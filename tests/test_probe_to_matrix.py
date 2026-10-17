@@ -94,6 +94,16 @@ def test_cell_formats() -> None:
     """Cells show success, failure and skips."""
     assert probe_to_matrix.cell({"ok": True, "ttff_ms": 999}) == "✓ 999 ms"
     assert probe_to_matrix.cell({"ok": False, "error": "a|b"}) == "✗ (a/b)"
+    assert probe_to_matrix.cell({"ok": False, "error": "Host: 10.0.0.5:80"}) == (
+        "✗ (Host: <ip>:80)"
+    )
+    ffmpeg_error = (
+        "[in#0 @ 0x7f55] method DESCRIBE failed: 404 (Stream Not Found) | "
+        "Error opening input file <url>."
+    )
+    assert probe_to_matrix.cell({"ok": False, "error": ffmpeg_error}) == (
+        "✗ (method DESCRIBE failed: 404 (Stream Not Found))"
+    )
     assert probe_to_matrix.cell({"ok": False, "skipped": "x"}) == "-"
     assert probe_to_matrix.cell(None) == "?"
     assert probe_to_matrix.fmt_ms(None) == ""

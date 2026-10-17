@@ -9,7 +9,7 @@ built-in [Reolink integration](https://www.home-assistant.io/integrations/reolin
   (person, vehicle, animal, face, package, visitor, ...) and recording thumbnails
 - smooth recorded-video playback and low-latency live view
 
-**Status: Phase 0** (foundations and hardware discovery). The integration adds a
+**Status: Phase 0 done** (foundations and hardware discovery). The integration adds a
 **Reolink** sidebar panel that lists your Reolink hosts and channels and, for admins,
 runs a read-only hardware probe whose JSON report fills the
 [hardware matrix](docs/hardware-matrix.md). Live view, playback and settings come in

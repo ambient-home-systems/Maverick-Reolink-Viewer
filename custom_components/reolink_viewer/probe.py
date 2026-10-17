@@ -64,6 +64,15 @@ _LOGGER = logging.getLogger(__name__)
 
 LIVE_STREAMS: tuple[str, ...] = ("main", "sub", "ext")
 VOD_STREAMS: tuple[str, ...] = ("main", "sub")
+# NVR_DOWNLOAD last: its "prepare" step can leave an NVR busy for a while, which
+# made later requests fail in the first hardware run.
+VOD_ORDER: tuple[VodMethod, ...] = (
+    VodMethod.PLAYBACK,
+    VodMethod.DOWNLOAD,
+    VodMethod.FLV,
+    VodMethod.RTMP,
+    VodMethod.NVR_DOWNLOAD,
+)
 PROBE_PRIORITY = Priority.PREFETCH
 # Recordings that ended less than this long ago may still be being written.
 RECORDING_SETTLE = timedelta(minutes=2)
@@ -375,7 +384,7 @@ class Prober:
                 "triggers": list(file.triggers),
             }
             methods: dict[str, Any] = {}
-            for method in VodMethod:
+            for method in VOD_ORDER:
                 self._report_progress(f"ch{ch} vod {method.value} {stream}")
                 methods[method.value] = await self._vod_one(
                     host, info, ch, file, method
@@ -593,7 +602,9 @@ async def _concurrency_levels(
             {
                 "streams": count,
                 "ok": ok,
-                "ttff_ms": [r.ttff_ms for r in results],
+                # Time until each stream reported its video (the processes run
+                # for the whole hold, so their exit time is not a first frame).
+                "open_ms": [r.open_ms for r in results],
                 "errors": sorted({r.error for r in results if r.error}),
             }
         )

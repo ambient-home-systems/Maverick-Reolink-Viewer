@@ -12,10 +12,14 @@ import argparse
 from collections.abc import Iterable, Iterator
 import json
 from pathlib import Path
+import re
 import sys
 from typing import Any
 
 PROTOCOLS = ("rtsp", "rtmp", "flv")
+# Older reports (schema 1 from v0.0.1) could carry device IPs in error text.
+_IPV4 = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
+_FFMPEG_PREFIX = re.compile(r"\[[^\]]*@ 0x[0-9a-f]+\] ")
 LIVE_STREAMS = ("main", "sub", "ext")
 VOD_METHODS = ("PLAYBACK", "DOWNLOAD", "NVR_DOWNLOAD", "FLV", "RTMP")
 
@@ -68,8 +72,10 @@ def cell(result: Any, timing_key: str = "ttff_ms") -> str:
             # NVR_DOWNLOAD prepares the file on the NVR before the first byte.
             extra.append(f"(+{fmt_ms(prepare)} prep)")
         return " ".join(["✓", timing, *extra]).strip()
-    error = str(result.get("error") or "failed").replace("|", "/")
-    return f"✗ ({error[:40]})"
+    error = _IPV4.sub("<ip>", str(result.get("error") or "failed"))
+    # ffmpeg errors: drop "[in#0 @ 0x...]" prefixes and keep the first message.
+    error = _FFMPEG_PREFIX.sub("", error).split(" | ")[0].replace("|", "/")
+    return f"✗ ({error[:60]})"
 
 
 def _codec(encodings: dict[str, Any], stream: str) -> str:
