@@ -16,7 +16,7 @@ put on it:
 
 | Phase | Outcome | Difficulty | Estimate | Status |
 | --- | --- | --- | --- | --- |
-| 0 | Foundations, CI, adapter layer, hardware discovery | High | 1–2 wk | Code done; waiting on the first probe report |
+| 0 | Foundations, CI, adapter layer, hardware discovery | High | 1–2 wk | Done (2026-10-17); one optional re-probe listed under Phase 0 decisions |
 | 1 | Device details and every setting, with explanations | Standard (catalog) / High (panel shell) | 2–3 wk | Not started |
 | 2 | Event timeline, thumbnails, smooth playback | High (backend) / Very high (player) | 3–5 wk | Not started |
 | 3 | Live view via go2rtc, grid, fullscreen, PTZ | High | 3–4 wk | Not started |
@@ -139,7 +139,7 @@ bridge's compatibility check catches it on day one.
 | 5. Panel shell (`panel_custom` + `StaticPathConfig`) listing devices | Done |
 | 6. `reolink_viewer/probe` (admin) + "Run probe" button with JSON download | Done |
 | 7. `docs/hardware-matrix.md` template + `scripts/probe_to_matrix.py` | Done; matrix waits on the first probe report |
-| Exit: probe run on every owned device, matrix filled, decisions recorded | **Pending: needs a probe report from real hardware** |
+| Exit: probe run on every owned device, matrix filled, decisions recorded | Done: first run 2026-10-17 on the RLN36 NVR (6 channels) and 3 directly added cameras; see [hardware-matrix.md](hardware-matrix.md) |
 
 How the probe stays safe:
 
@@ -185,14 +185,41 @@ worth knowing:
 
 ### Phase 0 decisions
 
-To be recorded from the first probe report (see [hardware-matrix.md](hardware-matrix.md)):
+Recorded 2026-10-17 from the first probe run (evidence in
+[hardware-matrix.md](hardware-matrix.md)). Owned hardware: an RLN36 NVR with a
+Reolink Duo 3 PoE, two RLC-520A, an E1 Pro, a CX410 and a CX810; the CX410 and CX810
+are also added to HA directly; an E1 Zoom is added directly only. No battery cameras,
+Home Hubs or doorbells.
 
 | Decision | Value | Evidence |
 | --- | --- | --- |
-| Default live source per model | _pending probe_ | Live table |
-| VOD method per device type (camera / NVR / Hub) | _pending probe_ | VOD table |
-| H.265 strategy | _pending probe_ | Main-stream codecs; browser support below |
-| Per-host concurrency limit | _pending probe_ (scheduler default is 2 until then) | Max concurrent streams |
+| Default live source per model | **RTSP for main and sub on every model** (Duo 3 PoE, RLC-520A, E1 Pro, CX410, CX810, E1 Zoom), via the NVR or directly. **HTTP-FLV for `ext`** (RTSP has no `ext`) and as the fallback when RTSP fails. RTMP is not used. | RTSP main was the fastest on every channel (1.7–2.8 s vs 2.1–4.7 s); sub streams took 2.2–9.7 s on every protocol, set by the key-frame interval rather than the protocol; RTMP is off on the directly added cameras and offers no gain. |
+| VOD method per device type | **NVR: `DOWNLOAD`** (MP4 over HTTP). Not `PLAYBACK` (404), not `NVR_DOWNLOAD` (2–18 s prepare, then disconnects, and leaves the NVR busy). NVR `FLV` VOD is unconfirmed, so it's not used until a re-probe. **Standalone cameras and Home Hubs: no decision**: none owned record locally. | DOWNLOAD's first byte arrived in 158–394 ms on all 6 channels, main and sub. |
+| H.265 strategy | **No transcoding by default.** Grid and timeline scrubbing use sub streams (H.264 everywhere). HD view: use the H.265 main only when the browser says it can decode it at that resolution (`MediaCapabilities.decodingInfo` with the real width/height; Safari and the iOS Companion app decode HEVC in hardware); otherwise use the H.264 `ext` stream. The Duo 3's 7680×2160 main exceeds the 4096-pixel width limit of many hardware decoders, so its default HD stream is `ext` (2560×720). An opt-in VAAPI/QSV H.265→H.264 transcode on the x86 host stays a Phase 4 option. | 4 of 9 main streams are H.265 (Duo 3, RLC-520A "Garage", CX810, E1 Zoom); every sub and ext stream is H.264. |
+| Per-host concurrency limit | **NVR: 4. Standalone cameras: 3.** (The scheduler default stays 2 for unknown device types.) Revisit after a re-probe with up to 6 streams. | 4 simultaneous FLV sub streams worked on the NVR and on each direct camera with no failures, so 4 is a floor. |
+
+Consequences for later phases:
+
+- **Cold live start is 2–10 s on every protocol.** Instant-feeling live view (Phase 3)
+  depends on showing a snapshot first and keeping favourite streams warm in go2rtc.
+  Shortening the sub stream's I-frame interval would also help, but that's a camera
+  setting and the owner's choice.
+- **Playback (Phase 2)** builds on NVR `DOWNLOAD`. Not yet measured: whether it
+  honours HTTP `Range` for seeking, and how fast it starts mid-file. The probe read
+  only the first 64 KB.
+- **Thumbnails:** `snapshot_past` answers in 160–300 ms, fast enough for timeline
+  hover previews through the thumbnail queue.
+- **Day searches take 1–4 s per channel**, so the planned timeline caching is
+  required, not optional.
+- **Duplicate cameras:** the CX410 and CX810 appear twice (via the NVR and directly).
+  Phase 1 should group them as one camera. Live view may use either source; playback
+  must use the NVR.
+- The E1 Zoom has no recordings anywhere the integration can see, so it gets live
+  view only.
+
+Optional follow-up: re-run the probe on this build with **Test concurrent streams =
+6**. It settles NVR FLV VOD (now tested before `NVR_DOWNLOAD`) and finds the real
+stream ceiling.
 
 Owner's setup (answers to PLAN.md's open decisions, 2026-10-17):
 
@@ -260,7 +287,7 @@ Backend:
    behind the scheduler at thumbnail priority, with a disk LRU cache, in-flight
    de-duplication and signed URLs.
 4. **VOD view** `/api/reolink_viewer/vod/...` — picks the VOD method from the hardware
-   matrix and streams fragmented MP4:
+   matrix (NVR: `DOWNLOAD`, see Phase 0 decisions) and streams fragmented MP4:
    - native MP4 is passed through with HTTP range support
    - FLV/RTMP is remuxed with ffmpeg `-c copy -movflags frag_keyframe+empty_moov+default_base_moof`
    - seek by file plus offset
@@ -312,7 +339,8 @@ Goal: live video that is reliably faster than the stock HA UI.
    - Packaging go2rtc as an HA app for HA OS users is a Phase 4 option.
 2. **Stream registry:** one stream per channel and stream type, sources chosen from the
    hardware matrix:
-   - HTTP-FLV for sub streams; RTSP for 4K/H.265 main streams
+   - RTSP for main and sub streams, HTTP-FLV for `ext` and as the fallback (Phase 0
+     decision; the original plan of HTTP-FLV for sub streams didn't hold up)
    - `ffmpeg` audio AAC → Opus for WebRTC
    - credentials sourced from `reolink-aio`, never exposed
    - streams re-registered when a Reolink entry reloads

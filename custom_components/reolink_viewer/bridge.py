@@ -24,7 +24,7 @@ import re
 from typing import TYPE_CHECKING, Any, cast
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
+from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr
 
@@ -502,6 +502,8 @@ class ReolinkHostHandle:
         values: list[str | None] = [
             self._entry.data.get(CONF_PASSWORD),
             self._entry.data.get(CONF_USERNAME),
+            # reolink-aio error messages carry "Host: <address>:<port>".
+            self._entry.data.get(CONF_HOST),
             self._entry.unique_id,
             _safe(lambda: api.uid),
             _safe(lambda: api.mac_address),
@@ -635,6 +637,7 @@ def _trigger_names(triggers: Iterable[Any] | Any) -> tuple[str, ...]:
 
 
 _URL = re.compile(r"(?i)\b[a-z][a-z0-9+.-]*://[^\s\"'<>]+")
+_IPV4 = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
 _SECRET_PARAM = re.compile(
     r"(?i)\b(password|passwd|pwd|user|username|token)=([^&\s\"']+)"
 )
@@ -643,9 +646,11 @@ _SECRET_PARAM = re.compile(
 def redact_text(text: str, secrets: Iterable[str]) -> str:
     """Remove URLs, credentials, tokens and identifiers from a string.
 
-    Whole URLs are replaced: they carry credentials and device addresses.
+    Whole URLs are replaced: they carry credentials and device addresses. IPv4
+    addresses are replaced too (reolink-aio errors include "Host: <ip>:<port>").
     """
     text = _URL.sub("<url>", text)
+    text = _IPV4.sub("<ip>", text)
     text = _SECRET_PARAM.sub(r"\1=<redacted>", text)
     for secret in sorted(set(secrets), key=len, reverse=True):
         if secret:

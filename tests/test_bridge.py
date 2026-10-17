@@ -25,6 +25,7 @@ from homeassistant.core import HomeAssistant
 from .conftest import SECRETS, TEST_NOW, TEST_PASSWORD, TEST_SERIAL, TEST_TOKEN
 from .ha_reolink_mock import (
     TEST_CAM_MODEL,
+    TEST_HOST,
     TEST_HOST_MODEL,
     TEST_NVR_NAME,
     TEST_UID,
@@ -186,7 +187,7 @@ async def test_secrets(hass: HomeAssistant, loaded_reolink: MockConfigEntry) -> 
     """Secrets include password, UIDs, serials and MACs."""
     (host,) = bridge.async_get_hosts(hass)
     secrets = host.secrets()
-    for value in (TEST_PASSWORD, TEST_UID, TEST_UID_CAM, TEST_SERIAL):
+    for value in (TEST_PASSWORD, TEST_UID, TEST_UID_CAM, TEST_SERIAL, TEST_HOST):
         assert value in secrets
     assert host.hide_password(f"x {TEST_TOKEN}") == "x <token>"
 
@@ -303,6 +304,7 @@ def test_redact_text() -> None:
         assert secret not in cleaned
     assert "1.2.3.4" not in cleaned
     assert cleaned.startswith("<url> <url> uid <redacted>")
+    assert redact_text("Host: 192.168.20.237:80: busy", ()) == "Host: <ip>:80: busy"
     assert redact_text("login user=admin&password=x", ()) == (
         "login user=<redacted>&password=<redacted>"
     )

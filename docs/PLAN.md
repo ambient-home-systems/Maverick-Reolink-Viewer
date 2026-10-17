@@ -165,8 +165,9 @@ Why HA's live view is flaky with Reolink:
 Design:
 
 - reolink_viewer runs its **own** go2rtc instance and registers per-channel streams
-  with the best source per model, measured in Phase 0: HTTP-FLV for sub streams,
-  RTSP for 4K/H.265 main streams, AAC → Opus audio for WebRTC.
+  with the best source per model, measured in Phase 0: RTSP for main and sub
+  streams, HTTP-FLV for the `ext` stream and as the fallback (the first hardware run
+  found no advantage for HTTP-FLV on sub streams), AAC → Opus audio for WebRTC.
 - WebRTC signaling goes through an HA websocket command; MSE is the fallback through
   an authenticated HA proxy. Remote access over WebRTC needs a TURN relay; MSE through
   HA works remotely at the cost of bandwidth.

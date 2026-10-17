@@ -13,7 +13,7 @@ from reolink_aio.enums import VodRequestType
 from reolink_aio.exceptions import ReolinkError
 
 from custom_components.reolink_viewer import bridge, probe
-from custom_components.reolink_viewer.bridge import CameraUrl, VodFile
+from custom_components.reolink_viewer.bridge import CameraUrl, VodFile, VodMethod
 from custom_components.reolink_viewer.media import ByteResult, FrameResult
 from custom_components.reolink_viewer.probe import (
     ProbeOptions,
@@ -79,7 +79,7 @@ class FakeMedia:
         self.hold_calls += 1
         return self._hold_result
 
-    _hold_result = FrameResult(ok=True, ttff_ms=300.0, frames=50)
+    _hold_result = FrameResult(ok=True, open_ms=900.0, ttff_ms=6000.0, frames=50)
 
 
 @pytest.fixture
@@ -168,8 +168,16 @@ async def test_probe_nvr_success(
             assert "prepare_ms" in methods[method]
         assert methods["RTMP"] == {"ok": False, "skipped": "not supported on NVRs"}
 
-    requested = {c.args[3] for c in reolink_host.get_vod_source.await_args_list}
+    requested = [c.args[3] for c in reolink_host.get_vod_source.await_args_list]
     assert VodRequestType.RTMP not in requested
+    # NVR_DOWNLOAD runs last per file: its prepare step can leave the NVR busy.
+    assert requested[:4] == [
+        VodRequestType.PLAYBACK,
+        VodRequestType.DOWNLOAD,
+        VodRequestType.FLV,
+        VodRequestType.NVR_DOWNLOAD,
+    ]
+    assert set(probe.VOD_ORDER) == set(VodMethod)
     reolink_host.set_net_port.assert_not_awaited()
 
     bc = ch["baichuan"]
@@ -479,7 +487,7 @@ async def test_probe_concurrency_opt_in(
         # Levels 1 and 2 use calls 1..3; level 3 (calls 4..6) has one failure.
         if calls == 6:
             return FrameResult(ok=False, error="503 Service Unavailable")
-        return FrameResult(ok=True, ttff_ms=300.0, frames=50)
+        return FrameResult(ok=True, open_ms=900.0, ttff_ms=6000.0, frames=50)
 
     with patch.object(probe, "async_hold_stream", hold):
         report = await _prober(
@@ -492,6 +500,8 @@ async def test_probe_concurrency_opt_in(
     assert conc["max_ok"] == 2
     assert conc["first_failure"] == 3
     assert [lvl["streams"] for lvl in conc["levels"]] == [1, 2, 3]
+    assert conc["levels"][0]["open_ms"] == [900.0]
+    assert "ttff_ms" not in conc["levels"][0]
     assert conc["levels"][2]["errors"] == ["503 Service Unavailable"]
     assert calls == 6
 
