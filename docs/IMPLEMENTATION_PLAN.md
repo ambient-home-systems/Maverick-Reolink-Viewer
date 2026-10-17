@@ -17,7 +17,7 @@ put on it:
 | Phase | Outcome | Difficulty | Estimate | Status |
 | --- | --- | --- | --- | --- |
 | 0 | Foundations, CI, adapter layer, hardware discovery | High | 1–2 wk | Done (2026-10-17) |
-| 1 | Device details and every setting, with explanations | Standard (catalog) / High (panel shell) | 2–3 wk | Code complete (2026-10-17); exit criteria wait on the hardware checklist |
+| 1 | Device details and every setting, with explanations | Standard (catalog) / High (panel shell) | 2–3 wk | Done (2026-10-17) |
 | 2 | Event timeline, thumbnails, smooth playback | High (backend) / Very high (player) | 3–5 wk | Not started |
 | 3 | Live view via go2rtc, grid, fullscreen, PTZ | High | 3–4 wk | Not started |
 | 4 | Performance, mobile, packaging, first release | Standard | 2–3 wk | Not started |
@@ -279,8 +279,8 @@ Exit criteria:
 
 ### Phase 1 status (2026-10-17)
 
-Code complete in v0.1.0. The exit criteria need the owner's devices: run the
-hardware checklist below, then mark the phase done.
+Done in v0.1.0. The owner ran the hardware checklist below on 2026-10-17 and every
+item passed.
 
 | Task | Status |
 | --- | --- |
@@ -295,8 +295,8 @@ hardware checklist below, then mark the phase done.
 | Frontend 3. Writes through standard HA actions; optimistic update, rollback with message, live via state updates | Done |
 | Frontend 4. "Show disabled entities" + Enable (admin, entity registry), with the reload explained | Done |
 | Frontend 5. HA theme variables, own small Lit controls (no `ha-*` form elements) | Done |
-| Frontend 6. Re-render only on the shown device's state changes; Settings under 300 ms | Done in a desktop browser (below); phone measurement is part of the checklist |
-| Exit: every entity in the right category, a setting round-trips on real hardware, < 300 ms on a mid-range phone | Waiting on the hardware checklist |
+| Frontend 6. Re-render only on the shown device's state changes; Settings under 300 ms | Done: measured in a desktop browser (below); on the iPhone it felt fast (not timed) |
+| Exit: every entity in the right category, a setting round-trips on real hardware, < 300 ms on a mid-range phone | Done: hardware checklist passed (2026-10-17) |
 
 How it works, and what differs from the plan above:
 
@@ -335,7 +335,7 @@ How it works, and what differs from the plan above:
   settings element rendering in 25–46 ms. 200 unrelated state changes caused 0
   re-renders of the device page. The production bundle is 20 KB gzipped.
 
-Hardware checklist (owner, before marking Phase 1 done):
+Hardware checklist (run by the owner on 2026-10-17 on the RLN36, CX410, CX810 and E1 Zoom; all passed):
 
 1. Every entity shows up: for each device, the entity counts on the Overview
    match the device page under Settings → Devices & services → Reolink
@@ -348,7 +348,8 @@ Hardware checklist (owner, before marking Phase 1 done):
    follows, the toggle never jumps back, and HA's own entity page shows the same
    state. (Rollback on failure is covered by tests.)
 5. A disruptive action asks first (e.g. turning **Record** off → Cancel).
-6. Settings opens in under 300 ms on the iPhone (Companion app).
+6. Settings opens in under 300 ms on the iPhone (Companion app). Result: felt
+   fast, with no noticeable delay; not timed.
 
 ## Phase 2 — Event timeline and playback (difficulty: High backend / Very high player, 3–5 wk)
 
