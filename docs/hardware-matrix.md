@@ -6,17 +6,19 @@ sources, VOD methods and concurrency limits from this table rather than from
 assumptions. The decisions drawn from it are in
 [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md#phase-0-decisions).
 
-Status: **filled from the first probe run** (2026-10-17, HA 2026.10.2, reolink-aio
-0.21.18, ffmpeg 6.0, integration v0.0.1, concurrency test up to 4 streams).
+Status: **filled from two probe runs on 2026-10-17** (HA 2026.10.2, reolink-aio
+0.21.18, ffmpeg 6.0). The tables show run 2 (integration v0.0.2, concurrency test up
+to 6 streams); the findings use both runs. Run 1 (v0.0.1, up to 4 streams) agreed on
+every pass/fail result.
 
 ## Setup probed
 
 | Host | Model | Firmware | Notes |
 | --- | --- | --- | --- |
 | host1 | NVR RLN36 (hardware N5MB01) | v3.6.5.597_26082822 | 6 channels in use; all recordings live here |
-| host2 | CX410, direct | v3.1.0.3429_2404181313 | Same camera as NVR channel "Front Yard Right"; no recordings on the camera |
-| host3 | CX810, direct | v3.1.0.5129_2510222154 | Same camera as NVR channel "Front Yard Left"; no recordings on the camera |
-| host4 | E1 Zoom, direct | v3.2.0.6932_2608111908 | Not on the NVR; no recordings on the camera (Search returns rspCode -330) |
+| host2 | CX410, direct | v3.1.0.3429_2404181313 | Same camera as NVR channel "Front Yard Right". Added directly only to improve streaming; may be removed once live view through the NVR is good enough |
+| host3 | CX810, direct | v3.1.0.5129_2510222154 | Same camera as NVR channel "Front Yard Left"; same reason as host2 |
+| host4 | E1 Zoom, direct | v3.2.0.6932_2608111908 | Not on the NVR and does not record, by design: used only for snapshots of the washer/dryer panels |
 
 No battery cameras, Home Hubs or doorbells.
 
@@ -49,21 +51,22 @@ addresses inside error messages; the script strips them from the rows.
 - `-` — skipped: not applicable (RTMP VOD on NVRs) or not safe (RTMP when the port is
   off: the probe never turns it on). The JSON has the exact reason.
 - Max concurrent streams: highest number of simultaneous sub streams that all
-  delivered frames; `fails at N` is the first level where at least one failed.
+  delivered frames; `fails at N` is the first level where at least one failed. The
+  test runs on one channel per host ("tested on chN" on the other channels).
 
 ### Live view
 
 | Model | Type | Connected via | Firmware | Battery | Main codec | Sub codec | RTSP main | RTSP sub | RTSP ext | RTMP main | RTMP sub | RTMP ext | FLV main | FLV sub | FLV ext | Max concurrent streams |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Reolink Duo 3 PoE | camera | NVR (RLN36) | v3.0.0.5049_2506302188 | no | h265 20 fps 8192 kbps | h264 20 fps 1024 kbps | ✓ 2.8 s hevc 7680x2160 | ✓ 3.8 s h264 1536x432 | ✗ (method DESCRIBE failed: 404 (Stream Not Found)) | ✓ 4.7 s hevc 7680x2160 | ✓ 3.5 s h264 1536x432 | ✓ 4.0 s h264 2560x720 | ✓ 4.5 s hevc 7680x2160 | ✓ 3.4 s h264 1536x432 | ✓ 4.1 s h264 2560x720 | ≥ 4 (all 4 ok) |
-| RLC-520A | camera | NVR (RLN36) | v3.0.0.4348_2411261177 | no | h265 30 fps 6144 kbps | h264 15 fps 512 kbps | ✓ 2.5 s hevc 2560x1920 | ✓ 5.7 s h264 640x480 | ✗ (method DESCRIBE failed: 404 (Stream Not Found)) | ✓ 3.1 s hevc 2560x1920 | ✓ 5.6 s h264 640x480 | ✓ 4.2 s h264 896x672 | ✓ 4.1 s hevc 2560x1920 | ✓ 3.7 s h264 640x480 | ✓ 4.1 s h264 896x672 | ≥ 4 (all 4 ok) |
-| E1 Pro | camera | NVR (RLN36) | v3.1.0.5112_2507081475 | no | h264 25 fps 3072 kbps | h264 7 fps 160 kbps | ✓ 2.8 s h264 2560x1440 | ✓ 6.6 s h264 640x360 | ✗ (method DESCRIBE failed: 404 (Stream Not Found)) | ✓ 3.9 s h264 2560x1440 | ✓ 9.7 s h264 640x360 | ✓ 4.9 s h264 896x512 | ✓ 3.4 s h264 2560x1440 | ✓ 7.7 s h264 640x360 | ✓ 2.9 s h264 896x512 | ≥ 4 (all 4 ok) |
-| CX410 | camera | NVR (RLN36) | v3.1.0.3429_2404181313 | no | h264 30 fps 5120 kbps | h264 15 fps 512 kbps | ✓ 1.9 s h264 2560x1440 | ✓ 2.2 s h264 640x360 | ✗ (method DESCRIBE failed: 404 (Stream Not Found)) | ✓ 2.1 s h264 2560x1440 | ✓ 3.6 s h264 640x360 | ✓ 4.0 s h264 896x512 | ✓ 2.4 s h264 2560x1440 | ✓ 3.5 s h264 640x360 | ✓ 4.1 s h264 896x512 | ≥ 4 (all 4 ok) |
-| RLC-520A | camera | NVR (RLN36) | v3.0.0.4348_2411261177 | no | h264 30 fps 6144 kbps | h264 10 fps 256 kbps | ✓ 2.6 s h264 2560x1920 | ✓ 5.4 s h264 640x480 | ✗ (method DESCRIBE failed: 404 (Stream Not Found)) | ✓ 2.8 s h264 2560x1920 | ✓ 6.3 s h264 640x480 | ✓ 3.1 s h264 896x672 | ✓ 4.0 s h264 2560x1920 | ✓ 4.9 s h264 640x480 | ✓ 2.5 s h264 896x672 | ≥ 4 (all 4 ok) |
-| CX810 | camera | NVR (RLN36) | v3.1.0.5129_2510222154 | no | h265 25 fps 6144 kbps | h264 15 fps 256 kbps | ✓ 2.0 s hevc 3840x2160 | ✓ 2.7 s h264 640x360 | ✗ (method DESCRIBE failed: 404 (Stream Not Found)) | ✓ 4.0 s hevc 3840x2160 | ✓ 4.9 s h264 640x360 | ✓ 3.6 s h264 896x512 | ✓ 3.8 s hevc 3840x2160 | ✓ 4.8 s h264 640x360 | ✓ 3.6 s h264 896x512 | ≥ 4 (all 4 ok) |
-| CX410 | camera | direct | v3.1.0.3429_2404181313 | no | h264 30 fps 5120 kbps | h264 15 fps 512 kbps | ✓ 1.7 s h264 2560x1440 | ✓ 2.2 s h264 640x360 | ✗ (method DESCRIBE failed: 404 (Stream Not Found)) | - | - | - | ✓ 2.1 s h264 2560x1440 | ✓ 3.6 s h264 640x360 | ✓ 4.1 s h264 896x512 | ≥ 4 (all 4 ok) |
-| CX810 | camera | direct | v3.1.0.5129_2510222154 | no | h265 25 fps 6144 kbps | h264 15 fps 256 kbps | ✓ 1.9 s hevc 3840x2160 | ✓ 4.9 s h264 640x360 | ✗ (method DESCRIBE failed: 404 (Stream Not Found)) | - | - | - | ✓ 4.0 s hevc 3840x2160 | ✓ 4.9 s h264 640x360 | ✓ 3.7 s h264 896x512 | ≥ 4 (all 4 ok) |
-| E1 Zoom | camera | direct | v3.2.0.6932_2608111908 | no | h265 20 fps 4096 kbps | h264 10 fps 256 kbps | ✓ 2.4 s hevc 3840x2160 | ✓ 3.5 s h264 640x360 | ✗ (method DESCRIBE failed: 404 (Stream Not Found)) | - | - | - | ✓ 3.4 s hevc 3840x2160 | ✓ 5.6 s h264 640x360 | ✓ 3.7 s h264 896x512 | ≥ 4 (all 4 ok) |
+| Reolink Duo 3 PoE | camera | NVR (RLN36) | v3.0.0.5049_2506302188 | no | h265 20 fps 8192 kbps | h264 20 fps 1024 kbps | ✓ 2.1 s hevc 7680x2160 | ✓ 1.7 s h264 1536x432 | ✗ (method DESCRIBE failed: 404 (Stream Not Found)) | ✓ 3.1 s hevc 7680x2160 | ✓ 5.3 s h264 1536x432 | ✓ 4.0 s h264 2560x720 | ✓ 4.5 s hevc 7680x2160 | ✓ 3.4 s h264 1536x432 | ✓ 4.0 s h264 2560x720 | ≥ 6 (all 6 ok) |
+| RLC-520A | camera | NVR (RLN36) | v3.0.0.4348_2411261177 | no | h265 30 fps 6144 kbps | h264 15 fps 512 kbps | ✓ 2.1 s hevc 2560x1920 | ✓ 4.3 s h264 640x480 | ✗ (method DESCRIBE failed: 404 (Stream Not Found)) | ✓ 4.6 s hevc 2560x1920 | ✓ 3.8 s h264 640x480 | ✓ 4.0 s h264 896x672 | ✓ 4.2 s hevc 2560x1920 | ✓ 3.9 s h264 640x480 | ✓ 3.9 s h264 896x672 | tested on ch5 |
+| E1 Pro | camera | NVR (RLN36) | v3.1.0.5112_2507081475 | no | h264 25 fps 3072 kbps | h264 7 fps 160 kbps | ✓ 3.0 s h264 2560x1440 | ✓ 6.6 s h264 640x360 | ✗ (method DESCRIBE failed: 404 (Stream Not Found)) | ✓ 3.9 s h264 2560x1440 | ✓ 9.7 s h264 640x360 | ✓ 4.9 s h264 896x512 | ✓ 3.4 s h264 2560x1440 | ✓ 7.7 s h264 640x360 | ✓ 2.9 s h264 896x512 | tested on ch5 |
+| CX410 | camera | NVR (RLN36) | v3.1.0.3429_2404181313 | no | h264 30 fps 5120 kbps | h264 15 fps 512 kbps | ✓ 3.0 s h264 2560x1440 | ✓ 3.0 s h264 640x360 | ✗ (method DESCRIBE failed: 404 (Stream Not Found)) | ✓ 3.2 s h264 2560x1440 | ✓ 3.4 s h264 640x360 | ✓ 4.1 s h264 896x512 | ✓ 2.5 s h264 2560x1440 | ✓ 3.5 s h264 640x360 | ✓ 4.1 s h264 896x512 | tested on ch5 |
+| RLC-520A | camera | NVR (RLN36) | v3.0.0.4348_2411261177 | no | h264 30 fps 6144 kbps | h264 10 fps 256 kbps | ✓ 2.6 s h264 2560x1920 | ✓ 3.8 s h264 640x480 | ✗ (method DESCRIBE failed: 404 (Stream Not Found)) | ✓ 4.3 s h264 2560x1920 | ✓ 4.7 s h264 640x480 | ✓ 2.7 s h264 896x672 | ✓ 4.0 s h264 2560x1920 | ✓ 5.3 s h264 640x480 | ✓ 4.1 s h264 896x672 | tested on ch5 |
+| CX810 | camera | NVR (RLN36) | v3.1.0.5129_2510222154 | no | h265 25 fps 6144 kbps | h264 15 fps 256 kbps | ✓ 2.0 s hevc 3840x2160 | ✓ 4.8 s h264 640x360 | ✗ (method DESCRIBE failed: 404 (Stream Not Found)) | ✓ 3.9 s hevc 3840x2160 | ✓ 4.9 s h264 640x360 | ✓ 3.6 s h264 896x512 | ✓ 3.8 s hevc 3840x2160 | ✓ 4.8 s h264 640x360 | ✓ 3.6 s h264 896x512 | tested on ch5 |
+| CX410 | camera | direct | v3.1.0.3429_2404181313 | no | h264 30 fps 5120 kbps | h264 15 fps 512 kbps | ✓ 2.0 s h264 2560x1440 | ✓ 3.0 s h264 640x360 | ✗ (method DESCRIBE failed: 404 (Stream Not Found)) | - | - | - | ✓ 3.3 s h264 2560x1440 | ✓ 3.4 s h264 640x360 | ✓ 4.1 s h264 896x512 | ≥ 6 (all 6 ok) |
+| CX810 | camera | direct | v3.1.0.5129_2510222154 | no | h265 25 fps 6144 kbps | h264 15 fps 256 kbps | ✓ 1.5 s hevc 3840x2160 | ✓ 2.9 s h264 640x360 | ✗ (method DESCRIBE failed: 404 (Stream Not Found)) | - | - | - | ✓ 3.9 s hevc 3840x2160 | ✓ 4.9 s h264 640x360 | ✓ 3.7 s h264 896x512 | ≥ 6 (all 6 ok) |
+| E1 Zoom | camera | direct | v3.2.0.6932_2608111908 | no | h265 20 fps 4096 kbps | h264 10 fps 256 kbps | ✓ 3.1 s hevc 3840x2160 | ✓ 3.6 s h264 640x360 | ✗ (method DESCRIBE failed: 404 (Stream Not Found)) | - | - | - | ✓ 3.4 s hevc 3840x2160 | ✓ 5.5 s h264 640x360 | ✓ 3.7 s h264 896x512 | ≥ 6 (all 6 ok) |
 
 ### Recorded video and Baichuan
 
@@ -72,18 +75,18 @@ sub stream).
 
 | Model | Connected via | Stream | Search | PLAYBACK | DOWNLOAD | NVR_DOWNLOAD | FLV | RTMP | Event search | Day search | snapshot_past |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Reolink Duo 3 PoE | NVR (RLN36) | main | ✓ 2.4 s | ✗ (HTTP 404) | ✓ 203 ms | ✗ (ServerDisconnectedError: Server disconnected) | ✗ (ServerDisconnectedError: Server disconnected) | - |  |  |  |
-| Reolink Duo 3 PoE | NVR (RLN36) | sub | ✓ 2.6 s | ✗ (HTTP 404) | ✓ 178 ms | ✗ (ServerDisconnectedError: Server disconnected) | ✗ (ServerDisconnectedError: Server disconnected) | - | ✓ 1.8 s | ✓ 1.1 s | ✓ 298 ms |
-| RLC-520A | NVR (RLN36) | main | ✓ 1.1 s | ✗ (HTTP 404) | ✓ 202 ms | ✗ (ServerDisconnectedError: Server disconnected) | ✗ (ServerDisconnectedError: Server disconnected) | - |  |  |  |
-| RLC-520A | NVR (RLN36) | sub | ✓ 1.1 s | ✗ (HTTP 404) | ✓ 159 ms | ✗ (ServerDisconnectedError: Server disconnected) | ✗ (ServerDisconnectedError: Server disconnected) | - | ✓ 418 ms | ✓ 1.1 s | ✓ 168 ms |
-| E1 Pro | NVR (RLN36) | main | ✓ 3.2 s | ✗ (HTTP 404) | ✓ 160 ms | ✗ (ServerDisconnectedError: Server disconnected) | ✗ (ServerDisconnectedError: Server disconnected) | - |  |  |  |
-| E1 Pro | NVR (RLN36) | sub | ✓ 3.4 s | ✗ (HTTP 404) | ✓ 158 ms | ✗ (ServerDisconnectedError: Server disconnected) | ✗ (ServerDisconnectedError: Server disconnected) | - | ✓ 2.4 s | ✓ 1.1 s | ✓ 163 ms |
-| CX410 | NVR (RLN36) | main | ✓ 2.5 s | ✗ (HTTP 404) | ✓ 160 ms | ✗ (ApiError: Host: <ip>:80: Request NvrDownload: API returned e) | ✗ (ServerDisconnectedError: Server disconnected) | - |  |  |  |
-| CX410 | NVR (RLN36) | sub | ✓ 3.3 s | ✗ (HTTP 404) | ✓ 279 ms | ✗ (ApiError: Host: <ip>:80: Request NvrDownload: API returned e) | ✗ (ServerDisconnectedError: Server disconnected) | - | ✓ 2.1 s | ✓ 841 ms | ✓ 267 ms |
-| RLC-520A | NVR (RLN36) | main | ✓ 2.6 s | ✗ (HTTP 404) | ✓ 300 ms | ✗ (ApiError: Host: <ip>:80: Request NvrDownload: API returned e) | ✗ (ServerDisconnectedError: Server disconnected) | - |  |  |  |
-| RLC-520A | NVR (RLN36) | sub | ✓ 1.5 s | ✗ (HTTP 404) | ✓ 240 ms | ✗ (ApiError: Host: <ip>:80: Request NvrDownload: API returned e) | ✗ (ServerDisconnectedError: Server disconnected) | - | ✓ 929 ms | ✓ 1.1 s | ✓ 228 ms |
-| CX810 | NVR (RLN36) | main | ✓ 4.2 s | ✗ (HTTP 404) | ✓ 394 ms | ✗ (ApiError: Host: <ip>:80: Request NvrDownload: API returned e) | ✗ (ServerDisconnectedError: Server disconnected) | - |  |  |  |
-| CX810 | NVR (RLN36) | sub | ✓ 4.3 s | ✗ (HTTP 404) | ✓ 220 ms | ✗ (ApiError: Host: <ip>:80: Request NvrDownload: API returned e) | ✗ (ServerDisconnectedError: Server disconnected) | - | ✓ 2.6 s | ✓ 955 ms | ✓ 191 ms |
+| Reolink Duo 3 PoE | NVR (RLN36) | main | ✓ 2.4 s | ✗ (HTTP 404) | ✓ 183 ms | ✗ (ServerDisconnectedError: Server disconnected) | ✗ (ServerDisconnectedError: Server disconnected) | - |  |  |  |
+| Reolink Duo 3 PoE | NVR (RLN36) | sub | ✓ 2.7 s | ✗ (HTTP 404) | ✓ 158 ms | ✗ (ServerDisconnectedError: Server disconnected) | ✗ (ServerDisconnectedError: Server disconnected) | - | ✓ 1.6 s | ✓ 1.1 s | ✓ 316 ms |
+| RLC-520A | NVR (RLN36) | main | ✓ 1.0 s | ✗ (HTTP 404) | ✓ 161 ms | ✗ (ServerDisconnectedError: Server disconnected) | ✗ (ServerDisconnectedError: Server disconnected) | - |  |  |  |
+| RLC-520A | NVR (RLN36) | sub | ✓ 1.5 s | ✗ (HTTP 404) | ✓ 159 ms | ✗ (ServerDisconnectedError: Server disconnected) | ✗ (ServerDisconnectedError: Server disconnected) | - | ✓ 474 ms | ✓ 1.1 s | ✓ 169 ms |
+| E1 Pro | NVR (RLN36) | main | ✓ 3.1 s | ✗ (HTTP 404) | ✓ 189 ms | ✗ (ServerDisconnectedError: Server disconnected) | ✗ (ServerDisconnectedError: Server disconnected) | - |  |  |  |
+| E1 Pro | NVR (RLN36) | sub | ✓ 3.1 s | ✗ (HTTP 404) | ✓ 199 ms | ✗ (ServerDisconnectedError: Server disconnected) | ✗ (ServerDisconnectedError: Server disconnected) | - | ✓ 2.4 s | ✓ 1.1 s | ✓ 162 ms |
+| CX410 | NVR (RLN36) | main | ✓ 2.5 s | ✗ (HTTP 404) | ✓ 181 ms | ✗ (ApiError: Host: <ip>:80: Request NvrDownload: API returned e) | ✗ (ServerDisconnectedError: Server disconnected) | - |  |  |  |
+| CX410 | NVR (RLN36) | sub | ✓ 3.1 s | ✗ (HTTP 404) | ✓ 310 ms | ✗ (ApiError: Host: <ip>:80: Request NvrDownload: API returned e) | ✗ (ServerDisconnectedError: Server disconnected) | - | ✓ 2.0 s | ✓ 900 ms | ✓ 188 ms |
+| RLC-520A | NVR (RLN36) | main | ✓ 2.1 s | ✗ (HTTP 404) | ✓ 330 ms | ✗ (ApiError: Host: <ip>:80: Request NvrDownload: API returned e) | ✗ (ServerDisconnectedError: Server disconnected) | - |  |  |  |
+| RLC-520A | NVR (RLN36) | sub | ✓ 2.1 s | ✗ (HTTP 404) | ✓ 199 ms | ✗ (ApiError: Host: <ip>:80: Request NvrDownload: API returned e) | ✗ (ServerDisconnectedError: Server disconnected) | - | ✓ 1.7 s | ✓ 1.1 s | ✓ 492 ms |
+| CX810 | NVR (RLN36) | main | ✓ 4.1 s | ✗ (HTTP 404) | ✓ 379 ms | ✗ (ApiError: Host: <ip>:80: Request NvrDownload: API returned e) | ✗ (ServerDisconnectedError: Server disconnected) | - |  |  |  |
+| CX810 | NVR (RLN36) | sub | ✓ 4.7 s | ✗ (HTTP 404) | ✓ 648 ms | ✗ (ApiError: Host: <ip>:80: Request NvrDownload: API returned e) | ✗ (ServerDisconnectedError: Server disconnected) | - | ✓ 2.5 s | ✓ 1.7 s | ✓ 273 ms |
 | CX410 | direct | main | ✗ (ApiError: Host: <ip>:443: Request VOD files: API returned er) | - (no finished recording in the last 3 days) |  |  |  |  |  |  |  |
 | CX410 | direct | sub | ✗ (ApiError: Host: <ip>:443: Request VOD files: API returned er) | - (no finished recording in the last 3 days) |  |  |  |  | ✗ (ApiError: Baichuan host <ip>: received status code 405 from ) | ✓ 3.1 s | - |
 | CX810 | direct | main | ✗ (ApiError: Host: <ip>:443: Request VOD files: API returned er) | - (no finished recording in the last 3 days) |  |  |  |  |  |  |  |
@@ -98,45 +101,48 @@ Live view:
 - Every source works on every channel, except **RTSP ext**: Reolink serves no `ext`
   stream over RTSP (404). `ext` is available over HTTP-FLV and RTMP: H.264 at
   896×512 / 896×672, and 2560×720 on the Duo 3.
-- **RTSP is fastest for main streams on every channel**: 1.7–2.8 s, against
-  2.1–4.5 s for FLV and 2.1–4.7 s for RTMP.
-- **Sub streams take 2.2–9.7 s whatever the protocol.** RTSP was faster on 5 of 9
-  channels and FLV on 3 (one tie). The slowest are the low-frame-rate subs (E1 Pro at
-  7 fps, RLC-520A "Dogs" at 10 fps). The time is dominated by waiting for the next
-  key frame, not by the protocol, so with one sample per cell the protocol
-  differences are within noise.
+- **RTSP is fastest for main streams**: fastest on 17 of 18 channel samples across
+  the two runs, 1.5–3.0 s. FLV took 2.1–4.5 s and RTMP 2.1–4.7 s.
+- **RTSP is also usually fastest for sub streams**: faster than FLV on 12 of 18
+  samples, slower on 4, and tied on 2. Sub streams take 1.7–9.7 s whatever the
+  protocol. The slowest are the low-frame-rate subs (E1 Pro at 7 fps, RLC-520A
+  "Dogs" at 10 fps): most of the time is spent waiting for the next key frame.
 - Four main streams are H.265: Duo 3 (7680×2160), RLC-520A "Garage" (2560×1920),
   CX810 (3840×2160) and E1 Zoom (3840×2160). All sub and ext streams are H.264.
 - RTMP is enabled on the NVR and disabled on the three cameras added directly. FLV
   works on all of them, so HTTP-FLV does not need the RTMP port on these models.
-- Concurrency: 4 simultaneous FLV sub streams worked on the NVR (Duo 3 channel) and
-  on each direct camera; nothing failed, so 4 is a floor, not a ceiling. (The
-  per-level times in v0.0.1 reports include the 5 s hold; newer reports record the
-  time each stream took to open instead.)
+
+Concurrent streams (FLV sub streams, held 5 s, opened simultaneously):
+
+- **NVR (Duo 3 channel): 6 of 6, with no slowdown.** Every stream opened in ~2.7 s at
+  every level from 2 to 6. 6 is the most the probe tests, so the NVR's real limit is
+  higher.
+- **Cameras added directly: 6 of 6, but they slow down.** The CX810 took 3.6 s to
+  open up to 3 streams and 7.7 s from 4. The CX410 went from 3.3 s to 4.3 s at 4.
+  The E1 Zoom took 7.2 s for one stream and 8.5 s from 2.
 
 Recorded video (NVR RLN36; the cameras record only to the NVR):
 
-- **DOWNLOAD works on every channel and stream**: MP4, first byte in 158–394 ms.
+- **DOWNLOAD works on every channel and stream**: MP4, first byte in 157–649 ms.
 - **PLAYBACK** returns HTTP 404 on the NVR.
-- **NVR_DOWNLOAD** spent 2.3–17.6 s in its "prepare" step and then the download was
-  disconnected. Later prepare requests failed with `busy` / `rcv failed`: the
-  prepare step leaves the NVR busy.
-- **FLV** VOD was disconnected on every channel. Inconclusive: in this run it ran
-  right after `NVR_DOWNLOAD`, which may have left the NVR busy. The probe now runs
-  `NVR_DOWNLOAD` last; a re-run settles it.
-- Searching one day of recordings takes 1.1–4.3 s per channel and stream, so
+- **FLV** VOD is disconnected by the NVR on every channel. That held in run 2, where
+  FLV ran before `NVR_DOWNLOAD`, so it is not a side effect. With the URL reolink-aio
+  0.21.18 builds, FLV VOD does not work on this NVR.
+- **NVR_DOWNLOAD** spends 2.2–17.6 s in its "prepare" step, then the download is
+  disconnected, and the next prepare requests fail with `busy` / `rcv failed`.
+- Searching one day of recordings takes 1.0–4.7 s per channel and stream, so
   timeline data must be cached (as planned for Phase 2).
 - Baichuan works on the NVR: event search over 24 h in 0.4–2.6 s, with person,
   vehicle, animal and line-crossing counts; day search in ~1 s; **`snapshot_past`
-  in 160–300 ms**, fast enough for hover thumbnails.
-- The three cameras added directly have no local recordings (day search returns 0
-  days, Search errors, Baichuan event search returns 400/405).
+  in 160–490 ms**, fast enough for hover thumbnails.
+- The three cameras added directly have no local recordings: day search returns 0
+  days, Search errors, and Baichuan event search returns 400/405.
 
 ## Per-host notes
 
 | Host | Model | Notes |
 | --- | --- | --- |
 | host1 | RLN36 | Duo 3 main stream is 16 MP (7680×2160) H.265; its ext stream (2560×720 H.264) is the practical "HD" view in browsers |
-| host1 / host2 | CX410 | In HA twice (via NVR and directly). Direct RTSP main 1.7 s vs 1.9 s via NVR |
-| host1 / host3 | CX810 | In HA twice (via NVR and directly). Direct RTSP main 1.9 s vs 2.0 s via NVR |
-| host4 | E1 Zoom | Only reachable directly and has no recordings, so no timeline or playback for it unless it gets an SD card or is added to the NVR |
+| host1 / host2 | CX410 | In HA twice (via NVR and directly). RTSP main: 1.7 / 2.0 s direct vs 1.9 / 3.0 s via NVR (runs 1 / 2) |
+| host1 / host3 | CX810 | In HA twice (via NVR and directly). RTSP main: 1.9 / 1.5 s direct vs 2.0 / 2.0 s via NVR (runs 1 / 2) |
+| host4 | E1 Zoom | Snapshot-only by design; live view and snapshots, no timeline or playback |

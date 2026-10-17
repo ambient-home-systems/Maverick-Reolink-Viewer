@@ -107,6 +107,10 @@ def test_cell_formats() -> None:
     assert probe_to_matrix.cell({"ok": False, "skipped": "x"}) == "-"
     assert probe_to_matrix.cell(None) == "?"
     assert probe_to_matrix.fmt_ms(None) == ""
+    host = {
+        "concurrency": {"ok": True, "channel": 5, "max_ok": 6, "first_failure": None}
+    }
+    assert probe_to_matrix._concurrency(host, {"channel": 16}) == "tested on ch5"
     assert (
         probe_to_matrix.cell(
             {"ok": True, "ttfb_ms": 300, "prepare_ms": 2500}, "ttfb_ms"
