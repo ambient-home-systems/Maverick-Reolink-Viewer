@@ -1041,6 +1041,12 @@ def with_start_param(url: str, start_at: datetime, device_tz: tzinfo | None) -> 
     return _START_PARAM.sub("", url) + "&start=" + _reolink_time_id(start_at)
 
 
+def opaque_key(entry_id: str, channel: int | None) -> str:
+    """Return a stable key for a host channel that reveals no identifier."""
+    digest = hashlib.sha256(f"{entry_id}:{channel}".encode()).hexdigest()
+    return digest[:16]
+
+
 def _vod_file(f: Any, stream: str) -> VodFile:
     playback = _safe(lambda: f.playback_time)
     return VodFile(

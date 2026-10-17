@@ -28,17 +28,32 @@ def hdlr(handler: str) -> bytes:
     return full_box("hdlr", b"\0\0\0\0" + handler.encode() + bytes(12) + b"\0")
 
 
-def visual_entry(entry: str, width: int, height: int) -> bytes:
-    """Build a visual sample entry."""
+# H.265 Main, level 5.1, as Reolink cameras write it.
+HVCC = box(
+    "hvcC", bytes([1, 0x01, 0x60, 0, 0, 0, 0xB0, 0, 0, 0, 0, 0, 153]) + bytes(10)
+)
+# H.264 High, level 5.1.
+AVCC = box("avcC", bytes([1, 0x64, 0x00, 0x33, 0xFF]) + bytes(4))
+# AAC-LC: ES_Descriptor > DecoderConfigDescriptor (0x40) > DecoderSpecificInfo.
+ESDS = full_box(
+    "esds",
+    bytes([0x03, 25, 0, 1, 0, 0x04, 17, 0x40, 0x15])
+    + bytes(11)
+    + bytes([0x05, 2, 0x12, 0x10, 0x06, 1, 2]),
+)
+
+
+def visual_entry(entry: str, width: int, height: int, config: bytes = b"") -> bytes:
+    """Build a visual sample entry, with its codec configuration box."""
     body = (
         bytes(6) + struct.pack(">H", 1) + bytes(16) + struct.pack(">HH", width, height)
     )
-    return box(entry, body + bytes(50))
+    return box(entry, body + bytes(50) + config)
 
 
-def audio_entry(entry: str) -> bytes:
+def audio_entry(entry: str, config: bytes = b"") -> bytes:
     """Build an audio sample entry."""
-    return box(entry, bytes(28))
+    return box(entry, bytes(28) + config)
 
 
 def trak(handler: str, entry: bytes) -> bytes:
@@ -55,8 +70,8 @@ def moov(seconds: float = 60.0, *, fragmented: bool = False) -> bytes:
     """Build a moov with an H.265 video and an AAC audio track."""
     children = (
         mvhd(seconds)
-        + trak("vide", visual_entry("hvc1", 3840, 2160))
-        + trak("soun", audio_entry("mp4a"))
+        + trak("vide", visual_entry("hvc1", 3840, 2160, HVCC))
+        + trak("soun", audio_entry("mp4a", ESDS))
     )
     if fragmented:
         children += box("mvex", full_box("trex", bytes(20)))

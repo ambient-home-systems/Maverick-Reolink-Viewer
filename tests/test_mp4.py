@@ -12,13 +12,25 @@ from custom_components.reolink_viewer.mp4 import (
     Mp4ReadError,
     PrefixReader,
     async_layout,
+    codec_string,
     parse_box_header,
     parse_mvhd,
     parse_stsd,
     walk_boxes,
 )
 
-from .mp4_fixtures import FTYP, box, fragmented_file, mp4_file, mvhd
+from .mp4_fixtures import (
+    AVCC,
+    ESDS,
+    FTYP,
+    HVCC,
+    audio_entry,
+    box,
+    fragmented_file,
+    mp4_file,
+    mvhd,
+    visual_entry,
+)
 
 FFMPEG = shutil.which("ffmpeg")
 needs_ffmpeg = pytest.mark.skipif(FFMPEG is None, reason="ffmpeg not installed")
@@ -88,8 +100,14 @@ async def test_layout_moov_first() -> None:
     assert layout.error is None
     result = layout.as_dict()
     assert result["tracks"] == [
-        {"handler": "vide", "sample_entry": "hvc1", "width": 3840, "height": 2160},
-        {"handler": "soun", "sample_entry": "mp4a"},
+        {
+            "handler": "vide",
+            "sample_entry": "hvc1",
+            "width": 3840,
+            "height": 2160,
+            "codec": "hvc1.1.6.L153.B0",
+        },
+        {"handler": "soun", "sample_entry": "mp4a", "codec": "mp4a.40.2"},
     ]
 
 
@@ -291,3 +309,20 @@ async def test_scanner_moov_cut_short_and_limits() -> None:
     scanner = _scan(to_end, 10)
     assert [b.type for b in scanner.boxes] == ["ftyp", "mdat"]
     assert scanner.bytes_seen == len(to_end)
+
+
+def test_codec_strings() -> None:
+    """RFC 6381 strings from avcC, hvcC and esds; fallbacks."""
+    assert codec_string(visual_entry("avc1", 640, 360, AVCC)) == "avc1.640033"
+    assert codec_string(visual_entry("hev1", 640, 360, HVCC)) == "hev1.1.6.L153.B0"
+    high_tier = box(
+        "hvcC", bytes([1, 0x62, 0x40, 0, 0, 0, 0x90, 0, 0, 0, 0, 0, 120]) + bytes(10)
+    )
+    assert codec_string(visual_entry("hvc1", 1, 1, high_tier)) == "hvc1.A2.2.H120.90"
+    assert codec_string(visual_entry("avc1", 640, 360)) == "avc1"
+    assert codec_string(audio_entry("mp4a", ESDS)) == "mp4a.40.2"
+    he_aac = ESDS.replace(bytes([0x12, 0x10]), bytes([0x2B, 0x10]))
+    assert codec_string(audio_entry("mp4a", he_aac)) == "mp4a.40.5"
+    assert codec_string(audio_entry("mp4a")) == "mp4a.40.2"
+    assert codec_string(box("tx3g", bytes(8))) == "tx3g"
+    assert codec_string(b"\0") is None
