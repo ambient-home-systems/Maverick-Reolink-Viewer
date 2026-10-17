@@ -1,12 +1,13 @@
 """Tests for the bridge over HA's Reolink integration."""
 
 from datetime import UTC, datetime, timedelta, timezone
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from reolink_aio.enums import VodRequestType
 from reolink_aio.exceptions import ReolinkError
+from reolink_aio.typings import VOD_search_status, VOD_trigger
 
 from custom_components.reolink_viewer import bridge
 from custom_components.reolink_viewer.bridge import (
@@ -23,7 +24,14 @@ from custom_components.reolink_viewer.bridge import (
 )
 from homeassistant.core import HomeAssistant
 
-from .conftest import SECRETS, TEST_NOW, TEST_PASSWORD, TEST_SERIAL, TEST_TOKEN
+from .conftest import (
+    SECRETS,
+    TEST_NOW,
+    TEST_PASSWORD,
+    TEST_SERIAL,
+    TEST_TOKEN,
+    make_vod_file,
+)
 from .ha_reolink_mock import (
     TEST_CAM_MODEL,
     TEST_HOST,
@@ -331,3 +339,63 @@ def test_redact_text() -> None:
     assert redact_text("login user=admin&password=x", ()) == (
         "login user=<redacted>&password=<redacted>"
     )
+
+
+async def test_search_day_and_recording_days(
+    hass: HomeAssistant, reolink_host: MagicMock, loaded_reolink: MockConfigEntry
+) -> None:
+    """One window: recordings plus individual events (one per item, all types)."""
+    (host,) = bridge.async_get_hosts(hass)
+    start = TEST_NOW - timedelta(hours=2)
+    both = make_vod_file(start, 2, name="20261017100000")
+    both.bc_triggers = VOD_trigger.PERSON | VOD_trigger.VEHICLE
+    animal = make_vod_file(start + timedelta(minutes=30), 1, name="20261017103000")
+    animal.bc_triggers = VOD_trigger.ANIMAL
+    reolink_host.baichuan.search_vod_type = AsyncMock(
+        return_value=(
+            {},
+            {
+                VOD_trigger.PERSON: [both],
+                VOD_trigger.VEHICLE: [both],
+                VOD_trigger.ANIMAL: [animal],
+            },
+        )
+    )
+    day = await host.async_search_day(0, start, TEST_NOW, "sub")
+    (file,) = day.files
+    assert file.start_id == "20261017110000"
+    assert file.playback is not None
+    assert file.playback.tzinfo is None
+    assert [(e.types, e.file_id) for e in day.events] == [
+        (("VEHICLE", "PERSON"), "20261017100000"),
+        (("ANIMAL",), "20261017103000"),
+    ]
+    assert day.events[0].start == start
+    assert day.events[0].end == start + timedelta(minutes=2)
+    assert day.events_error is None
+
+    # A failing event search keeps the recordings.
+    reolink_host.baichuan.search_vod_type = AsyncMock(side_effect=ReolinkError("x"))
+    day = await host.async_search_day(0, start, TEST_NOW, "sub")
+    assert len(day.files) == 1
+    assert day.events == []
+    assert day.events_error == "ReolinkError"
+    # A failing recording search fails the whole search.
+    reolink_host.request_vod_files = AsyncMock(side_effect=ReolinkError("y"))
+    with pytest.raises(ReolinkError):
+        await host.async_search_day(0, start, TEST_NOW, "sub")
+
+    month_start, month_end = datetime(2026, 10, 1), datetime(2026, 10, 31, 23, 59)
+    days = await host.async_recording_days(0, month_start, month_end)
+    assert days[0].isoformat() == "2026-10-01"
+    assert len(days) == 17
+    # Baichuan fails: the HTTP status search answers.
+    reolink_host.baichuan.search_vod_days = AsyncMock(side_effect=ReolinkError("z"))
+    reolink_host.request_vod_files = AsyncMock(
+        return_value=(
+            [VOD_search_status({"year": 2026, "mon": 10, "table": "01" + "0" * 29})],
+            [],
+        )
+    )
+    days = await host.async_recording_days(0, month_start, month_end)
+    assert [d.day for d in days] == [2]

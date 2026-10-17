@@ -21,9 +21,14 @@ FRONTEND_DIST_DIR: Final = "frontend_dist"
 # bridge expects.
 ISSUE_INCOMPATIBLE: Final = "reolink_incompatible"
 
-# Default per-host scheduler limit. Phase 0's probe measures the real tolerance;
-# until then stay conservative: Reolink cameras commonly allow few sessions.
+# Per-host scheduler limits (Phase 0 decisions, hardware-matrix.md): request
+# slots, and a separate budget for long-lived streams (recording downloads).
 DEFAULT_HOST_CONCURRENCY: Final = 2
+NVR_HOST_CONCURRENCY: Final = 6
+CAMERA_HOST_CONCURRENCY: Final = 3
+NVR_STREAM_BUDGET: Final = 4
+DEFAULT_STREAM_BUDGET: Final = 2
+PREFETCH_STREAM_BUDGET: Final = 1
 
 # Probe safety limits.
 PROBE_DEFAULT_MAX_STREAMS: Final = 4

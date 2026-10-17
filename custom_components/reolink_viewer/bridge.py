@@ -13,9 +13,10 @@ Methods on :class:`ReolinkHostHandle` that perform device I/O are prefixed with
 ``async_`` and must be called through ``scheduler.py``.
 """
 
+import asyncio
 from collections.abc import Iterable
 from dataclasses import asdict, dataclass, field, fields, is_dataclass
-from datetime import datetime, tzinfo
+from datetime import date, datetime, tzinfo
 from enum import StrEnum
 import hashlib
 import importlib
@@ -231,7 +232,12 @@ class HostInfo:
 
 @dataclass(frozen=True, slots=True)
 class VodFile:
-    """A recording file returned by a VOD search."""
+    """A recording file returned by a VOD search.
+
+    ``start``/``end`` are the device's wall-clock times (reolink-aio attaches
+    the device zone, which cannot tell the repeated DST hour apart: convert
+    with ``timeconv``). ``playback`` is the search's raw PlaybackTime.
+    """
 
     start: datetime
     end: datetime
@@ -239,11 +245,36 @@ class VodFile:
     stream: str
     size: int | None
     triggers: tuple[str, ...]
+    playback: datetime | None = None
+
+    @property
+    def start_id(self) -> str:
+        """Return the wall-clock start as YYYYMMDDHHMMSS (the events' file key)."""
+        return _reolink_time_id(self.start)
 
     @property
     def nvr_download_name(self) -> str:
         """Return the 'start_end' id NVR_DOWNLOAD expects (as HA's media source)."""
         return f"{_reolink_time_id(self.start)}_{_reolink_time_id(self.end)}"
+
+
+@dataclass(frozen=True, slots=True)
+class VodEvent:
+    """One detection from the Baichuan event search (wall-clock times)."""
+
+    start: datetime
+    end: datetime
+    types: tuple[str, ...]
+    file_id: str  # start_id of the recording it belongs to
+
+
+@dataclass(frozen=True, slots=True)
+class DaySearch:
+    """Recordings and events of one search window."""
+
+    files: list[VodFile]
+    events: list[VodEvent]
+    events_error: str | None = None
 
 
 def _reolink_time_id(value: datetime) -> str:
@@ -787,17 +818,52 @@ class ReolinkHostHandle:
         _statuses, files = await self._api.request_vod_files(
             channel, start, end, stream=stream
         )
-        return [
-            VodFile(
-                start=f.start_time,
-                end=f.end_time,
-                name=f.file_name,
-                stream=stream,
-                size=_safe(lambda f=f: f.size),
-                triggers=_trigger_names(f.triggers),
+        return [_vod_file(f, stream) for f in files]
+
+    async def async_search_day(
+        self, channel: int, start: datetime, end: datetime, stream: str
+    ) -> DaySearch:
+        """Search recordings and their individual events in one window.
+
+        Runs the HTTP recording search and the Baichuan event search together.
+        ``start``/``end`` are device wall-clock times. An event search failure
+        leaves the recordings usable (``events_error``).
+        """
+        files_result, events_result = await asyncio.gather(
+            self._api.request_vod_files(channel, start, end, stream=stream),
+            self._api.baichuan.search_vod_type(
+                channel=channel, start=start, end=end, stream=stream
+            ),
+            return_exceptions=True,
+        )
+        if isinstance(files_result, BaseException):
+            raise files_result
+        _statuses, raw_files = files_result
+        files = [_vod_file(f, stream) for f in raw_files]
+        if isinstance(events_result, BaseException):
+            if isinstance(events_result, asyncio.CancelledError):
+                raise events_result
+            return DaySearch(files, [], f"{type(events_result).__name__}")
+        _by_id, by_trigger = events_result
+        return DaySearch(files, _events(by_trigger))
+
+    async def async_recording_days(
+        self, channel: int, start: datetime, end: datetime
+    ) -> list[date]:
+        """Return the days with recordings between two wall-clock times."""
+        try:
+            statuses = await self._api.baichuan.search_vod_days(channel, start, end)
+        except Exception:  # fall back to the HTTP status search
+            _LOGGER.debug("Baichuan day search failed, trying HTTP", exc_info=True)
+            statuses, _files = await self._api.request_vod_files(
+                channel, start, end, status_only=True
             )
-            for f in files
-        ]
+        days = {
+            date(status.year, status.month, day)
+            for status in statuses
+            for day in status.days
+        }
+        return sorted(d for d in days if start.date() <= d <= end.date())
 
     async def async_search_vod_events(
         self, channel: int, start: datetime, end: datetime, stream: str
@@ -973,6 +1039,41 @@ def with_start_param(url: str, start_at: datetime, device_tz: tzinfo | None) -> 
     if start_at.tzinfo is not None and device_tz is not None:
         start_at = start_at.astimezone(device_tz)
     return _START_PARAM.sub("", url) + "&start=" + _reolink_time_id(start_at)
+
+
+def _vod_file(f: Any, stream: str) -> VodFile:
+    playback = _safe(lambda: f.playback_time)
+    return VodFile(
+        start=f.start_time,
+        end=f.end_time,
+        name=f.file_name,
+        stream=stream,
+        size=_safe(lambda: f.size),
+        triggers=_trigger_names(f.triggers),
+        playback=playback.replace(tzinfo=None)
+        if isinstance(playback, datetime)
+        else None,
+    )
+
+
+def _events(by_trigger: Any) -> list[VodEvent]:
+    """Flatten the Baichuan search: one event per item, with all its types."""
+    seen: dict[int, Any] = {}
+    for items in by_trigger.values():
+        for item in items:
+            seen.setdefault(id(item), item)
+    events = []
+    for item in seen.values():
+        try:
+            start = item.start_time.replace(tzinfo=None)
+            end = item.end_time.replace(tzinfo=None)
+            file_id = str(item.file_name)
+        except Exception:  # skip malformed items
+            _LOGGER.debug("Skipping a malformed event", exc_info=True)
+            continue
+        events.append(VodEvent(start, end, _trigger_names(item.bc_triggers), file_id))
+    events.sort(key=lambda e: (e.start, e.end))
+    return events
 
 
 def _trigger_names(triggers: Iterable[Any] | Any) -> tuple[str, ...]:

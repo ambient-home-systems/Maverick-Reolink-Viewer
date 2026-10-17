@@ -13,19 +13,24 @@ from homeassistant.util.hass_dict import HassKey
 
 from . import bridge
 from .const import (
+    CAMERA_HOST_CONCURRENCY,
     DEFAULT_HOST_CONCURRENCY,
+    DEFAULT_STREAM_BUDGET,
     DOMAIN,
     FRONTEND_DIST_DIR,
     ISSUE_INCOMPATIBLE,
+    NVR_HOST_CONCURRENCY,
+    NVR_STREAM_BUDGET,
     PANEL_COMPONENT_NAME,
     PANEL_FILENAME,
     PANEL_ICON,
     PANEL_TITLE,
     PANEL_URL_PATH,
+    PREFETCH_STREAM_BUDGET,
     STATIC_URL_PATH,
 )
 from .models import ReolinkViewerConfigEntry, ReolinkViewerData
-from .scheduler import Scheduler
+from .scheduler import HostLimits, Scheduler
 from .websocket_api import async_register_commands
 
 _LOGGER = logging.getLogger(__name__)
@@ -51,6 +56,18 @@ def _bundle_version() -> str:
         ]
     except OSError:
         return "missing"
+
+
+def host_limits(hass: HomeAssistant, entry_id: str) -> HostLimits:
+    """Return the scheduler limits of a Reolink host (NVR/Hub or camera)."""
+    host = bridge.async_get_host(hass, entry_id)
+    if host.is_nvr:
+        return HostLimits(
+            NVR_HOST_CONCURRENCY, NVR_STREAM_BUDGET, PREFETCH_STREAM_BUDGET
+        )
+    return HostLimits(
+        CAMERA_HOST_CONCURRENCY, DEFAULT_STREAM_BUDGET, PREFETCH_STREAM_BUDGET
+    )
 
 
 async def async_setup_entry(
@@ -79,7 +96,11 @@ async def async_setup_entry(
         )
 
     entry.runtime_data = ReolinkViewerData(
-        scheduler=Scheduler(default_limit=DEFAULT_HOST_CONCURRENCY)
+        scheduler=Scheduler(
+            default_limit=DEFAULT_HOST_CONCURRENCY,
+            default_stream_limit=DEFAULT_STREAM_BUDGET,
+            resolver=lambda entry_id: host_limits(hass, entry_id),
+        )
     )
 
     if not hass.data.get(DATA_STATIC_REGISTERED):

@@ -10,11 +10,15 @@ Each Reolink host (camera, NVR or Home Hub) gets a :class:`HostScheduler` with:
 - exclusive jobs, which run alone (used by the probe's concurrent-stream test,
   which opens several streams itself);
 - per-job timeouts, and cancellation: when every caller waiting on a job is
-  cancelled, the job is dropped from the queue or its task is cancelled.
+  cancelled, the job is dropped from the queue or its task is cancelled;
+- a separate **stream budget** for long-lived video streams (recording
+  downloads), so a stream never holds a request slot: streams wait for a stream
+  slot by priority, and prefetch streams have their own, smaller cap.
 """
 
 import asyncio
-from collections.abc import Awaitable, Callable, Hashable
+from collections.abc import AsyncIterator, Awaitable, Callable, Hashable
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from enum import IntEnum
 import heapq
@@ -58,15 +62,150 @@ class _Job:
     task: asyncio.Task[None] | None = field(default=None)
 
 
+@dataclass(frozen=True, slots=True)
+class HostLimits:
+    """Concurrency limits of one host."""
+
+    requests: int
+    streams: int
+    prefetch_streams: int = 1
+
+
+class StreamTicket:
+    """A request for a stream slot; ``wait()`` until granted, then ``release()``."""
+
+    def __init__(self, budget: StreamBudget, priority: Priority, seq: int) -> None:
+        """Initialize the ticket (use StreamBudget.request)."""
+        self._budget = budget
+        self.priority = priority
+        self.seq = seq
+        self.granted_priority: Priority | None = None
+        self.future: asyncio.Future[None] = asyncio.get_running_loop().create_future()
+        self.future.add_done_callback(_consume)
+        self.released = False
+
+    @property
+    def granted(self) -> bool:
+        """Return True once the slot is held."""
+        return self.granted_priority is not None and not self.released
+
+    def raise_priority(self, priority: Priority) -> None:
+        """Move a waiting ticket up the queue."""
+        if self.granted_priority is None and priority < self.priority:
+            self.priority = priority
+            self._budget.dispatch()
+
+    async def wait(self) -> None:
+        """Wait until the slot is granted; cancelling gives the place up."""
+        try:
+            await asyncio.shield(self.future)
+        except asyncio.CancelledError:
+            self.release()
+            raise
+
+    def release(self) -> None:
+        """Free the slot (or give up the place in the queue)."""
+        if not self.released:
+            self.released = True
+            self._budget.done(self)
+
+
+class StreamBudget:
+    """Slots for long-lived streams to one host, apart from request slots."""
+
+    def __init__(self, name: str, limit: int, prefetch_limit: int = 1) -> None:
+        """Initialize the budget."""
+        if limit < 1 or prefetch_limit < 1:
+            raise ValueError("stream limits must be at least 1")
+        self.name = name
+        self.limit = limit
+        self.prefetch_limit = min(prefetch_limit, limit)
+        self._waiting: list[StreamTicket] = []
+        self._active: set[StreamTicket] = set()
+        self._seq = itertools.count()
+        self._closed = False
+
+    def request(self, priority: Priority) -> StreamTicket:
+        """Queue for a slot; the ticket's ``wait()`` resolves when granted."""
+        if self._closed:
+            raise SchedulerClosedError(self.name)
+        ticket = StreamTicket(self, priority, next(self._seq))
+        self._waiting.append(ticket)
+        self.dispatch()
+        return ticket
+
+    @asynccontextmanager
+    async def slot(self, priority: Priority) -> AsyncIterator[StreamTicket]:
+        """Hold a stream slot for the duration of the block."""
+        ticket = self.request(priority)
+        try:
+            await ticket.wait()
+            yield ticket
+        finally:
+            ticket.release()
+
+    def _prefetch_active(self) -> int:
+        return sum(1 for t in self._active if t.granted_priority is Priority.PREFETCH)
+
+    def dispatch(self) -> None:
+        """Grant free slots to the best waiting tickets."""
+        self._waiting.sort(key=lambda t: (t.priority, t.seq))
+        for ticket in list(self._waiting):
+            if len(self._active) >= self.limit:
+                return
+            if (
+                ticket.priority is Priority.PREFETCH
+                and self._prefetch_active() >= self.prefetch_limit
+            ):
+                continue
+            self._waiting.remove(ticket)
+            self._active.add(ticket)
+            ticket.granted_priority = ticket.priority
+            ticket.future.set_result(None)
+
+    def done(self, ticket: StreamTicket) -> None:
+        """Forget a ticket (released or abandoned) and grant its slot."""
+        if ticket in self._waiting:
+            self._waiting.remove(ticket)
+            if not ticket.future.done():
+                ticket.future.cancel()
+        self._active.discard(ticket)
+        if not self._closed:
+            self.dispatch()
+
+    def stats(self) -> dict[str, int]:
+        """Return stream statistics."""
+        return {
+            "stream_limit": self.limit,
+            "streams": len(self._active),
+            "streams_waiting": len(self._waiting),
+        }
+
+    def close(self) -> None:
+        """Fail every waiting ticket."""
+        self._closed = True
+        for ticket in self._waiting:
+            if not ticket.future.done():
+                ticket.future.set_exception(SchedulerClosedError(self.name))
+        self._waiting.clear()
+
+
 class HostScheduler:
     """Queue, limit and prioritize the requests to one host."""
 
-    def __init__(self, name: str, limit: int) -> None:
+    def __init__(
+        self,
+        name: str,
+        limit: int,
+        stream_limit: int = 2,
+        prefetch_stream_limit: int = 1,
+    ) -> None:
         """Initialize the scheduler."""
         if limit < 1:
             raise ValueError("limit must be at least 1")
         self.name = name
         self.limit = limit
+        self.streams = StreamBudget(name, stream_limit, prefetch_stream_limit)
         self._heap: list[tuple[int, int, _Job]] = []
         self._by_key: dict[Hashable, _Job] = {}
         self._running: set[_Job] = set()
@@ -86,7 +225,12 @@ class HostScheduler:
 
     def stats(self) -> dict[str, int]:
         """Return queue statistics."""
-        return {"limit": self.limit, "running": self.running, "queued": self.queued}
+        return {
+            "limit": self.limit,
+            "running": self.running,
+            "queued": self.queued,
+            **self.streams.stats(),
+        }
 
     async def run[T](
         self,
@@ -209,6 +353,7 @@ class HostScheduler:
     async def async_shutdown(self) -> None:
         """Fail queued jobs, cancel running ones and wait for them to finish."""
         self._closed = True
+        self.streams.close()
         for _priority, seq, job in self._heap:
             if _valid(seq, job):
                 job.state = _DONE
@@ -241,24 +386,54 @@ class Scheduler:
     """Registry of per-host schedulers."""
 
     def __init__(
-        self, default_limit: int, limits: dict[str, int] | None = None
+        self,
+        default_limit: int,
+        limits: dict[str, int] | None = None,
+        *,
+        default_stream_limit: int = 2,
+        resolver: Callable[[str], HostLimits | None] | None = None,
     ) -> None:
-        """Initialize the registry."""
-        self._default_limit = default_limit
+        """Initialize the registry.
+
+        ``resolver`` gives a host's limits from its key (e.g. NVR or camera) when
+        its scheduler is first created; ``limits`` overrides request limits by key.
+        """
+        self._default = HostLimits(default_limit, default_stream_limit)
         self._limits = dict(limits or {})
+        self._resolver = resolver
         self._hosts: dict[str, HostScheduler] = {}
         self._closed = False
+
+    def _limits_for(self, host_key: str) -> HostLimits:
+        limits = self._default
+        if self._resolver is not None:
+            try:
+                limits = self._resolver(host_key) or self._default
+            except Exception:  # fall back to the safe default
+                _LOGGER.debug("Cannot resolve limits of %s", host_key, exc_info=True)
+        if host_key in self._limits:
+            limits = HostLimits(
+                self._limits[host_key], limits.streams, limits.prefetch_streams
+            )
+        return limits
 
     def host(self, host_key: str) -> HostScheduler:
         """Return the scheduler for a host, creating it on first use."""
         if self._closed:
             raise SchedulerClosedError(host_key)
         if (scheduler := self._hosts.get(host_key)) is None:
+            limits = self._limits_for(host_key)
             scheduler = HostScheduler(
-                host_key, self._limits.get(host_key, self._default_limit)
+                host_key, limits.requests, limits.streams, limits.prefetch_streams
             )
             self._hosts[host_key] = scheduler
         return scheduler
+
+    def forget(self, host_key: str) -> None:
+        """Drop an idle host's scheduler so its limits are resolved again."""
+        scheduler = self._hosts.get(host_key)
+        if scheduler is not None and not scheduler.running and not scheduler.queued:
+            del self._hosts[host_key]
 
     async def run[T](
         self,
