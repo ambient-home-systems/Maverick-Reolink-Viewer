@@ -276,7 +276,9 @@ class PlaybackCheck:
                 "bytes_scanned": scanner.bytes_seen,
             }
         mp4_duration = entry["mp4"].get("duration_s")
-        if isinstance(mp4_duration, (int, float)):
+        if isinstance(mp4_duration, (int, float)) and not entry["mp4"].get(
+            "fragmented"
+        ):
             entry["mp4"]["duration_vs_search_s"] = round(
                 mp4_duration - (file.end - file.start).total_seconds(), 1
             )
@@ -734,7 +736,9 @@ def seek_verdict(
     if not got.ok:
         return "error"
     ratio: float | None = None
-    if layout.duration_s and full_layout.duration_s:
+    # A fragmented MP4's mvhd duration is a placeholder: use sizes instead.
+    fragmented = layout.fragmented or full_layout.fragmented
+    if layout.duration_s and full_layout.duration_s and not fragmented:
         ratio = layout.duration_s / full_layout.duration_s
     elif got.eof and full.eof and full.bytes_read:
         ratio = got.bytes_read / full.bytes_read

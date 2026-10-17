@@ -243,6 +243,21 @@ def test_playback_cells() -> None:
         }
     ) == ("ignored (2.0 MB of 2.0 MB)")
     assert probe_to_matrix._seek({"verdict": "unknown"}) == "unknown"
+    capped = {"verdict": "ignored", "mp4_duration_s": 1, "full_mp4_duration_s": 1}
+    assert probe_to_matrix._seek(capped, fragmented=True) == (
+        "n/a (fragmented MP4, read capped)"
+    )
+    read_whole = {
+        "verdict": "ignored",
+        "eof": True,
+        "full_eof": True,
+        "bytes_read": 3e6,
+        "full_bytes_read": 3e6,
+        "mp4_duration_s": 1,
+    }
+    assert probe_to_matrix._seek(read_whole, fragmented=True) == (
+        "ignored (3.0 MB of 3.0 MB)"
+    )
     assert probe_to_matrix.fmt_bytes(None) == "?"
     report = {
         "hosts": [

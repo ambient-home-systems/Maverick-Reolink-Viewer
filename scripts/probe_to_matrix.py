@@ -254,7 +254,7 @@ def _recording(file: dict[str, Any]) -> str:
     return ", ".join(parts)
 
 
-def _seek(seek: dict[str, Any]) -> str:
+def _seek(seek: dict[str, Any], fragmented: bool = False) -> str:
     if not seek:
         return ""
     if "skipped" in seek:
@@ -262,15 +262,22 @@ def _seek(seek: dict[str, Any]) -> str:
     verdict = str(seek.get("verdict") or "?")
     if verdict == "error":
         return cell(seek)
+    both_eof = seek.get("eof") and seek.get("full_eof")
+    if fragmented and not both_eof:
+        # Reports from v0.1.2 judged fragmented files by a placeholder duration.
+        return "n/a (fragmented MP4, read capped)"
     detail = []
-    if seek.get("mp4_duration_s") is not None:
+    if seek.get("mp4_duration_s") is not None and not fragmented:
         detail.append(
             f"{seek['mp4_duration_s']:.0f} s of {seek.get('full_mp4_duration_s') or '?'} s"
         )
-    elif seek.get("eof") and seek.get("full_eof"):
+    elif both_eof:
         detail.append(
             f"{fmt_bytes(seek.get('bytes_read'))} of {fmt_bytes(seek.get('full_bytes_read'))}"
         )
+        if fragmented:
+            same = seek.get("bytes_read") == seek.get("full_bytes_read")
+            verdict = "ignored" if same else verdict
     return f"{verdict} ({', '.join(detail)})" if detail else verdict
 
 
@@ -426,8 +433,10 @@ def playback_rows(reports: Iterable[dict[str, Any]]) -> list[str]:
                         _mid_ttfb(entry.get("range") or {}),
                         _layout(mp4),
                         _tracks(mp4),
-                        f"{diff:+.1f} s" if isinstance(diff, (int, float)) else "",
-                        _seek(entry.get("seek") or {}),
+                        f"{diff:+.1f} s"
+                        if isinstance(diff, (int, float)) and not mp4.get("fragmented")
+                        else "",
+                        _seek(entry.get("seek") or {}, bool(mp4.get("fragmented"))),
                         _throughput(entry.get("full") or {}),
                         _day(entry.get("day") or {}),
                         cell((entry.get("day") or {}).get("search"), "latency_ms"),

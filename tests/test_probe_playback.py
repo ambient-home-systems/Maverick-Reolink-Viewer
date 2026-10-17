@@ -164,6 +164,9 @@ def test_seek_verdict() -> None:
     assert seek_verdict(ok, full, half, whole, None) == "seeks"
     assert seek_verdict(ok, full, whole, whole, None) == "ignored"
     assert seek_verdict(ok, full, Mp4Layout(duration_s=50), whole, None) == "unclear"
+    # Fragmented files: the placeholder duration is ignored, sizes decide.
+    frag = Mp4Layout(duration_s=1, fragmented=True)
+    assert seek_verdict(ok, full, frag, frag, None) == "seeks"
     assert seek_verdict(ok, full, none, none, None) == "seeks"
     assert seek_verdict(FetchResult(ok=False), full, none, none, None) == "error"
     partial = FetchResult(ok=True, status=200, bytes_read=500)
