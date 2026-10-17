@@ -15,12 +15,13 @@ import {
 } from "../test-fixtures";
 import type { DeviceDetails } from "../types";
 import "./device-page";
-import { watchedEntities, type RvDevicePage } from "./device-page";
+import { hasPlayback, tabsFor, watchedEntities, type RvDevicePage } from "./device-page";
+import type { Tab } from "./navigation";
 import { SNAPSHOT_REFRESH_MS, type RvOverview } from "./overview";
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-async function mount(hass: FakeHass, tab: "overview" | "settings" = "overview"): Promise<RvDevicePage> {
+async function mount(hass: FakeHass, tab: Tab = "overview"): Promise<RvDevicePage> {
   const el = document.createElement("rv-device-page");
   el.hass = hass;
   el.deviceId = "dev-cam";
@@ -139,6 +140,31 @@ describe("rv-device-page", () => {
       { view: "device", id: "dev-cam", tab: "settings" },
       { view: "list" },
     ]);
+  });
+
+  it("offers Playback only for cameras that record", async () => {
+    const hass = makeHass(okDevices());
+    const el = await mount(hass, "playback");
+    const tabs = () => [...(el.shadowRoot?.querySelectorAll('[role="tab"]') ?? [])].map((b) => b.textContent.trim());
+    expect(tabs()).toEqual(["Overview", "Playback", "Settings"]);
+    const playback = el.shadowRoot?.querySelector("rv-playback");
+    expect(playback?.deviceId).toBe("dev-cam");
+    expect(playback?.cameraName).toBe("Front Yard");
+
+    // A camera that records nowhere (e.g. the E1 Zoom): no Playback tab, Overview instead.
+    const nvrConnection = makeCamera().connections.at(0);
+    if (!nvrConnection) throw new Error("fixture has no connection");
+    const snapshotOnly = makeDevice({
+      node: makeCamera({ connections: [{ ...nvrConnection, playback_source: false }] }),
+    });
+    hass.responses["reolink_viewer/device"] = snapshotOnly;
+    expect(hasPlayback(snapshotOnly)).toBe(false);
+    expect(tabsFor(snapshotOnly)).toEqual(["overview", "settings"]);
+    await el.reload();
+    await el.updateComplete;
+    expect(tabs()).toEqual(["Overview", "Settings"]);
+    expect(el.shadowRoot?.querySelector("rv-playback")).toBeNull();
+    expect(el.shadowRoot?.querySelector("rv-overview")).not.toBeNull();
   });
 
   it("reloads after an entity registry change of its own entities", async () => {

@@ -1,6 +1,6 @@
 // In-panel navigation, mirrored in the URL hash so back/forward work.
 
-export type Tab = "overview" | "settings";
+export type Tab = "overview" | "settings" | "playback";
 
 export type Route = { view: "list" } | { view: "device"; id: string; tab: Tab };
 
@@ -33,11 +33,12 @@ export function routeToHash(route: Route): string {
 }
 
 export function routeFromHash(hash: string): Route {
-  const match = /^#device\/([^/]+)(?:\/(overview|settings))?$/.exec(hash);
+  const match = /^#device\/([^/]+)(?:\/(overview|settings|playback))?$/.exec(hash);
   if (!match?.[1]) return { view: "list" };
+  const tab = match[2];
   return {
     view: "device",
     id: decodeURIComponent(match[1]),
-    tab: match[2] === "settings" ? "settings" : "overview",
+    tab: tab === "settings" || tab === "playback" ? tab : "overview",
   };
 }

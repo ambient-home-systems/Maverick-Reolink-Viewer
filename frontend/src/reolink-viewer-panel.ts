@@ -1,6 +1,6 @@
 import { LitElement, css, html, nothing, type PropertyValues, type TemplateResult } from "lit";
 
-import { fetchCatalog, fetchDevices, runProbe, toError, type ProbeRun } from "./api";
+import { fetchCatalog, fetchDevices, runProbe, toError, warmTimelines, type ProbeRun } from "./api";
 import "./components/device-list";
 import "./components/device-page";
 import {
@@ -62,6 +62,7 @@ export class ReolinkViewerPanel extends LitElement {
 
   private _run: ProbeRun | undefined;
   private _loading = false;
+  private _warmed = false;
   private _toastTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly _onHashChange = () => {
     this._route = routeFromHash(window.location.hash);
@@ -135,6 +136,11 @@ export class ReolinkViewerPanel extends LitElement {
     try {
       this._devices = await fetchDevices(this.hass);
       this._loadError = undefined;
+      if (!this._warmed && !this._devices.degraded) {
+        // Fetch today's timeline of every recording camera in the background.
+        this._warmed = true;
+        warmTimelines(this.hass).catch(() => undefined);
+      }
     } catch (err) {
       this._loadError = toError(err).message;
     } finally {

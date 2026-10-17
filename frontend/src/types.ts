@@ -31,6 +31,14 @@ export interface ServiceTarget {
   entity_id: string;
 }
 
+export interface HassConfig {
+  time_zone?: string;
+}
+
+export interface HassLocale {
+  language?: string;
+}
+
 export interface HomeAssistant {
   callWS<T>(message: Record<string, unknown>): Promise<T>;
   callService(
@@ -43,6 +51,8 @@ export interface HomeAssistant {
   connection: HassConnection;
   states: HassEntities;
   user?: HassUser;
+  config?: HassConfig;
+  locale?: HassLocale;
 }
 
 export interface CompatReport {
@@ -279,3 +289,84 @@ export interface EntityRegistryUpdateResult {
   require_restart?: boolean;
   reload_delay?: number;
 }
+
+// ---- Playback (reolink_viewer/timeline/*, reolink_viewer/playback/*) ----
+// All times are UTC epoch milliseconds.
+
+export type Stream = "sub" | "main";
+
+export interface Timing {
+  cache?: string;
+  search_ms?: number;
+  total_ms?: number;
+  [key: string]: unknown;
+}
+
+export interface Segment {
+  id: string;
+  start: number;
+  end: number;
+  triggers: string[];
+  ambiguous: boolean;
+}
+
+export interface TimelineEvent {
+  start: number;
+  end: number;
+  types: string[];
+  segment: string | null;
+  ambiguous: boolean;
+}
+
+export interface TimelineDay {
+  date: string;
+  start: number;
+  end: number;
+  now: number;
+  segments: Segment[];
+  events: TimelineEvent[];
+  complete: boolean;
+  events_error: string | null;
+  hint_source: string | null;
+  timing: Timing;
+}
+
+export interface TimelineDays {
+  days: number[];
+  timing: Timing;
+}
+
+export interface MediaInfo {
+  codec: string;
+  width: number | null;
+  height: number | null;
+  audio: string | null;
+}
+
+export interface CacheStatus {
+  complete: boolean;
+  bytes: number;
+  error: string | null;
+  [key: string]: unknown;
+}
+
+export interface PlaybackUrl {
+  url: string;
+  clip_url: string;
+  stream: Stream;
+  segment_id: string;
+  start: number;
+  end: number;
+  media: MediaInfo | null;
+  cache: CacheStatus;
+  expires_in: number;
+  timing: Timing;
+}
+
+export interface ThumbnailUrl {
+  time: number;
+  bucket: number;
+  url: string;
+}
+
+export type MediaInfoResponse = Record<Stream, MediaInfo | null>;
