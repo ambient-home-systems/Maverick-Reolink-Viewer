@@ -17,7 +17,7 @@ put on it:
 | Phase | Outcome | Difficulty | Estimate | Status |
 | --- | --- | --- | --- | --- |
 | 0 | Foundations, CI, adapter layer, hardware discovery | High | 1–2 wk | Done (2026-10-17) |
-| 1 | Device details and every setting, with explanations | Standard (catalog) / High (panel shell) | 2–3 wk | Not started |
+| 1 | Device details and every setting, with explanations | Standard (catalog) / High (panel shell) | 2–3 wk | Code complete (2026-10-17); exit criteria wait on the hardware checklist |
 | 2 | Event timeline, thumbnails, smooth playback | High (backend) / Very high (player) | 3–5 wk | Not started |
 | 3 | Live view via go2rtc, grid, fullscreen, PTZ | High | 3–4 wk | Not started |
 | 4 | Performance, mobile, packaging, first release | Standard | 2–3 wk | Not started |
@@ -276,6 +276,79 @@ Exit criteria:
 - Changing a setting updates the camera and the UI without a reload, and failures roll
   back visibly.
 - The settings tab renders in under 300 ms from navigation on a mid-range phone.
+
+### Phase 1 status (2026-10-17)
+
+Code complete in v0.1.0. The exit criteria need the owner's devices: run the
+hardware checklist below, then mark the phase done.
+
+| Task | Status |
+| --- | --- |
+| Phase 0 fixes: per-host probe errors (TaskGroup), guarded media jobs, redacted probe error, `IncompatibleError` before the ack | Done |
+| Backend 1. `reolink_viewer/devices`: NVRs/Hubs → cameras, registry info, curated details from cached data (no new device I/O) | Done |
+| Backend 2. `reolink_viewer/device`: details and every Reolink entity per connection (entity_id, domain, translation_key, entity_category, disabled_by, hidden_by), each mapped to a category | Done |
+| Backend 3. Duplicate cameras merged in the bridge (camera UID, serial or MAC); opaque group ids; NVR connection marked as playback source | Done |
+| Backend 4. `catalog/categories.json` and `catalog/settings-catalog.json`: 193 keys (188 strings.json keys + 5 entities without a strings entry) | Done: 182 verified, 11 marked unverified |
+| Backend 5. Coverage test against the installed integration's `strings.json` and its entity descriptions | Done (`tests/test_catalog.py`) |
+| Frontend 1. Device list (NVR → channels, direct cameras, duplicates merged); Overview with snapshot (primary view for cameras that don't record) | Done |
+| Frontend 2. Settings per category and domain, inline explanations, search, confirmation for disruptive actions | Done |
+| Frontend 3. Writes through standard HA actions; optimistic update, rollback with message, live via state updates | Done |
+| Frontend 4. "Show disabled entities" + Enable (admin, entity registry), with the reload explained | Done |
+| Frontend 5. HA theme variables, own small Lit controls (no `ha-*` form elements) | Done |
+| Frontend 6. Re-render only on the shown device's state changes; Settings under 300 ms | Done in a desktop browser (below); phone measurement is part of the checklist |
+| Exit: every entity in the right category, a setting round-trips on real hardware, < 300 ms on a mid-range phone | Waiting on the hardware checklist |
+
+How it works, and what differs from the plan above:
+
+- **Catalog keys are per domain.** Both JSON files are keyed by domain, then
+  translation_key, like the integration's `strings.json`: `hdr` exists as both a
+  select and a switch. Entities with no translation_key are matched by device class
+  (`catalog.FALLBACK_KEYS`: motion, restart → `reboot`, battery, firmware), and
+  `binary_sensor.tamper` has a translation_key but no strings entry. The test
+  covers all three sources, so a new HA release with new entities fails CI.
+- **Catalog entries** have title, summary, what it does, trade-offs, related keys,
+  requirements, impact (`read_only`, `safe`, `disruptive` plus the direction that
+  hurts: `on`, `off`, `any` or a list of select options) and sources. They were
+  checked against HA's Reolink docs, the HA/reolink-aio source (which device
+  setting each entity writes) and Reolink support articles. 11 entries are marked
+  unverified because Reolink doesn't document them precisely: the face, bicycle and
+  package AI delays, the face and bicycle AI sensitivities, baby-cry sensitivity,
+  the item forgotten/taken delays, doorbell volume, `hardwired_chime_enabled`, and
+  `switch.hdr` (a leftover string: HA 2026.10 creates no HDR switch, it's the select).
+- **Device identity lives in the bridge.** Mapping registry devices to hosts,
+  channels, lenses and chimes mirrors the Reolink integration's identifiers, so
+  it is in `bridge.py`. `devices.py` uses only the public device and entity
+  registries plus the bridge. Nothing secret reaches the browser: no unique ids,
+  identifiers, serials, MACs or configuration URLs. Group ids hash entry ids and
+  channels, never identifiers.
+- **Merged cameras** list both connections. The NVR one is the primary (its device
+  id is the camera's id) and the playback source. Settings default to the
+  connection with the most entities, with a switch to the other. A camera that
+  records nowhere (no NVR, no SD card, like the E1 Zoom) gets the snapshot as its
+  primary view: the Overview shows it large and refreshes it every 30 s while
+  open. Snapshots use HA's camera proxy (`entity_picture`), so they are HA's own
+  device requests, not ours.
+- **Degraded mode** builds the tree from the registry alone (no details, no
+  merging); settings still work.
+- **Measured** in Chromium (desktop, 1100×900) with 193 entities and a 20 ms fake
+  websocket: from navigation to the painted Settings tab in 86–133 ms, with the
+  settings element rendering in 25–46 ms. 200 unrelated state changes caused 0
+  re-renders of the device page. The production bundle is 20 KB gzipped.
+
+Hardware checklist (owner, before marking Phase 1 done):
+
+1. Every entity shows up: for each device, the entity counts on the Overview
+   match the device page under Settings → Devices & services → Reolink
+   (including disabled ones), and no entity is under **Other**.
+2. The CX410 and CX810 are each listed once under the RLN36 with a **+ direct**
+   badge; their page shows two connections, the NVR one marked **playback source**.
+3. The E1 Zoom is under **Cameras added directly** with the snapshot as its
+   primary view.
+4. One harmless round trip: toggle **Status LED** off and on; the camera's LED
+   follows, the toggle never jumps back, and HA's own entity page shows the same
+   state. (Rollback on failure is covered by tests.)
+5. A disruptive action asks first (e.g. turning **Record** off → Cancel).
+6. Settings opens in under 300 ms on the iPhone (Companion app).
 
 ## Phase 2 — Event timeline and playback (difficulty: High backend / Very high player, 3–5 wk)
 

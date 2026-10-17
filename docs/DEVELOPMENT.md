@@ -9,14 +9,18 @@ custom_components/reolink_viewer/
   config_flow.py     # single instance, no options
   const.py
   bridge.py          # ONLY module that touches the Reolink integration's internals
+  devices.py         # device model: hosts, cameras (duplicates merged), entities
+  catalog.py         # loads catalog/*.json; catalog keys for entities
+  catalog/           # categories.json, settings-catalog.json (keyed by domain, key)
   scheduler.py       # per-host queue: concurrency limit, priorities, de-duplication
   media.py           # ffmpeg time-to-first-frame, HTTP time-to-first-byte
   probe.py           # Phase 0 hardware probe
-  websocket_api.py   # reolink_viewer/status, /devices, /probe
+  websocket_api.py   # reolink_viewer/status, /devices, /device, /catalog, /probe
   models.py          # runtime data of the config entry
   translations/en.json
   frontend_dist/     # built panel bundle (committed; CI checks it matches the source)
 frontend/            # Lit + TypeScript panel, built with Vite
+  src/components/    # device list, device page, overview, settings
 tests/               # pytest-homeassistant-custom-component
 scripts/             # setup_dev.sh, probe_to_matrix.py
 ```
@@ -64,6 +68,16 @@ Tests set up HA's real Reolink integration on a mocked `reolink_aio.api.Host`.
 `tests/components/reolink/conftest.py` (re-sync it when bumping the HA pin);
 `tests/conftest.py` adds what the bridge and the probe read. Media tests run real
 ffmpeg against a generated clip when ffmpeg is installed and skip otherwise.
+
+## Settings catalog
+
+`catalog/settings-catalog.json` explains every entity of HA's Reolink integration;
+`catalog/categories.json` puts each in a category. Both are keyed by domain, then
+translation_key. `tests/test_catalog.py` loads the installed integration's
+`strings.json` and entity descriptions and fails on any key missing from either
+file, so bumping the HA pin surfaces new settings. Add an entry for each new key,
+checked against HA's Reolink docs, the reolink-aio source and Reolink's support
+articles; mark it `"verification": "unverified"` if its effect isn't documented.
 
 ## Trying it on a real Home Assistant
 
