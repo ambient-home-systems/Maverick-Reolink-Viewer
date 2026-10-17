@@ -169,7 +169,7 @@ async def test_render_playback(
     lines = out.splitlines()
     main_row = lines[lines.index(header) + 2]
     assert main_row.startswith(
-        "| RLC-123 | main | 300 s, 1.0 MB, 28 kbps, unrecognized name |"
+        "| RLC-123 | main | 300 s, 1.0 MB, 28 kbps, name `99999999999999` (local start) |"
     )
     assert "✓ all 5 (206)" in main_row
     assert "moov after mdat, not fragmented, [ftyp mdat moov]" in main_row
@@ -215,6 +215,34 @@ def test_playback_cells() -> None:
         {"fragmented": True, "top_level": ["a"] * 8, "error": "budget"}
     ) == ("fragmented, [a a a a a a …], (budget)")
     assert probe_to_matrix.fmt_bytes(2.5e9) == "2.5 GB"
+    assert probe_to_matrix._recording(
+        {
+            "duration_s": 60,
+            "size": 500,
+            "name": {
+                "format": "unrecognized",
+                "pattern": "99_9999.aa9",
+                "has_local_start": True,
+                "has_dst_text": True,
+            },
+        }
+    ) == ("60 s, 500 B, name `99_9999.aa9` (local start, DST)")
+    assert probe_to_matrix._seek({}) == ""
+    assert probe_to_matrix._seek({"skipped": "short"}) == "- (short)"
+    assert probe_to_matrix._seek({"verdict": "error", "error": "x"}) == "✗ (x)"
+    assert probe_to_matrix._seek(
+        {"verdict": "seeks", "mp4_duration_s": 30, "full_mp4_duration_s": 60}
+    ) == ("seeks (30 s of 60 s)")
+    assert probe_to_matrix._seek(
+        {
+            "verdict": "ignored",
+            "eof": True,
+            "full_eof": True,
+            "bytes_read": 2e6,
+            "full_bytes_read": 2e6,
+        }
+    ) == ("ignored (2.0 MB of 2.0 MB)")
+    assert probe_to_matrix._seek({"verdict": "unknown"}) == "unknown"
     assert probe_to_matrix.fmt_bytes(None) == "?"
     report = {
         "hosts": [
@@ -245,17 +273,32 @@ def test_playback_cells() -> None:
                         {"streams": 1, "ok": True, "ttfb_ms": [100], "total_mbit_s": 9},
                         {"streams": 2, "ok": False, "ttfb_ms": [None, 90]},
                     ],
+                    "full_speed": [
+                        {
+                            "streams": 1,
+                            "ok": True,
+                            "mbit_s": [250],
+                            "total_mbit_s": 250,
+                        },
+                        {
+                            "streams": 2,
+                            "ok": False,
+                            "mbit_s": [140, None],
+                            "total_mbit_s": 140,
+                        },
+                    ],
                 },
                 "channels": [],
             },
         ]
     }
     assert probe_to_matrix.playback_rows([report]) == [
-        "| CX810 | - | skipped: no replay | | | | | | | | |"
+        "| CX810 | - | skipped: no replay | | | | | | | | | |"
     ]
     assert probe_to_matrix.playback_concurrency_rows([report]) == [
-        "| host1 | RLN36 | - | ✗ (boom) | |",
-        "| host2 | E1 | sub | 1 (fails at 2) | 1: 100 ms, 9 Mbit/s; 2: ?/90 ms, None Mbit/s ✗ |",
+        "| host1 | RLN36 | - | ✗ (boom) | | |",
+        "| host2 | E1 | sub | 1 (fails at 2) | 1: 100 ms, 9 Mbit/s; 2: ?/90 ms, None"
+        " Mbit/s ✗ | 1: 250 = 250; 2: 140+? = 140 ✗ |",
     ]
     assert probe_to_matrix.time_rows([report]) == [
         "| host1 | RLN36 | ✗ (no time) | | | |",

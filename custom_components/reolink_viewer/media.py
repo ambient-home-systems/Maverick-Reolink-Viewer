@@ -6,6 +6,7 @@ them through ``bridge.redact_text`` before they leave the server.
 """
 
 import asyncio
+from collections.abc import Callable
 from contextlib import suppress
 from dataclasses import asdict, dataclass, field, fields
 import re
@@ -273,14 +274,16 @@ async def async_fetch(
     max_seconds: float | None = None,
     keep_bytes: int = 0,
     pace_bps: float | None = None,
+    on_chunk: Callable[[bytes], None] | None = None,
     timeout: float,
 ) -> FetchResult:
     """GET a media URL, reading at most ``max_bytes`` / ``max_seconds`` of body.
 
     ``pace_bps`` limits the read rate (bytes per second) the way a player that
     buffers ahead would, so TCP back-pressure keeps the stream open on the
-    device. The connection is closed as soon as the read stops. ``ok`` means
-    an HTTP 200/206 with a body; callers judge the Range semantics.
+    device. ``on_chunk`` sees every body chunk in order. The connection is
+    closed as soon as the read stops. ``ok`` means an HTTP 200/206 with a body;
+    callers judge the Range semantics.
     """
     start = time.monotonic()
     result = FetchResult(ok=False, range=range_header)
@@ -315,6 +318,8 @@ async def async_fetch(
                     result.bytes_read += len(chunk)
                     if len(kept) < keep_bytes:
                         kept += chunk[: keep_bytes - len(kept)]
+                    if on_chunk is not None:
+                        on_chunk(chunk)
                     if max_seconds is not None and now - first >= max_seconds:
                         break
                     if pace_bps:

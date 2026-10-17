@@ -1,8 +1,10 @@
 """Minimal ISO BMFF (MP4) box reader.
 
-Reads only box headers and a few small payloads (mvhd, hdlr, stsd), through a
-``read(offset, length)`` callback, so a file's layout can be learned from a
-handful of small HTTP Range requests instead of downloading it.
+Reads only box headers and a few small payloads (mvhd, hdlr, stsd), either
+through a ``read(offset, length)`` callback, so a file's layout can be learned
+from a handful of small HTTP Range requests, or with :class:`BoxScanner`, which
+follows the top-level boxes through a plain download as it streams by (for
+servers that ignore Range).
 """
 
 from collections.abc import Awaitable, Callable
@@ -14,6 +16,9 @@ type ReadFunc = Callable[[int, int], Awaitable[bytes]]
 
 _HEADER_READ = 16
 _MAX_CHILDREN = 32
+# BoxScanner keeps the bytes of these boxes (to read the tracks from moov).
+_CAPTURE = frozenset({"moov"})
+_CAPTURE_LIMIT = 16 * 1024 * 1024
 
 
 class Mp4ReadError(Exception):
@@ -197,20 +202,42 @@ async def async_layout(
 ) -> Mp4Layout:
     """Describe the file: top-level boxes, moov position, fragmentation, tracks."""
     layout = Mp4Layout()
-    try:
-        boxes, layout.truncated = await walk_boxes(read, 0, size, max_boxes)
-    except Mp4ReadError as err:
-        layout.error = str(err)
-        return layout
+    boxes: list[Box] = []
+    offset = 0
+    # Walk by hand rather than with walk_boxes, to keep the boxes found before
+    # a read fails (e.g. the next header lies beyond what can be read).
+    while size is None or offset + 8 <= size:
+        if len(boxes) >= max_boxes:
+            layout.truncated = True
+            break
+        try:
+            data = await read(offset, _HEADER_READ)
+        except Mp4ReadError as err:
+            layout.error = f"after {len(boxes)} boxes: {err}"
+            break
+        if (box := parse_box_header(data, offset)) is None:
+            break
+        boxes.append(box)
+        if box.end is None:
+            break
+        offset = box.end
+    return await _describe(read, boxes, layout)
+
+
+async def _describe(read: ReadFunc, boxes: list[Box], layout: Mp4Layout) -> Mp4Layout:
+    """Fill the layout from the top-level boxes, reading moov through ``read``."""
     layout.top_level = [b.type for b in boxes]
     moov = next((b for b in boxes if b.type == "moov"), None)
     mdat = next((b for b in boxes if b.type == "mdat"), None)
     if mdat is not None:
         layout.mdat_offset, layout.mdat_size = mdat.offset, mdat.size
     if moov is None:
-        if not layout.truncated:
+        if not layout.truncated and layout.error is None:
             layout.error = "no moov box found"
         layout.fragmented = "moof" in layout.top_level or None
+        if mdat is not None and layout.fragmented is None:
+            # moov comes after an mdat we could not get past.
+            layout.moov_before_mdat = False
         return layout
     layout.moov_offset, layout.moov_size = moov.offset, moov.size
     if mdat is not None:
@@ -263,3 +290,105 @@ async def _read_trak(read: ReadFunc, trak: Box) -> Track:
 
 def _find(boxes: list[Box], box_type: str) -> Box | None:
     return next((b for b in boxes if b.type == box_type), None)
+
+
+class BoxScanner:
+    """Follow the top-level boxes of an MP4 as it streams by, without Range.
+
+    Feed it the body of a plain GET in order. It records every top-level box
+    header it passes and keeps the bytes of the moov box (up to a limit), so
+    :meth:`async_layout` can describe the file from whatever part was read.
+    """
+
+    def __init__(self, max_boxes: int = 64) -> None:
+        """Initialize the scanner."""
+        self._max_boxes = max_boxes
+        self._pos = 0
+        self._next = 0
+        self._hdr = bytearray()
+        self._captures: list[tuple[Box, bytearray]] = []
+        self.boxes: list[Box] = []
+        self.truncated = False
+        self.error: str | None = None
+        self._stopped = False
+
+    @property
+    def bytes_seen(self) -> int:
+        """Return how many body bytes were fed."""
+        return self._pos
+
+    def feed(self, chunk: bytes) -> None:
+        """Consume the next piece of the body."""
+        start = self._pos
+        self._pos += len(chunk)
+        for box, data in self._captures:
+            self._capture(box, data, chunk, start)
+        while not self._stopped and self._next < self._pos:
+            if self._next >= start:
+                rel = self._next - start
+                self._hdr = bytearray(chunk[rel : rel + _HEADER_READ])
+            else:
+                # The header started in an earlier chunk.
+                self._hdr += chunk[: _HEADER_READ - len(self._hdr)]
+            if len(self._hdr) < _HEADER_READ:
+                return  # wait for the rest of the header
+            self._header(chunk, start)
+
+    def finish(self) -> None:
+        """Handle a short header left at the end of the stream."""
+        if not self._stopped and len(self._hdr) >= 8 and self._next < self._pos:
+            self._header(b"", self._pos)
+
+    def _header(self, chunk: bytes, start: int) -> None:
+        header, self._hdr = bytes(self._hdr), bytearray()
+        box = parse_box_header(header, self._next)
+        if box is None:
+            self.error = f"unparseable box header at {self._next}"
+            self._stopped = True
+            return
+        self.boxes.append(box)
+        if box.type in _CAPTURE and box.size is not None and box.size <= _CAPTURE_LIMIT:
+            # Header bytes that arrived in earlier chunks, then this chunk's part.
+            data = bytearray(header[: max(0, start - box.offset)])
+            self._captures.append((box, data))
+            self._capture(box, data, chunk, start)
+        if box.end is None:
+            self._stopped = True
+            return
+        if len(self.boxes) >= self._max_boxes:
+            self.truncated = True
+            self._stopped = True
+            return
+        self._next = box.end
+
+    @staticmethod
+    def _capture(box: Box, data: bytearray, chunk: bytes, start: int) -> None:
+        assert box.end is not None
+        lo = max(box.offset, start)
+        hi = min(box.end, start + len(chunk))
+        if lo < hi:
+            data += chunk[lo - start : hi - start]
+
+    async def async_layout(self) -> Mp4Layout:
+        """Describe the file from what streamed by."""
+        layout = Mp4Layout(truncated=self.truncated, error=self.error)
+        captured = {box: bytes(data) for box, data in self._captures}
+
+        async def read(offset: int, length: int) -> bytes:
+            for box, data in captured.items():
+                if box.offset <= offset and offset + length <= box.offset + len(data):
+                    rel = offset - box.offset
+                    return data[rel : rel + length]
+                if box.end is not None and box.offset <= offset < box.end:
+                    # The tail of a box that was not read to its end.
+                    raise Mp4ReadError(f"{box.type} not read to its end")
+            for box in self.boxes:
+                if box.type in _CAPTURE and box.offset <= offset < (box.end or 0):
+                    raise Mp4ReadError(f"{box.type} larger than the capture limit")
+            raise Mp4ReadError("bytes not in the part of the stream that was read")
+
+        boxes = list(self.boxes)
+        if not self._stopped and boxes and boxes[-1].end is not None:
+            # The read stopped inside the last box; later boxes were not seen.
+            layout.truncated = layout.truncated or boxes[-1].end > self._pos
+        return await _describe(read, boxes, layout)
