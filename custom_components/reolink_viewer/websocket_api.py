@@ -1,7 +1,10 @@
 """Websocket commands for the Reolink Viewer panel."""
 
 from collections.abc import Callable
+from datetime import UTC, date, datetime
 import logging
+import re
+import time
 from typing import Any
 
 import probatio
@@ -19,12 +22,32 @@ from .const import DOMAIN, PROBE_HARD_MAX_STREAMS, PROBE_PLAYBACK_HARD_MAX_STREA
 from .models import ReolinkViewerConfigEntry
 from .probe import ProbeOptions, Prober
 from .probe_playback import PlaybackOptions
+from .scheduler import Priority
+from .thumbnails import BUCKETS_S
+from .timeconv import epoch_ms
+from .timeline import TimelineError
+from .views import (
+    CLIP_PATH,
+    THUMB_PATH,
+    THUMB_TTL,
+    VOD_PATH,
+    VOD_TTL,
+    ThumbGrant,
+    VodGrant,
+    sign,
+)
+from .vodcache import Recording, VodCacheError
 
 _LOGGER = logging.getLogger(__name__)
 
 ERR_NOT_LOADED = "not_loaded"
 ERR_INCOMPATIBLE = "incompatible"
 ERR_PROBE_RUNNING = "probe_running"
+ERR_NO_PLAYBACK = "no_playback"
+ERR_SEARCH_FAILED = "search_failed"
+ERR_CACHE_FAILED = "cache_failed"
+MAX_THUMB_TIMES = 200
+STREAM = probatio.In(["sub", "main"])
 
 
 @callback
@@ -35,6 +58,13 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_device)
     websocket_api.async_register_command(hass, ws_catalog)
     websocket_api.async_register_command(hass, ws_probe)
+    websocket_api.async_register_command(hass, ws_timeline_days)
+    websocket_api.async_register_command(hass, ws_timeline_day)
+    websocket_api.async_register_command(hass, ws_timeline_warm)
+    websocket_api.async_register_command(hass, ws_playback_url)
+    websocket_api.async_register_command(hass, ws_playback_prefetch)
+    websocket_api.async_register_command(hass, ws_thumbnail_urls)
+    websocket_api.async_register_command(hass, ws_media_info)
 
 
 def _loaded_entry(hass: HomeAssistant) -> ReolinkViewerConfigEntry | None:
@@ -278,3 +308,289 @@ async def ws_probe(
     connection.send_result(msg["id"])
     task = entry.async_create_background_task(hass, run(), "reolink_viewer probe")
     connection.subscriptions[msg["id"]] = task.cancel
+
+
+# ---- Playback ----
+
+
+def _playback_source(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> tuple[ReolinkViewerConfigEntry, devices.PlaybackSource] | None:
+    """Resolve the camera to its recording host, or send the error."""
+    if (entry := _loaded_entry(hass)) is None:
+        connection.send_error(msg["id"], ERR_NOT_LOADED, "Reolink Viewer is not loaded")
+        return None
+    compat = bridge.async_check_compat(hass)
+    if not compat.ok:
+        connection.send_error(
+            msg["id"],
+            ERR_INCOMPATIBLE,
+            "Reolink integration internals changed: " + "; ".join(compat.errors),
+        )
+        return None
+    try:
+        return entry, devices.async_playback_source(hass, msg["device_id"])
+    except devices.DeviceNotFoundError:
+        connection.send_error(
+            msg["id"], websocket_api.ERR_NOT_FOUND, "Reolink device not found"
+        )
+    except devices.NoPlaybackError:
+        connection.send_error(
+            msg["id"], ERR_NO_PLAYBACK, "This camera has no recordings HA can reach"
+        )
+    return None
+
+
+def _date(value: str) -> date:
+    return date.fromisoformat(value)
+
+
+@websocket_api.websocket_command(
+    {
+        probatio.Required("type"): f"{DOMAIN}/timeline/days",
+        probatio.Required("device_id"): str,
+        probatio.Required("year"): probatio.All(int, probatio.Range(2000, 2100)),
+        probatio.Required("month"): probatio.All(int, probatio.Range(1, 12)),
+    }
+)
+@websocket_api.async_response
+async def ws_timeline_days(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Return the days of a month that have recordings (calendar dots)."""
+    if (resolved := _playback_source(hass, connection, msg)) is None:
+        return
+    entry, source = resolved
+    try:
+        days, timing = await entry.runtime_data.timeline.async_days(
+            source, msg["year"], msg["month"]
+        )
+    except TimelineError as err:
+        connection.send_error(msg["id"], ERR_SEARCH_FAILED, str(err))
+        return
+    connection.send_result(msg["id"], {"days": days, "timing": timing})
+
+
+@websocket_api.websocket_command(
+    {
+        probatio.Required("type"): f"{DOMAIN}/timeline/day",
+        probatio.Required("device_id"): str,
+        probatio.Required("date"): probatio.All(str, _date),
+        probatio.Optional("stream", default="sub"): STREAM,
+    }
+)
+@websocket_api.async_response
+async def ws_timeline_day(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Return a camera-local day: recording segments and events, in UTC ms."""
+    if (resolved := _playback_source(hass, connection, msg)) is None:
+        return
+    entry, source = resolved
+    try:
+        day, timing = await entry.runtime_data.timeline.async_day(
+            source, msg["date"], msg["stream"]
+        )
+    except TimelineError as err:
+        connection.send_error(msg["id"], ERR_SEARCH_FAILED, str(err))
+        return
+    result = day.public(timing)
+    result["now"] = epoch_ms(datetime.now(UTC))
+    connection.send_result(msg["id"], result)
+
+
+@callback
+@websocket_api.websocket_command({probatio.Required("type"): f"{DOMAIN}/timeline/warm"})
+def ws_timeline_warm(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Fetch today's timeline of every recording camera, at prefetch priority."""
+    if (entry := _loaded_entry(hass)) is None:
+        connection.send_error(msg["id"], ERR_NOT_LOADED, "Reolink Viewer is not loaded")
+        return
+    if not bridge.async_check_compat(hass).ok:
+        connection.send_result(msg["id"], {"cameras": 0})
+        return
+    sources = devices.async_playback_sources(hass)
+    entry.async_create_background_task(
+        hass, entry.runtime_data.timeline.async_warm(sources), "reolink_viewer warm"
+    )
+    connection.send_result(msg["id"], {"cameras": len(sources)})
+
+
+async def _recording(
+    entry: ReolinkViewerConfigEntry,
+    source: devices.PlaybackSource,
+    msg: dict[str, Any],
+) -> tuple[Recording, str]:
+    timeline = entry.runtime_data.timeline
+    segment = await timeline.async_segment(
+        source, msg["date"], msg["stream"], msg["segment_id"]
+    )
+    recording = Recording(
+        source=source,
+        stream=msg["stream"],
+        name=segment.name,
+        start_ms=segment.start,
+        end_ms=segment.end,
+        size=segment.size,
+    )
+    return recording, str(segment.start)
+
+
+def _download_name(source: devices.PlaybackSource, recording: Recording) -> str:
+    slug = re.sub(r"[^A-Za-z0-9]+", "-", source.name).strip("-").lower() or "camera"
+    when = datetime.fromtimestamp(recording.start_ms / 1000, UTC)
+    return f"{slug}-{when:%Y%m%d-%H%M%SZ}-{recording.stream}.mp4"
+
+
+_SEGMENT_SCHEMA: dict[probatio.Marker | str, Any] = {
+    probatio.Required("device_id"): str,
+    probatio.Required("date"): probatio.All(str, _date),
+    probatio.Required("segment_id"): str,
+    probatio.Optional("stream", default="sub"): STREAM,
+}
+
+
+@websocket_api.websocket_command(
+    {
+        probatio.Required("type"): f"{DOMAIN}/playback/url",
+        **_SEGMENT_SCHEMA,
+        probatio.Optional("progressive", default=True): bool,
+    }
+)
+@websocket_api.async_response
+async def ws_playback_url(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Start caching a recording and return signed URLs to play and download it."""
+    began = time.monotonic()
+    if (resolved := _playback_source(hass, connection, msg)) is None:
+        return
+    entry, source = resolved
+    data = entry.runtime_data
+    try:
+        recording, segment_id = await _recording(entry, source, msg)
+        cache_entry = await data.vod_cache.async_open(recording, Priority.PLAYBACK)
+    except TimelineError as err:
+        connection.send_error(msg["id"], ERR_SEARCH_FAILED, str(err))
+        return
+    except VodCacheError as err:
+        connection.send_error(msg["id"], ERR_CACHE_FAILED, str(err))
+        return
+    grant = VodGrant(recording, msg["progressive"], _download_name(source, recording))
+    token = data.grants.issue(grant, VOD_TTL)
+    clip_token = data.grants.issue(grant, VOD_TTL)
+    connection.send_result(
+        msg["id"],
+        {
+            "url": sign(hass, VOD_PATH, token, VOD_TTL),
+            "clip_url": sign(hass, CLIP_PATH, clip_token, VOD_TTL),
+            "stream": recording.stream,
+            "segment_id": segment_id,
+            "start": recording.start_ms,
+            "end": recording.end_ms,
+            "media": data.vod_cache.media_info(source, recording.stream),
+            "cache": cache_entry.public(),
+            "expires_in": int(VOD_TTL.total_seconds()),
+            "timing": {"total_ms": round((time.monotonic() - began) * 1000, 1)},
+        },
+    )
+
+
+@websocket_api.websocket_command(
+    {probatio.Required("type"): f"{DOMAIN}/playback/prefetch", **_SEGMENT_SCHEMA}
+)
+@websocket_api.async_response
+async def ws_playback_prefetch(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Start caching a recording at prefetch priority (next file, warm hours)."""
+    if (resolved := _playback_source(hass, connection, msg)) is None:
+        return
+    entry, source = resolved
+    try:
+        recording, segment_id = await _recording(entry, source, msg)
+        cache_entry = await entry.runtime_data.vod_cache.async_open(
+            recording, Priority.PREFETCH
+        )
+    except TimelineError as err:
+        connection.send_error(msg["id"], ERR_SEARCH_FAILED, str(err))
+        return
+    except VodCacheError as err:
+        connection.send_error(msg["id"], ERR_CACHE_FAILED, str(err))
+        return
+    connection.send_result(
+        msg["id"], {"segment_id": segment_id, "cache": cache_entry.public()}
+    )
+
+
+@callback
+@websocket_api.websocket_command(
+    {
+        probatio.Required("type"): f"{DOMAIN}/thumbnail/urls",
+        probatio.Required("device_id"): str,
+        probatio.Required("times"): [int],
+        probatio.Optional("bucket", default=10): probatio.All(
+            int, probatio.Range(min=min(BUCKETS_S), max=max(BUCKETS_S))
+        ),
+        probatio.Optional("stream", default="sub"): STREAM,
+    }
+)
+def ws_thumbnail_urls(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Return signed thumbnail URLs for times (one per bucket)."""
+    if (resolved := _playback_source(hass, connection, msg)) is None:
+        return
+    entry, source = resolved
+    data = entry.runtime_data
+    urls = []
+    for when in msg["times"][:MAX_THUMB_TIMES]:
+        key = data.thumbnails.key(source, when, msg["bucket"], msg["stream"])
+        token = data.grants.issue(ThumbGrant(key), THUMB_TTL)
+        urls.append(
+            {
+                "time": when,
+                "bucket": key.bucket_ms,
+                "url": sign(hass, THUMB_PATH, token, THUMB_TTL),
+            }
+        )
+    connection.send_result(msg["id"], {"urls": urls})
+
+
+@callback
+@websocket_api.websocket_command(
+    {
+        probatio.Required("type"): f"{DOMAIN}/playback/media_info",
+        probatio.Required("device_id"): str,
+    }
+)
+def ws_media_info(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Return the codec and size last seen for each stream of a camera."""
+    if (resolved := _playback_source(hass, connection, msg)) is None:
+        return
+    entry, source = resolved
+    cache = entry.runtime_data.vod_cache
+    connection.send_result(
+        msg["id"],
+        {stream: cache.media_info(source, stream) for stream in ("main", "sub")},
+    )

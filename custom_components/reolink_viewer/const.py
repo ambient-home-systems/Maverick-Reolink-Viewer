@@ -39,3 +39,9 @@ PROBE_SCHEMA_VERSION: Final = 2
 # Recording playback check (Phase 2 gate): simultaneous DOWNLOAD streams.
 PROBE_PLAYBACK_DEFAULT_STREAMS: Final = 4
 PROBE_PLAYBACK_HARD_MAX_STREAMS: Final = 6
+
+# Playback caches (under HA's cache directory) and their size caps.
+VOD_CACHE_DIR: Final = "vod"
+THUMB_CACHE_DIR: Final = "thumbs"
+VOD_CACHE_MAX_BYTES: Final = 8 * 1024**3
+THUMB_CACHE_MAX_BYTES: Final = 256 * 1024**2
