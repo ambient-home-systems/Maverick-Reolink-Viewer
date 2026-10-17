@@ -18,7 +18,7 @@ put on it:
 | --- | --- | --- | --- | --- |
 | 0 | Foundations, CI, adapter layer, hardware discovery | High | 1–2 wk | Done (2026-10-17) |
 | 1 | Device details and every setting, with explanations | Standard (catalog) / High (panel shell) | 2–3 wk | Done (2026-10-17) |
-| 2 | Event timeline, thumbnails, smooth playback | High (backend) / Very high (player) | 3–5 wk | In progress: 2A step 1 measured, serving strategy chosen; follow-up check (v0.1.2) pending |
+| 2 | Event timeline, thumbnails, smooth playback | High (backend) / Very high (player) | 3–5 wk | In progress: 2A built (v0.2.0); its LAN exit criteria await the hardware check. 2B not started |
 | 3 | Live view via go2rtc, grid, fullscreen, PTZ | High | 3–4 wk | Not started |
 | 4 | Performance, mobile, packaging, first release | Standard | 2–3 wk | Not started |
 | 5 | Optional R&D: Baichuan live/playback | Very high | 4–8 wk, time-boxed with gates | Not started |
@@ -421,9 +421,12 @@ gets no Playback tab.
 | --- | --- |
 | 1. Measure (gate): opt-in **recording playback** check in the probe | Done: run 3 on 2026-10-17 (v0.1.1), see [hardware-matrix.md](hardware-matrix.md#recording-playback-download) |
 | 1. Record the report in the matrix and choose the serving strategy | Done: **disk cache**, see "Serving strategy" below |
-| 1. Follow-up check (v0.1.2): MP4 layout through the plain GET, server-side seek with `start=`, file-name shape, full-speed parallel downloads | Code done; waiting on the owner's run |
-| 2. Backend: scheduler limits + stream budget, event list from the bridge, timeline commands and cache, UTC conversion with DST, thumbnails, VOD and clip views | Not started (after the gate) |
-| 2. Frontend: Playback tab, canvas timeline, calendar, event list, simple player, debug panel | Not started (after the gate) |
+| 1. Follow-up check (v0.1.2): MP4 layout through the plain GET, server-side seek with `start=`, file-name shape, full-speed parallel downloads | Done: run 4 on 2026-10-17; the open questions are settled below |
+| 2. Backend: scheduler limits + stream budget, event list from the bridge, timeline commands and cache, UTC conversion with DST, thumbnails, VOD and clip views | Done (v0.2.0): see "2A as built" below |
+| 2. Frontend: Playback tab, canvas timeline, calendar, event list, simple player, debug panel | Done (v0.2.0): checked in Chromium with synthetic recordings (desktop and iPhone-sized layout) |
+| Exit on LAN: timeline < 1 s cached, < 3 s cold | Awaiting the hardware check (debug panel: "Time to timeline") |
+| Exit on LAN: clicking an event starts video in < 2 s on the sub stream | Awaiting the hardware check (debug panel: "Time to first frame") |
+| Exit on LAN: auto-advance to the next file | Awaiting the hardware check. With synthetic files in Chromium the swap took about 1 ms |
 
 What the playback check measures (`probe_playback.py`, opt-in, read-only, every
 request a prefetch-priority scheduler job, reads bounded in bytes and time, no URL
@@ -495,25 +498,86 @@ rules above applied as follows:
   also for Phase 3 live view). **Other hosts: 2** (none record). The full-speed
   result from v0.1.2 can lower the NVR budget if two fills already saturate the link.
 
-Still open, settled by the v0.1.2 run:
+Settled by run 4 (v0.1.2):
 
-1. **MP4 layout.** If `moov` comes first, playback starts as soon as the first bytes
-   are cached. If it comes after `mdat`, the browser needs the whole file first. That
-   is fine for sub clips, but a main clip waits 2–5 s for its full download, and a
-   one-hour continuous main file far longer. In that case main is only offered once
-   cached, and sub plays meanwhile.
-2. **Server-side seek.** If the DOWNLOAD URL's `start=` parameter makes the NVR begin
-   mid-file, a click into the middle of a one-hour continuous recording (CX410,
-   CX810) fetches from that point. If not, everything before that point must be
-   downloaded first. For minute 30 of a one-hour CX410 sub file that is about 110 MB,
-   roughly 5 s, over the 2 s budget. The fallback is to warm the cache with the
-   current hour of the continuous cameras when the Playback tab opens (prefetch
-   priority).
-3. **File names and DST.** reolink-aio already tags recording times with the NVR's
-   zone, including DST (UTC−4 now). Its local-to-UTC conversion can't tell the
-   repeated hour apart when clocks fall back (1–2 am on 2026-11-01). The documented
-   `Rec…_DST…` file names would resolve it. This NVR's names are a different format,
-   so v0.1.2 records their shape, and the conversion is designed once that is known.
+1. **MP4 layout: fragmented, `moov` first.** Each DOWNLOAD is `ftyp`, a 1.1 KB
+   `moov`, then 2 s `moof`+`mdat` fragments. So a browser can play a recording as
+   soon as its first fragment is cached, whatever its length. Phase 2B's MSE player
+   can append the fragments as they are, with no remux. The `mvhd` duration is a
+   placeholder, so durations come from the search.
+2. **No server-side seek.** `start=` is ignored. Reaching the middle of a long
+   recording means downloading what comes before it first, at 265–1000× real time
+   on sub. A click on a 2–3 min event clip stays far inside the 2 s budget. On the
+   continuous CX410/CX810 one-hour files, minute 30 needs 40–110 MB of sub first,
+   about 2–5 s. To keep clicks fast there, the Playback tab warms the cache with the
+   sub recording at the selected time on those cameras (prefetch priority, one fill
+   at a time). The debug panel shows when a click had to wait for the fill.
+3. **Codecs as stored are browser-ready.** H.265 is tagged `hvc1` and H.264 `avc1`,
+   with AAC audio. So ffmpeg is not needed on the playback path at all. The codec
+   string and size for `MediaCapabilities.decodingInfo` come from the cached file's
+   `moov` (`avcC`/`hvcC`), and are remembered per camera and stream.
+4. **Stream budget confirmed.** One main fill runs at about 408 Mbit/s and two
+   share about 512 Mbit/s. So the NVR budget stays at 4 fills, but prefetch fills
+   are limited to one at a time, leaving most of the bandwidth to the fill behind
+   a click.
+5. **File names and DST.** This NVR's names (`C-CH-S-<14 digits>-NNNNN`) carry no
+   DST mark, and their 14-digit stamp is neither the local nor the UTC start time.
+   Times are converted from camera-local time with the device's own DST rules:
+   - **Repeated hour:** the hour repeated when clocks fall back is detected, and a
+     recording in it is placed by a UTC timestamp only if one is proven to be UTC.
+     Proven means it matches the UTC start time on every unambiguous recording of
+     that search; the search's `PlaybackTime` and the name stamp are both checked.
+   - **Otherwise:** the recording is placed at the first occurrence and flagged
+     `ambiguous`, which the timeline shows.
+   - **Skipped hour:** times in the hour skipped when clocks spring forward cannot
+     occur and are mapped with the standard offset.
+
+#### 2A as built (v0.2.0)
+
+Backend (`custom_components/reolink_viewer/`):
+
+- `scheduler.py`: request limits NVR 6, cameras 3, unknown hosts 2. A separate
+  per-host **stream budget** counts long-lived fills: NVR 4, other hosts 2, and at
+  most 1 prefetch fill per host. A click raises a waiting fill's priority.
+- `bridge.py`: one day's files (HTTP search) and individual Baichuan events (type
+  and exact start/end), plus the month's recording days. An event-search failure
+  still returns the files and is reported as `events_error`.
+- `timeconv.py`: camera-local times to UTC with the device's own DST rules (see
+  item 5 above). Tested across both 2026 transitions.
+- `timeline.py`: `timeline/days` (month) and `timeline/day` (camera, day). Past
+  days are cached permanently (memory and HA storage, last 120 days per camera).
+  Today is refreshed incrementally: only the last 10 minutes are searched again,
+  with a 60 s TTL. Today is warmed for every recording camera at PREFETCH priority
+  when the panel opens (`timeline/warm`).
+- `vodcache.py`: the disk cache of the serving strategy. Fills run at full speed
+  under the stream budget and are served progressively while filling (200,
+  chunked, Chrome/Firefox), or with Range once complete (Safari / iOS app). The
+  cache is an LRU capped at 8 GiB that keeps 2 GiB free on disk. The codec string
+  and size come from the file's `moov`.
+- `thumbnails.py`: `snapshot_past` at THUMBNAILS priority. Times are bucketed by
+  zoom (5 s to 5 min), and concurrent requests for the same bucket share one fetch.
+  Failures are cached for 60 s. Disk LRU capped at 256 MiB.
+- `views.py`: `/api/reolink_viewer/vod|clip|thumb/{token}`. Each URL is signed
+  with `async_sign_path` for the websocket user and expires (VOD 30 min,
+  thumbnails 10 min). The token maps to a server-side grant, so no camera URL or
+  credential reaches the browser.
+
+Frontend (`frontend/src/playback/`, `components/playback.ts`):
+
+- **Playback** tab for cameras with a playback source; none for the E1 Zoom.
+- **Canvas timeline:** zoom 24 h, 6 h, 1 h, 15 min, 5 min (wheel, the −/+
+  buttons, keys); recording bars and colored markers for every VOD trigger type.
+  It also has filter chips, hover thumbnails (150 ms debounce), drag to scrub,
+  previous/next event, and a calendar with recording-day dots.
+- **Event list:** thumbnail cards, newest first.
+- **Player:** two `<video>` elements. The next file is preloaded in the hidden one
+  and swapped in at `ended`.
+- **Streams:** sub stream by default. HD is offered only when
+  `MediaCapabilities.decodingInfo` reports the main stream's codec and size as
+  supported and smooth. An HD failure falls back to the sub stream.
+- **Debug panel:** time to timeline (with the server's cache state), time to first
+  frame, URL latency, the gap at the last file change, stream and codec, cache
+  state, the HD decision, and the delivery mode.
 
 ## Phase 3 — Live view (difficulty: High, 3–4 wk)
 

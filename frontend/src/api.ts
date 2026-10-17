@@ -1,5 +1,11 @@
 import type {
   Catalog,
+  MediaInfoResponse,
+  PlaybackUrl,
+  Stream,
+  ThumbnailUrl,
+  TimelineDay,
+  TimelineDays,
   DeviceResponse,
   DevicesResponse,
   EntityRegistryUpdateResult,
@@ -121,3 +127,75 @@ export function toError(err: unknown): Error {
   }
   return new Error(String(err));
 }
+
+// ---- Playback ----
+
+export const fetchTimelineDays = (
+  hass: HomeAssistant,
+  deviceId: string,
+  year: number,
+  month: number,
+): Promise<TimelineDays> =>
+  hass.callWS<TimelineDays>({
+    type: "reolink_viewer/timeline/days",
+    device_id: deviceId,
+    year,
+    month,
+  });
+
+export const fetchTimelineDay = (
+  hass: HomeAssistant,
+  deviceId: string,
+  date: string,
+): Promise<TimelineDay> =>
+  hass.callWS<TimelineDay>({ type: "reolink_viewer/timeline/day", device_id: deviceId, date });
+
+/** Fetch today's timeline of every recording camera in the background. */
+export const warmTimelines = (hass: HomeAssistant): Promise<{ cameras: number }> =>
+  hass.callWS<{ cameras: number }>({ type: "reolink_viewer/timeline/warm" });
+
+export interface SegmentRef {
+  deviceId: string;
+  date: string;
+  segmentId: string;
+  stream: Stream;
+}
+
+export const fetchPlaybackUrl = (
+  hass: HomeAssistant,
+  ref: SegmentRef,
+  progressive: boolean,
+): Promise<PlaybackUrl> =>
+  hass.callWS<PlaybackUrl>({
+    type: "reolink_viewer/playback/url",
+    device_id: ref.deviceId,
+    date: ref.date,
+    segment_id: ref.segmentId,
+    stream: ref.stream,
+    progressive,
+  });
+
+export const prefetchSegment = (hass: HomeAssistant, ref: SegmentRef): Promise<unknown> =>
+  hass.callWS({
+    type: "reolink_viewer/playback/prefetch",
+    device_id: ref.deviceId,
+    date: ref.date,
+    segment_id: ref.segmentId,
+    stream: ref.stream,
+  });
+
+export const fetchThumbnailUrls = (
+  hass: HomeAssistant,
+  deviceId: string,
+  times: number[],
+  bucket: number,
+): Promise<{ urls: ThumbnailUrl[] }> =>
+  hass.callWS<{ urls: ThumbnailUrl[] }>({
+    type: "reolink_viewer/thumbnail/urls",
+    device_id: deviceId,
+    times,
+    bucket,
+  });
+
+export const fetchMediaInfo = (hass: HomeAssistant, deviceId: string): Promise<MediaInfoResponse> =>
+  hass.callWS<MediaInfoResponse>({ type: "reolink_viewer/playback/media_info", device_id: deviceId });

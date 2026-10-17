@@ -33,6 +33,7 @@ describe("navigation hash", () => {
     expect(routeToHash({ view: "list" })).toBe("");
     expect(routeFromHash("#device/x")).toEqual({ view: "device", id: "x", tab: "overview" });
     expect(routeFromHash("#nonsense")).toEqual({ view: "list" });
+    expect(routeFromHash("#device/x/playback")).toEqual({ view: "device", id: "x", tab: "playback" });
     expect(routeFromHash("")).toEqual({ view: "list" });
   });
 });

@@ -17,7 +17,12 @@ in Home Assistant both via an NVR and directly is shown once). Each device has a
 battery, features) and a **Settings** tab with every entity the Reolink integration
 creates, grouped by category, each with a plain-language explanation, search, and a
 confirmation before disruptive actions. Admins can enable disabled entities and run a
-read-only hardware probe. Playback and live view come in later phases.
+read-only hardware probe.
+
+**Phase 2A (v0.2.0, awaiting the hardware check):** cameras that record to the NVR
+get a **Playback** tab: a zoomable timeline of the day with colored markers for each
+detection type, hover thumbnails, a calendar, an event list, and a player that moves
+on to the next recording by itself. Live view comes in a later phase.
 
 Requires Home Assistant 2026.10 or newer with the Reolink integration set up.
 

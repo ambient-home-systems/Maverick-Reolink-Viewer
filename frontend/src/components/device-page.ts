@@ -7,6 +7,7 @@ import { sharedStyles } from "../styles";
 import type { Catalog, DeviceResponse, HassEntities, HomeAssistant, Unsubscribe } from "../types";
 import { navigate, type Tab } from "./navigation";
 import "./overview";
+import "./playback";
 import "./settings";
 
 /** Wait this long after a registry change before reloading (changes come in bursts). */
@@ -17,7 +18,7 @@ interface RegistryEvent {
 }
 
 /**
- * One device with Overview and Settings tabs.
+ * One device with Overview, Settings and (for cameras with recordings) Playback tabs.
  *
  * The panel passes a new `hass` on every state change in Home Assistant; this
  * element re-renders only when a state of one of its own entities changed.
@@ -154,7 +155,7 @@ export class RvDevicePage extends LitElement {
               <span class="muted small">${node.model ?? ""}</span>
             </div>
             <div class="tabs" role="tablist">
-              ${(["overview", "settings"] as const).map(
+              ${tabsFor(device).map(
                 (tab) => html`<button
                   role="tab"
                   aria-selected=${this.tab === tab ? "true" : "false"}
@@ -163,7 +164,7 @@ export class RvDevicePage extends LitElement {
                     navigate(this, { view: "device", id: this.deviceId, tab });
                   }}
                 >
-                  ${tab === "overview" ? "Overview" : "Settings"}
+                  ${TAB_LABELS[tab]}
                 </button>`,
               )}
             </div>
@@ -173,7 +174,13 @@ export class RvDevicePage extends LitElement {
                   missing. Settings still work.
                 </div>`
               : nothing}
-            ${this.tab === "overview"
+            ${this.tab === "playback" && hasPlayback(device)
+              ? html`<rv-playback
+                  .hass=${this.hass}
+                  .deviceId=${node.id}
+                  .cameraName=${node.name ?? ""}
+                ></rv-playback>`
+              : this.tab === "overview" || this.tab === "playback"
               ? html`<rv-overview .hass=${this.hass} .device=${device}></rv-overview>`
               : html`<rv-settings
                   .hass=${this.hass}
@@ -226,6 +233,21 @@ export class RvDevicePage extends LitElement {
       }
     `,
   ];
+}
+
+const TAB_LABELS: Record<Tab, string> = {
+  overview: "Overview",
+  playback: "Playback",
+  settings: "Settings",
+};
+
+/** A camera has playback when one of its connections records (NVR, Hub, SD card). */
+export function hasPlayback(device: DeviceResponse): boolean {
+  return device.node.kind === "camera" && device.node.connections.some((c) => c.playback_source);
+}
+
+export function tabsFor(device: DeviceResponse): Tab[] {
+  return hasPlayback(device) ? ["overview", "playback", "settings"] : ["overview", "settings"];
 }
 
 /** Every entity whose state the page shows. */

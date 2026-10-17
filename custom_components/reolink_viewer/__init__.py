@@ -5,27 +5,43 @@ import logging
 from pathlib import Path
 
 from homeassistant.components import frontend, panel_custom
+from homeassistant.components.ffmpeg import get_ffmpeg_manager
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv, issue_registry as ir
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.util.hass_dict import HassKey
+from homeassistant.util.ssl import SSLCipherList
 
 from . import bridge
 from .const import (
+    CAMERA_HOST_CONCURRENCY,
     DEFAULT_HOST_CONCURRENCY,
+    DEFAULT_STREAM_BUDGET,
     DOMAIN,
     FRONTEND_DIST_DIR,
     ISSUE_INCOMPATIBLE,
+    NVR_HOST_CONCURRENCY,
+    NVR_STREAM_BUDGET,
     PANEL_COMPONENT_NAME,
     PANEL_FILENAME,
     PANEL_ICON,
     PANEL_TITLE,
     PANEL_URL_PATH,
+    PREFETCH_STREAM_BUDGET,
     STATIC_URL_PATH,
+    THUMB_CACHE_DIR,
+    THUMB_CACHE_MAX_BYTES,
+    VOD_CACHE_DIR,
+    VOD_CACHE_MAX_BYTES,
 )
 from .models import ReolinkViewerConfigEntry, ReolinkViewerData
-from .scheduler import Scheduler
+from .scheduler import HostLimits, Scheduler
+from .thumbnails import ThumbnailService
+from .timeline import TimelineService
+from .views import ClipView, ThumbView, VodView
+from .vodcache import VodCache
 from .websocket_api import async_register_commands
 
 _LOGGER = logging.getLogger(__name__)
@@ -38,8 +54,12 @@ DATA_STATIC_REGISTERED: HassKey[bool] = HassKey(f"{DOMAIN}_static_registered")
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Register the websocket commands once."""
+    """Register the websocket commands and HTTP views once."""
     async_register_commands(hass)
+    # Views cannot be unregistered; they find the loaded entry per request.
+    hass.http.register_view(VodView())
+    hass.http.register_view(ClipView())
+    hass.http.register_view(ThumbView())
     return True
 
 
@@ -51,6 +71,18 @@ def _bundle_version() -> str:
         ]
     except OSError:
         return "missing"
+
+
+def host_limits(hass: HomeAssistant, entry_id: str) -> HostLimits:
+    """Return the scheduler limits of a Reolink host (NVR/Hub or camera)."""
+    host = bridge.async_get_host(hass, entry_id)
+    if host.is_nvr:
+        return HostLimits(
+            NVR_HOST_CONCURRENCY, NVR_STREAM_BUDGET, PREFETCH_STREAM_BUDGET
+        )
+    return HostLimits(
+        CAMERA_HOST_CONCURRENCY, DEFAULT_STREAM_BUDGET, PREFETCH_STREAM_BUDGET
+    )
 
 
 async def async_setup_entry(
@@ -78,8 +110,36 @@ async def async_setup_entry(
             translation_placeholders={"errors": "; ".join(compat.errors)},
         )
 
+    scheduler = Scheduler(
+        default_limit=DEFAULT_HOST_CONCURRENCY,
+        default_stream_limit=DEFAULT_STREAM_BUDGET,
+        resolver=lambda entry_id: host_limits(hass, entry_id),
+    )
+    cache_dir = Path(hass.config.cache_path(DOMAIN))
+    vod_cache = VodCache(
+        hass,
+        scheduler,
+        cache_dir / VOD_CACHE_DIR,
+        VOD_CACHE_MAX_BYTES,
+        # Reolink devices use self-signed certificates and old ciphers.
+        lambda: async_get_clientsession(
+            hass, verify_ssl=False, ssl_cipher=SSLCipherList.INSECURE
+        ),
+    )
+    thumbnails = ThumbnailService(
+        hass,
+        scheduler,
+        cache_dir / THUMB_CACHE_DIR,
+        THUMB_CACHE_MAX_BYTES,
+        get_ffmpeg_manager(hass).binary,
+    )
+    await vod_cache.async_setup()
+    await thumbnails.async_setup()
     entry.runtime_data = ReolinkViewerData(
-        scheduler=Scheduler(default_limit=DEFAULT_HOST_CONCURRENCY)
+        scheduler=scheduler,
+        timeline=TimelineService(hass, scheduler),
+        vod_cache=vod_cache,
+        thumbnails=thumbnails,
     )
 
     if not hass.data.get(DATA_STATIC_REGISTERED):
@@ -107,5 +167,6 @@ async def async_unload_entry(
 ) -> bool:
     """Unload the entry."""
     frontend.async_remove_panel(hass, PANEL_URL_PATH, warn_if_unknown=False)
+    await entry.runtime_data.vod_cache.async_shutdown()
     await entry.runtime_data.scheduler.async_shutdown()
     return True

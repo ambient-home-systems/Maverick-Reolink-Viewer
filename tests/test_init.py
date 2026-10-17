@@ -85,3 +85,20 @@ async def test_setup_without_reolink_entries(
         assert await hass.config_entries.async_setup(viewer_entry.entry_id)
         await hass.async_block_till_done()
     assert viewer_entry.state is ConfigEntryState.LOADED
+
+
+async def test_host_limits(
+    hass: HomeAssistant,
+    reolink_host: MagicMock,
+    loaded_viewer: MockConfigEntry,
+    reolink_entry: MockConfigEntry,
+) -> None:
+    """NVRs get 6 request slots and 4 streams; cameras 3 and 2; unknown 2 and 2."""
+    scheduler = loaded_viewer.runtime_data.scheduler
+    nvr = scheduler.host(reolink_entry.entry_id)
+    assert (nvr.limit, nvr.streams.limit, nvr.streams.prefetch_limit) == (6, 4, 1)
+    assert scheduler.host("unknown-entry").limit == 2
+    scheduler.forget(reolink_entry.entry_id)
+    reolink_host.is_nvr = False
+    camera = scheduler.host(reolink_entry.entry_id)
+    assert (camera.limit, camera.streams.limit) == (3, 2)

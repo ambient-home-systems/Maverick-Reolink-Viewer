@@ -1,0 +1,287 @@
+"""Tests for the recording disk cache."""
+
+import asyncio
+from collections.abc import AsyncGenerator
+from pathlib import Path
+import shutil
+from typing import Any, NamedTuple
+from unittest.mock import patch
+
+from aiohttp import ClientSession, web
+from aiohttp.test_utils import TestServer
+import pytest
+
+from custom_components.reolink_viewer import bridge
+from custom_components.reolink_viewer.bridge import CameraUrl, VodFile, VodMethod
+from custom_components.reolink_viewer.devices import PlaybackSource
+from custom_components.reolink_viewer.scheduler import Priority, Scheduler
+from custom_components.reolink_viewer.vodcache import Recording, VodCache, VodCacheError
+from homeassistant.core import HomeAssistant
+
+from .mp4_fixtures import fragmented_file, mp4_file
+
+SOURCE = PlaybackSource("cam1", "Garage", "entry1", 16)
+BODY = mp4_file(moov_first=True, mdat_bytes=600_000)
+
+
+def rec(name: str = "0-16-1-20261017120000-00000", stream: str = "sub") -> Recording:
+    return Recording(SOURCE, stream, name, 1_000, 61_000, size=len(BODY))
+
+
+class Server(NamedTuple):
+    server: TestServer
+    hits: list[str]
+    gate: asyncio.Event
+
+
+@pytest.fixture
+async def media(socket_enabled: None) -> AsyncGenerator[Server]:
+    """Serve recordings; /slow pauses after the first 100 KB until the gate opens."""
+    hits: list[str] = []
+    gate = asyncio.Event()
+
+    async def handler(request: web.Request) -> web.StreamResponse:
+        name = request.match_info["name"]
+        hits.append(name)
+        if name == "missing":
+            return web.Response(status=404)
+        if name == "empty":
+            return web.Response(body=b"", content_type="video/mp4")
+        body = fragmented_file(20) if name == "frag" else BODY
+        resp = web.StreamResponse(headers={"Content-Type": "video/mp4"})
+        resp.enable_chunked_encoding()
+        await resp.prepare(request)
+        await resp.write(body[:100_000])
+        if name == "slow":
+            await gate.wait()
+        await resp.write(body[100_000:])
+        await resp.write_eof()
+        return resp
+
+    app = web.Application()
+    app.router.add_get("/{name}", handler)
+    server = TestServer(app, host="127.0.0.1")
+    await server.start_server()
+    yield Server(server, hits, gate)
+    gate.set()
+    await server.close()
+
+
+class FakeHost:
+    """Returns the test server's URL for a recording's name."""
+
+    def __init__(self, server: TestServer) -> None:
+        self.server = server
+        self.calls: list[tuple[int, VodFile, VodMethod]] = []
+
+    async def async_vod_url(
+        self, channel: int, file: VodFile, method: VodMethod
+    ) -> tuple[str, CameraUrl]:
+        self.calls.append((channel, file, method))
+        return "video/mp4", CameraUrl(str(self.server.make_url(f"/{file.name}")))
+
+
+@pytest.fixture
+async def cache(
+    hass: HomeAssistant, tmp_path: Path, media: Server
+) -> AsyncGenerator[tuple[VodCache, Scheduler, FakeHost]]:
+    host = FakeHost(media.server)
+    scheduler = Scheduler(default_limit=2, default_stream_limit=1)
+    async with ClientSession() as session:
+        with patch.object(bridge, "async_get_host", return_value=host):
+            cache = VodCache(hass, scheduler, tmp_path / "vod", 10**9, lambda: session)
+            await cache.async_setup()
+            yield cache, scheduler, host
+            await cache.async_shutdown()
+    await scheduler.async_shutdown()
+
+
+async def _read(
+    cache: VodCache, entry: Any, start: int = 0, stop: int | None = None
+) -> bytes:
+    return b"".join([c async for c in cache.async_iter(entry, start, stop)])
+
+
+async def test_fill_and_read(
+    cache: tuple[VodCache, Scheduler, FakeHost], media: Server
+) -> None:
+    """A recording is downloaded once and read back whole or in ranges."""
+    vc, _sched, host = cache
+    entry = await vc.async_open(rec())
+    await vc.async_wait(entry, complete=True)
+    assert entry.complete
+    assert entry.written == len(BODY)
+    assert entry.path.read_bytes() == BODY
+    assert not entry.part_path.exists()
+    assert entry.timing["cache"] == "fill"
+    assert entry.timing["ttfb_ms"] >= 0
+    assert "mbit_s" in entry.timing
+    (channel, file, method) = host.calls[0]
+    assert (channel, file.name, file.stream, method) == (
+        16,
+        rec().name,
+        "sub",
+        VodMethod.DOWNLOAD,
+    )
+    assert await _read(vc, entry) == BODY
+    assert await _read(vc, entry, 10, 20) == BODY[10:20]
+    assert await _read(vc, entry, len(BODY)) == b""
+    # Opening again reuses the file: no second download.
+    again = await vc.async_open(rec())
+    assert again is entry
+    assert media.hits == [rec().name]
+    # The first fill of the stream recorded its codec and size.
+    info = vc.media_info(SOURCE, "sub")
+    assert info is not None
+    assert (info["codec"], info["width"], info["height"]) == (
+        "hvc1.1.6.L153.B0",
+        3840,
+        2160,
+    )
+    assert info["audio"] == "mp4a.40.2"
+    assert vc.media_info(SOURCE, "main") is None
+    assert vc.stats()["entries"] == 1
+    assert entry.public()["complete"] is True
+
+
+async def test_readers_follow_a_fill(
+    cache: tuple[VodCache, Scheduler, FakeHost], media: Server
+) -> None:
+    """Readers get the first bytes at once and the rest as they arrive."""
+    vc, _sched, _host = cache
+    entry = await vc.async_open(rec("slow"))
+    other = await vc.async_open(rec("slow"), Priority.PREFETCH)
+    assert other is entry
+    await vc.async_wait(entry, offset=0)
+    assert not entry.complete
+    reader = asyncio.create_task(_read(vc, entry))
+    head = await _read(vc, entry, 0, 1000)
+    assert head == BODY[:1000]
+    await asyncio.sleep(0.05)
+    assert not reader.done()
+    media.gate.set()
+    assert await reader == BODY
+    assert media.hits == ["slow"]
+
+
+async def test_priority_and_stream_budget(
+    cache: tuple[VodCache, Scheduler, FakeHost], media: Server
+) -> None:
+    """Fills hold stream slots; a queued prefetch fill is sped up when asked for."""
+    vc, sched, _host = cache
+    budget = sched.host("entry1").streams
+    slow = await vc.async_open(rec("slow"))
+    await vc.async_wait(slow, offset=0)
+    assert budget.stats()["streams"] == 1
+    queued = await vc.async_open(rec("a"), Priority.PREFETCH)
+    await asyncio.sleep(0.01)
+    ticket = queued.ticket
+    assert ticket is not None
+    priorities = [ticket.priority]
+    await vc.async_open(rec("a"), Priority.PLAYBACK)
+    priorities.append(ticket.priority)
+    assert priorities == [Priority.PREFETCH, Priority.PLAYBACK]
+    assert queued.priority == Priority.PLAYBACK
+    media.gate.set()
+    await vc.async_wait(queued, complete=True)
+    assert queued.timing["priority"] == "prefetch"
+    assert queued.timing["wait_ms"] >= 0
+    assert budget.stats()["streams"] == 0
+
+
+async def test_failures_and_retry(cache: tuple[VodCache, Scheduler, FakeHost]) -> None:
+    """HTTP errors and empty bodies fail the entry; asking again retries."""
+    vc, _sched, _host = cache
+    entry = await vc.async_open(rec("missing"))
+    with pytest.raises(VodCacheError, match="HTTP 404"):
+        await vc.async_wait(entry, complete=True)
+    assert entry.error == "HTTP 404"
+    retry = await vc.async_open(rec("missing"))
+    assert retry is not entry
+    empty = await vc.async_open(rec("empty"))
+    with pytest.raises(VodCacheError, match="empty recording"):
+        await vc.async_wait(empty, complete=True)
+    with pytest.raises(VodCacheError):
+        await _read(vc, empty)
+
+
+async def test_disk_space_guard(cache: tuple[VodCache, Scheduler, FakeHost]) -> None:
+    """No fill starts without enough free disk space."""
+    vc, _sched, _host = cache
+
+    class Usage(NamedTuple):
+        total: int
+        used: int
+        free: int
+
+    with patch.object(shutil, "disk_usage", return_value=Usage(10, 10, 100)):
+        entry = await vc.async_open(rec("b"))
+        with pytest.raises(VodCacheError, match="free disk space"):
+            await vc.async_wait(entry, complete=True)
+
+
+async def test_eviction_and_restart(
+    hass: HomeAssistant, tmp_path: Path, cache: tuple[VodCache, Scheduler, FakeHost]
+) -> None:
+    """Least recently used files go above the cap; a restart finds what is left."""
+    vc, sched, host = cache
+    vc._max_bytes = int(len(BODY) * 2.5)
+    first = await vc.async_open(rec("one"))
+    await vc.async_wait(first, complete=True)
+    second = await vc.async_open(rec("two"))
+    await vc.async_wait(second, complete=True)
+    first.last_access = 0  # least recently used
+    third = await vc.async_open(rec("three"))
+    assert third.task is not None
+    await third.task
+    assert not first.path.exists()
+    assert second.path.exists()
+    assert third.path.exists()
+
+    # A new cache (HA restart) drops partial files and reuses complete ones.
+    (tmp_path / "vod" / "stale.mp4.part").write_bytes(b"x")
+    async with ClientSession() as session:
+        restarted = VodCache(hass, sched, tmp_path / "vod", 10**9, lambda: session)
+        await restarted.async_setup()
+        assert not (tmp_path / "vod" / "stale.mp4.part").exists()
+        found = await restarted.async_open(rec("two"))
+        assert found.complete
+        assert found.timing == {"cache": "disk"}
+        assert len(host.calls) == 3
+
+
+async def test_unknown_files_evicted_first(
+    tmp_path: Path, cache: tuple[VodCache, Scheduler, FakeHost]
+) -> None:
+    """Files from earlier runs that nobody asked for go before recent ones."""
+    vc, _sched, _host = cache
+    old = tmp_path / "vod" / "f00dfeed.mp4"
+    old.write_bytes(b"x" * len(BODY))
+    vc._max_bytes = int(len(BODY) * 1.5)
+    entry = await vc.async_open(rec("four"))
+    assert entry.task is not None
+    await entry.task
+    assert not old.exists()
+    assert entry.path.exists()
+
+
+async def test_shutdown_cancels_fills(
+    cache: tuple[VodCache, Scheduler, FakeHost], media: Server
+) -> None:
+    """Shutting down cancels fills and removes their partial files."""
+    vc, _sched, _host = cache
+    entry = await vc.async_open(rec("slow"))
+    await vc.async_wait(entry, offset=0)
+    await vc.async_shutdown()
+    assert entry.error == "cancelled"
+    assert not entry.part_path.exists()
+    with pytest.raises(VodCacheError, match="closed"):
+        await vc.async_open(rec("c"))
+
+
+def test_cache_id_reveals_nothing() -> None:
+    """Cache file names are hashes of camera, stream and recording."""
+    a, b = rec("x"), rec("x", stream="main")
+    assert a.cache_id != b.cache_id
+    assert "x" not in a.cache_id
+    assert len(a.cache_id) == 32

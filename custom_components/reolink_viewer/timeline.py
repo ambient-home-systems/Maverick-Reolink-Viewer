@@ -1,0 +1,527 @@
+"""Recording timeline: days with recordings, and one day's recordings and events.
+
+A day search takes 1 to 5 s per channel (hardware-matrix.md), so results are
+cached:
+
+- past days permanently, in an HA ``Store`` per camera (the most recent
+  ``MAX_STORED_DAYS`` days per stream);
+- today in memory for ``TODAY_TTL`` seconds, then refreshed incrementally:
+  only the time since the last search is searched again, from a little before
+  it so a recording that was still being written is picked up whole;
+- months (calendar dots): past months permanently, the current one for
+  ``MONTH_TTL`` seconds.
+
+Every device request is a scheduler job (``PLAYBACK`` priority for what the
+user waits on, ``PREFETCH`` for warming), de-duplicated while in flight. All
+times sent to the browser are UTC epoch milliseconds (``timeconv``).
+"""
+
+import asyncio
+from calendar import monthrange
+from collections import OrderedDict
+from collections.abc import Awaitable, Callable
+from dataclasses import asdict, dataclass, field
+from datetime import date, datetime, timedelta
+import logging
+import time
+from typing import Any
+
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.storage import Store
+
+from . import bridge
+from .devices import PlaybackSource
+from .scheduler import Priority, Scheduler
+from .timeconv import (
+    DayConverter,
+    Recording,
+    epoch_ms,
+    local_day_bounds,
+    local_now,
+    name_stamp,
+    utc_candidates,
+)
+
+_LOGGER = logging.getLogger(__name__)
+
+STORAGE_VERSION = 1
+STORAGE_KEY = "reolink_viewer.timeline.{key}"
+SAVE_DELAY = 10.0
+MAX_STORED_DAYS = 120
+MAX_MEMORY_DAYS = 400
+TODAY_TTL = 60.0
+MONTH_TTL = 600.0
+# Re-search this much before the last search, for recordings still being written.
+REFRESH_OVERLAP = timedelta(minutes=10)
+# A day is final once searched this long after it ended.
+DAY_SETTLE = timedelta(minutes=10)
+SEARCH_TIMEOUT = 60.0
+STREAMS = ("sub", "main")
+
+
+class TimelineError(Exception):
+    """A timeline search failed."""
+
+
+@dataclass(slots=True)
+class Segment:
+    """One recording file, in UTC epoch milliseconds."""
+
+    start: int
+    end: int
+    name: str
+    size: int | None
+    triggers: list[str]
+    ambiguous: bool = False
+
+    def public(self) -> dict[str, Any]:
+        """Return what the browser gets (the file name stays on the server)."""
+        return {
+            "id": str(self.start),
+            "start": self.start,
+            "end": self.end,
+            "triggers": self.triggers,
+            "ambiguous": self.ambiguous,
+        }
+
+
+@dataclass(slots=True)
+class Event:
+    """One detection, in UTC epoch milliseconds."""
+
+    start: int
+    end: int
+    types: list[str]
+    segment: int | None
+    ambiguous: bool = False
+
+    def public(self) -> dict[str, Any]:
+        """Return what the browser gets."""
+        return {
+            "start": self.start,
+            "end": self.end,
+            "types": self.types,
+            "segment": str(self.segment) if self.segment is not None else None,
+            "ambiguous": self.ambiguous,
+        }
+
+
+@dataclass(slots=True)
+class Day:
+    """One camera-local day of one stream."""
+
+    date: str
+    start: int
+    end: int
+    segments: list[Segment] = field(default_factory=list)
+    events: list[Event] = field(default_factory=list)
+    complete: bool = False
+    searched_until: str | None = None  # wall clock, ISO
+    fetched_at: float = 0.0
+    events_error: str | None = None
+    hint_source: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize for the Store."""
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Day:
+        """Deserialize from the Store."""
+        return cls(
+            date=data["date"],
+            start=data["start"],
+            end=data["end"],
+            segments=[Segment(**s) for s in data.get("segments", [])],
+            events=[Event(**e) for e in data.get("events", [])],
+            complete=data.get("complete", False),
+            searched_until=data.get("searched_until"),
+            fetched_at=data.get("fetched_at", 0.0),
+            events_error=data.get("events_error"),
+            hint_source=data.get("hint_source"),
+        )
+
+    def public(self, timing: dict[str, Any]) -> dict[str, Any]:
+        """Return the day as sent to the browser."""
+        return {
+            "date": self.date,
+            "start": self.start,
+            "end": self.end,
+            "segments": [s.public() for s in self.segments],
+            "events": [e.public() for e in self.events],
+            "complete": self.complete,
+            "events_error": self.events_error,
+            "hint_source": self.hint_source,
+            "timing": timing,
+        }
+
+    def segment(self, segment_id: str) -> Segment | None:
+        """Find a segment by its public id."""
+        return next((s for s in self.segments if str(s.start) == segment_id), None)
+
+
+def convert_search(
+    search: bridge.DaySearch, tz: Any
+) -> tuple[list[Segment], list[Event], str | None]:
+    """Turn one search's wall-clock recordings and events into UTC."""
+    recordings = [
+        Recording(
+            key=f.start_id,
+            start=f.start,
+            end=f.end,
+            hints={"playback": f.playback, "name": name_stamp(f.name)},
+        )
+        for f in search.files
+    ]
+    conv = DayConverter(tz, recordings)
+    segments: dict[int, Segment] = {}
+    by_file: dict[str, int] = {}
+    for file, rec in zip(search.files, recordings, strict=True):
+        start, end = conv.recording(rec)
+        segments[start.ms] = Segment(
+            start=start.ms,
+            end=end.ms,
+            name=file.name,
+            size=file.size,
+            triggers=list(file.triggers),
+            ambiguous=start.ambiguous or end.ambiguous,
+        )
+        by_file[file.start_id] = start.ms
+    events = []
+    for ev in search.events:
+        start, end = conv.event(ev.start, ev.end, ev.file_id)
+        events.append(
+            Event(
+                start=start.ms,
+                end=end.ms,
+                types=list(ev.types),
+                segment=by_file.get(ev.file_id),
+                ambiguous=start.ambiguous or end.ambiguous,
+            )
+        )
+    ordered = sorted(segments.values(), key=lambda s: s.start)
+    events.sort(key=lambda e: (e.start, e.end))
+    return ordered, events, conv.hint_source
+
+
+def merge_window(
+    day: Day, segments: list[Segment], events: list[Event], window_start: int
+) -> None:
+    """Replace what a refresh window covers with its new results."""
+    kept = [s for s in day.segments if s.end < window_start]
+    by_start = {s.start: s for s in kept}
+    for seg in segments:
+        by_start[seg.start] = seg
+    day.segments = sorted(by_start.values(), key=lambda s: s.start)
+    old_events = [e for e in day.events if e.start < window_start]
+    seen = {(e.start, e.end, tuple(e.types)) for e in old_events}
+    new_events = [e for e in events if (e.start, e.end, tuple(e.types)) not in seen]
+    day.events = sorted([*old_events, *new_events], key=lambda e: (e.start, e.end))
+
+
+class TimelineService:
+    """Searches and caches recording timelines."""
+
+    def __init__(self, hass: HomeAssistant, scheduler: Scheduler) -> None:
+        """Initialize the service."""
+        self._hass = hass
+        self._scheduler = scheduler
+        self._memory: OrderedDict[tuple[str, str, str], Day] = OrderedDict()
+        self._stores: dict[str, Store[dict[str, Any]]] = {}
+        self._stored: dict[str, dict[str, Any]] = {}
+        self._inflight: dict[tuple[Any, ...], asyncio.Future[Any]] = {}
+        self._months: dict[tuple[str, int, int], tuple[float, list[int], bool]] = {}
+
+    # ---- Storage ----
+
+    async def _data(self, key: str) -> dict[str, Any]:
+        if key not in self._stored:
+            store: Store[dict[str, Any]] = Store(
+                self._hass, STORAGE_VERSION, STORAGE_KEY.format(key=key)
+            )
+            self._stores[key] = store
+            loaded = await store.async_load()
+            data = loaded if isinstance(loaded, dict) else {}
+            for name in (*STREAMS, "months"):
+                data.setdefault(name, {})
+            self._stored[key] = data
+        return self._stored[key]
+
+    def _save(self, key: str) -> None:
+        data = self._stored[key]
+        for stream in STREAMS:
+            days = data[stream]
+            for old in sorted(days)[:-MAX_STORED_DAYS]:
+                del days[old]
+        self._stores[key].async_delay_save(lambda: data, SAVE_DELAY)
+
+    def _remember(self, mkey: tuple[str, str, str], day: Day) -> None:
+        self._memory[mkey] = day
+        self._memory.move_to_end(mkey)
+        while len(self._memory) > MAX_MEMORY_DAYS:
+            self._memory.popitem(last=False)
+
+    # ---- Days ----
+
+    async def _dedupe[T](
+        self, key: tuple[Any, ...], factory: Callable[[], Awaitable[T]]
+    ) -> T:
+        if (pending := self._inflight.get(key)) is not None:
+            result: T = await asyncio.shield(pending)
+            return result
+        future: asyncio.Future[T] = asyncio.get_running_loop().create_future()
+        self._inflight[key] = future
+        try:
+            value = await factory()
+        except BaseException as err:
+            if not future.done():
+                if isinstance(err, asyncio.CancelledError):
+                    future.cancel()
+                else:
+                    future.set_exception(err)
+                    future.exception()  # mark retrieved
+            raise
+        else:
+            future.set_result(value)
+            return value
+        finally:
+            self._inflight.pop(key, None)
+
+    async def async_day(
+        self,
+        source: PlaybackSource,
+        day: date,
+        stream: str = "sub",
+        priority: Priority = Priority.PLAYBACK,
+    ) -> tuple[Day, dict[str, Any]]:
+        """Return one day of recordings and events, from cache when possible."""
+        began = time.monotonic()
+        host = bridge.async_get_host(self._hass, source.entry_id)
+        tz = host.timezone()
+        now_local = local_now(tz)
+        iso = day.isoformat()
+        mkey = (source.key, stream, iso)
+        start_utc, end_utc = local_day_bounds(
+            datetime.combine(day, datetime.min.time()), tz
+        )
+        empty = Day(iso, epoch_ms(start_utc), epoch_ms(end_utc))
+
+        if day > now_local.date():
+            return empty, {"cache": "future", "total_ms": _ms(began)}
+        cached = self._memory.get(mkey)
+        if cached is not None and cached.complete:
+            self._memory.move_to_end(mkey)
+            return cached, {"cache": "memory", "total_ms": _ms(began)}
+        data = await self._data(source.key)
+        if (stored := data[stream].get(iso)) is not None:
+            day_data = Day.from_dict(stored)
+            if day_data.complete:
+                self._remember(mkey, day_data)
+                return day_data, {"cache": "store", "total_ms": _ms(began)}
+
+        is_today = day == now_local.date()
+        if (
+            is_today
+            and cached is not None
+            and _wall_time() - cached.fetched_at < TODAY_TTL
+        ):
+            return cached, {"cache": "memory", "total_ms": _ms(began)}
+
+        async def fetch() -> tuple[Day, dict[str, Any]]:
+            return await self._fetch_day(
+                source,
+                host,
+                tz=tz,
+                empty=empty,
+                previous=cached if is_today else None,
+                stream=stream,
+                priority=priority,
+            )
+
+        result, timing = await self._dedupe(("day", *mkey), fetch)
+        timing["total_ms"] = _ms(began)
+        return result, timing
+
+    async def _fetch_day(
+        self,
+        source: PlaybackSource,
+        host: bridge.ReolinkHostHandle,
+        *,
+        tz: Any,
+        empty: Day,
+        previous: Day | None,
+        stream: str,
+        priority: Priority,
+    ) -> tuple[Day, dict[str, Any]]:
+        now_local = local_now(tz)
+        midnight = datetime.fromisoformat(empty.date)
+        day_end_wall = midnight + timedelta(days=1) - timedelta(seconds=1)
+        window_end = min(now_local, day_end_wall)
+        window_start = midnight
+        if previous is not None and previous.searched_until is not None:
+            window_start = max(
+                midnight,
+                datetime.fromisoformat(previous.searched_until) - REFRESH_OVERLAP,
+            )
+        else:
+            previous = None
+        incremental = previous is not None
+        searched = time.monotonic()
+        try:
+            search = await self._scheduler.run(
+                source.entry_id,
+                lambda: host.async_search_day(
+                    source.channel, window_start, window_end, stream
+                ),
+                priority=priority,
+                key=("day", source.channel, stream, window_start, window_end),
+                timeout=SEARCH_TIMEOUT,
+            )
+        except Exception as err:
+            raise TimelineError(f"day search failed: {type(err).__name__}") from err
+        search_ms = _ms(searched)
+        segments, events, hint = convert_search(search, tz)
+        if previous is not None:
+            day = previous
+            window_ms = epoch_ms(utc_candidates(window_start, tz)[0])
+            merge_window(day, segments, events, window_ms)
+        else:
+            day = Day(empty.date, empty.start, empty.end, segments, events)
+        day.events_error = search.events_error
+        day.hint_source = hint or day.hint_source
+        day.searched_until = window_end.isoformat()
+        day.fetched_at = _wall_time()
+        day.complete = now_local >= day_end_wall + DAY_SETTLE
+        self._remember((source.key, stream, empty.date), day)
+        if day.complete:
+            data = await self._data(source.key)
+            data[stream][day.date] = day.to_dict()
+            self._save(source.key)
+        timing = {
+            "cache": "incremental" if incremental else "fresh",
+            "search_ms": search_ms,
+            "segments": len(day.segments),
+        }
+        return day, timing
+
+    # ---- Months ----
+
+    async def async_days(
+        self,
+        source: PlaybackSource,
+        year: int,
+        month: int,
+        priority: Priority = Priority.PLAYBACK,
+    ) -> tuple[list[int], dict[str, Any]]:
+        """Return the days of a month that have recordings."""
+        began = time.monotonic()
+        host = bridge.async_get_host(self._hass, source.entry_id)
+        tz = host.timezone()
+        today = local_now(tz).date()
+        if (year, month) > (today.year, today.month):
+            return [], {"cache": "future", "total_ms": _ms(began)}
+        mkey = (source.key, year, month)
+        month_id = f"{year:04d}-{month:02d}"
+        if (hit := self._months.get(mkey)) is not None:
+            fetched, days, final = hit
+            if final or _clock() - fetched < MONTH_TTL:
+                return days, {"cache": "memory", "total_ms": _ms(began)}
+        data = await self._data(source.key)
+        if (stored := data["months"].get(month_id)) is not None:
+            self._months[mkey] = (_clock(), list(stored), True)
+            return list(stored), {"cache": "store", "total_ms": _ms(began)}
+
+        last = monthrange(year, month)[1]
+        start = datetime(year, month, 1)
+        end = datetime(year, month, last, 23, 59, 59)
+
+        async def fetch() -> list[int]:
+            try:
+                found = await self._scheduler.run(
+                    source.entry_id,
+                    lambda: host.async_recording_days(source.channel, start, end),
+                    priority=priority,
+                    key=("days", source.channel, month_id),
+                    timeout=SEARCH_TIMEOUT,
+                )
+            except Exception as err:
+                raise TimelineError(
+                    f"month search failed: {type(err).__name__}"
+                ) from err
+            return sorted({d.day for d in found})
+
+        searched = time.monotonic()
+        days = await self._dedupe(("days", *mkey), fetch)
+        final = (year, month) < (today.year, today.month)
+        self._months[mkey] = (_clock(), days, final)
+        if final:
+            data["months"][month_id] = days
+            self._save(source.key)
+        return days, {
+            "cache": "fresh",
+            "search_ms": _ms(searched),
+            "total_ms": _ms(began),
+        }
+
+    # ---- Warming and lookup ----
+
+    async def async_warm(self, sources: list[PlaybackSource]) -> None:
+        """Fetch today for each camera at prefetch priority (errors are logged)."""
+
+        async def one(source: PlaybackSource) -> None:
+            try:
+                host = bridge.async_get_host(self._hass, source.entry_id)
+                today = local_now(host.timezone()).date()
+                await self.async_day(source, today, "sub", Priority.PREFETCH)
+            except Exception as err:  # noqa: BLE001 - warming is best effort
+                _LOGGER.debug("Warming %s failed: %s", source.name, err)
+
+        await asyncio.gather(*(one(s) for s in sources))
+
+    async def async_segment(
+        self, source: PlaybackSource, day: date, stream: str, segment_id: str
+    ) -> Segment:
+        """Find a recording to play: the sub segment, or the main one matching it."""
+        sub_day, _ = await self.async_day(source, day, "sub")
+        if (sub := sub_day.segment(segment_id)) is None:
+            raise TimelineError("unknown segment")
+        if stream == "sub":
+            return sub
+        main_day, _ = await self.async_day(source, day, "main")
+        best = match_segment(main_day.segments, sub)
+        if best is None:
+            raise TimelineError("no main-stream recording for this segment")
+        return best
+
+    def clear(self) -> None:
+        """Drop the in-memory caches (the Store stays)."""
+        self._memory.clear()
+        self._months.clear()
+
+
+def match_segment(candidates: list[Segment], target: Segment) -> Segment | None:
+    """Pick the candidate overlapping ``target`` most (main vs sub differ by seconds)."""
+    best: Segment | None = None
+    best_score: tuple[int, int] = (0, 0)
+    for seg in candidates:
+        overlap = min(seg.end, target.end) - max(seg.start, target.start)
+        if overlap <= 0:
+            continue
+        score = (overlap, -abs(seg.start - target.start))
+        if best is None or score > best_score:
+            best, best_score = seg, score
+    return best
+
+
+def _ms(start: float) -> float:
+    return round((time.monotonic() - start) * 1000, 1)
+
+
+def _wall_time() -> float:
+    """Return epoch seconds (a hook for tests)."""
+    return time.time()
+
+
+def _clock() -> float:
+    """Return a monotonic clock for cache ages (a hook for tests)."""
+    return time.monotonic()

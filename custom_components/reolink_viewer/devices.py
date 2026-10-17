@@ -48,6 +48,27 @@ class DeviceNotFoundError(Exception):
     """No Reolink device with that id."""
 
 
+class NoPlaybackError(Exception):
+    """The camera records nowhere HA can reach (no NVR, Hub or SD card)."""
+
+
+@dataclass(frozen=True, slots=True)
+class PlaybackSource:
+    """Where a camera's recordings are: a host and channel (the NVR for merged)."""
+
+    camera_id: str
+    name: str
+    entry_id: str
+    channel: int
+    is_doorbell: bool = False
+    is_battery: bool = False
+
+    @property
+    def key(self) -> str:
+        """Return a stable storage key that reveals no identifier."""
+        return bridge.opaque_key(self.entry_id, self.channel)
+
+
 @dataclass(slots=True)
 class _Connection:
     """One way HA reaches a camera: an NVR channel or a direct connection."""
@@ -394,6 +415,47 @@ def _host_dict(host: _Host, ent_reg: er.EntityRegistry) -> dict[str, Any]:
         "camera_ids": host.camera_ids,
         **_counts(entities),
     }
+
+
+def _playback_source(camera: _Camera) -> PlaybackSource | None:
+    for conn in camera.connections:
+        if conn.playback_source and conn.channel is not None:
+            status: dict[str, Any] = {}
+            if conn.handle is not None:
+                try:
+                    status = conn.handle.channel_details(conn.channel)
+                except Exception:  # flags are optional
+                    _LOGGER.debug("Cannot read channel details", exc_info=True)
+            return PlaybackSource(
+                camera_id=camera.id,
+                name=_device_name(camera.primary.device) or camera.primary.entry_title,
+                entry_id=conn.entry_id,
+                channel=conn.channel,
+                is_doorbell=bool(status.get("is_doorbell")),
+                is_battery=bool(status.get("is_battery")),
+            )
+    return None
+
+
+@callback
+def async_playback_source(hass: HomeAssistant, device_id: str) -> PlaybackSource:
+    """Return where a camera's recordings are; ``device_id`` as in async_device."""
+    model = _async_build(hass, degraded=False)
+    for camera in model.cameras:
+        if any(device_id in c.device_ids for c in camera.connections) or (
+            device_id == camera.group_id
+        ):
+            if (source := _playback_source(camera)) is None:
+                raise NoPlaybackError(device_id)
+            return source
+    raise DeviceNotFoundError(device_id)
+
+
+@callback
+def async_playback_sources(hass: HomeAssistant) -> list[PlaybackSource]:
+    """Return the playback source of every camera that records."""
+    model = _async_build(hass, degraded=False)
+    return [s for c in model.cameras if (s := _playback_source(c)) is not None]
 
 
 @callback

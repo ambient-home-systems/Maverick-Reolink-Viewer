@@ -17,12 +17,18 @@ custom_components/reolink_viewer/
   mp4.py             # minimal MP4 box reader (layout from a few Range requests)
   probe.py           # Phase 0 hardware probe
   probe_playback.py  # Phase 2 gate: recording playback check (opt-in probe section)
-  websocket_api.py   # reolink_viewer/status, /devices, /device, /catalog, /probe
+  timeconv.py        # camera-local time -> UTC (device DST rules, repeated-hour hints)
+  timeline.py        # day/month timelines: permanent cache for past days, 60 s for today
+  vodcache.py        # disk cache of recordings: fills under the stream budget, LRU
+  thumbnails.py      # recording thumbnails: time buckets, de-duplication, disk LRU
+  views.py           # signed, short-lived /vod, /clip, /thumb URLs (no camera URLs)
+  websocket_api.py   # status, devices, catalog, probe, timeline/*, playback/*, thumbnail/*
   models.py          # runtime data of the config entry
   translations/en.json
   frontend_dist/     # built panel bundle (committed; CI checks it matches the source)
 frontend/            # Lit + TypeScript panel, built with Vite
-  src/components/    # device list, device page, overview, settings
+  src/components/    # device list, device page, overview, settings, playback tab
+  src/playback/      # timeline canvas + math, calendar, event list, player, codec checks
 tests/               # pytest-homeassistant-custom-component
 scripts/             # setup_dev.sh, probe_to_matrix.py
 ```

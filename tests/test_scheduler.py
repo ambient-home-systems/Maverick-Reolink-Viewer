@@ -6,10 +6,12 @@ from typing import Any
 import pytest
 
 from custom_components.reolink_viewer.scheduler import (
+    HostLimits,
     HostScheduler,
     Priority,
     Scheduler,
     SchedulerClosedError,
+    StreamBudget,
 )
 
 
@@ -32,6 +34,9 @@ class Gate:
         return self.result
 
 
+IDLE_STREAMS = {"stream_limit": 2, "streams": 0, "streams_waiting": 0}
+
+
 async def _settle() -> None:
     for _ in range(5):
         await asyncio.sleep(0)
@@ -47,14 +52,14 @@ async def test_concurrency_limit() -> None:
     ]
     await _settle()
     assert log == ["j0", "j1"]
-    assert sched.stats() == {"limit": 2, "running": 2, "queued": 2}
+    assert sched.stats() == {"limit": 2, "running": 2, "queued": 2, **IDLE_STREAMS}
     gates[0].release.set()
     await _settle()
     assert log == ["j0", "j1", "j2"]
     for g in gates:
         g.release.set()
     assert await asyncio.gather(*tasks) == [0, 1, 2, 3]
-    assert sched.stats() == {"limit": 2, "running": 0, "queued": 0}
+    assert sched.stats() == {"limit": 2, "running": 0, "queued": 0, **IDLE_STREAMS}
 
 
 async def test_priority_order() -> None:
@@ -284,7 +289,12 @@ async def test_shutdown() -> None:
         registry.run("h", Gate([], "q"), priority=Priority.LIVE)
     )
     await _settle()
-    assert registry.stats()["h"] == {"limit": 1, "running": 1, "queued": 1}
+    assert registry.stats()["h"] == {
+        "limit": 1,
+        "running": 1,
+        "queued": 1,
+        **IDLE_STREAMS,
+    }
     await registry.async_shutdown()
     with pytest.raises(SchedulerClosedError):
         await running
@@ -310,3 +320,105 @@ def test_invalid_limit() -> None:
     """A limit below 1 is rejected."""
     with pytest.raises(ValueError, match="at least 1"):
         HostScheduler("h", limit=0)
+
+
+async def test_stream_budget_limit_and_priority() -> None:
+    """Streams wait by priority; release hands the slot to the best waiter."""
+    budget = StreamBudget("h", limit=2, prefetch_limit=1)
+    a = budget.request(Priority.PLAYBACK)
+    b = budget.request(Priority.PLAYBACK)
+    await a.wait()
+    await b.wait()
+    later = budget.request(Priority.PREFETCH)
+    urgent = budget.request(Priority.PLAYBACK)
+    await _settle()
+    assert not later.granted
+    assert not urgent.granted
+    assert budget.stats() == {"stream_limit": 2, "streams": 2, "streams_waiting": 2}
+    a.release()
+    await urgent.wait()
+    assert not later.granted
+    b.release()
+    await later.wait()
+    assert later.granted_priority is Priority.PREFETCH
+    # Releasing twice is harmless.
+    b.release()
+    assert budget.stats()["streams"] == 2
+
+
+async def test_stream_budget_prefetch_cap() -> None:
+    """Prefetch streams have their own cap, which never blocks others."""
+    budget = StreamBudget("h", limit=3, prefetch_limit=1)
+    first = budget.request(Priority.PREFETCH)
+    second = budget.request(Priority.PREFETCH)
+    playback = budget.request(Priority.PLAYBACK)
+    await first.wait()
+    await playback.wait()
+    await _settle()
+    assert not second.granted
+    first.release()
+    await second.wait()
+    assert second.granted
+
+
+async def test_stream_ticket_raise_priority_and_cancel() -> None:
+    """A waiting ticket can move up; a cancelled wait gives its place up."""
+    budget = StreamBudget("h", limit=1, prefetch_limit=1)
+    holder = budget.request(Priority.LIVE)
+    await holder.wait()
+    slow = budget.request(Priority.PREFETCH)
+    other = budget.request(Priority.THUMBNAILS)
+    slow.raise_priority(Priority.PLAYBACK)
+    slow.raise_priority(Priority.PREFETCH)  # lowering is ignored
+    assert slow.priority is Priority.PLAYBACK
+    holder.release()
+    await slow.wait()
+    assert not other.granted
+
+    waiter = asyncio.create_task(other.wait())
+    await _settle()
+    waiter.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await waiter
+    assert other.released
+    slow.release()
+    assert budget.stats() == {"stream_limit": 1, "streams": 0, "streams_waiting": 0}
+
+
+async def test_stream_slot_context_and_close() -> None:
+    """slot() holds and frees; close() fails waiters; closed budgets refuse."""
+    budget = StreamBudget("h", limit=1)
+    async with budget.slot(Priority.PLAYBACK) as ticket:
+        assert ticket.granted
+        waiting = budget.request(Priority.PLAYBACK)
+        budget.close()
+        with pytest.raises(SchedulerClosedError):
+            await waiting.wait()
+    with pytest.raises(SchedulerClosedError):
+        budget.request(Priority.PLAYBACK)
+    with pytest.raises(ValueError, match="at least 1"):
+        StreamBudget("h", limit=0)
+
+
+async def test_scheduler_resolver_and_overrides() -> None:
+    """Limits come from the resolver, fall back on errors, and can be forgotten."""
+    calls: list[str] = []
+
+    def resolver(key: str) -> HostLimits | None:
+        calls.append(key)
+        if key == "broken":
+            raise RuntimeError("no host")
+        return HostLimits(6, 4) if key == "nvr" else None
+
+    registry = Scheduler(2, {"pinned": 5}, resolver=resolver)
+    nvr = registry.host("nvr")
+    assert (nvr.limit, nvr.streams.limit, nvr.streams.prefetch_limit) == (6, 4, 1)
+    assert registry.host("cam").limit == 2
+    assert registry.host("broken").limit == 2
+    assert registry.host("pinned").limit == 5
+    assert registry.host("nvr") is nvr
+    registry.forget("nvr")
+    registry.forget("missing")
+    assert registry.host("nvr") is not nvr
+    assert calls.count("nvr") == 2
+    await registry.async_shutdown()
