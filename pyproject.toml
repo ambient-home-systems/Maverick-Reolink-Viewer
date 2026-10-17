@@ -1,0 +1,88 @@
+[project]
+name = "maverick-reolink-viewer"
+version = "0.0.1"
+description = "Home Assistant companion integration and panel for Reolink cameras"
+requires-python = ">=3.14.2"
+license = "MIT"
+
+[tool.ruff]
+target-version = "py314"
+line-length = 88
+extend-exclude = ["frontend", ".venv"]
+
+[tool.ruff.lint]
+select = [
+  "A", "ASYNC", "B", "BLE", "C4", "D", "E", "F", "G", "I", "LOG", "N", "PERF",
+  "PIE", "PL", "PT", "RET", "RSE", "RUF", "S", "SIM", "SLF", "T20", "TID", "UP", "W",
+]
+ignore = [
+  "D202",    # blank line after docstring
+  "D203",    # conflicts with D211
+  "D213",    # conflicts with D212
+  "E501",    # handled by the formatter
+  "PLR0911", # too many returns
+  "PLR0912", # too many branches
+  "PLR0913", # too many arguments
+  "PLR0915", # too many statements
+  "PLR2004", # magic values
+  "S101",    # assert
+  "ASYNC109", # timeout params bound run time, not the call (scheduler, media)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["D", "S", "SLF001", "PLC0415", "PLR0917", "TID251"]
+"scripts/**" = ["T20"]
+
+[tool.ruff.lint.isort]
+force-sort-within-sections = true
+known-first-party = ["custom_components", "homeassistant"]
+combine-as-imports = true
+split-on-trailing-comma = false
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"voluptuous".msg = "use probatio instead (HA 2026.10+)"
+"async_timeout".msg = "use asyncio.timeout instead"
+"homeassistant.components.reolink".msg = "only bridge.py may touch the Reolink integration"
+
+[tool.ruff.lint.flake8-import-conventions.banned-aliases]
+"probatio" = ["vol"]
+
+[tool.mypy]
+python_version = "3.14"
+strict = true
+warn_unreachable = true
+show_error_codes = true
+files = ["custom_components", "scripts", "tests"]
+explicit_package_bases = true
+mypy_path = "."
+
+[[tool.mypy.overrides]]
+module = ["pytest_homeassistant_custom_component.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+disallow_untyped_decorators = false
+disallow_any_generics = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+asyncio_default_test_loop_scope = "function"
+timeout = 30
+addopts = "-p no:cacheprovider"
+filterwarnings = ["error::RuntimeWarning"]
+
+[tool.coverage.run]
+source = ["custom_components.reolink_viewer"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+
+[[tool.mypy.overrides]]
+# HA re-exports names from package __init__ files without `as` aliases.
+module = ["homeassistant.*"]
+implicit_reexport = true

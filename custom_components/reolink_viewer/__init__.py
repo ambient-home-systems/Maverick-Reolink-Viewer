@@ -1,0 +1,111 @@
+"""Reolink Viewer: a companion panel for HA's Reolink integration."""
+
+import hashlib
+import logging
+from pathlib import Path
+
+from homeassistant.components import frontend, panel_custom
+from homeassistant.components.http import StaticPathConfig
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers import config_validation as cv, issue_registry as ir
+from homeassistant.helpers.typing import ConfigType
+from homeassistant.util.hass_dict import HassKey
+
+from . import bridge
+from .const import (
+    DEFAULT_HOST_CONCURRENCY,
+    DOMAIN,
+    FRONTEND_DIST_DIR,
+    ISSUE_INCOMPATIBLE,
+    PANEL_COMPONENT_NAME,
+    PANEL_FILENAME,
+    PANEL_ICON,
+    PANEL_TITLE,
+    PANEL_URL_PATH,
+    STATIC_URL_PATH,
+)
+from .models import ReolinkViewerConfigEntry, ReolinkViewerData
+from .scheduler import Scheduler
+from .websocket_api import async_register_commands
+
+_LOGGER = logging.getLogger(__name__)
+
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+
+FRONTEND_DIR = Path(__file__).parent / FRONTEND_DIST_DIR
+# Static paths cannot be unregistered, so register them once per HA run.
+DATA_STATIC_REGISTERED: HassKey[bool] = HassKey(f"{DOMAIN}_static_registered")
+
+
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Register the websocket commands once."""
+    async_register_commands(hass)
+    return True
+
+
+def _bundle_version() -> str:
+    """Return a short content hash of the panel bundle for cache busting."""
+    try:
+        return hashlib.sha256((FRONTEND_DIR / PANEL_FILENAME).read_bytes()).hexdigest()[
+            :12
+        ]
+    except OSError:
+        return "missing"
+
+
+async def async_setup_entry(
+    hass: HomeAssistant, entry: ReolinkViewerConfigEntry
+) -> bool:
+    """Set up Reolink Viewer from a config entry."""
+    compat = bridge.async_check_compat(hass)
+    if compat.ok:
+        ir.async_delete_issue(hass, DOMAIN, ISSUE_INCOMPATIBLE)
+    else:
+        _LOGGER.error(
+            "Reolink Viewer cannot use the Reolink integration's internals (reolink-aio"
+            " %s): %s. Running in degraded mode: the panel lists devices from the"
+            " device registry only and the probe is disabled",
+            compat.reolink_aio_version,
+            "; ".join(compat.errors),
+        )
+        ir.async_create_issue(
+            hass,
+            DOMAIN,
+            ISSUE_INCOMPATIBLE,
+            is_fixable=False,
+            severity=ir.IssueSeverity.ERROR,
+            translation_key=ISSUE_INCOMPATIBLE,
+            translation_placeholders={"errors": "; ".join(compat.errors)},
+        )
+
+    entry.runtime_data = ReolinkViewerData(
+        scheduler=Scheduler(default_limit=DEFAULT_HOST_CONCURRENCY)
+    )
+
+    if not hass.data.get(DATA_STATIC_REGISTERED):
+        await hass.http.async_register_static_paths(
+            [StaticPathConfig(STATIC_URL_PATH, str(FRONTEND_DIR), cache_headers=False)]
+        )
+        hass.data[DATA_STATIC_REGISTERED] = True
+
+    bundle_version = await hass.async_add_executor_job(_bundle_version)
+    await panel_custom.async_register_panel(
+        hass,
+        frontend_url_path=PANEL_URL_PATH,
+        webcomponent_name=PANEL_COMPONENT_NAME,
+        sidebar_title=PANEL_TITLE,
+        sidebar_icon=PANEL_ICON,
+        module_url=f"{STATIC_URL_PATH}/{PANEL_FILENAME}?v={bundle_version}",
+        require_admin=False,
+        config={},
+    )
+    return True
+
+
+async def async_unload_entry(
+    hass: HomeAssistant, entry: ReolinkViewerConfigEntry
+) -> bool:
+    """Unload the entry."""
+    frontend.async_remove_panel(hass, PANEL_URL_PATH, warn_if_unknown=False)
+    await entry.runtime_data.scheduler.async_shutdown()
+    return True

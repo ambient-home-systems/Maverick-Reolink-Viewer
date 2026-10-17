@@ -1,0 +1,32 @@
+{
+  "name": "reolink-viewer-panel",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Sidebar panel for the Reolink Viewer Home Assistant integration",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite build --watch",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "lit": "3.3.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "eslint": "10.13.0",
+    "eslint-plugin-lit": "2.3.1",
+    "globals": "17.13.0",
+    "happy-dom": "21.0.3",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.71.2",
+    "vite": "8.3.4",
+    "vitest": "5.0.5"
+  }
+}
