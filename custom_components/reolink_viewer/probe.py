@@ -172,9 +172,15 @@ class Prober:
             wanted = set(self._options.entry_ids)
             hosts = [h for h in hosts if h.entry_id in wanted]
 
-        results = await asyncio.gather(
-            *(self._probe_host(index, host) for index, host in enumerate(hosts, 1))
-        )
+        # Each host records its own errors (see _probe_host_safe), so one failing
+        # host never fails the report. The TaskGroup still cancels every sibling
+        # if anything escapes (e.g. the probe itself is cancelled).
+        async with asyncio.TaskGroup() as group:
+            tasks = [
+                group.create_task(self._probe_host_safe(index, host))
+                for index, host in enumerate(hosts, 1)
+            ]
+        results = [task.result() for task in tasks]
         report = {
             "schema_version": PROBE_SCHEMA_VERSION,
             "generated_at": started.isoformat(),
@@ -196,6 +202,16 @@ class Prober:
             report, secrets, [h.hide_password for h in hosts]
         )
         return redacted
+
+    async def _probe_host_safe(
+        self, index: int, host: ReolinkHostHandle
+    ) -> dict[str, Any]:
+        """Probe one host, recording an unexpected failure instead of raising."""
+        try:
+            return await self._probe_host(index, host)
+        except Exception as err:
+            _LOGGER.debug("Probe of host%s failed", index, exc_info=True)
+            return {"id": f"host{index}", "error": _err(err)}
 
     async def _probe_host(self, index: int, host: ReolinkHostHandle) -> dict[str, Any]:
         start = time.monotonic()
@@ -344,11 +360,14 @@ class Prober:
             return {"ok": False, "error": _err(err)}
         if url is None:
             return _skipped("no URL for this stream")
-        frame = await self._job(
-            host,
-            lambda: async_first_frame(self._ffmpeg, url, timeout=timeout),
-            timeout=timeout + 5,
-        )
+        try:
+            frame = await self._job(
+                host,
+                lambda: async_first_frame(self._ffmpeg, url, timeout=timeout),
+                timeout=timeout + 5,
+            )
+        except Exception as err:  # noqa: BLE001
+            return {"ok": False, "error": _err(err)}
         return frame.as_dict()
 
     # ---- VOD ----
@@ -458,21 +477,24 @@ class Prober:
         prepare_ms = _ms(start)
 
         result: dict[str, Any]
-        if method is VodMethod.RTMP:
-            frame = await self._job(
-                host,
-                lambda: async_first_frame(self._ffmpeg, url, timeout=timeout),
-                timeout=timeout + 5,
-            )
-            result = frame.as_dict()
-            result["ttfb_ms"] = frame.ttff_ms
-        else:
-            fetched: ByteResult = await self._job(
-                host,
-                lambda: async_first_bytes(self._session, url, timeout=timeout),
-                timeout=timeout + 5,
-            )
-            result = fetched.as_dict()
+        try:
+            if method is VodMethod.RTMP:
+                frame = await self._job(
+                    host,
+                    lambda: async_first_frame(self._ffmpeg, url, timeout=timeout),
+                    timeout=timeout + 5,
+                )
+                result = frame.as_dict()
+                result["ttfb_ms"] = frame.ttff_ms
+            else:
+                fetched: ByteResult = await self._job(
+                    host,
+                    lambda: async_first_bytes(self._session, url, timeout=timeout),
+                    timeout=timeout + 5,
+                )
+                result = fetched.as_dict()
+        except Exception as err:  # noqa: BLE001
+            return {"ok": False, "error": _err(err), "prepare_ms": prepare_ms}
         result["mime"] = mime
         result["prepare_ms"] = prepare_ms
         return result

@@ -9,13 +9,13 @@ import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry, MockUser
 from pytest_homeassistant_custom_component.typing import WebSocketGenerator
 
-from custom_components.reolink_viewer import probe
+from custom_components.reolink_viewer import bridge, probe
 from custom_components.reolink_viewer.media import ByteResult, FrameResult
 from homeassistant.components.ffmpeg import FFmpegManager
 from homeassistant.core import HomeAssistant
 
-from .conftest import SECRETS
-from .ha_reolink_mock import TEST_HOST_MODEL
+from .conftest import SECRETS, TEST_PASSWORD
+from .ha_reolink_mock import TEST_HOST_MODEL, TEST_UID
 
 
 @pytest.fixture(autouse=True)
@@ -245,3 +245,43 @@ async def test_probe_unexpected_error(
         client = await hass_ws_client(hass)
         events = await _collect_probe(client, {})
     assert events[-1] == {"type": "error", "message": "crash"}
+
+
+async def test_probe_error_is_redacted(
+    hass: HomeAssistant,
+    hass_ws_client: WebSocketGenerator,
+    loaded_viewer: MockConfigEntry,
+) -> None:
+    """The top-level error message never carries URLs, addresses or secrets."""
+    error = RuntimeError(
+        f"failed rtsp://admin:{TEST_PASSWORD}@1.2.3.4:554/x on {TEST_UID} at 1.2.3.4"
+    )
+    with patch.object(probe.Prober, "async_run", side_effect=error):
+        client = await hass_ws_client(hass)
+        events = await _collect_probe(client, {})
+    message = events[-1]["message"]
+    assert events[-1]["type"] == "error"
+    for secret in (*SECRETS, "1.2.3.4", "rtsp://"):
+        assert secret not in message
+    assert message == "failed <url> on <redacted> at <ip>"
+
+
+async def test_probe_hosts_incompatible(
+    hass: HomeAssistant,
+    hass_ws_client: WebSocketGenerator,
+    loaded_viewer: MockConfigEntry,
+) -> None:
+    """An IncompatibleError while listing hosts is a clear error before the ack."""
+    with patch.object(
+        bridge,
+        "async_get_hosts",
+        side_effect=bridge.IncompatibleError("Reolink runtime_data has no 'host'"),
+    ):
+        client = await hass_ws_client(hass)
+        await client.send_json_auto_id({"type": "reolink_viewer/probe"})
+        msg = await client.receive_json()
+    assert not msg["success"]
+    assert msg["error"]["code"] == "incompatible"
+    assert msg["error"]["message"] == (
+        "Reolink integration internals changed: Reolink runtime_data has no 'host'"
+    )

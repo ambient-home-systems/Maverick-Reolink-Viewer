@@ -104,6 +104,17 @@ def ws_devices(
     )
 
 
+def _redacted_error(err: Exception, hosts: list[bridge.ReolinkHostHandle]) -> str:
+    """Return an error message safe to send to the browser."""
+    secrets: list[str] = []
+    for host in hosts:
+        try:
+            secrets.extend(host.secrets())
+        except Exception:  # noqa: BLE001 - the regexes in redact_text still run
+            _LOGGER.debug("Cannot collect secrets of %s", host.entry_id)
+    return bridge.redact_text(str(err) or type(err).__name__, secrets)
+
+
 @websocket_api.websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/probe",
@@ -145,6 +156,16 @@ async def ws_probe(
         )
         return
 
+    try:
+        hosts = bridge.async_get_hosts(hass)
+    except bridge.IncompatibleError as err:
+        connection.send_error(
+            msg["id"],
+            ERR_INCOMPATIBLE,
+            f"Reolink integration internals changed: {err}",
+        )
+        return
+
     ffmpeg = get_ffmpeg_manager(hass)
     ffmpeg_version, _major = await ffmpeg.async_get_version()
     integration = await async_get_integration(hass, DOMAIN)
@@ -164,7 +185,7 @@ async def ws_probe(
 
     prober = Prober(
         data.scheduler,
-        bridge.async_get_hosts(hass),
+        hosts,
         options=options,
         compat=compat,
         ffmpeg_binary=ffmpeg.binary,
@@ -184,7 +205,8 @@ async def ws_probe(
                 _LOGGER.exception("Reolink Viewer probe failed")
                 connection.send_message(
                     websocket_api.event_message(
-                        msg["id"], {"type": "error", "message": str(err)}
+                        msg["id"],
+                        {"type": "error", "message": _redacted_error(err, hosts)},
                     )
                 )
                 return
