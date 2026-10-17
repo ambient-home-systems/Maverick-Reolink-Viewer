@@ -18,7 +18,7 @@ put on it:
 | --- | --- | --- | --- | --- |
 | 0 | Foundations, CI, adapter layer, hardware discovery | High | 1–2 wk | Done (2026-10-17) |
 | 1 | Device details and every setting, with explanations | Standard (catalog) / High (panel shell) | 2–3 wk | Done (2026-10-17) |
-| 2 | Event timeline, thumbnails, smooth playback | High (backend) / Very high (player) | 3–5 wk | In progress: 2A step 1 done (strategy chosen); step 2 (backend + frontend) in progress |
+| 2 | Event timeline, thumbnails, smooth playback | High (backend) / Very high (player) | 3–5 wk | In progress: 2A built (v0.2.0); its LAN exit criteria await the hardware check. 2B not started |
 | 3 | Live view via go2rtc, grid, fullscreen, PTZ | High | 3–4 wk | Not started |
 | 4 | Performance, mobile, packaging, first release | Standard | 2–3 wk | Not started |
 | 5 | Optional R&D: Baichuan live/playback | Very high | 4–8 wk, time-boxed with gates | Not started |
@@ -422,8 +422,11 @@ gets no Playback tab.
 | 1. Measure (gate): opt-in **recording playback** check in the probe | Done: run 3 on 2026-10-17 (v0.1.1), see [hardware-matrix.md](hardware-matrix.md#recording-playback-download) |
 | 1. Record the report in the matrix and choose the serving strategy | Done: **disk cache**, see "Serving strategy" below |
 | 1. Follow-up check (v0.1.2): MP4 layout through the plain GET, server-side seek with `start=`, file-name shape, full-speed parallel downloads | Done: run 4 on 2026-10-17; the open questions are settled below |
-| 2. Backend: scheduler limits + stream budget, event list from the bridge, timeline commands and cache, UTC conversion with DST, thumbnails, VOD and clip views | Not started (after the gate) |
-| 2. Frontend: Playback tab, canvas timeline, calendar, event list, simple player, debug panel | Not started (after the gate) |
+| 2. Backend: scheduler limits + stream budget, event list from the bridge, timeline commands and cache, UTC conversion with DST, thumbnails, VOD and clip views | Done (v0.2.0): see "2A as built" below |
+| 2. Frontend: Playback tab, canvas timeline, calendar, event list, simple player, debug panel | Done (v0.2.0): checked in Chromium with synthetic recordings (desktop and iPhone-sized layout) |
+| Exit on LAN: timeline < 1 s cached, < 3 s cold | Awaiting the hardware check (debug panel: "Time to timeline") |
+| Exit on LAN: clicking an event starts video in < 2 s on the sub stream | Awaiting the hardware check (debug panel: "Time to first frame") |
+| Exit on LAN: auto-advance to the next file | Awaiting the hardware check. With synthetic files in Chromium the swap took about 1 ms |
 
 What the playback check measures (`probe_playback.py`, opt-in, read-only, every
 request a prefetch-priority scheduler job, reads bounded in bytes and time, no URL
@@ -528,6 +531,53 @@ Settled by run 4 (v0.1.2):
      `ambiguous`, which the timeline shows.
    - **Skipped hour:** times in the hour skipped when clocks spring forward cannot
      occur and are mapped with the standard offset.
+
+#### 2A as built (v0.2.0)
+
+Backend (`custom_components/reolink_viewer/`):
+
+- `scheduler.py`: request limits NVR 6, cameras 3, unknown hosts 2. A separate
+  per-host **stream budget** counts long-lived fills: NVR 4, other hosts 2, and at
+  most 1 prefetch fill per host. A click raises a waiting fill's priority.
+- `bridge.py`: one day's files (HTTP search) and individual Baichuan events (type
+  and exact start/end), plus the month's recording days. An event-search failure
+  still returns the files and is reported as `events_error`.
+- `timeconv.py`: camera-local times to UTC with the device's own DST rules (see
+  item 5 above). Tested across both 2026 transitions.
+- `timeline.py`: `timeline/days` (month) and `timeline/day` (camera, day). Past
+  days are cached permanently (memory and HA storage, last 120 days per camera).
+  Today is refreshed incrementally: only the last 10 minutes are searched again,
+  with a 60 s TTL. Today is warmed for every recording camera at PREFETCH priority
+  when the panel opens (`timeline/warm`).
+- `vodcache.py`: the disk cache of the serving strategy. Fills run at full speed
+  under the stream budget and are served progressively while filling (200,
+  chunked, Chrome/Firefox), or with Range once complete (Safari / iOS app). The
+  cache is an LRU capped at 8 GiB that keeps 2 GiB free on disk. The codec string
+  and size come from the file's `moov`.
+- `thumbnails.py`: `snapshot_past` at THUMBNAILS priority. Times are bucketed by
+  zoom (5 s to 5 min), and concurrent requests for the same bucket share one fetch.
+  Failures are cached for 60 s. Disk LRU capped at 256 MiB.
+- `views.py`: `/api/reolink_viewer/vod|clip|thumb/{token}`. Each URL is signed
+  with `async_sign_path` for the websocket user and expires (VOD 30 min,
+  thumbnails 10 min). The token maps to a server-side grant, so no camera URL or
+  credential reaches the browser.
+
+Frontend (`frontend/src/playback/`, `components/playback.ts`):
+
+- **Playback** tab for cameras with a playback source; none for the E1 Zoom.
+- **Canvas timeline:** zoom 24 h, 6 h, 1 h, 15 min, 5 min (wheel, the −/+
+  buttons, keys); recording bars and colored markers for every VOD trigger type.
+  It also has filter chips, hover thumbnails (150 ms debounce), drag to scrub,
+  previous/next event, and a calendar with recording-day dots.
+- **Event list:** thumbnail cards, newest first.
+- **Player:** two `<video>` elements. The next file is preloaded in the hidden one
+  and swapped in at `ended`.
+- **Streams:** sub stream by default. HD is offered only when
+  `MediaCapabilities.decodingInfo` reports the main stream's codec and size as
+  supported and smooth. An HD failure falls back to the sub stream.
+- **Debug panel:** time to timeline (with the server's cache state), time to first
+  frame, URL latency, the gap at the last file change, stream and codec, cache
+  state, the HD decision, and the delivery mode.
 
 ## Phase 3 — Live view (difficulty: High, 3–4 wk)
 
