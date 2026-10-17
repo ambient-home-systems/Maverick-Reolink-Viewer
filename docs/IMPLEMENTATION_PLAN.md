@@ -18,7 +18,7 @@ put on it:
 | --- | --- | --- | --- | --- |
 | 0 | Foundations, CI, adapter layer, hardware discovery | High | 1–2 wk | Done (2026-10-17) |
 | 1 | Device details and every setting, with explanations | Standard (catalog) / High (panel shell) | 2–3 wk | Done (2026-10-17) |
-| 2 | Event timeline, thumbnails, smooth playback | High (backend) / Very high (player) | 3–5 wk | Not started |
+| 2 | Event timeline, thumbnails, smooth playback | High (backend) / Very high (player) | 3–5 wk | In progress: 2A step 1 (playback measurement) waiting on the probe report |
 | 3 | Live view via go2rtc, grid, fullscreen, PTZ | High | 3–4 wk | Not started |
 | 4 | Performance, mobile, packaging, first release | Standard | 2–3 wk | Not started |
 | 5 | Optional R&D: Baichuan live/playback | Very high | 4–8 wk, time-boxed with gates | Not started |
@@ -405,6 +405,62 @@ Risks:
   shows they work, and prefetch.
 - Thumbnail floods → scheduler priorities and caching.
 - H.265 → codec detection plus fallback paths.
+
+### Phase 2 status
+
+Phase 2 is split in two parts. **2A**: timeline, thumbnails and simple playback
+(`<video>` on a signed URL, auto-advance with the next file preloaded). **2B**: the
+continuous MSE player, speeds and the remaining exit criteria.
+
+Scope notes for 2A: playback exists only on the RLN36 NVR (VOD method `DOWNLOAD`,
+Phase 0 decision); the directly added cameras don't record. Merged cameras (CX410,
+CX810) play back through their playback-source connection (the NVR). The E1 Zoom
+gets no Playback tab.
+
+| 2A step | Status |
+| --- | --- |
+| 1. Measure (gate): opt-in **recording playback** check in the probe | Code done (v0.1.1); waiting on the owner's report |
+| 1. Record the report in the matrix and choose the serving strategy | Waiting on the report |
+| 2. Backend: scheduler limits + stream budget, event list from the bridge, timeline commands and cache, UTC conversion with DST, thumbnails, VOD and clip views | Not started (after the gate) |
+| 2. Frontend: Playback tab, canvas timeline, calendar, event list, simple player, debug panel | Not started (after the gate) |
+
+What the playback check measures (`probe_playback.py`, opt-in, read-only, every
+request a prefetch-priority scheduler job, reads bounded in bytes and time, no URL
+recorded), per channel and stream (main/sub), on one recent recording:
+
+- HTTP Range: 206 + Content-Range for the first 2 bytes (Safari's first request), a
+  mid-file range, an open-ended mid-file range (Chrome/Firefox seeking), a suffix
+  range and the same tail as an explicit range; the tail bytes are compared.
+- MP4 layout from a few Range requests (`mp4.py`): moov before or after mdat,
+  fragmented or not, the tracks' sample entries (`avc1`/`hvc1`/`hev1`/audio) and
+  sizes, and the MP4 duration against the search's.
+- The duration, size, bitrate and gap distribution of the most recent complete day,
+  plus that day search's latency (cold timeline cost).
+- Time to first byte of the mid-file ranges; the sustained throughput of a plain GET
+  (up to 6 s) and its ratio to the recording's bitrate.
+- The recording's file name: whether it carries the `DST` marker and how its time
+  compares with the search's; plus the device's time zone, UTC offset and DST
+  offset (inputs for the UTC conversion).
+- (Separate opt-in, exclusive, capped at 6, default 4) how many sub-stream DOWNLOADs
+  on different channels the NVR serves at once while each is read at 4× its bitrate
+  for 6 s, stopping at the first failing level.
+
+How the serving strategy will be chosen from the report (decided before seeing
+it, so the evidence picks):
+
+- **Range passthrough** (the HA view forwards the browser's Range to the NVR and
+  streams the answer) if every channel and stream answers all five ranges correctly
+  with a Content-Length, mid-file TTFB stays well under the 2 s click-to-video
+  budget, and the layout is one a browser plays (`moov` first, or `moov` last with
+  working Range, which costs the browser one extra round trip).
+- **ffmpeg remux (`-c copy`)** only for what the browser can't take as stored: e.g.
+  `hev1`-tagged H.265 (Safari needs `hvc1`) or a layout that needs rewriting. Remux
+  can't seek inside a file without Range, so it doesn't replace Range.
+- **Download to a disk cache** (then serve the cached file with Range) if Range is
+  missing or broken, or mid-file TTFB is too slow while throughput is many times
+  real time (a whole file arrives in a fraction of its duration).
+- The per-host **stream budget** (long-lived video streams counted apart from request
+  slots) comes from the simultaneous-stream result, leaving headroom.
 
 ## Phase 3 — Live view (difficulty: High, 3–4 wk)
 

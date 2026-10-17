@@ -35,6 +35,10 @@ export class ReolinkViewerPanel extends LitElement {
     _includeBattery: { state: true },
     _concurrency: { state: true },
     _maxStreams: { state: true },
+    _playback: { state: true },
+    _playbackOnly: { state: true },
+    _playbackConcurrency: { state: true },
+    _playbackStreams: { state: true },
     _copied: { state: true },
     _route: { state: true },
     _toast: { state: true },
@@ -48,6 +52,10 @@ export class ReolinkViewerPanel extends LitElement {
   declare _includeBattery: boolean;
   declare _concurrency: boolean;
   declare _maxStreams: number;
+  declare _playback: boolean;
+  declare _playbackOnly: boolean;
+  declare _playbackConcurrency: boolean;
+  declare _playbackStreams: number;
   declare _copied: boolean;
   declare _route: Route;
   declare _toast: ToastDetail | undefined;
@@ -66,6 +74,10 @@ export class ReolinkViewerPanel extends LitElement {
     this._includeBattery = false;
     this._concurrency = false;
     this._maxStreams = 4;
+    this._playback = false;
+    this._playbackOnly = false;
+    this._playbackConcurrency = false;
+    this._playbackStreams = 4;
     this._copied = false;
     this._route = { view: "list" };
     this.addEventListener(NAVIGATE_EVENT, (e) => {
@@ -234,6 +246,53 @@ export class ReolinkViewerPanel extends LitElement {
         </select>
         sub streams at once on one camera per device, stopping at the first failure
       </label>
+      <label>
+        <input
+          type="checkbox"
+          .checked=${this._playback}
+          ?disabled=${running}
+          @change=${(e: Event) => {
+            this._playback = (e.target as HTMLInputElement).checked;
+          }}
+        />
+        Test recording playback: HTTP range requests, MP4 layout, download speed and a
+        day of file sizes, on one recent recording per camera (main and sub)
+      </label>
+      <label class="nested">
+        <input
+          type="checkbox"
+          .checked=${this._playbackOnly}
+          ?disabled=${running || !this._playback}
+          @change=${(e: Event) => {
+            this._playbackOnly = (e.target as HTMLInputElement).checked;
+          }}
+        />
+        Only this test (skip the live and recorded-video method tests)
+      </label>
+      <label class="nested">
+        <input
+          type="checkbox"
+          .checked=${this._playbackConcurrency}
+          ?disabled=${running || !this._playback}
+          @change=${(e: Event) => {
+            this._playbackConcurrency = (e.target as HTMLInputElement).checked;
+          }}
+        />
+        Test simultaneous playback: plays up to
+        <select
+          .value=${String(this._playbackStreams)}
+          ?disabled=${running || !this._playback || !this._playbackConcurrency}
+          @change=${(e: Event) => {
+            this._playbackStreams = Number((e.target as HTMLSelectElement).value);
+          }}
+        >
+          ${[2, 3, 4, 5, 6].map(
+            (n) =>
+              html`<option value=${n} ?selected=${n === this._playbackStreams}>${n}</option>`,
+          )}
+        </select>
+        recordings at once, one per camera, stopping at the first failure
+      </label>
       <div class="actions">
         ${running
           ? html`<button @click=${() => {
@@ -300,6 +359,10 @@ export class ReolinkViewerPanel extends LitElement {
         include_battery: this._includeBattery,
         concurrency_test: this._concurrency,
         max_streams: this._maxStreams,
+        playback_test: this._playback,
+        playback_only: this._playback && this._playbackOnly,
+        playback_concurrency_test: this._playback && this._playbackConcurrency,
+        playback_max_streams: this._playbackStreams,
       },
       (message) => {
         if (this._probe.status !== "running") return;
@@ -381,6 +444,9 @@ export class ReolinkViewerPanel extends LitElement {
       label {
         display: block;
         margin: 8px 0;
+      }
+      label.nested {
+        margin-inline-start: 24px;
       }
       .actions {
         display: flex;

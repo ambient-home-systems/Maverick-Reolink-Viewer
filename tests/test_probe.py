@@ -2,7 +2,7 @@
 
 import asyncio
 from collections.abc import Generator
-from datetime import timedelta
+from datetime import timedelta, timezone
 import json
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -12,19 +12,21 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from reolink_aio.enums import VodRequestType
 from reolink_aio.exceptions import ReolinkError
 
-from custom_components.reolink_viewer import bridge, probe
+from custom_components.reolink_viewer import bridge, probe, probe_playback
 from custom_components.reolink_viewer.bridge import CameraUrl, VodFile, VodMethod
-from custom_components.reolink_viewer.media import ByteResult, FrameResult
+from custom_components.reolink_viewer.media import ByteResult, FetchResult, FrameResult
 from custom_components.reolink_viewer.probe import (
     ProbeOptions,
     Prober,
     pick_recording,
     redact,
 )
+from custom_components.reolink_viewer.probe_playback import PlaybackOptions
 from custom_components.reolink_viewer.scheduler import Priority, Scheduler
 from homeassistant.core import HomeAssistant
 
 from .conftest import SECRETS, TEST_NOW, make_vod_file
+from .mp4_fixtures import mp4_file
 
 
 class FakeMedia:
@@ -138,7 +140,7 @@ async def test_probe_nvr_success(
     report = await _prober(hass, scheduler, progress=messages.append).async_run()
     await scheduler.async_shutdown()
 
-    assert report["schema_version"] == 1
+    assert report["schema_version"] == 2
     assert report["reolink_aio_version"] == "0.21.18"
     assert report["compat"]["ok"] is True
     assert messages
@@ -727,3 +729,156 @@ async def test_probe_cancel_stops_every_host(
             await task
     await scheduler.async_shutdown()
     assert sorted(cancelled) == [1, 2]
+
+
+class FakeDownload:
+    """Serves an in-memory MP4 with Range semantics, inside scheduler jobs."""
+
+    def __init__(self, scheduler: Scheduler, data: bytes) -> None:
+        self.scheduler = scheduler
+        self.data = data
+        self.ranges: list[str | None] = []
+        self.paced = 0
+        self.exclusive_seen = False
+
+    async def fetch(
+        self,
+        session: Any,
+        url: CameraUrl,
+        *,
+        range_header: str | None = None,
+        max_bytes: int,
+        max_seconds: float | None = None,
+        keep_bytes: int = 0,
+        pace_bps: float | None = None,
+        timeout: float,
+    ) -> FetchResult:
+        assert any(s.running for s in self.scheduler._hosts.values()), (
+            "media I/O outside the scheduler"
+        )
+        assert "cmd=Download" in url.value
+        self.ranges.append(range_header)
+        if pace_bps is not None:
+            self.paced += 1
+            self.exclusive_seen = any(
+                s._exclusive_running for s in self.scheduler._hosts.values()
+            )
+        total = len(self.data)
+        status, content_range, start, end = 200, None, 0, total - 1
+        if range_header:
+            first, _, last = range_header.removeprefix("bytes=").partition("-")
+            if not first:
+                start = total - int(last)
+            else:
+                start = int(first)
+                end = min(int(last), total - 1) if last else total - 1
+            status, content_range = 206, f"bytes {start}-{end}/{total}"
+        body = self.data[start : end + 1][:max_bytes]
+        return FetchResult(
+            ok=True,
+            range=range_header,
+            status=status,
+            headers_ms=5.0,
+            ttfb_ms=9.0,
+            content_type="video/mp4",
+            content_length=end - start + 1,
+            content_range=content_range,
+            accept_ranges="bytes",
+            bytes_read=len(body),
+            eof=len(body) == end - start + 1,
+            read_ms=6000.0 if max_seconds else 10.0,
+            mbit_s=80.0,
+            data=body[:keep_bytes],
+        )
+
+
+async def test_probe_recording_playback_only(
+    hass: HomeAssistant,
+    reolink_host: MagicMock,
+    loaded_reolink: MockConfigEntry,
+    scheduler: Scheduler,
+    fake_media: FakeMedia,
+) -> None:
+    """The playback check alone: DOWNLOAD ranges, layout, day stats, streams."""
+    fake = FakeDownload(scheduler, mp4_file(moov_first=False))
+    reolink_host.timezone.return_value = timezone(timedelta(hours=2), "CEST")
+    options = ProbeOptions(
+        concurrency_test=True,
+        playback=PlaybackOptions(
+            enabled=True, only=True, concurrency_test=True, max_streams=3
+        ),
+    )
+    with (
+        patch.object(probe_playback, "async_fetch", fake.fetch),
+        patch.object(probe_playback, "PLAYBACK_COOLDOWN", 0),
+    ):
+        report = await _prober(hass, scheduler, options).async_run()
+    await scheduler.async_shutdown()
+
+    assert report["options"]["playback"]["only"] is True
+    (host,) = report["hosts"]
+    assert host["time"]["timezone"] == {
+        "name": "CEST",
+        "utcoffset_s": 7200.0,
+        "dst_s": None,
+    }
+    (ch,) = host["channels"]
+    # The Phase 0 checks did not run.
+    assert not {"live", "vod", "baichuan"} & ch.keys()
+    assert fake_media.frame_calls == fake_media.byte_calls == []
+    assert host["concurrency"] == {
+        "ok": False,
+        "skipped": "recording playback check only",
+    }
+
+    playback = ch["playback"]
+    assert playback["method"] == "DOWNLOAD"
+    for stream in ("main", "sub"):
+        entry = playback[stream]
+        assert entry["day"]["stats"]["files"] == 1
+        assert entry["full"]["realtime_factor"] is not None
+        assert entry["range"]["supported"] is True
+        assert entry["mp4"]["moov_before_mdat"] is False
+        assert entry["mp4"]["tracks"][0]["sample_entry"] == "hvc1"
+    requested = {c.args[3] for c in reolink_host.get_vod_source.await_args_list}
+    assert requested == {VodRequestType.DOWNLOAD}
+    assert "bytes=0-1" in fake.ranges
+    assert "bytes=-65536" in fake.ranges
+
+    conc = host["playback_concurrency"]
+    # One channel has a recording, so one level.
+    assert conc["ok"] is True
+    assert conc["max_streams_tested"] == 1
+    assert conc["max_ok"] == 1
+    assert fake.paced == 1
+    assert fake.exclusive_seen is True
+    _assert_redacted(report)
+
+
+async def test_probe_recording_playback_with_phase0(
+    hass: HomeAssistant,
+    reolink_host: MagicMock,
+    loaded_reolink: MockConfigEntry,
+    scheduler: Scheduler,
+    fake_media: FakeMedia,
+) -> None:
+    """With the Phase 0 checks too, both sections are in the report."""
+    fake = FakeDownload(scheduler, mp4_file())
+    options = ProbeOptions(playback=PlaybackOptions(enabled=True))
+    with patch.object(probe_playback, "async_fetch", fake.fetch):
+        report = await _prober(hass, scheduler, options).async_run()
+    (host,) = report["hosts"]
+    (ch,) = host["channels"]
+    assert {"live", "vod", "baichuan", "playback"} <= ch.keys()
+    assert ch["playback"]["sub"]["mp4"]["moov_before_mdat"] is True
+    assert host["playback_concurrency"]["skipped"].startswith("opt-in")
+
+    # Without a device time, the check is recorded as not run.
+    reolink_host.time.return_value = None
+    reolink_host.async_get_time = AsyncMock(side_effect=RuntimeError("no time"))
+    with patch.object(probe_playback, "async_fetch", fake.fetch):
+        report = await _prober(hass, scheduler, options).async_run()
+    await scheduler.async_shutdown()
+    (host,) = report["hosts"]
+    assert host["time"]["error"] == "cannot read device time: RuntimeError: no time"
+    assert host["channels"][0]["playback"] == {"ok": False, "error": "no device time"}

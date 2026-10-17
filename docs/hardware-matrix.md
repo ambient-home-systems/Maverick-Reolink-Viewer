@@ -35,6 +35,11 @@ No battery cameras, Home Hubs or doorbells.
 
 3. Paste the rows under the matching headers below.
 
+For the Phase 2 recording playback measurements, tick **Test recording playback**
+(optionally **Only this test** to skip the Phase 0 checks, and **Test simultaneous
+playback**). Reports with it have `schema_version` 2 and the script adds three
+tables: recording playback, simultaneous DOWNLOAD streams and device time.
+
 The report is redacted (no passwords, tokens, UIDs, serial numbers, MAC addresses,
 URLs or IP addresses) but still contains model names, firmware versions and the
 channel names you gave your cameras. Reports from v0.0.1 could include device IP
@@ -53,6 +58,28 @@ addresses inside error messages; the script strips them from the rows.
 - Max concurrent streams: highest number of simultaneous sub streams that all
   delivered frames; `fails at N` is the first level where at least one failed. The
   test runs on one channel per host ("tested on chN" on the other channels).
+
+Recording playback (Phase 2 gate, `DOWNLOAD` only, one recent recording per channel
+and stream):
+
+- HTTP Range: five requests a browser makes — the first 2 bytes (Safari's first
+  request), a 256 KB mid-file range, an open-ended mid-file range (Chrome/Firefox
+  seeking), a 64 KB suffix range and the same tail as an explicit range. `✓ all 5
+  (206)` means every answer was a 206 with the right Content-Range and length;
+  otherwise each is listed (`✗ 200` = the device ignored Range and sent the whole
+  file).
+- Mid-file TTFB: time to the first byte of the mid-file and open-ended ranges.
+- MP4 layout: whether `moov` (the index) comes before `mdat` (the media), whether
+  the file is fragmented, and the top-level boxes; tracks are the sample entries
+  (`avc1`, `hvc1`/`hev1`, `mp4a`, ...) with the video size.
+- MP4 vs search: the MP4's own duration minus the search's end − start.
+- Throughput: a plain GET read for up to 6 s, and how many times faster than real
+  time that is (versus the file's own bitrate).
+- Day of recordings: the most recent complete day: file count, duration and size
+  as median (min to max), median bitrate and gaps over 1 s between files.
+- Simultaneous DOWNLOAD streams: 1, 2, ... sub-stream recordings on different
+  channels downloaded at once, each read at 4× its bitrate (like a player buffering
+  ahead) for 6 s; a level passes when every stream answered, stayed open and kept up.
 
 ### Live view
 
@@ -93,6 +120,10 @@ sub stream).
 | CX810 | direct | sub | ✗ (ApiError: Host: <ip>:443: Request VOD files: API returned er) | - (no finished recording in the last 3 days) |  |  |  |  | ✗ (ApiError: Baichuan host <ip>: received status code 400 from ) | ✓ 3.1 s | - |
 | E1 Zoom | direct | main | ✗ (ApiError: Host: <ip>:443: Request VOD files: API returned er) | - (no finished recording in the last 3 days) |  |  |  |  |  |  |  |
 | E1 Zoom | direct | sub | ✗ (ApiError: Host: <ip>:443: Request VOD files: API returned er) | - (no finished recording in the last 3 days) |  |  |  |  | ✗ (ApiError: Baichuan host <ip>: received status code 400 from ) | ✓ 3.1 s | - |
+
+### Recording playback (DOWNLOAD)
+
+Waiting on the first probe report with **Test recording playback** (Phase 2, step 1).
 
 ## Findings
 

@@ -109,12 +109,46 @@ async def test_probe(
     assert events[0]["type"] == "progress"
     report = events[-1]["report"]
     assert report["ffmpeg_version"] == "7.1"
-    assert report["integration_version"] == "0.1.0"
+    assert report["integration_version"] == "0.1.1"
     assert report["options"]["concurrency_test"] is False
     assert report["hosts"][0]["channels"][0]["live"]["rtsp"]["sub"]["ok"] is True
     text = str(report)
     for secret in SECRETS:
         assert secret not in text
+
+
+async def test_probe_playback_options(
+    hass: HomeAssistant,
+    hass_ws_client: WebSocketGenerator,
+    loaded_viewer: MockConfigEntry,
+) -> None:
+    """The recording playback options reach the probe."""
+    client = await hass_ws_client(hass)
+    with patch.object(
+        probe.Prober, "async_run", autospec=True, return_value={"ok": 1}
+    ) as run:
+        events = await _collect_probe(
+            client,
+            {
+                "playback_test": True,
+                "playback_only": True,
+                "playback_concurrency_test": True,
+                "playback_max_streams": 3,
+            },
+        )
+    assert events[-1] == {"type": "result", "report": {"ok": 1}}
+    options = run.call_args.args[0]._options.playback
+    assert (options.enabled, options.only, options.concurrency_test) == (
+        True,
+        True,
+        True,
+    )
+    assert options.max_streams == 3
+    await client.send_json_auto_id(
+        {"type": "reolink_viewer/probe", "playback_max_streams": 7}
+    )
+    msg = await client.receive_json()
+    assert msg["success"] is False
 
 
 async def test_probe_requires_admin(

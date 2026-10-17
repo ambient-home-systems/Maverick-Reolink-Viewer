@@ -152,6 +152,10 @@ describe("reolink-viewer-panel", () => {
       include_battery: false,
       concurrency_test: true,
       max_streams: 4,
+      playback_test: false,
+      playback_only: false,
+      playback_concurrency_test: false,
+      playback_max_streams: 4,
     });
     hass.emit({ type: "progress", message: "ch0 live rtsp main" });
     await el.updateComplete;
@@ -167,6 +171,53 @@ describe("reolink-viewer-panel", () => {
     expect(text(el)).toContain("Done.");
     button(el, "Download again")?.click();
     expect(download).toHaveBeenCalledTimes(2);
+  });
+
+  it("sends the recording playback options", async () => {
+    const hass = makeHass(okDevices());
+    const el = await mount(hass);
+    const boxes = () =>
+      Array.from(el.shadowRoot?.querySelectorAll<HTMLInputElement>("input[type=checkbox]") ?? []);
+    const toggle = async (index: number) => {
+      const box = boxes().at(index);
+      if (!box) throw new Error(`no checkbox ${String(index)}`);
+      box.checked = !box.checked;
+      box.dispatchEvent(new Event("change"));
+      await el.updateComplete;
+    };
+    expect(boxes()[3]?.disabled).toBe(true);
+    expect(boxes()[4]?.disabled).toBe(true);
+    await toggle(2);
+    expect(boxes()[3]?.disabled).toBe(false);
+    await toggle(3);
+    await toggle(4);
+    const select = el.shadowRoot?.querySelectorAll<HTMLSelectElement>("select")[1];
+    if (!select) throw new Error("no select");
+    expect(select.disabled).toBe(false);
+    select.value = "6";
+    select.dispatchEvent(new Event("change"));
+    await el.updateComplete;
+
+    button(el, "Run probe")?.click();
+    await flush();
+    expect(hass.sent.at(-1)).toMatchObject({
+      playback_test: true,
+      playback_only: true,
+      playback_concurrency_test: true,
+      playback_max_streams: 6,
+    });
+    button(el, "Cancel")?.click();
+    await flush();
+
+    // Turning the check off turns its sub-options off too.
+    await toggle(2);
+    button(el, "Run probe")?.click();
+    await flush();
+    expect(hass.sent.at(-1)).toMatchObject({
+      playback_test: false,
+      playback_only: false,
+      playback_concurrency_test: false,
+    });
   });
 
   it("shows probe errors and supports cancel", async () => {

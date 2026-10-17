@@ -14,13 +14,15 @@ Safety rules:
 - The concurrent-stream test is opt-in, capped, stops at the first failure and
   runs as one exclusive scheduler job so nothing else hits the host meanwhile.
 - All device traffic goes through the scheduler at prefetch (lowest) priority.
+- The recording playback check (Phase 2 gate, ``probe_playback.py``) is opt-in;
+  its simultaneous-stream test is a separate opt-in, capped and exclusive.
 - The report is redacted: passwords, tokens, UIDs, serial numbers and MAC
   addresses are removed and no URL is ever recorded.
 """
 
 import asyncio
 from collections.abc import Awaitable, Callable, Hashable, Iterable
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta
 from functools import partial
 import logging
@@ -58,6 +60,7 @@ from .media import (
     async_first_frame,
     async_hold_stream,
 )
+from .probe_playback import PlaybackCheck, PlaybackOptions
 from .scheduler import Priority, Scheduler
 
 _LOGGER = logging.getLogger(__name__)
@@ -91,6 +94,7 @@ class ProbeOptions:
     max_streams: int = PROBE_DEFAULT_MAX_STREAMS
     hold_seconds: float = 5.0
     step_timeout: float = PROBE_STEP_TIMEOUT
+    playback: PlaybackOptions = field(default_factory=PlaybackOptions)
 
     def __post_init__(self) -> None:
         """Clamp to safe values."""
@@ -228,14 +232,62 @@ class Prober:
             "identity": _identity(info),
             "ports": await self._ports(host, info),
         }
+        playback = self._playback_check(host)
+        now: datetime | None = None
+        if playback is not None:
+            try:
+                now = await self._job(host, host.async_get_time, key=("time",))
+                result["time"] = playback.time_info(now)
+            except Exception as err:  # noqa: BLE001
+                result["time"] = {"error": f"cannot read device time: {_err(err)}"}
+
         channels: list[dict[str, Any]] = []
+        playback_files: list[tuple[int, VodFile]] = []
         for channel in info.channels:
             self._report_progress(f"{label} ch{channel.channel}: {channel.model}")
-            channels.append(await self._probe_channel(host, info, channel))
+            probed = await self._probe_channel(host, info, channel)
+            if playback is not None and "skipped" not in probed:
+                if now is None:
+                    probed["playback"] = {"ok": False, "error": "no device time"}
+                else:
+                    probed["playback"], sub_file = await playback.async_channel(
+                        channel, now
+                    )
+                    if sub_file is not None:
+                        playback_files.append((channel.channel, sub_file))
+            channels.append(probed)
         result["channels"] = channels
-        result["concurrency"] = await self._concurrency(host, info, channels)
+        if self._options.playback.only:
+            result["concurrency"] = _skipped("recording playback check only")
+        else:
+            result["concurrency"] = await self._concurrency(host, info, channels)
+        if playback is not None:
+            result["playback_concurrency"] = await playback.async_concurrency(
+                playback_files
+            )
         result["duration_ms"] = _ms(start)
         return result
+
+    def _playback_check(self, host: ReolinkHostHandle) -> PlaybackCheck | None:
+        if not self._options.playback.enabled:
+            return None
+
+        def job[T](
+            factory: Callable[[], Awaitable[T]],
+            *,
+            timeout: float | None = None,
+            exclusive: bool = False,
+        ) -> Awaitable[T]:
+            return self._job(host, factory, timeout=timeout, exclusive=exclusive)
+
+        return PlaybackCheck(
+            host,
+            job,
+            self._session,
+            self._options.playback,
+            step_timeout=self._options.step_timeout,
+            progress=self._report_progress,
+        )
 
     async def _ports(self, host: ReolinkHostHandle, info: HostInfo) -> dict[str, Any]:
         ports: dict[str, Any] = {
@@ -291,6 +343,8 @@ class Prober:
         }
         if (reason := self._skip_reason(channel)) is not None:
             result["skipped"] = reason
+            return result
+        if self._options.playback.only:
             return result
 
         # Fresh encodings (GetEnc) in case the cached data is incomplete.
