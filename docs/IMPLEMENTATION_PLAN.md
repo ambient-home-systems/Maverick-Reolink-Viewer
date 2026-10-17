@@ -14,14 +14,14 @@ put on it:
 - **Very high:** novel engineering with little prior art (custom media player,
   protocol reverse-engineering).
 
-| Phase | Outcome | Difficulty | Estimate |
-| --- | --- | --- | --- |
-| 0 | Foundations, CI, adapter layer, hardware discovery | High | 1–2 wk |
-| 1 | Device details and every setting, with explanations | Standard (catalog) / High (panel shell) | 2–3 wk |
-| 2 | Event timeline, thumbnails, smooth playback | High (backend) / Very high (player) | 3–5 wk |
-| 3 | Live view via go2rtc, grid, fullscreen, PTZ | High | 3–4 wk |
-| 4 | Performance, mobile, packaging, first release | Standard | 2–3 wk |
-| 5 | Optional R&D: Baichuan live/playback | Very high | 4–8 wk, time-boxed with gates |
+| Phase | Outcome | Difficulty | Estimate | Status |
+| --- | --- | --- | --- | --- |
+| 0 | Foundations, CI, adapter layer, hardware discovery | High | 1–2 wk | Code done; waiting on the first probe report |
+| 1 | Device details and every setting, with explanations | Standard (catalog) / High (panel shell) | 2–3 wk | Not started |
+| 2 | Event timeline, thumbnails, smooth playback | High (backend) / Very high (player) | 3–5 wk | Not started |
+| 3 | Live view via go2rtc, grid, fullscreen, PTZ | High | 3–4 wk | Not started |
+| 4 | Performance, mobile, packaging, first release | Standard | 2–3 wk | Not started |
+| 5 | Optional R&D: Baichuan live/playback | Very high | 4–8 wk, time-boxed with gates | Not started |
 
 Phases 1 and 2 can overlap once Phase 0 is done. Phase 5 can start any time after
 Phase 0 as a separate track.
@@ -127,6 +127,82 @@ Exit criteria:
 
 Risks: the Reolink integration's internals differ from what was researched → the
 bridge's compatibility check catches it on day one.
+
+### Phase 0 status (2026-10-17)
+
+| Task | Status |
+| --- | --- |
+| 1. Scaffold, `manifest.json`, `hacs.json`, single-instance config flow | Done |
+| 2. CI: ruff, mypy (strict), pytest + coverage, hassfest, HACS, frontend lint/typecheck/test/build, committed-bundle check, weekly run against the newest HA | Done |
+| 3. Dev environment | Done: `scripts/setup_dev.sh` (venv); see [DEVELOPMENT.md](DEVELOPMENT.md) |
+| 4. `bridge.py` with compatibility check, repair issue and degraded mode | Done |
+| 5. Panel shell (`panel_custom` + `StaticPathConfig`) listing devices | Done |
+| 6. `reolink_viewer/probe` (admin) + "Run probe" button with JSON download | Done |
+| 7. `docs/hardware-matrix.md` template + `scripts/probe_to_matrix.py` | Done; matrix waits on the first probe report |
+| Exit: probe run on every owned device, matrix filled, decisions recorded | **Pending: needs a probe report from real hardware** |
+
+How the probe stays safe:
+
+- It never changes settings. reolink-aio's `get_vod_source(..., RTMP)` turns the RTMP
+  port on when it is off (`set_net_port(enable_rtmp=True)`), so the bridge refuses RTMP
+  VOD unless the port is known to be on, and the probe reads the port state with the
+  read-only `GetNetPort` when it is unknown.
+- Battery cameras are skipped unless "include battery cameras" is ticked.
+- The concurrent-stream test is opt-in, capped at 6 (default 4), opens sub streams
+  1, 2, … at once, stops at the first failing level, waits between levels and runs as
+  one exclusive scheduler job.
+- All device traffic goes through the scheduler at the lowest (prefetch) priority.
+- The report drops URLs entirely and redacts passwords, tokens, UIDs, serial numbers
+  and MAC addresses (both by key and by value).
+
+Verified against HA core `dev` (2026.11.0.dev0) and the 2026.10.1 release, both
+pinning `reolink-aio==0.21.18`. Differences from [PLAN.md](PLAN.md) and assumptions
+worth knowing:
+
+- **Schemas use `probatio`, not voluptuous.** HA replaced voluptuous with `probatio`
+  in 2026.9, so this integration requires HA 2026.10.0+ (the tested release) and ruff
+  bans `voluptuous` imports.
+- **Python 3.14.2+** is required (HA's minimum).
+- HA `dev` lets `async_setup_entry` / `async_unload_entry` return `None` (the Reolink
+  integration already does); custom integrations may still return a bool, which works
+  on both 2026.10 and dev.
+- `runtime_data` is as researched: `ReolinkData(host, device_coordinator,
+  firmware_coordinator)` with `host.api` the logged-in `reolink_aio.api.Host`. The
+  bridge checks this shape plus every `Host` / `Baichuan` attribute it uses.
+- On NVRs reolink-aio silently replaces an RTMP VOD request with FLV (logging a
+  warning), so RTMP VOD is "not applicable" on NVRs rather than a separate method.
+- `NVR_DOWNLOAD` takes `"<start>_<end>"` time ids instead of a file name and runs an
+  `NvrDownload` "prepare" request first; the probe records that as `prepare_ms`.
+- HA's own media browser picks RTMP VOD for non-`.mp4` files on standalone cameras,
+  which also goes through `get_vod_source(RTMP)` and can turn the RTMP port on. Worth
+  knowing when reading port states.
+- `baichuan.snapshot_past` needs the ffmpeg binary (it decodes an I-frame to JPEG), so
+  `ffmpeg` is a manifest dependency.
+- The HTTP-FLV URL passes the RTMP port, so FLV may depend on the RTMP service. The
+  probe does not assume this: it tries FLV even when the RTMP port is off.
+- `panel_custom.async_register_panel` gained a `handle_safe_area` option (defaults are
+  fine for now; revisit for the iOS app in Phase 4).
+
+### Phase 0 decisions
+
+To be recorded from the first probe report (see [hardware-matrix.md](hardware-matrix.md)):
+
+| Decision | Value | Evidence |
+| --- | --- | --- |
+| Default live source per model | _pending probe_ | Live table |
+| VOD method per device type (camera / NVR / Hub) | _pending probe_ | VOD table |
+| H.265 strategy | _pending probe_ | Main-stream codecs; browser support below |
+| Per-host concurrency limit | _pending probe_ (scheduler default is 2 until then) | Max concurrent streams |
+
+Owner's setup (answers to PLAN.md's open decisions, 2026-10-17):
+
+| Question | Answer | Consequence |
+| --- | --- | --- |
+| HA install type and version | Latest HA on an x86 mini PC | x86 → hardware H.265 transcode via VAAPI/QSV is plausible if needed |
+| Topology | Most cameras via an NVR | `NVR_DOWNLOAD` / `DOWNLOAD` / FLV are the VOD paths that matter; NVR session limits drive the scheduler limit |
+| Main-stream codecs | Mostly H.264, one or two H.265 | Sub streams (H.264) for grids and scrubbing; H.265 main only where the browser decodes it |
+| Remote access | Yes: Nabu Casa and Tailscale | WebRTC needs TURN over Nabu Casa; Tailscale gives a direct path; MSE-through-HA fallback required |
+| Viewing | Desktop browser and HA Companion app on iOS | iOS (Safari/WKWebView) decodes H.265 natively; touch-first timeline matters |
 
 ## Phase 1 — Device details and every setting (difficulty: Standard / High, 2–3 wk)
 

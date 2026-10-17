@@ -1,0 +1,154 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import "./reolink-viewer-panel";
+import type { ReolinkViewerPanel } from "./reolink-viewer-panel";
+import { makeHass, makeHost, okDevices, type FakeHass } from "./test-fixtures";
+import type { DevicesResponse } from "./types";
+
+const download = vi.hoisted(() => vi.fn());
+vi.mock("./download", () => ({ downloadJson: download }));
+
+const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+async function mount(hass: FakeHass): Promise<ReolinkViewerPanel> {
+  const el = document.createElement("reolink-viewer-panel");
+  el.hass = hass;
+  document.body.appendChild(el);
+  await flush();
+  await el.updateComplete;
+  return el;
+}
+
+const text = (el: ReolinkViewerPanel) => (el.shadowRoot?.textContent ?? "").replace(/\s+/g, " ");
+
+const button = (el: ReolinkViewerPanel, label: string) =>
+  [...(el.shadowRoot?.querySelectorAll("button") ?? [])].find(
+    (b) => b.textContent.trim() === label,
+  );
+
+describe("reolink-viewer-panel", () => {
+  beforeEach(() => {
+    download.mockReset();
+  });
+  afterEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  it("lists hosts and channels from the bridge", async () => {
+    const el = await mount(makeHass(okDevices()));
+    const content = text(el);
+    expect(content).toContain("Garage NVR");
+    expect(content).toContain("NVR");
+    expect(content).toContain("RTSP on · RTMP off");
+    expect(content).toContain("Front door");
+    expect(content).toContain("H.265 · 25 fps · 6144 kbps");
+    expect(content).toContain("online · battery");
+  });
+
+  it("shows an empty state", async () => {
+    const el = await mount(makeHass(okDevices([])));
+    expect(text(el)).toContain("No Reolink devices");
+  });
+
+  it("shows the degraded banner and registry devices", async () => {
+    const degraded: DevicesResponse = {
+      degraded: true,
+      compat: { ok: false, errors: ["ReolinkData no longer has a 'host' field"], reolink_aio_version: null },
+      hosts: [],
+      devices: [
+        {
+          entry_id: "e",
+          device_id: "d",
+          name: "Garage NVR",
+          model: "RLN16-410",
+          firmware_version: "v3",
+          hardware_version: null,
+          via_device_id: null,
+        },
+      ],
+    };
+    const el = await mount(makeHass(degraded));
+    const content = text(el);
+    expect(content).toContain("Degraded mode.");
+    expect(content).toContain("no longer has a 'host' field");
+    expect(content).toContain("Garage NVR");
+    expect(button(el, "Run probe")?.disabled).toBe(true);
+  });
+
+  it("shows a load error", async () => {
+    const hass = makeHass(okDevices());
+    // HA rejects with plain {code, message} objects, not Errors.
+    // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
+    hass.callWS = () => Promise.reject({ code: "not_loaded", message: "Reolink Viewer is not loaded" });
+    const el = await mount(hass);
+    expect(text(el)).toContain("Could not load devices: Reolink Viewer is not loaded");
+  });
+
+  it("hides the probe from non-admins", async () => {
+    const el = await mount(makeHass(okDevices(), false));
+    expect(text(el)).not.toContain("Hardware probe");
+  });
+
+  it("runs the probe, shows progress and downloads the report", async () => {
+    const hass = makeHass(okDevices([makeHost()]));
+    const el = await mount(hass);
+    const concurrency = el.shadowRoot?.querySelectorAll<HTMLInputElement>("input[type=checkbox]")[1];
+    if (!concurrency) throw new Error("no checkbox");
+    concurrency.checked = true;
+    concurrency.dispatchEvent(new Event("change"));
+    await el.updateComplete;
+
+    button(el, "Run probe")?.click();
+    await flush();
+    expect(hass.sent.at(-1)).toEqual({
+      type: "reolink_viewer/probe",
+      include_battery: false,
+      concurrency_test: true,
+      max_streams: 4,
+    });
+    hass.emit({ type: "progress", message: "ch0 live rtsp main" });
+    await el.updateComplete;
+    expect(text(el)).toContain("ch0 live rtsp main");
+    expect(button(el, "Cancel")).toBeDefined();
+
+    hass.emit({ type: "result", report: { schema_version: 1 } });
+    await flush();
+    await el.updateComplete;
+    expect(download).toHaveBeenCalledTimes(1);
+    expect(download.mock.calls[0]?.[0]).toEqual({ schema_version: 1 });
+    expect(String(download.mock.calls[0]?.[1])).toMatch(/^reolink-viewer-probe-.*\.json$/);
+    expect(text(el)).toContain("Done.");
+    button(el, "Download again")?.click();
+    expect(download).toHaveBeenCalledTimes(2);
+  });
+
+  it("shows probe errors and supports cancel", async () => {
+    const hass = makeHass(okDevices());
+    const el = await mount(hass);
+    button(el, "Run probe")?.click();
+    await flush();
+    hass.emit({ type: "error", message: "boom" });
+    await flush();
+    await el.updateComplete;
+    expect(text(el)).toContain("Probe failed: boom");
+
+    button(el, "Run probe")?.click();
+    await flush();
+    button(el, "Cancel")?.click();
+    await flush();
+    await el.updateComplete;
+    expect(hass.unsubscribed).toBe(2);
+    expect(button(el, "Run probe")).toBeDefined();
+    expect(text(el)).not.toContain("Probe failed");
+  });
+
+  it("cancels a running probe when removed", async () => {
+    const hass = makeHass(okDevices());
+    const el = await mount(hass);
+    button(el, "Run probe")?.click();
+    await flush();
+    el.remove();
+    await flush();
+    expect(hass.unsubscribed).toBe(1);
+  });
+});

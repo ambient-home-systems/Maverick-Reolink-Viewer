@@ -1,0 +1,308 @@
+"""Tests for the bridge over HA's Reolink integration."""
+
+from datetime import datetime, timedelta
+from unittest.mock import MagicMock, patch
+
+import pytest
+from pytest_homeassistant_custom_component.common import MockConfigEntry
+from reolink_aio.enums import VodRequestType
+from reolink_aio.exceptions import ReolinkError
+
+from custom_components.reolink_viewer import bridge
+from custom_components.reolink_viewer.bridge import (
+    CameraUrl,
+    HostNotFoundError,
+    IncompatibleError,
+    LiveProtocol,
+    NotApplicableError,
+    RtmpDisabledError,
+    VodFile,
+    VodMethod,
+    redact_text,
+)
+from homeassistant.core import HomeAssistant
+
+from .conftest import SECRETS, TEST_NOW, TEST_PASSWORD, TEST_SERIAL, TEST_TOKEN
+from .ha_reolink_mock import (
+    TEST_CAM_MODEL,
+    TEST_HOST_MODEL,
+    TEST_NVR_NAME,
+    TEST_UID,
+    TEST_UID_CAM,
+)
+
+FILE = VodFile(
+    start=TEST_NOW - timedelta(hours=1),
+    end=TEST_NOW - timedelta(minutes=55),
+    name="Mp4Record/2026-10-17/RecS03_20261017_110000_110500_0_A.mp4",
+    stream="sub",
+    size=1,
+    triggers=("PERSON",),
+)
+
+
+async def test_compat_ok(hass: HomeAssistant, loaded_reolink: MockConfigEntry) -> None:
+    """The real Reolink integration with a mocked host is compatible."""
+    report = bridge.async_check_compat(hass)
+    assert report.ok, report.errors
+    assert report.reolink_aio_version == "0.21.18"
+    assert report.as_dict()["ok"] is True
+
+
+async def test_compat_static_failure(hass: HomeAssistant) -> None:
+    """A missing library method is reported clearly."""
+    with patch.object(bridge, "REQUIRED_HOST_ATTRS", ("does_not_exist",)):
+        report = bridge.async_check_compat(hass)
+    assert not report.ok
+    assert report.errors == ("reolink_aio.api.Host.does_not_exist is missing",)
+
+
+async def test_compat_reolink_data_changed(hass: HomeAssistant) -> None:
+    """A renamed runtime_data field is caught by the static check."""
+    from dataclasses import make_dataclass
+
+    fake = make_dataclass("ReolinkData", [("device", object)])
+    with patch("homeassistant.components.reolink.util.ReolinkData", fake):
+        report = bridge.async_check_compat(hass)
+    assert "ReolinkData no longer has a 'host' field" in report.errors
+
+
+async def test_compat_import_failure(hass: HomeAssistant) -> None:
+    """An import failure is reported, not raised."""
+    with patch(
+        "custom_components.reolink_viewer.bridge.importlib.import_module",
+        side_effect=ImportError("gone"),
+    ):
+        report = bridge.async_check_compat(hass)
+    assert not report.ok
+    assert "gone" in report.errors[0]
+
+
+async def test_compat_runtime_failure(
+    hass: HomeAssistant, reolink_host: MagicMock, loaded_reolink: MockConfigEntry
+) -> None:
+    """A loaded entry whose api lacks an attribute fails the check."""
+    del reolink_host.baichuan.snapshot_past
+    report = bridge.async_check_compat(hass)
+    assert not report.ok
+    assert "baichuan.snapshot_past" in report.errors[0]
+    with pytest.raises(IncompatibleError):
+        bridge.async_get_hosts(hass)
+
+
+async def test_compat_runtime_data_missing(
+    hass: HomeAssistant, loaded_reolink: MockConfigEntry
+) -> None:
+    """Missing runtime_data / host / api are each reported."""
+    entry = loaded_reolink
+    real = entry.runtime_data
+    entry.runtime_data = None
+    assert "has no runtime_data" in bridge.async_check_compat(hass).errors[0]
+    entry.runtime_data = MagicMock(spec=[])
+    assert "has no 'host'" in bridge.async_check_compat(hass).errors[0]
+    entry.runtime_data = MagicMock(host=MagicMock(spec=[]))
+    assert "has no 'api'" in bridge.async_check_compat(hass).errors[0]
+    entry.runtime_data = real
+
+
+async def test_no_entries(hass: HomeAssistant) -> None:
+    """With no Reolink entries there are no hosts."""
+    assert bridge.async_get_hosts(hass) == []
+    assert bridge.async_check_compat(hass).ok
+
+
+async def test_host_info(
+    hass: HomeAssistant, reolink_host: MagicMock, loaded_reolink: MockConfigEntry
+) -> None:
+    """The typed view reflects the library state."""
+    (host,) = bridge.async_get_hosts(hass)
+    info = host.info()
+    assert info.entry_id == loaded_reolink.entry_id
+    assert info.name == TEST_NVR_NAME
+    assert info.model == TEST_HOST_MODEL
+    assert info.device_type == "nvr"
+    assert info.rtmp_enabled is True
+    assert info.supports_flv is True
+    (channel,) = info.channels
+    assert channel.channel == 0
+    assert channel.model == TEST_CAM_MODEL
+    assert channel.is_battery is False
+    assert channel.main.codec == "h264"
+    assert channel.sub.bit_rate == 4096
+    data = info.as_dict()
+    assert data["device_type"] == "nvr"
+    assert data["channels"][0]["main"] == {
+        "codec": "h264",
+        "bit_rate": 4096,
+        "frame_rate": 25,
+    }
+
+    reolink_host.is_hub = True
+    assert host.info().device_type == "hub"
+    reolink_host.is_nvr = False
+    reolink_host.is_hub = False
+    assert host.info().device_type == "camera"
+
+
+async def test_host_info_missing_encoding(
+    hass: HomeAssistant, reolink_host: MagicMock, loaded_reolink: MockConfigEntry
+) -> None:
+    """Accessors that raise on missing data map to None."""
+    reolink_host.bit_rate.side_effect = KeyError("subStream")
+    reolink_host.frame_rate.side_effect = ReolinkError("no data")
+    (host,) = bridge.async_get_hosts(hass)
+    channel = host.info().channels[0]
+    assert channel.main.bit_rate is None
+    assert channel.main.frame_rate is None
+    reolink_host.timezone.side_effect = RuntimeError("unexpected")
+    with pytest.raises(RuntimeError):
+        host.timezone()
+
+
+async def test_get_host(hass: HomeAssistant, loaded_reolink: MockConfigEntry) -> None:
+    """Lookup by entry id."""
+    assert bridge.async_get_host(hass, loaded_reolink.entry_id).entry_id == (
+        loaded_reolink.entry_id
+    )
+    with pytest.raises(HostNotFoundError):
+        bridge.async_get_host(hass, "nope")
+    await hass.config_entries.async_unload(loaded_reolink.entry_id)
+    with pytest.raises(HostNotFoundError):
+        bridge.async_get_host(hass, loaded_reolink.entry_id)
+    assert bridge.async_get_hosts(hass) == []
+
+
+async def test_degraded_device_list(
+    hass: HomeAssistant, loaded_reolink: MockConfigEntry
+) -> None:
+    """Degraded mode lists devices from the device registry."""
+    devices = bridge.async_list_devices_degraded(hass)
+    assert devices
+    assert devices[0]["entry_id"] == loaded_reolink.entry_id
+    assert {d["name"] for d in devices} >= {TEST_NVR_NAME}
+
+
+async def test_secrets(hass: HomeAssistant, loaded_reolink: MockConfigEntry) -> None:
+    """Secrets include password, UIDs, serials and MACs."""
+    (host,) = bridge.async_get_hosts(hass)
+    secrets = host.secrets()
+    for value in (TEST_PASSWORD, TEST_UID, TEST_UID_CAM, TEST_SERIAL):
+        assert value in secrets
+    assert host.hide_password(f"x {TEST_TOKEN}") == "x <token>"
+
+
+async def test_live_urls(
+    hass: HomeAssistant, reolink_host: MagicMock, loaded_reolink: MockConfigEntry
+) -> None:
+    """Live URLs come from the matching library call and are wrapped."""
+    (host,) = bridge.async_get_hosts(hass)
+    rtsp = await host.async_live_url(0, LiveProtocol.RTSP, "sub")
+    assert rtsp is not None
+    assert rtsp.scheme == "rtsp"
+    assert TEST_PASSWORD not in repr(rtsp)
+    assert TEST_PASSWORD not in str(rtsp)
+    rtmp = await host.async_live_url(0, LiveProtocol.RTMP, "main")
+    assert rtmp is not None
+    assert rtmp.scheme == "rtmp"
+    flv = await host.async_live_url(0, LiveProtocol.FLV, "ext")
+    assert flv is not None
+    assert flv.scheme == "https"
+    reolink_host.get_flv_stream_source.side_effect = None
+    reolink_host.get_flv_stream_source.return_value = None
+    assert await host.async_live_url(0, LiveProtocol.FLV, "sub") is None
+
+
+async def test_vod_url_methods(
+    hass: HomeAssistant, reolink_host: MagicMock, loaded_reolink: MockConfigEntry
+) -> None:
+    """VOD methods map to VodRequestType; NVR_DOWNLOAD uses start_end ids."""
+    (host,) = bridge.async_get_hosts(hass)
+    mime, url = await host.async_vod_url(0, FILE, VodMethod.DOWNLOAD)
+    assert mime == "video/mp4"
+    assert isinstance(url, CameraUrl)
+    reolink_host.get_vod_source.assert_awaited_with(
+        0, FILE.name, "sub", VodRequestType.DOWNLOAD
+    )
+    await host.async_vod_url(0, FILE, VodMethod.NVR_DOWNLOAD)
+    reolink_host.get_vod_source.assert_awaited_with(
+        0, "20261017110000_20261017110500", "sub", VodRequestType.NVR_DOWNLOAD
+    )
+    with pytest.raises(NotApplicableError):
+        await host.async_vod_url(0, FILE, VodMethod.RTMP)  # NVR
+
+    reolink_host.is_nvr = False
+    with pytest.raises(NotApplicableError):
+        await host.async_vod_url(0, FILE, VodMethod.NVR_DOWNLOAD)
+    await host.async_vod_url(0, FILE, VodMethod.RTMP)
+    reolink_host.get_vod_source.assert_awaited_with(
+        0, FILE.name, "sub", VodRequestType.RTMP
+    )
+
+
+@pytest.mark.parametrize("rtmp_enabled", [False, None])
+async def test_vod_rtmp_never_enables_port(
+    hass: HomeAssistant,
+    reolink_host: MagicMock,
+    loaded_reolink: MockConfigEntry,
+    rtmp_enabled: bool | None,
+) -> None:
+    """RTMP VOD is refused unless the port is known to be on."""
+    reolink_host.is_nvr = False
+    reolink_host.rtmp_enabled = rtmp_enabled
+    reolink_host.get_vod_source.reset_mock()
+    (host,) = bridge.async_get_hosts(hass)
+    with pytest.raises(RtmpDisabledError):
+        await host.async_vod_url(0, FILE, VodMethod.RTMP)
+    reolink_host.get_vod_source.assert_not_awaited()
+    reolink_host.set_net_port.assert_not_awaited()
+
+
+async def test_searches_and_snapshot(
+    hass: HomeAssistant, reolink_host: MagicMock, loaded_reolink: MockConfigEntry
+) -> None:
+    """VOD search, event search, day search and snapshot_past."""
+    (host,) = bridge.async_get_hosts(hass)
+    start, end = TEST_NOW - timedelta(days=1), TEST_NOW
+    files = await host.async_search_vod_files(0, start, end, "sub")
+    assert len(files) == 1
+    assert files[0].triggers == ("MOTION", "PERSON")
+    assert files[0].size == 1048576
+    assert await host.async_search_vod_events(0, start, end, "sub") == {"PERSON": 1}
+    assert await host.async_search_vod_days(0, start, end) == 17
+
+    from datetime import UTC
+    from zoneinfo import ZoneInfo
+
+    reolink_host.timezone.return_value = ZoneInfo("Europe/Amsterdam")
+    when = datetime(2026, 10, 17, 10, 0, tzinfo=UTC)
+    assert (
+        await host.async_snapshot_past(0, when, "sub", "ffmpeg") == b"\xff\xd8jpegdata"
+    )
+    called_when = reolink_host.baichuan.snapshot_past.call_args.args[1]
+    assert called_when.hour == 12  # converted to the camera's local time
+
+    assert await host.async_get_time() == TEST_NOW
+    reolink_host.time.return_value = None
+    assert await host.async_get_time() == TEST_NOW
+    reolink_host.async_get_time.assert_awaited()
+    assert await host.async_get_encoding(0, "main") == "h264"
+    reolink_host.rtmp_enabled = False
+    assert await host.async_refresh_ports() is False
+    reolink_host.get_state.assert_awaited_with("GetNetPort")
+
+
+def test_redact_text() -> None:
+    """URLs, query credentials and known secrets are removed."""
+    text = (
+        f"rtsp://admin:{TEST_PASSWORD}@1.2.3.4:554/x "
+        f"https://h/flv?user=admin&password={TEST_PASSWORD}&token={TEST_TOKEN} "
+        f"uid {TEST_UID} serial {TEST_SERIAL}"
+    )
+    cleaned = redact_text(text, SECRETS)
+    for secret in SECRETS:
+        assert secret not in cleaned
+    assert "1.2.3.4" not in cleaned
+    assert cleaned.startswith("<url> <url> uid <redacted>")
+    assert redact_text("login user=admin&password=x", ()) == (
+        "login user=<redacted>&password=<redacted>"
+    )

@@ -1,0 +1,19 @@
+{
+  "config": {
+    "abort": {
+      "single_instance_allowed": "Reolink Viewer is already set up."
+    },
+    "step": {
+      "user": {
+        "description": "Adds a Reolink sidebar panel for the cameras, NVRs and Home Hubs set up in the Reolink integration. Nothing else needs to be configured.",
+        "title": "Reolink Viewer"
+      }
+    }
+  },
+  "issues": {
+    "reolink_incompatible": {
+      "description": "Reolink Viewer could not use the Reolink integration's internals, which changed in this Home Assistant release: {errors}\n\nThe Reolink panel still lists your devices from the device registry, but the hardware probe is disabled. Update Reolink Viewer, or report the error at the project's issue tracker.",
+      "title": "Reolink Viewer is running in degraded mode"
+    }
+  }
+}

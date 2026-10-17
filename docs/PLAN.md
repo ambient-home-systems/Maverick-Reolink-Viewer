@@ -4,6 +4,11 @@ Status: planning. Researched 2026-10-17 against Home Assistant core `dev`
 (Reolink integration pinned to `reolink-aio==0.21.18`), `reolink-aio` `main`,
 go2rtc `master`, neolink and Advanced Camera Card.
 
+Update (Phase 0): API differences found while implementing (notably HA's switch from
+voluptuous to `probatio` in 2026.9) and the owner's answers to the open decisions in
+section 5 are recorded under "Phase 0 status" in
+[IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
+
 ## 1. Goal
 
 A Home Assistant (HA) sidebar app for Reolink cameras already configured in HA's

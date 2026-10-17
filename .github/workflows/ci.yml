@@ -1,0 +1,108 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Weekly: catch Home Assistant / reolink-aio changes that break the bridge.
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.14"
+  NODE_VERSION: "22"
+
+jobs:
+  python-lint:
+    name: Ruff and mypy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: requirements_test.txt
+      - run: pip install -r requirements_test.txt
+      - run: ruff check .
+      - run: ruff format --check .
+      - run: mypy
+
+  pytest:
+    name: Pytest (HA ${{ matrix.ha }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ha: [pinned]
+        include:
+          # The weekly run also tries the newest HA release, non-blocking.
+          - ha: ${{ github.event_name == 'schedule' && 'latest' || 'pinned' }}
+    continue-on-error: ${{ matrix.ha == 'latest' }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: requirements_test.txt
+      - name: Install ffmpeg (real-ffmpeg media tests)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      - run: pip install -r requirements_test.txt
+      - name: Upgrade to the newest Home Assistant
+        if: matrix.ha == 'latest'
+        run: pip install --upgrade pytest-homeassistant-custom-component
+      - run: python -m pytest --cov --cov-report=term-missing --cov-fail-under=90
+
+  hassfest:
+    name: Hassfest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: home-assistant/actions/hassfest@master
+
+  hacs:
+    name: HACS validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: hacs/action@main
+        with:
+          category: integration
+          # brands: not in home-assistant/brands yet. description/topics: repository
+          # settings (About panel), not code; set them before submitting to HACS.
+          ignore: brands description topics
+
+  frontend:
+    name: Frontend lint, typecheck, test, build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - name: Committed bundle matches the source
+        run: |
+          changes=$(git status --porcelain -- ../custom_components/reolink_viewer/frontend_dist)
+          if [ -n "$changes" ]; then
+            echo "$changes"
+            echo "::error::frontend_dist is stale: run 'npm run build' in frontend/ and commit"
+            exit 1
+          fi
