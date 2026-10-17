@@ -9,8 +9,8 @@ built-in [Reolink integration](https://www.home-assistant.io/integrations/reolin
   (person, vehicle, animal, face, package, visitor, ...) and recording thumbnails
 - smooth recorded-video playback and low-latency live view
 
-**Status: Phase 1 code complete** (device details and every setting; v0.1.0, waiting
-on the hardware checklist in the [plan](docs/IMPLEMENTATION_PLAN.md#phase-1-status-2026-10-17)).
+**Status: Phase 1 done** (device details and every setting; v0.1.0, verified on the
+owner's hardware, see the [plan](docs/IMPLEMENTATION_PLAN.md#phase-1-status-2026-10-17)).
 The **Reolink** sidebar panel lists your NVRs, Home Hubs and cameras (a camera that is
 in Home Assistant both via an NVR and directly is shown once). Each device has an
 **Overview** (latest snapshot, model, firmware, streams, network, ports, storage,
