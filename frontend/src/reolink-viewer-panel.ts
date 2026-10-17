@@ -1,17 +1,23 @@
 import { LitElement, css, html, nothing, type PropertyValues, type TemplateResult } from "lit";
 
-import { fetchDevices, runProbe, toError, type ProbeRun } from "./api";
-import { downloadJson } from "./download";
+import { fetchCatalog, fetchDevices, runProbe, toError, type ProbeRun } from "./api";
+import "./components/device-list";
+import "./components/device-page";
 import {
-  channelStatus,
-  deviceTypeLabel,
-  encodingLabel,
-  portLabel,
-  probeFilename,
-} from "./format";
-import type { DevicesResponse, HomeAssistant, HostInfo, ProbeReport } from "./types";
+  NAVIGATE_EVENT,
+  TOAST_EVENT,
+  routeFromHash,
+  routeToHash,
+  type Route,
+  type ToastDetail,
+} from "./components/navigation";
+import { downloadJson } from "./download";
+import { probeFilename } from "./format";
+import { sharedStyles } from "./styles";
+import type { DevicesResponse, HomeAssistant, ProbeReport } from "./types";
 
 const MAX_LOG_LINES = 8;
+const TOAST_MS = 6_000;
 
 type ProbeState =
   | { status: "idle" }
@@ -30,6 +36,8 @@ export class ReolinkViewerPanel extends LitElement {
     _concurrency: { state: true },
     _maxStreams: { state: true },
     _copied: { state: true },
+    _route: { state: true },
+    _toast: { state: true },
   };
 
   declare hass: HomeAssistant | undefined;
@@ -41,9 +49,15 @@ export class ReolinkViewerPanel extends LitElement {
   declare _concurrency: boolean;
   declare _maxStreams: number;
   declare _copied: boolean;
+  declare _route: Route;
+  declare _toast: ToastDetail | undefined;
 
   private _run: ProbeRun | undefined;
   private _loading = false;
+  private _toastTimer: ReturnType<typeof setTimeout> | undefined;
+  private readonly _onHashChange = () => {
+    this._route = routeFromHash(window.location.hash);
+  };
 
   constructor() {
     super();
@@ -53,10 +67,25 @@ export class ReolinkViewerPanel extends LitElement {
     this._concurrency = false;
     this._maxStreams = 4;
     this._copied = false;
+    this._route = { view: "list" };
+    this.addEventListener(NAVIGATE_EVENT, (e) => {
+      this.navigate((e as CustomEvent<Route>).detail);
+    });
+    this.addEventListener(TOAST_EVENT, (e) => {
+      this.showToast((e as CustomEvent<ToastDetail>).detail);
+    });
+  }
+
+  override connectedCallback(): void {
+    super.connectedCallback();
+    this._route = routeFromHash(window.location.hash);
+    window.addEventListener("hashchange", this._onHashChange);
   }
 
   override disconnectedCallback(): void {
     super.disconnectedCallback();
+    window.removeEventListener("hashchange", this._onHashChange);
+    clearTimeout(this._toastTimer);
     this._run?.cancel();
     this._run = undefined;
   }
@@ -64,7 +93,28 @@ export class ReolinkViewerPanel extends LitElement {
   protected override updated(changed: PropertyValues<this>): void {
     if (changed.has("hass") && this.hass && !this._devices && !this._loading) {
       void this._load();
+      // Warm the catalog so the Settings tab renders without waiting for it.
+      fetchCatalog(this.hass).catch(() => undefined);
     }
+  }
+
+  /** Go to a view; the URL hash mirrors it so browser back works. */
+  navigate(route: Route): void {
+    const hash = routeToHash(route);
+    if (window.location.hash !== hash) {
+      const url = `${window.location.pathname}${window.location.search}${hash}`;
+      window.history.pushState(null, "", url);
+    }
+    if (route.view === "list" && this._route.view === "device") void this._load();
+    this._route = route;
+  }
+
+  showToast(toast: ToastDetail): void {
+    clearTimeout(this._toastTimer);
+    this._toast = toast;
+    this._toastTimer = setTimeout(() => {
+      this._toast = undefined;
+    }, TOAST_MS);
   }
 
   async _load(): Promise<void> {
@@ -85,18 +135,38 @@ export class ReolinkViewerPanel extends LitElement {
   }
 
   protected override render(): TemplateResult {
+    const route = this._route;
     return html`
       <div class="toolbar">
         <ha-menu-button .hass=${this.hass} .narrow=${this.narrow}></ha-menu-button>
         <div class="title">Reolink</div>
-        <button class="text" @click=${() => void this._load()} ?disabled=${this._loading}>
-          Refresh
-        </button>
+        ${route.view === "list"
+          ? html`<button class="text" @click=${() => void this._load()} ?disabled=${this._loading}>
+              Refresh
+            </button>`
+          : nothing}
       </div>
       <main>
-        ${this._renderBanner()} ${this._renderDevices()}
-        ${this._isAdmin ? this._renderProbe() : nothing}
+        ${route.view === "device"
+          ? html`<rv-device-page
+              .hass=${this.hass}
+              .deviceId=${route.id}
+              .tab=${route.tab}
+            ></rv-device-page>`
+          : html`${this._renderBanner()}
+              ${this._loadError
+                ? nothing
+                : html`<rv-device-list .devices=${this._devices}></rv-device-list>`}
+              ${this._isAdmin ? this._renderProbe() : nothing}`}
       </main>
+      ${this._toast
+        ? html`<div class="toast ${this._toast.kind}" role="status" aria-live="polite">
+            <span>${this._toast.message}</span>
+            <button class="text" aria-label="Dismiss" @click=${() => {
+              this._toast = undefined;
+            }}>✕</button>
+          </div>`
+        : nothing}
     `;
   }
 
@@ -110,91 +180,12 @@ export class ReolinkViewerPanel extends LitElement {
     if (!devices?.degraded) return nothing;
     return html`<div class="banner warning" role="alert">
       <strong>Degraded mode.</strong> The Reolink integration's internals changed in this
-      Home Assistant release, so only basic device information is shown and the probe is
-      disabled.
+      Home Assistant release, so only the device registry's information is shown, duplicate
+      cameras are not merged and the probe is disabled. Settings still work.
       <ul>
         ${devices.compat.errors.map((e) => html`<li>${e}</li>`)}
       </ul>
     </div>`;
-  }
-
-  private _renderDevices(): TemplateResult {
-    const devices = this._devices;
-    if (!devices) {
-      return html`<p class="muted">${this._loadError ? "" : "Loading devices…"}</p>`;
-    }
-    if (devices.degraded) {
-      const list = devices.devices ?? [];
-      return html`<section class="card">
-        <h2>Devices</h2>
-        ${list.length
-          ? html`<ul class="plain">
-              ${list.map(
-                (d) =>
-                  html`<li>
-                    <strong>${d.name ?? "Unnamed"}</strong>
-                    <span class="muted">${d.model ?? ""} ${d.firmware_version ?? ""}</span>
-                  </li>`,
-              )}
-            </ul>`
-          : html`<p class="muted">No Reolink devices found.</p>`}
-      </section>`;
-    }
-    if (!devices.hosts.length) {
-      return html`<section class="card">
-        <h2>No Reolink devices</h2>
-        <p class="muted">
-          Set up your cameras, NVRs or Home Hubs in the Reolink integration first; they
-          appear here once loaded.
-        </p>
-      </section>`;
-    }
-    return html`${devices.hosts.map((host) => this._renderHost(host))}`;
-  }
-
-  private _renderHost(host: HostInfo): TemplateResult {
-    return html`<section class="card">
-      <div class="host-header">
-        <h2>${host.name}</h2>
-        <span class="badge">${deviceTypeLabel(host.device_type)}</span>
-      </div>
-      <p class="muted">
-        ${host.model} · firmware ${host.firmware_version} · hardware ${host.hardware_version}
-      </p>
-      <p class="ports">
-        RTSP ${portLabel(host.rtsp_enabled)} · RTMP ${portLabel(host.rtmp_enabled)} · ONVIF
-        ${portLabel(host.onvif_enabled)} · stream protocol ${host.protocol}
-      </p>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Ch</th>
-              <th>Name</th>
-              <th>Model</th>
-              <th>Main stream</th>
-              <th>Sub stream</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${host.channels.map(
-              (ch) =>
-                html`<tr>
-                  <td>${ch.channel}</td>
-                  <td>${ch.name}</td>
-                  <td>${ch.model}</td>
-                  <td>${encodingLabel(ch.main)}</td>
-                  <td>${encodingLabel(ch.sub)}</td>
-                  <td>
-                    ${channelStatus(ch)}${ch.is_battery ? html` · battery` : nothing}
-                  </td>
-                </tr>`,
-            )}
-          </tbody>
-        </table>
-      </div>
-    </section>`;
   }
 
   private _renderProbe(): TemplateResult {
@@ -351,147 +342,85 @@ export class ReolinkViewerPanel extends LitElement {
     }
   }
 
-  static override styles = css`
-    :host {
-      display: block;
-      min-height: 100%;
-      background: var(--primary-background-color);
-      color: var(--primary-text-color);
-      font-family: var(--paper-font-body1_-_font-family, Roboto, sans-serif);
-    }
-    .toolbar {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      height: var(--header-height, 56px);
-      padding: 0 12px;
-      background: var(--app-header-background-color, var(--primary-color));
-      color: var(--app-header-text-color, white);
-      box-sizing: border-box;
-    }
-    .title {
-      flex: 1;
-      min-width: 0;
-      font-size: 20px;
-    }
-    main {
-      max-width: 1100px;
-      margin: 0 auto;
-      padding: 16px;
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
-    main > * {
-      /* Let wide tables scroll inside their card instead of widening the page. */
-      min-width: 0;
-    }
-    .card {
-      overflow-wrap: anywhere;
-      background: var(--card-background-color, white);
-      border-radius: var(--ha-card-border-radius, 12px);
-      box-shadow: var(--ha-card-box-shadow, none);
-      border: 1px solid var(--divider-color, #e0e0e0);
-      padding: 16px;
-    }
-    h2 {
-      margin: 0 0 4px;
-      font-size: 18px;
-      font-weight: 500;
-    }
-    .host-header {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .badge {
-      font-size: 12px;
-      padding: 2px 8px;
-      border-radius: 10px;
-      background: var(--secondary-background-color, #eee);
-    }
-    .muted {
-      color: var(--secondary-text-color);
-    }
-    .ports {
-      font-size: 14px;
-    }
-    .table-wrap {
-      overflow-x: auto;
-    }
-    table {
-      border-collapse: collapse;
-      width: 100%;
-      font-size: 14px;
-    }
-    th,
-    td {
-      text-align: left;
-      padding: 6px 8px;
-      border-bottom: 1px solid var(--divider-color, #e0e0e0);
-      white-space: nowrap;
-    }
-    label {
-      display: block;
-      margin: 8px 0;
-    }
-    .actions {
-      display: flex;
-      gap: 8px;
-      margin-top: 12px;
-    }
-    button {
-      font: inherit;
-      padding: 8px 16px;
-      border-radius: 4px;
-      border: 1px solid var(--divider-color, #ccc);
-      background: var(--card-background-color, white);
-      color: var(--primary-text-color);
-      cursor: pointer;
-    }
-    button.primary {
-      background: var(--primary-color);
-      color: var(--text-primary-color, white);
-      border-color: var(--primary-color);
-    }
-    button.text {
-      background: transparent;
-      color: inherit;
-      border: none;
-    }
-    button:disabled {
-      opacity: 0.5;
-      cursor: default;
-    }
-    .banner {
-      padding: 12px 16px;
-      border-radius: 8px;
-    }
-    .banner.warning {
-      background: var(--warning-color, #ffa600);
-      color: var(--text-primary-color, black);
-    }
-    .banner.error {
-      background: var(--error-color, #db4437);
-      color: var(--text-primary-color, white);
-    }
-    .log {
-      font-family: var(--code-font-family, monospace);
-      font-size: 13px;
-      color: var(--secondary-text-color);
-    }
-    pre {
-      max-height: 400px;
-      overflow: auto;
-      font-size: 12px;
-      background: var(--secondary-background-color, #f5f5f5);
-      padding: 8px;
-    }
-    ul.plain {
-      list-style: none;
-      padding: 0;
-    }
-  `;
+  static override styles = [
+    sharedStyles,
+    css`
+      :host {
+        display: block;
+        min-height: 100%;
+        background: var(--primary-background-color);
+        color: var(--primary-text-color);
+        font-family: var(--paper-font-body1_-_font-family, Roboto, sans-serif);
+      }
+      .toolbar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--header-height, 56px);
+        padding: 0 12px;
+        background: var(--app-header-background-color, var(--primary-color));
+        color: var(--app-header-text-color, white);
+        box-sizing: border-box;
+      }
+      .title {
+        flex: 1;
+        min-width: 0;
+        font-size: 20px;
+      }
+      main {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+      main > * {
+        min-width: 0;
+      }
+      label {
+        display: block;
+        margin: 8px 0;
+      }
+      .actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 12px;
+      }
+      .log {
+        font-family: var(--code-font-family, monospace);
+        font-size: 13px;
+        color: var(--secondary-text-color);
+      }
+      pre {
+        max-height: 400px;
+        overflow: auto;
+        font-size: 12px;
+        background: var(--secondary-background-color, #f5f5f5);
+        padding: 8px;
+      }
+      .toast {
+        position: fixed;
+        left: 50%;
+        bottom: 24px;
+        transform: translateX(-50%);
+        z-index: 20;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        max-width: min(560px, calc(100vw - 32px));
+        padding: 10px 16px;
+        border-radius: 8px;
+        background: var(--primary-text-color, #222);
+        color: var(--primary-background-color, white);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+      }
+      .toast.error {
+        background: var(--error-color, #db4437);
+        color: var(--text-primary-color, white);
+      }
+    `,
+  ];
 }
 
 if (!customElements.get("reolink-viewer-panel")) {

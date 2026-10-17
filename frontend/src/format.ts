@@ -1,12 +1,12 @@
-import type { ChannelInfo, DeviceType, StreamEncoding } from "./types";
+import type { DeviceKind, StreamEncoding } from "./types";
 
-const DEVICE_TYPE_LABELS: Record<DeviceType, string> = {
+const DEVICE_TYPE_LABELS: Record<DeviceKind, string> = {
   camera: "Camera",
   nvr: "NVR",
   hub: "Home Hub",
 };
 
-export const deviceTypeLabel = (type: DeviceType): string => DEVICE_TYPE_LABELS[type];
+export const deviceTypeLabel = (type: DeviceKind): string => DEVICE_TYPE_LABELS[type];
 
 /** "H.264 · 25 fps · 4096 kbps", omitting unknown parts. */
 export function encodingLabel(enc: StreamEncoding): string {
@@ -32,12 +32,6 @@ export function codecLabel(codec: string): string {
 export function portLabel(enabled: boolean | null): string {
   if (enabled === null) return "unknown";
   return enabled ? "on" : "off";
-}
-
-export function channelStatus(ch: ChannelInfo): string {
-  if (!ch.online) return "offline";
-  if (ch.sleeping) return "sleeping";
-  return "online";
 }
 
 /** reolink-viewer-probe-2026-10-17T12-00-00.json */

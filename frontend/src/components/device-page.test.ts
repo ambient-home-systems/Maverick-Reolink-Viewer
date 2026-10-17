@@ -1,0 +1,243 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import {
+  deepQueryAll,
+  deepText,
+  makeCamera,
+  makeConnection,
+  makeDevice,
+  makeHass,
+  makeHostNode,
+  makeState,
+  okDevices,
+  withStates,
+  type FakeHass,
+} from "../test-fixtures";
+import type { DeviceDetails } from "../types";
+import "./device-page";
+import { watchedEntities, type RvDevicePage } from "./device-page";
+import { SNAPSHOT_REFRESH_MS, type RvOverview } from "./overview";
+
+const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+async function mount(hass: FakeHass, tab: "overview" | "settings" = "overview"): Promise<RvDevicePage> {
+  const el = document.createElement("rv-device-page");
+  el.hass = hass;
+  el.deviceId = "dev-cam";
+  el.tab = tab;
+  document.body.appendChild(el);
+  await flush();
+  await flush();
+  await el.updateComplete;
+  return el;
+}
+
+const DETAILS: DeviceDetails = {
+  host: {
+    model: "CX810",
+    model_id: null,
+    hardware_version: "IPC_1",
+    firmware_version: "v3.1",
+    device_type: "camera",
+    channels: 1,
+    stream_protocol: "rtsp",
+    baichuan_only: false,
+    network: { connection: "wifi", wifi_signal_dbm: -52 },
+    ports: {
+      http: { port: 443, https: true },
+      rtsp: { enabled: true, port: 554 },
+      rtmp: { enabled: false, port: 1935 },
+      onvif: { enabled: true, port: 8000 },
+    },
+    storage: [{ index: 0, type: "SD", used_percent: 42, available: true }],
+    cpu_usage: 7,
+    capabilities: ["Wi-Fi"],
+  },
+  channel: {
+    channel: 0,
+    name: "Front Yard",
+    model: "CX810",
+    model_id: "P123",
+    hardware_version: "IPC_1",
+    firmware_version: "v3.1",
+    online: true,
+    sleeping: false,
+    is_battery: true,
+    is_doorbell: false,
+    is_dual_lens: false,
+    supports_replay: true,
+    supports_stream: true,
+    encodings: {
+      main: { codec: "h265", bit_rate: 6144, frame_rate: 25 },
+      sub: { codec: "h264", bit_rate: 256, frame_rate: 15 },
+    },
+    network: { connection: "lan", wifi_signal_dbm: null },
+    battery: { percent: 80, temperature_c: 21, status: "charging" },
+    ai_types: ["people", "dog_cat"],
+    capabilities: ["Floodlight", "Siren"],
+  },
+};
+
+describe("rv-device-page", () => {
+  afterEach(() => {
+    document.body.innerHTML = "";
+    vi.useRealTimers();
+  });
+
+  it("loads the device and the catalog and shows the snapshot", async () => {
+    const hass = makeHass(okDevices());
+    const el = await mount(hass);
+    expect(hass.sent).toContainEqual({ type: "reolink_viewer/device", device_id: "dev-cam" });
+    expect(deepText(el)).toContain("Front Yard");
+    const img = deepQueryAll<HTMLImageElement>(el, "img").at(0);
+    expect(img?.getAttribute("src")).toBe("/api/camera_proxy/camera.front_yard_fluent?token=abc");
+    expect(deepText(el)).toContain("playback source");
+  });
+
+  it("re-renders only when one of its own entities changes", async () => {
+    const hass = makeHass(okDevices());
+    const el = await mount(hass);
+    const renders = el.renderCount;
+
+    let current = withStates(hass, { "sensor.elsewhere": makeState("sensor.elsewhere", "2") });
+    el.hass = current;
+    await el.updateComplete;
+    expect(el.renderCount).toBe(renders);
+
+    current = withStates(current, { "switch.record": makeState("switch.record", "off") });
+    el.hass = current;
+    await el.updateComplete;
+    expect(el.renderCount).toBe(renders + 1);
+
+    // A new picture URL (HA rotates the token) re-renders the snapshot.
+    el.hass = withStates(current, {
+      "camera.front_yard_fluent": makeState("camera.front_yard_fluent", "idle", {
+        entity_picture: "/api/camera_proxy/camera.front_yard_fluent?token=new",
+      }),
+    });
+    await el.updateComplete;
+    expect(el.renderCount).toBe(renders + 2);
+    const img = deepQueryAll<HTMLImageElement>(el, "img").at(0);
+    expect(img?.getAttribute("src")).toContain("token=new");
+  });
+
+  it("shows the Settings tab", async () => {
+    const el = await mount(makeHass(okDevices()), "settings");
+    const settings = el.shadowRoot?.querySelector("rv-settings");
+    expect(settings?.catalog?.version).toBe(1);
+    expect(deepText(el)).toContain("Status LED");
+  });
+
+  it("navigates between tabs and back to the list", async () => {
+    const el = await mount(makeHass(okDevices()));
+    const routes: unknown[] = [];
+    el.addEventListener("rv-navigate", (e) => routes.push((e as CustomEvent).detail));
+    const buttons = [...(el.shadowRoot?.querySelectorAll("button") ?? [])];
+    buttons.find((b) => b.textContent.trim() === "Settings")?.click();
+    buttons.find((b) => b.textContent.includes("All devices"))?.click();
+    expect(routes).toEqual([
+      { view: "device", id: "dev-cam", tab: "settings" },
+      { view: "list" },
+    ]);
+  });
+
+  it("reloads after an entity registry change of its own entities", async () => {
+    vi.useFakeTimers();
+    const hass = makeHass(okDevices());
+    const el = document.createElement("rv-device-page");
+    el.hass = hass;
+    el.deviceId = "dev-cam";
+    document.body.appendChild(el);
+    await vi.advanceTimersByTimeAsync(0);
+    const count = () => hass.sent.filter((m) => m.type === "reolink_viewer/device").length;
+    expect(count()).toBe(1);
+    expect(hass.sent).toContainEqual({ type: "subscribe_events", event_type: "entity_registry_updated" });
+
+    hass.emitEvent({ data: { action: "update", entity_id: "sensor.elsewhere" } });
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(count()).toBe(1);
+
+    hass.emitEvent({ data: { action: "update", entity_id: "switch.ftp_upload" } });
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(count()).toBe(2);
+  });
+
+  it("shows load errors", async () => {
+    const hass = makeHass(okDevices());
+    hass.callWS = () =>
+      // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
+      Promise.reject({ code: "not_found", message: "Reolink device not found" });
+    const el = await mount(hass);
+    expect(deepText(el)).toContain("Could not load the device: Reolink device not found");
+  });
+
+  it("watches the device's entities and its snapshot camera", () => {
+    const ids = watchedEntities(makeDevice());
+    expect(ids).toContain("switch.record");
+    expect(ids).toContain("camera.front_yard_fluent");
+    const host = makeDevice({ node: makeHostNode(), connections: [makeConnection({ entities: [] })] });
+    expect(watchedEntities(host)).toEqual([]);
+  });
+});
+
+describe("rv-overview", () => {
+  afterEach(() => {
+    document.body.innerHTML = "";
+    vi.useRealTimers();
+  });
+
+  async function overview(hass: FakeHass, device = makeDevice()): Promise<RvOverview> {
+    const el = document.createElement("rv-overview");
+    el.hass = hass;
+    el.device = device;
+    document.body.appendChild(el);
+    await el.updateComplete;
+    return el;
+  }
+
+  it("shows details of each connection", async () => {
+    const direct = makeConnection({ via: "direct", playback_source: false, details: DETAILS });
+    const el = await overview(
+      makeHass(okDevices()),
+      makeDevice({ connections: [makeConnection({ details: DETAILS }), direct] }),
+    );
+    const text = deepText(el);
+    expect(text).toContain("NVR (Garage NVR)");
+    expect(text).toContain("Direct");
+    expect(text).toContain("channel 1");
+    expect(text).toContain("H.265 · 25 fps · 6144 kbps");
+    expect(text).toContain("80% · charging · 21 °C");
+    expect(text).toContain("person, animal");
+    expect(text).toContain("Wi-Fi, -52 dBm");
+    expect(text).toContain("RTSP on (554) · RTMP off (1935) · ONVIF on (8000)");
+    expect(text).toContain("SD 1: 42% used");
+    expect(text).toContain("Floodlight");
+  });
+
+  it("makes the snapshot the main view of a camera that does not record", async () => {
+    vi.useFakeTimers();
+    const camera = makeCamera({ primary_view: "snapshot", host_id: null });
+    const el = await overview(makeHass(okDevices()), makeDevice({ node: camera }));
+    expect(deepText(el)).toContain("does not record, so snapshots are its main view");
+    expect(el.snapshotUrl()).toBe("/api/camera_proxy/camera.front_yard_fluent?token=abc");
+    vi.advanceTimersByTime(SNAPSHOT_REFRESH_MS);
+    expect(el.snapshotUrl()).toMatch(/token=abc&_=\d+$/);
+  });
+
+  it("explains a missing snapshot and degraded details", async () => {
+    const camera = makeCamera({ snapshot_entity_id: null });
+    const el = await overview(makeHass(okDevices()), makeDevice({ node: camera, degraded: true }));
+    expect(deepText(el)).toContain("No snapshot: enable one of this camera's stream entities");
+    expect(deepText(el)).toContain("Details are unavailable in degraded mode");
+  });
+
+  it("summarizes an NVR", async () => {
+    const host = makeDevice({
+      node: makeHostNode(),
+      connections: [makeConnection({ via: "direct", details: { ...DETAILS, channel: null, host: { ...DETAILS.host, device_type: "nvr" } } })],
+    });
+    const el = await overview(makeHass(okDevices()), host);
+    expect(deepText(el)).toContain("1 cameras");
+    expect(deepText(el)).toContain("Channels");
+  });
+});

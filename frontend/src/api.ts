@@ -1,5 +1,9 @@
 import type {
+  Catalog,
+  DeviceResponse,
   DevicesResponse,
+  EntityRegistryUpdateResult,
+  HassConnection,
   HomeAssistant,
   ProbeEvent,
   ProbeOptions,
@@ -8,6 +12,34 @@ import type {
 
 export const fetchDevices = (hass: HomeAssistant): Promise<DevicesResponse> =>
   hass.callWS<DevicesResponse>({ type: "reolink_viewer/devices" });
+
+export const fetchDevice = (hass: HomeAssistant, deviceId: string): Promise<DeviceResponse> =>
+  hass.callWS<DeviceResponse>({ type: "reolink_viewer/device", device_id: deviceId });
+
+// The catalog only changes with an integration update: fetch it once per connection.
+const catalogs = new WeakMap<HassConnection, Promise<Catalog>>();
+
+export function fetchCatalog(hass: HomeAssistant): Promise<Catalog> {
+  let catalog = catalogs.get(hass.connection);
+  if (!catalog) {
+    catalog = hass.callWS<Catalog>({ type: "reolink_viewer/catalog" });
+    catalogs.set(hass.connection, catalog);
+    // Let a failed fetch be retried.
+    catalog.catch(() => catalogs.delete(hass.connection));
+  }
+  return catalog;
+}
+
+/** Enable a disabled entity (admin only). HA reloads the config entry afterwards. */
+export const enableEntity = (
+  hass: HomeAssistant,
+  entityId: string,
+): Promise<EntityRegistryUpdateResult> =>
+  hass.callWS<EntityRegistryUpdateResult>({
+    type: "config/entity_registry/update",
+    entity_id: entityId,
+    disabled_by: null,
+  });
 
 export interface ProbeRun {
   /** Resolves with the redacted report, rejects on error or cancel. */

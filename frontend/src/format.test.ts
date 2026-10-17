@@ -1,14 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  channelStatus,
   codecLabel,
   deviceTypeLabel,
   encodingLabel,
   portLabel,
   probeFilename,
 } from "./format";
-import { makeChannel } from "./test-fixtures";
 
 describe("format", () => {
   it("labels device types", () => {
@@ -36,12 +34,6 @@ describe("format", () => {
     expect(portLabel(true)).toBe("on");
     expect(portLabel(false)).toBe("off");
     expect(portLabel(null)).toBe("unknown");
-  });
-
-  it("derives channel status", () => {
-    expect(channelStatus(makeChannel())).toBe("online");
-    expect(channelStatus(makeChannel({ sleeping: true }))).toBe("sleeping");
-    expect(channelStatus(makeChannel({ online: false, sleeping: true }))).toBe("offline");
   });
 
   it("builds a filesystem-safe probe filename", () => {

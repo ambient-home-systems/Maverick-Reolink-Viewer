@@ -2,7 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import "./reolink-viewer-panel";
 import type { ReolinkViewerPanel } from "./reolink-viewer-panel";
-import { makeHass, makeHost, okDevices, type FakeHass } from "./test-fixtures";
+import {
+  deepText,
+  makeCamera,
+  makeHass,
+  makeHostNode,
+  okDevices,
+  type FakeHass,
+} from "./test-fixtures";
 import type { DevicesResponse } from "./types";
 
 const download = vi.hoisted(() => vi.fn());
@@ -19,7 +26,7 @@ async function mount(hass: FakeHass): Promise<ReolinkViewerPanel> {
   return el;
 }
 
-const text = (el: ReolinkViewerPanel) => (el.shadowRoot?.textContent ?? "").replace(/\s+/g, " ");
+const text = (el: ReolinkViewerPanel) => deepText(el);
 
 const button = (el: ReolinkViewerPanel, label: string) =>
   [...(el.shadowRoot?.querySelectorAll("button") ?? [])].find(
@@ -32,40 +39,48 @@ describe("reolink-viewer-panel", () => {
   });
   afterEach(() => {
     document.body.innerHTML = "";
+    window.history.replaceState(null, "", "/");
   });
 
-  it("lists hosts and channels from the bridge", async () => {
-    const el = await mount(makeHass(okDevices()));
+  it("lists NVRs with their cameras and cameras added directly", async () => {
+    const direct = makeCamera({
+      id: "dev-zoom",
+      name: "Laundry",
+      model: "E1 Zoom",
+      host_id: null,
+      primary_view: "snapshot",
+    });
+    const nvrConnection = makeCamera().connections.at(0);
+    if (!nvrConnection) throw new Error("no connection");
+    const merged = makeCamera({
+      connections: [
+        nvrConnection,
+        { ...nvrConnection, via: "direct", device_id: "dev-direct", host_id: null },
+      ],
+    });
+    const el = await mount(makeHass(okDevices([makeHostNode()], [merged, direct])));
     const content = text(el);
     expect(content).toContain("Garage NVR");
     expect(content).toContain("NVR");
-    expect(content).toContain("RTSP on · RTMP off");
-    expect(content).toContain("Front door");
-    expect(content).toContain("H.265 · 25 fps · 6144 kbps");
-    expect(content).toContain("online · battery");
+    expect(content).toContain("Ch 1 Front Yard");
+    expect(content).toContain("+ direct");
+    expect(content).toContain("Cameras added directly");
+    expect(content).toContain("Laundry");
+    expect(content).toContain("snapshots");
+    // The merged camera is listed once.
+    expect(content.match(/Front Yard/g)).toHaveLength(1);
   });
 
   it("shows an empty state", async () => {
-    const el = await mount(makeHass(okDevices([])));
+    const el = await mount(makeHass(okDevices([], [])));
     expect(text(el)).toContain("No Reolink devices");
   });
 
-  it("shows the degraded banner and registry devices", async () => {
+  it("shows the degraded banner", async () => {
     const degraded: DevicesResponse = {
+      ...okDevices(),
       degraded: true,
       compat: { ok: false, errors: ["ReolinkData no longer has a 'host' field"], reolink_aio_version: null },
-      hosts: [],
-      devices: [
-        {
-          entry_id: "e",
-          device_id: "d",
-          name: "Garage NVR",
-          model: "RLN16-410",
-          firmware_version: "v3",
-          hardware_version: null,
-          via_device_id: null,
-        },
-      ],
     };
     const el = await mount(makeHass(degraded));
     const content = text(el);
@@ -73,6 +88,38 @@ describe("reolink-viewer-panel", () => {
     expect(content).toContain("no longer has a 'host' field");
     expect(content).toContain("Garage NVR");
     expect(button(el, "Run probe")?.disabled).toBe(true);
+  });
+
+  it("opens a device and goes back to the list", async () => {
+    const hass = makeHass(okDevices());
+    const el = await mount(hass);
+    const list = el.shadowRoot?.querySelector("rv-device-list");
+    const row = [...(list?.shadowRoot?.querySelectorAll("button") ?? [])].find((b) =>
+      b.textContent.includes("Front Yard"),
+    );
+    row?.click();
+    await flush();
+    await el.updateComplete;
+    expect(window.location.hash).toBe("#device/dev-cam/overview");
+    const page = el.shadowRoot?.querySelector("rv-device-page");
+    expect(page?.deviceId).toBe("dev-cam");
+    await flush();
+    await page?.updateComplete;
+    expect(hass.sent).toContainEqual({ type: "reolink_viewer/device", device_id: "dev-cam" });
+
+    window.history.pushState(null, "", "#");
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+    await el.updateComplete;
+    expect(el.shadowRoot?.querySelector("rv-device-list")).not.toBeNull();
+  });
+
+  it("shows toasts from child elements", async () => {
+    const el = await mount(makeHass(okDevices()));
+    el.dispatchEvent(
+      new CustomEvent("rv-toast", { detail: { message: "Saved", kind: "info" } }),
+    );
+    await el.updateComplete;
+    expect(text(el)).toContain("Saved");
   });
 
   it("shows a load error", async () => {
@@ -90,7 +137,7 @@ describe("reolink-viewer-panel", () => {
   });
 
   it("runs the probe, shows progress and downloads the report", async () => {
-    const hass = makeHass(okDevices([makeHost()]));
+    const hass = makeHass(okDevices());
     const el = await mount(hass);
     const concurrency = el.shadowRoot?.querySelectorAll<HTMLInputElement>("input[type=checkbox]")[1];
     if (!concurrency) throw new Error("no checkbox");

@@ -2,11 +2,6 @@
   "version": 1,
   "categories": [
     {
-      "id": "events",
-      "title": "Detection events",
-      "description": "What the camera is detecting right now: motion, AI objects, doorbell presses."
-    },
-    {
       "id": "detection",
       "title": "Detection tuning",
       "description": "How sensitive motion, PIR and AI detection are, and how long an object must be seen."
@@ -70,6 +65,11 @@
       "id": "system",
       "title": "System and maintenance",
       "description": "Firmware, restart, time, storage, CPU, Wi-Fi and scenes."
+    },
+    {
+      "id": "events",
+      "title": "Detection events",
+      "description": "What the camera is detecting right now: motion, AI objects, doorbell presses."
     }
   ],
   "entities": {
