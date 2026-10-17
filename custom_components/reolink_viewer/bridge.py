@@ -738,13 +738,22 @@ class ReolinkHostHandle:
         return CameraUrl(url) if url else None
 
     async def async_vod_url(
-        self, channel: int, file: VodFile, method: VodMethod
+        self,
+        channel: int,
+        file: VodFile,
+        method: VodMethod,
+        *,
+        start_at: datetime | None = None,
     ) -> tuple[str, CameraUrl]:
         """Return (mime type, URL) for a recording.
 
         Never changes device settings: reolink-aio's get_vod_source(RTMP) turns
         the RTMP port on when it is off, so RTMP is refused unless the port is
         known to be enabled.
+
+        ``start_at`` sets the ``start`` query parameter (device-local time) of
+        PLAYBACK/DOWNLOAD URLs, which reolink-aio fills with the file's start
+        when it can parse the file name; it may ask the device to begin there.
         """
         from reolink_aio.enums import VodRequestType  # noqa: PLC0415
 
@@ -765,6 +774,10 @@ class ReolinkHostHandle:
         mime, url = await api.get_vod_source(
             channel, filename, file.stream, VodRequestType[method.value]
         )
+        if start_at is not None:
+            if method not in (VodMethod.PLAYBACK, VodMethod.DOWNLOAD):
+                raise NotApplicableError("start_at applies to PLAYBACK and DOWNLOAD")
+            url = with_start_param(url, start_at, self.timezone())
         return mime, CameraUrl(url)
 
     async def async_search_vod_files(
@@ -950,6 +963,16 @@ def async_camera_groups(
         for ref in refs:
             result[ref] = f"g{digest}"
     return result
+
+
+_START_PARAM = re.compile(r"&start=\d*")
+
+
+def with_start_param(url: str, start_at: datetime, device_tz: tzinfo | None) -> str:
+    """Set (or replace) the ``start`` query parameter, in device-local time."""
+    if start_at.tzinfo is not None and device_tz is not None:
+        start_at = start_at.astimezone(device_tz)
+    return _START_PARAM.sub("", url) + "&start=" + _reolink_time_id(start_at)
 
 
 def _trigger_names(triggers: Iterable[Any] | Any) -> tuple[str, ...]:

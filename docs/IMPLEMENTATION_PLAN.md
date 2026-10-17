@@ -18,7 +18,7 @@ put on it:
 | --- | --- | --- | --- | --- |
 | 0 | Foundations, CI, adapter layer, hardware discovery | High | 1–2 wk | Done (2026-10-17) |
 | 1 | Device details and every setting, with explanations | Standard (catalog) / High (panel shell) | 2–3 wk | Done (2026-10-17) |
-| 2 | Event timeline, thumbnails, smooth playback | High (backend) / Very high (player) | 3–5 wk | In progress: 2A step 1 (playback measurement) waiting on the probe report |
+| 2 | Event timeline, thumbnails, smooth playback | High (backend) / Very high (player) | 3–5 wk | In progress: 2A step 1 measured, serving strategy chosen; follow-up check (v0.1.2) pending |
 | 3 | Live view via go2rtc, grid, fullscreen, PTZ | High | 3–4 wk | Not started |
 | 4 | Performance, mobile, packaging, first release | Standard | 2–3 wk | Not started |
 | 5 | Optional R&D: Baichuan live/playback | Very high | 4–8 wk, time-boxed with gates | Not started |
@@ -419,8 +419,9 @@ gets no Playback tab.
 
 | 2A step | Status |
 | --- | --- |
-| 1. Measure (gate): opt-in **recording playback** check in the probe | Code done (v0.1.1); waiting on the owner's report |
-| 1. Record the report in the matrix and choose the serving strategy | Waiting on the report |
+| 1. Measure (gate): opt-in **recording playback** check in the probe | Done: run 3 on 2026-10-17 (v0.1.1), see [hardware-matrix.md](hardware-matrix.md#recording-playback-download) |
+| 1. Record the report in the matrix and choose the serving strategy | Done: **disk cache**, see "Serving strategy" below |
+| 1. Follow-up check (v0.1.2): MP4 layout through the plain GET, server-side seek with `start=`, file-name shape, full-speed parallel downloads | Code done; waiting on the owner's run |
 | 2. Backend: scheduler limits + stream budget, event list from the bridge, timeline commands and cache, UTC conversion with DST, thumbnails, VOD and clip views | Not started (after the gate) |
 | 2. Frontend: Playback tab, canvas timeline, calendar, event list, simple player, debug panel | Not started (after the gate) |
 
@@ -461,6 +462,58 @@ it, so the evidence picks):
   real time (a whole file arrives in a fraction of its duration).
 - The per-host **stream budget** (long-lived video streams counted apart from request
   slots) comes from the simultaneous-stream result, leaving headroom.
+
+#### Serving strategy (decided 2026-10-17 from run 3)
+
+Evidence: [hardware-matrix.md](hardware-matrix.md#recording-playback-download). The
+rules above applied as follows:
+
+- **Range passthrough: rejected.** The NVR ignored all 60 Range requests: `200` with
+  the whole file, chunked, no Content-Length. The MP4 is built on the fly.
+- **Download to a disk cache: chosen.** The server downloads the recording from the
+  NVR at full speed (30–85× real time for main, 340–860× for sub) into a disk cache.
+  It serves the browser from the cache through a short-lived signed URL, with HTTP
+  Range, *while* the download runs:
+  - a Range request for bytes already on disk is answered at once;
+  - one past the downloaded part waits until the download reaches it.
+
+  A sub event clip (2–6 MB, median 2–3 min) arrives whole 0.2–0.4 s after a first
+  byte of about 140 ms. So clicking an event stays inside the 2 s budget whatever
+  the MP4 layout. One download per file serves every viewer and every replay, and
+  the download-clip endpoint reads from the same cache.
+- **ffmpeg remux (`-c copy`): not on the serving path.** It is used only if v0.1.2
+  finds something the browser can't play as stored (e.g. `hev1`-tagged H.265, which
+  Safari refuses), as a rewrite of the cached file.
+- **Cache budget.** Main recordings are big: event clips of 50–140 MB, one-hour
+  continuous files of 2.4–2.8 GB, and up to 3.8 GB for the Duo 3. So the cache has
+  a size cap with LRU eviction, sub is the default, and main is fetched only when
+  asked for. Partial downloads are kept for reuse within the session and evicted
+  first.
+- **Stream budget.** A cache fill holds an NVR DOWNLOAD for a few seconds at full
+  speed, so fills count against a separate per-host stream budget, not the request
+  slots. **NVR: 4** (6 of 6 simultaneous DOWNLOADs worked; 2 are left as headroom,
+  also for Phase 3 live view). **Other hosts: 2** (none record). The full-speed
+  result from v0.1.2 can lower the NVR budget if two fills already saturate the link.
+
+Still open, settled by the v0.1.2 run:
+
+1. **MP4 layout.** If `moov` comes first, playback starts as soon as the first bytes
+   are cached. If it comes after `mdat`, the browser needs the whole file first. That
+   is fine for sub clips, but a main clip waits 2–5 s for its full download, and a
+   one-hour continuous main file far longer. In that case main is only offered once
+   cached, and sub plays meanwhile.
+2. **Server-side seek.** If the DOWNLOAD URL's `start=` parameter makes the NVR begin
+   mid-file, a click into the middle of a one-hour continuous recording (CX410,
+   CX810) fetches from that point. If not, everything before that point must be
+   downloaded first. For minute 30 of a one-hour CX410 sub file that is about 110 MB,
+   roughly 5 s, over the 2 s budget. The fallback is to warm the cache with the
+   current hour of the continuous cameras when the Playback tab opens (prefetch
+   priority).
+3. **File names and DST.** reolink-aio already tags recording times with the NVR's
+   zone, including DST (UTC−4 now). Its local-to-UTC conversion can't tell the
+   repeated hour apart when clocks fall back (1–2 am on 2026-11-01). The documented
+   `Rec…_DST…` file names would resolve it. This NVR's names are a different format,
+   so v0.1.2 records their shape, and the conversion is designed once that is known.
 
 ## Phase 3 — Live view (difficulty: High, 3–4 wk)
 

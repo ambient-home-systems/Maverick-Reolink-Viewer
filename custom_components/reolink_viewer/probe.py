@@ -242,7 +242,7 @@ class Prober:
                 result["time"] = {"error": f"cannot read device time: {_err(err)}"}
 
         channels: list[dict[str, Any]] = []
-        playback_files: list[tuple[int, VodFile]] = []
+        playback_files: dict[str, list[tuple[int, VodFile]]] = {"main": [], "sub": []}
         for channel in info.channels:
             self._report_progress(f"{label} ch{channel.channel}: {channel.model}")
             probed = await self._probe_channel(host, info, channel)
@@ -250,11 +250,11 @@ class Prober:
                 if now is None:
                     probed["playback"] = {"ok": False, "error": "no device time"}
                 else:
-                    probed["playback"], sub_file = await playback.async_channel(
+                    probed["playback"], files = await playback.async_channel(
                         channel, now
                     )
-                    if sub_file is not None:
-                        playback_files.append((channel.channel, sub_file))
+                    for stream, file in files.items():
+                        playback_files[stream].append((channel.channel, file))
             channels.append(probed)
         result["channels"] = channels
         if self._options.playback.only:
@@ -263,7 +263,7 @@ class Prober:
             result["concurrency"] = await self._concurrency(host, info, channels)
         if playback is not None:
             result["playback_concurrency"] = await playback.async_concurrency(
-                playback_files
+                playback_files["sub"], playback_files["main"]
             )
         result["duration_ms"] = _ms(start)
         return result

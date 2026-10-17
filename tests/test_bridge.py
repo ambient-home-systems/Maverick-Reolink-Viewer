@@ -1,6 +1,6 @@
 """Tests for the bridge over HA's Reolink integration."""
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -19,6 +19,7 @@ from custom_components.reolink_viewer.bridge import (
     VodFile,
     VodMethod,
     redact_text,
+    with_start_param,
 )
 from homeassistant.core import HomeAssistant
 
@@ -237,6 +238,28 @@ async def test_vod_url_methods(
     await host.async_vod_url(0, FILE, VodMethod.RTMP)
     reolink_host.get_vod_source.assert_awaited_with(
         0, FILE.name, "sub", VodRequestType.RTMP
+    )
+
+
+async def test_vod_url_start_at(
+    hass: HomeAssistant, reolink_host: MagicMock, loaded_reolink: MockConfigEntry
+) -> None:
+    """start_at sets the URL's start parameter in device-local time."""
+    (host,) = bridge.async_get_hosts(hass)
+    eastern = timezone(timedelta(hours=-4))
+    reolink_host.timezone.return_value = eastern
+    when = datetime(2026, 10, 17, 15, 30, 5, tzinfo=UTC)
+    _mime, url = await host.async_vod_url(0, FILE, VodMethod.DOWNLOAD, start_at=when)
+    assert url.value.endswith("&start=20261017113005")
+    with pytest.raises(NotApplicableError):
+        await host.async_vod_url(0, FILE, VodMethod.FLV, start_at=when)
+
+
+def test_with_start_param() -> None:
+    """An existing start parameter is replaced; naive times are used as-is."""
+    url = "https://h/api.cgi?cmd=Download&source=a.mp4&start=20260101000000&token=t"
+    assert with_start_param(url, datetime(2026, 10, 17, 3, 4, 5), None) == (
+        "https://h/api.cgi?cmd=Download&source=a.mp4&token=t&start=20261017030405"
     )
 
 

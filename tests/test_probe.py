@@ -1,7 +1,7 @@
 """Tests for the hardware probe."""
 
 import asyncio
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from datetime import timedelta, timezone
 import json
 from typing import Any
@@ -751,6 +751,7 @@ class FakeDownload:
         max_seconds: float | None = None,
         keep_bytes: int = 0,
         pace_bps: float | None = None,
+        on_chunk: Callable[[bytes], None] | None = None,
         timeout: float,
     ) -> FetchResult:
         assert any(s.running for s in self.scheduler._hosts.values()), (
@@ -774,6 +775,8 @@ class FakeDownload:
                 end = min(int(last), total - 1) if last else total - 1
             status, content_range = 206, f"bytes {start}-{end}/{total}"
         body = self.data[start : end + 1][:max_bytes]
+        if on_chunk is not None:
+            on_chunk(body)
         return FetchResult(
             ok=True,
             range=range_header,

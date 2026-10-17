@@ -35,9 +35,12 @@ VOD_HEADER = (
 )
 PLAYBACK_HEADER = (
     "| Model | Stream | Recording | HTTP Range | Mid-file TTFB | MP4 layout | Tracks "
-    "| MP4 vs search | Throughput | Day of recordings | Day search |"
+    "| MP4 vs search | Server-side seek | Throughput | Day of recordings | Day search |"
 )
-PLAYBACK_CONCURRENCY_HEADER = "| Host | Model | Stream | Simultaneous DOWNLOAD streams | Per level: TTFB, Mbit/s |"
+PLAYBACK_CONCURRENCY_HEADER = (
+    "| Host | Model | Stream | Simultaneous DOWNLOAD streams | Per level: TTFB, Mbit/s "
+    "| Full speed (main): Mbit/s per stream |"
+)
 TIME_HEADER = "| Host | Model | Device time | Time zone | UTC offset | DST offset |"
 SUPPORTED_SCHEMAS = (1, 2)
 RANGE_CHECKS = ("first_2", "mid", "mid_open", "suffix", "tail")
@@ -234,8 +237,50 @@ def _recording(file: dict[str, Any]) -> str:
     if name.get("start_minus_search_start_s"):
         parts.append(f"name {name['start_minus_search_start_s']:+.0f} s vs search")
     if name.get("format") == "unrecognized":
-        parts.append("unrecognized name")
+        times = [
+            label
+            for key, label in (
+                ("has_local_start", "local start"),
+                ("has_local_end", "local end"),
+                ("has_utc_start", "UTC start"),
+                ("has_dst_text", "DST"),
+            )
+            if name.get(key)
+        ]
+        shape = (
+            f"name `{name['pattern']}`" if name.get("pattern") else "unrecognized name"
+        )
+        parts.append(f"{shape} ({', '.join(times)})" if times else shape)
     return ", ".join(parts)
+
+
+def _seek(seek: dict[str, Any]) -> str:
+    if not seek:
+        return ""
+    if "skipped" in seek:
+        return f"- ({seek['skipped']})"
+    verdict = str(seek.get("verdict") or "?")
+    if verdict == "error":
+        return cell(seek)
+    detail = []
+    if seek.get("mp4_duration_s") is not None:
+        detail.append(
+            f"{seek['mp4_duration_s']:.0f} s of {seek.get('full_mp4_duration_s') or '?'} s"
+        )
+    elif seek.get("eof") and seek.get("full_eof"):
+        detail.append(
+            f"{fmt_bytes(seek.get('bytes_read'))} of {fmt_bytes(seek.get('full_bytes_read'))}"
+        )
+    return f"{verdict} ({', '.join(detail)})" if detail else verdict
+
+
+def _full_speed(levels: list[dict[str, Any]]) -> str:
+    parts = []
+    for level in levels:
+        rates = "+".join(f"{r:.0f}" if r is not None else "?" for r in level["mbit_s"])
+        mark = "" if level.get("ok") else " ✗"
+        parts.append(f"{level['streams']}: {rates} = {level['total_mbit_s']:.0f}{mark}")
+    return "; ".join(parts)
 
 
 def _range_check(result: dict[str, Any]) -> str:
@@ -359,7 +404,10 @@ def playback_rows(reports: Iterable[dict[str, Any]]) -> list[str]:
         model = ch.get("model") or host["identity"].get("model", "?")
         if "stream" not in playback and ("skipped" in playback or "error" in playback):
             reason = playback.get("skipped") or playback.get("error")
-            rows.append(f"| {model} | - | skipped: {reason} |" + " |" * 8)
+            rows.append(
+                f"| {model} | - | skipped: {reason} |"
+                + " |" * (PLAYBACK_HEADER.count("|") - 4)
+            )
             continue
         for stream in ("main", "sub"):
             entry = playback.get(stream) or {}
@@ -379,6 +427,7 @@ def playback_rows(reports: Iterable[dict[str, Any]]) -> list[str]:
                         _layout(mp4),
                         _tracks(mp4),
                         f"{diff:+.1f} s" if isinstance(diff, (int, float)) else "",
+                        _seek(entry.get("seek") or {}),
                         _throughput(entry.get("full") or {}),
                         _day(entry.get("day") or {}),
                         cell((entry.get("day") or {}).get("search"), "latency_ms"),
@@ -399,10 +448,10 @@ def playback_concurrency_rows(reports: Iterable[dict[str, Any]]) -> list[str]:
                 continue
             model = host.get("identity", {}).get("model", "?")
             if "skipped" in conc:
-                rows.append(f"| {host['id']} | {model} | - | not tested | |")
+                rows.append(f"| {host['id']} | {model} | - | not tested | | |")
                 continue
             if not conc.get("ok"):
-                rows.append(f"| {host['id']} | {model} | - | {cell(conc)} | |")
+                rows.append(f"| {host['id']} | {model} | - | {cell(conc)} | | |")
                 continue
             max_ok = conc.get("max_ok", 0)
             if conc.get("first_failure") is None:
@@ -417,7 +466,7 @@ def playback_concurrency_rows(reports: Iterable[dict[str, Any]]) -> list[str]:
                 levels.append(f"{level['streams']}: {ttfb}, {rate} Mbit/s{mark}")
             rows.append(
                 f"| {host['id']} | {model} | {conc.get('stream', 'sub')} | {summary} "
-                f"| {'; '.join(levels)} |"
+                f"| {'; '.join(levels)} | {_full_speed(conc.get('full_speed') or [])} |"
             )
     return rows
 

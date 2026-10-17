@@ -18,6 +18,7 @@ from custom_components.reolink_viewer.bridge import (
     VodFile,
 )
 from custom_components.reolink_viewer.media import FetchResult, async_fetch
+from custom_components.reolink_viewer.mp4 import Mp4Layout
 from custom_components.reolink_viewer.probe_playback import (
     PlaybackCheck,
     PlaybackOptions,
@@ -28,6 +29,7 @@ from custom_components.reolink_viewer.probe_playback import (
     pick_playback_file,
     range_verdict,
     realtime_factor,
+    seek_verdict,
     stream_verdict,
 )
 
@@ -130,9 +132,48 @@ def test_describe_file() -> None:
     )
     assert plain["name"]["dst_marker"] is False
     odd = describe_file(vod(NOW, size=None, name="/mnt/sda/UID123-cam/0-0-123-UID123"))
-    assert odd["name"] == {"format": "unrecognized", "length": 14}
+    assert odd["name"] == {
+        "format": "unrecognized",
+        "length": 14,
+        "pattern": "9-9-999-AAA999",
+        "has_local_start": False,
+        "has_local_end": False,
+        "has_dst_text": False,
+    }
     assert odd["bitrate_kbps"] is None
     assert "UID123" not in str(odd)
+    # A name that carries the local start and end times; aware times also
+    # check UTC.
+    eastern = timezone(timedelta(hours=-4))
+    start = datetime(2026, 10, 17, 3, 51, 33, tzinfo=eastern)
+    named = describe_file(vod(start, 128, name="05_20261017035133_035341.mp4"))
+    assert named["name"]["pattern"] == "99_99999999999999_999999.aa9"
+    assert named["name"]["has_local_start"] is True
+    assert named["name"]["has_local_end"] is True
+    assert named["name"]["has_utc_start"] is False
+    utc_named = describe_file(vod(start, name="RecDst_20261017075133.mp4"))
+    assert utc_named["name"]["has_utc_start"] is True
+    assert utc_named["name"]["has_dst_text"] is True
+
+
+def test_seek_verdict() -> None:
+    """Durations decide, then byte counts, then the first bytes."""
+    ok = FetchResult(ok=True, status=200, bytes_read=500, eof=True)
+    full = FetchResult(ok=True, status=200, bytes_read=1000, eof=True)
+    half, whole, none = Mp4Layout(duration_s=30), Mp4Layout(duration_s=60), Mp4Layout()
+    assert seek_verdict(ok, full, half, whole, None) == "seeks"
+    assert seek_verdict(ok, full, whole, whole, None) == "ignored"
+    assert seek_verdict(ok, full, Mp4Layout(duration_s=50), whole, None) == "unclear"
+    assert seek_verdict(ok, full, none, none, None) == "seeks"
+    assert seek_verdict(FetchResult(ok=False), full, none, none, None) == "error"
+    partial = FetchResult(ok=True, status=200, bytes_read=500)
+    assert seek_verdict(partial, full, none, none, True) == (
+        "ignored (same first bytes)"
+    )
+    assert seek_verdict(partial, full, none, none, False) == (
+        "likely seeks (different first bytes)"
+    )
+    assert seek_verdict(partial, full, none, none, None) == "unknown"
 
 
 def test_file_stats() -> None:
@@ -223,12 +264,21 @@ async def media_server(
     async def gone(request: web.Request) -> web.Response:
         return web.Response(status=404)
 
+    half = mp4_file(moov_first=True, seconds=30, mdat_bytes=1024 * 1024)
+    whole = moov_first.read_bytes()
+
+    async def seekable(request: web.Request) -> web.Response:
+        # Like a device that honours start=: a shorter file from mid-way.
+        data = half if "start" in request.query else whole
+        return web.Response(body=data, content_type="video/mp4")
+
     app = web.Application()
     app.router.add_get("/range", _range_handler(moov_last))
     app.router.add_get("/range_first", _range_handler(moov_first))
     app.router.add_get("/no_range", no_range)
     app.router.add_get("/chunked", chunked)
     app.router.add_get("/gone", gone)
+    app.router.add_get("/seekable", seekable)
     server = TestServer(app, host="127.0.0.1")
     await server.start_server()
     yield server
@@ -267,9 +317,16 @@ def _host(server: TestServer, path: str, size: int | None) -> MagicMock:
     host = MagicMock()
     recording = vod(NOW - timedelta(minutes=20), 60, size)
     host.async_search_vod_files = AsyncMock(return_value=[recording])
-    host.async_vod_url = AsyncMock(
-        return_value=("video/mp4", CameraUrl(str(server.make_url(path))))
-    )
+
+    async def vod_url(
+        ch: int, file: VodFile, method: Any, *, start_at: datetime | None = None
+    ) -> tuple[str, CameraUrl]:
+        url = str(server.make_url(path))
+        if start_at is not None:
+            url += "?start=" + start_at.strftime("%Y%m%d%H%M%S")
+        return "video/mp4", CameraUrl(url)
+
+    host.async_vod_url = AsyncMock(side_effect=vod_url)
     host.timezone.return_value = None
     return host
 
@@ -288,7 +345,7 @@ async def _check(
             progress=lambda _m: None,
         )
         check._options.throughput_seconds = 0.5
-        result, _sub = await check.async_channel(_channel(), NOW)
+        result, _files = await check.async_channel(_channel(), NOW)
     return result, host
 
 
@@ -339,9 +396,50 @@ async def test_server_ignoring_range(media_server: TestServer) -> None:
     assert ranges["supported"] is False
     assert ranges["mid"]["verdict"] == "ignored"
     assert ranges["mid"]["bytes_read"] == 256 * 1024 + 1
-    assert result["sub"]["mp4"]["error"] == (
-        "byte range not available (no Range support)"
-    )
+    # The layout comes from following the boxes through the plain GET.
+    mp4 = result["sub"]["mp4"]
+    assert mp4["source"] == "stream"
+    assert mp4["top_level"] == ["ftyp", "mdat", "moov"]
+    assert mp4["moov_before_mdat"] is False
+    assert mp4["tracks"][0]["sample_entry"] == "hvc1"
+    assert mp4["duration_s"] == 60
+    assert mp4["bytes_scanned"] == len(mp4_file(moov_first=False))
+    seek = result["sub"]["seek"]
+    assert seek["verdict"] == "ignored"
+    assert seek["offset_s"] == 30
+    assert seek["same_first_64k"] is True
+
+
+async def test_server_side_seek(media_server: TestServer) -> None:
+    """A device that honours start= is recognized."""
+    result, host = await _check(media_server, "/seekable", None)
+    seek = result["sub"]["seek"]
+    assert seek["verdict"] == "seeks"
+    assert seek["mp4_duration_s"] == 30
+    assert seek["full_mp4_duration_s"] == 60
+    assert seek["same_first_64k"] is False
+    start_at = host.async_vod_url.await_args_list[-1].kwargs["start_at"]
+    assert start_at == NOW - timedelta(minutes=20) + timedelta(seconds=30)
+
+    host.async_vod_url = AsyncMock(side_effect=RuntimeError("bad"))
+    async with ClientSession() as session:
+        check = PlaybackCheck(
+            host,
+            _direct_job,
+            session,
+            PlaybackOptions(enabled=True),
+            step_timeout=10,
+            progress=lambda _m: None,
+        )
+        recording = vod(NOW - timedelta(hours=1))
+        full = FetchResult(ok=True)
+        assert (await check._seek(0, recording, full, Mp4Layout()))["error"] == (
+            "RuntimeError: bad"
+        )
+        short = vod(NOW - timedelta(hours=1), 30)
+        assert (await check._seek(0, short, full, Mp4Layout()))["skipped"] == (
+            "recording shorter than 60 s"
+        )
 
 
 async def test_chunked_server(media_server: TestServer) -> None:
@@ -404,8 +502,8 @@ async def test_small_file_and_failures(media_server: TestServer) -> None:
             step_timeout=10,
             progress=lambda _m: None,
         )
-        result, sub = await check.async_channel(_channel(), NOW)
-        assert sub is None
+        result, files = await check.async_channel(_channel(), NOW)
+        assert files == {}
         assert result["main"]["file"]["skipped"].startswith("no finished recording")
         assert host.async_search_vod_files.await_count == 2 * (3 + 1)
         skipped, _ = await check.async_channel(_channel(replay=False), NOW)
@@ -451,8 +549,16 @@ async def test_concurrency(media_server: TestServer) -> None:
         )
         check._options.hold_seconds = 0.3
         with patch.object(probe_playback, "PLAYBACK_COOLDOWN", 0):
-            result = await check.async_concurrency(files)
+            result = await check.async_concurrency(files, files[:1])
             assert result["ok"] is True
+            # One main recording: only the single full-speed level runs.
+            (full_speed,) = result["full_speed"]
+            assert full_speed["streams"] == 1
+            assert full_speed["ok"] is True
+            assert full_speed["channels"] == [0]
+            both = await check.async_concurrency(files[:1], files[:2])
+            assert [lvl["streams"] for lvl in both["full_speed"]] == [1, 2]
+            assert both["full_speed"][1]["ok"] is True
             assert result["max_streams_tested"] == 3
             assert result["max_ok"] == 3
             assert result["first_failure"] is None

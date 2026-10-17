@@ -8,6 +8,7 @@ import subprocess
 import pytest
 
 from custom_components.reolink_viewer.mp4 import (
+    BoxScanner,
     Mp4ReadError,
     PrefixReader,
     async_layout,
@@ -98,8 +99,10 @@ async def test_layout_moov_last_needs_ranges() -> None:
     prefix = data[:65536]
     no_range = PrefixReader(prefix, None, 32)
     layout = await async_layout(no_range.read, len(data))
-    assert layout.error == "byte range not available (no Range support)"
-    assert layout.top_level == []
+    # The boxes found before the read failed are kept.
+    assert layout.error == "after 2 boxes: byte range not available (no Range support)"
+    assert layout.top_level == ["ftyp", "mdat"]
+    assert layout.moov_before_mdat is False
 
     memory = MemoryReader(data)
     with_range = PrefixReader(prefix, memory.read, 32)
@@ -212,3 +215,79 @@ async def test_layout_of_ffmpeg_files(
     assert (layout.tracks[0].width, layout.tracks[0].height) == (320, 240)
     if not fragmented:
         assert layout.duration_s == pytest.approx(2, abs=0.2)
+
+
+def _scan(data: bytes, chunk: int, max_boxes: int = 64) -> BoxScanner:
+    scanner = BoxScanner(max_boxes)
+    for i in range(0, len(data), chunk):
+        scanner.feed(data[i : i + chunk])
+    scanner.finish()
+    return scanner
+
+
+@pytest.mark.parametrize("chunk", [1, 7, 16, 1000, 65536, 10_000_000])
+async def test_scanner_follows_the_stream(chunk: int) -> None:
+    """Box headers split across chunks are handled; moov is captured."""
+    data = mp4_file(moov_first=False, mdat_bytes=200_000)
+    scanner = _scan(data, chunk)
+    assert [b.type for b in scanner.boxes] == ["ftyp", "mdat", "moov"]
+    assert scanner.bytes_seen == len(data)
+    layout = await scanner.async_layout()
+    assert layout.error is None
+    assert layout.moov_before_mdat is False
+    assert layout.duration_s == 60
+    assert layout.tracks[0].sample_entry == "hvc1"
+    assert layout.truncated is False
+
+
+async def test_scanner_partial_stream() -> None:
+    """A read that stops inside mdat knows moov comes later."""
+    data = mp4_file(moov_first=False, mdat_bytes=200_000)
+    scanner = BoxScanner()
+    scanner.feed(data[:100_000])
+    layout = await scanner.async_layout()
+    assert layout.top_level == ["ftyp", "mdat"]
+    assert layout.truncated is True
+    assert layout.moov_before_mdat is False
+    assert layout.error is None
+
+    first = mp4_file(moov_first=True, mdat_bytes=200_000)
+    scanner = BoxScanner()
+    scanner.feed(first[:100_000])
+    layout = await scanner.async_layout()
+    assert layout.moov_before_mdat is True
+    assert layout.duration_s == 60
+
+
+async def test_scanner_moov_cut_short_and_limits() -> None:
+    """A moov read only in part, an oversized moov, garbage and box limits."""
+    data = mp4_file(moov_first=True)
+    moov_end = len(FTYP) + 40
+    scanner = BoxScanner()
+    scanner.feed(data[:moov_end])
+    layout = await scanner.async_layout()
+    assert layout.error == "moov: moov not read to its end"
+
+    huge = FTYP + struct.pack(">I4s", 32 * 1024 * 1024, b"moov") + bytes(100)
+    layout = await _scan(huge, 4096).async_layout()
+    assert layout.error == "moov: moov larger than the capture limit"
+
+    garbage = FTYP + b"\0\0\0\x01\xff\xfe\xfd\xfc" + bytes(20)
+    scanner = _scan(garbage, 5)
+    assert scanner.error == f"unparseable box header at {len(FTYP)}"
+
+    frag = fragmented_file(5)
+    scanner = _scan(frag, 300, max_boxes=4)
+    assert scanner.truncated is True
+    assert len(scanner.boxes) == 4
+
+    tail = FTYP + struct.pack(">I4s", 8, b"free")
+    scanner = BoxScanner()
+    scanner.feed(tail)
+    scanner.finish()
+    assert [b.type for b in scanner.boxes] == ["ftyp", "free"]
+
+    to_end = FTYP + struct.pack(">I4s", 0, b"mdat") + bytes(64)
+    scanner = _scan(to_end, 10)
+    assert [b.type for b in scanner.boxes] == ["ftyp", "mdat"]
+    assert scanner.bytes_seen == len(to_end)

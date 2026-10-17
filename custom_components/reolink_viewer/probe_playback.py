@@ -8,12 +8,16 @@ stream (main/sub), on one recent recording:
   Chrome and Firefox send when seeking), a suffix range and an explicit tail
   range;
 - the MP4 layout: top-level boxes, moov before or after mdat, fragmented or
-  not, track codecs and the movie duration;
+  not, track codecs and the movie duration (through Range requests, or by
+  following the boxes through the plain GET when Range is ignored);
+- whether the URL's ``start`` parameter set to mid-file makes the device begin
+  there (a server-side seek);
 - the duration and size distribution of a full day's recordings;
 - time to first byte for mid-file ranges and the sustained throughput of a
   plain GET, compared with the recording's own bitrate;
 - (opt-in) how many simultaneous DOWNLOAD streams, one per channel, the device
-  serves while each is read at a player-like pace.
+  serves while each is read at a player-like pace, and the throughput of one
+  and two main-stream downloads read at full speed.
 
 Same safety rules as the rest of the probe: GET requests only, every request
 is a scheduler job at prefetch priority, reads are bounded in bytes and time,
@@ -25,7 +29,7 @@ import asyncio
 from collections import Counter
 from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass
-from datetime import datetime, timedelta, tzinfo
+from datetime import UTC, datetime, timedelta, tzinfo
 from itertools import pairwise
 import re
 import statistics
@@ -41,7 +45,7 @@ from .const import (
     PROBE_SEARCH_DAYS,
 )
 from .media import FetchResult, async_fetch
-from .mp4 import PrefixReader, async_layout
+from .mp4 import BoxScanner, Mp4Layout, PrefixReader, async_layout
 
 PLAYBACK_METHOD = VodMethod.DOWNLOAD
 PLAYBACK_STREAMS: tuple[str, ...] = ("main", "sub")
@@ -54,6 +58,11 @@ THROUGHPUT_MAX_BYTES = 64 * 1024 * 1024
 # bitrate (a player buffering ahead), capped in bytes.
 PACE_FACTOR = 4.0
 HOLD_MAX_BYTES = 32 * 1024 * 1024
+# Full-speed parallel downloads (what filling a cache costs the device).
+FULL_SPEED_LEVELS = (1, 2)
+FULL_SPEED_MAX_BYTES = 512 * 1024 * 1024
+# The server-side seek test asks for the middle of recordings this long or more.
+SEEK_MIN_DURATION = timedelta(seconds=60)
 PLAYBACK_COOLDOWN = 2.0
 # Recordings that ended less than this long ago may still be being written.
 RECORDING_SETTLE = timedelta(minutes=2)
@@ -169,18 +178,18 @@ class PlaybackCheck:
 
     async def async_channel(
         self, channel: ChannelInfo, now: datetime
-    ) -> tuple[dict[str, Any], VodFile | None]:
-        """Check one channel; return the result and its sub-stream recording."""
+    ) -> tuple[dict[str, Any], dict[str, VodFile]]:
+        """Check one channel; return the result and the recording per stream."""
         if not channel.supports_replay:
-            return _skipped("no replay capability"), None
+            return _skipped("no replay capability"), {}
         result: dict[str, Any] = {"method": PLAYBACK_METHOD.value}
-        sub_file: VodFile | None = None
+        files: dict[str, VodFile] = {}
         for stream in PLAYBACK_STREAMS:
             self._progress(f"ch{channel.channel} playback {stream}")
             result[stream], file = await self._stream(channel.channel, stream, now)
-            if stream == "sub":
-                sub_file = file
-        return result, sub_file
+            if file is not None:
+                files[stream] = file
+        return result, files
 
     async def _search(
         self, ch: int, stream: str, start: datetime, end: datetime
@@ -238,15 +247,19 @@ class PlaybackCheck:
             entry["url"] = {"ok": False, "error": _err(err)}
             return entry, file
 
+        scanner = BoxScanner()
         full = await self._fetch(
             url,
             max_bytes=THROUGHPUT_MAX_BYTES,
             max_seconds=self._options.throughput_seconds,
             keep_bytes=PREFIX_BYTES,
+            on_chunk=scanner.feed,
         )
         entry["full"] = full.as_dict()
         if not full.ok:
             return entry, file
+        scanner.finish()
+        streamed = await scanner.async_layout()
         entry["full"]["realtime_factor"] = realtime_factor(full, file)
         length = full.content_length if full.status == 200 else None
         if length is not None and file.size:
@@ -254,13 +267,64 @@ class PlaybackCheck:
         entry["range"] = await self._ranges(url, length, file.size, full.data)
         total = entry["range"]["total_bytes"]
         range_ok = entry["range"]["supported"] is True
-        entry["mp4"] = await self._layout(url, total, full.data, range_ok)
+        if range_ok:
+            entry["mp4"] = await self._layout(url, total, full.data, range_ok)
+            entry["mp4"]["source"] = "range"
+        else:
+            entry["mp4"] = streamed.as_dict() | {
+                "source": "stream",
+                "bytes_scanned": scanner.bytes_seen,
+            }
         mp4_duration = entry["mp4"].get("duration_s")
         if isinstance(mp4_duration, (int, float)):
             entry["mp4"]["duration_vs_search_s"] = round(
                 mp4_duration - (file.end - file.start).total_seconds(), 1
             )
+        entry["seek"] = await self._seek(ch, file, full, streamed)
         return entry, file
+
+    async def _seek(
+        self, ch: int, file: VodFile, full: FetchResult, full_layout: Mp4Layout
+    ) -> dict[str, Any]:
+        """Ask for the middle of the recording with the URL's start parameter."""
+        duration = file.end - file.start
+        if duration < SEEK_MIN_DURATION:
+            return _skipped("recording shorter than 60 s")
+        offset = duration / 2
+        try:
+            _mime, url = await self._job(
+                lambda: self._host.async_vod_url(
+                    ch, file, PLAYBACK_METHOD, start_at=file.start + offset
+                )
+            )
+        except Exception as err:  # noqa: BLE001
+            return {"ok": False, "error": _err(err)}
+        scanner = BoxScanner()
+        got = await self._fetch(
+            url,
+            max_bytes=THROUGHPUT_MAX_BYTES,
+            max_seconds=self._options.throughput_seconds,
+            keep_bytes=PREFIX_BYTES,
+            on_chunk=scanner.feed,
+        )
+        scanner.finish()
+        layout = await scanner.async_layout()
+        same_start = got.data == full.data if got.data and full.data else None
+        return {
+            "ok": got.ok,
+            "offset_s": round(offset.total_seconds()),
+            "status": got.status,
+            "ttfb_ms": got.ttfb_ms,
+            "bytes_read": got.bytes_read,
+            "eof": got.eof,
+            "full_bytes_read": full.bytes_read,
+            "full_eof": full.eof,
+            "mp4_duration_s": layout.duration_s,
+            "full_mp4_duration_s": full_layout.duration_s,
+            "same_first_64k": same_start,
+            "error": got.error,
+            "verdict": seek_verdict(got, full, layout, full_layout, same_start),
+        }
 
     async def _fetch(
         self,
@@ -270,6 +334,7 @@ class PlaybackCheck:
         max_bytes: int,
         max_seconds: float | None = None,
         keep_bytes: int = 0,
+        on_chunk: Callable[[bytes], None] | None = None,
     ) -> FetchResult:
         timeout = self._timeout + (max_seconds or 0)
         try:
@@ -281,6 +346,7 @@ class PlaybackCheck:
                     max_bytes=max_bytes,
                     max_seconds=max_seconds,
                     keep_bytes=keep_bytes,
+                    on_chunk=on_chunk,
                     timeout=timeout,
                 ),
                 timeout=timeout + 5,
@@ -404,9 +470,14 @@ class PlaybackCheck:
     # ---- Simultaneous streams ----
 
     async def async_concurrency(
-        self, files: list[tuple[int, VodFile]]
+        self,
+        files: list[tuple[int, VodFile]],
+        main_files: list[tuple[int, VodFile]] | None = None,
     ) -> dict[str, Any]:
-        """Open 1..N DOWNLOAD streams at once, one per channel, at a player pace."""
+        """Open 1..N DOWNLOAD streams at once, one per channel, at a player pace.
+
+        Then read one and two main-stream recordings at once at full speed.
+        """
         if not self._options.concurrency_test:
             return _skipped("opt-in: playback concurrency_test")
         if not files:
@@ -469,13 +540,53 @@ class PlaybackCheck:
                 "pace_factor": PACE_FACTOR,
                 "hold_s": hold,
                 "levels": levels,
+                "full_speed": await full_speed(),
             }
+
+        async def full_speed() -> list[dict[str, Any]]:
+            out: list[dict[str, Any]] = []
+            for count in FULL_SPEED_LEVELS:
+                chosen = (main_files or [])[:count]
+                if len(chosen) < count:
+                    break
+                urls = [
+                    (await self._host.async_vod_url(ch, f, PLAYBACK_METHOD))[1]
+                    for ch, f in chosen
+                ]
+                results: list[FetchResult] = await asyncio.gather(
+                    *(
+                        async_fetch(
+                            self._session,
+                            url,
+                            max_bytes=FULL_SPEED_MAX_BYTES,
+                            max_seconds=hold,
+                            timeout=timeout,
+                        )
+                        for url in urls
+                    )
+                )
+                out.append(
+                    {
+                        "streams": count,
+                        "stream": "main",
+                        "ok": all(r.ok for r in results),
+                        "channels": [ch for ch, _f in chosen],
+                        "ttfb_ms": [r.ttfb_ms for r in results],
+                        "mbit_s": [r.mbit_s for r in results],
+                        "total_mbit_s": round(sum(r.mbit_s or 0 for r in results), 1),
+                        "errors": sorted({r.error for r in results if r.error}),
+                    }
+                )
+                await asyncio.sleep(PLAYBACK_COOLDOWN)
+            return out
 
         try:
             levels = await self._job(
                 run_levels,
                 exclusive=True,
-                timeout=(timeout + PLAYBACK_COOLDOWN + 5) * levels_max + 10,
+                timeout=(timeout + PLAYBACK_COOLDOWN + 5)
+                * (levels_max + len(FULL_SPEED_LEVELS))
+                + 10,
             )
         except Exception as err:  # noqa: BLE001
             return {"ok": False, "error": _err(err)}
@@ -566,8 +677,14 @@ def describe_file(file: VodFile) -> dict[str, Any]:
     base = file.name.rsplit("/", 1)[-1]
     match = _NAME.match(base)
     if match is None:
-        # Unknown formats may embed identifiers: record only that it's unknown.
-        result["name"] = {"format": "unrecognized", "length": len(base)}
+        # Unknown formats may embed identifiers: record only their shape and
+        # whether they carry the recording's times (local or UTC) or a DST mark.
+        result["name"] = {
+            "format": "unrecognized",
+            "length": len(base),
+            "pattern": name_pattern(base),
+            **_name_times(base, file),
+        }
         return result
     name_start = datetime.strptime(match.group(2) + match.group(3), "%Y%m%d%H%M%S")
     result["name"] = {
@@ -578,6 +695,60 @@ def describe_file(file: VodFile) -> dict[str, Any]:
         ).total_seconds(),
     }
     return result
+
+
+def name_pattern(name: str) -> str:
+    """Return the shape of a name: digits as 9, letters as a/A, the rest kept."""
+    return "".join(
+        "9" if c.isdigit() else ("A" if c.isupper() else "a") if c.isalpha() else c
+        for c in name
+    )
+
+
+def _name_times(name: str, file: VodFile) -> dict[str, bool]:
+    local_start = file.start.replace(tzinfo=None)
+    local_end = file.end.replace(tzinfo=None)
+    result = {
+        "has_local_start": _stamp(local_start) in name,
+        "has_local_end": _stamp(local_end) in name
+        or local_end.strftime("%H%M%S") in name,
+        "has_dst_text": "dst" in name.lower(),
+    }
+    if file.start.tzinfo is not None:
+        result["has_utc_start"] = _stamp(file.start.astimezone(UTC)) in name
+    return result
+
+
+def _stamp(value: datetime) -> str:
+    return value.strftime("%Y%m%d%H%M%S")
+
+
+def seek_verdict(
+    got: FetchResult,
+    full: FetchResult,
+    layout: Mp4Layout,
+    full_layout: Mp4Layout,
+    same_start: bool | None,
+) -> str:
+    """Judge whether asking for mid-file made the device start there."""
+    if not got.ok:
+        return "error"
+    ratio: float | None = None
+    if layout.duration_s and full_layout.duration_s:
+        ratio = layout.duration_s / full_layout.duration_s
+    elif got.eof and full.eof and full.bytes_read:
+        ratio = got.bytes_read / full.bytes_read
+    if ratio is not None:
+        if ratio < 0.75:
+            return "seeks"
+        if 0.95 <= ratio <= 1.05:
+            return "ignored"
+        return "unclear"
+    if same_start is True:
+        return "ignored (same first bytes)"
+    if same_start is False:
+        return "likely seeks (different first bytes)"
+    return "unknown"
 
 
 def _dist(values: list[float]) -> dict[str, float] | None:
