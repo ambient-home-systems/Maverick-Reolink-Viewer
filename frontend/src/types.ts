@@ -261,6 +261,11 @@ export interface ProbeOptions {
   include_battery: boolean;
   concurrency_test: boolean;
   max_streams: number;
+  /** Recording playback check (Phase 2 gate). */
+  playback_test?: boolean;
+  playback_only?: boolean;
+  playback_concurrency_test?: boolean;
+  playback_max_streams?: number;
 }
 
 export type ProbeReport = Record<string, unknown>;

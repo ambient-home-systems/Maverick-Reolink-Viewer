@@ -15,9 +15,10 @@ from homeassistant.util.ssl import SSLCipherList
 
 from . import bridge, devices
 from .catalog import async_get_catalog
-from .const import DOMAIN, PROBE_HARD_MAX_STREAMS
+from .const import DOMAIN, PROBE_HARD_MAX_STREAMS, PROBE_PLAYBACK_HARD_MAX_STREAMS
 from .models import ReolinkViewerConfigEntry
 from .probe import ProbeOptions, Prober
+from .probe_playback import PlaybackOptions
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -171,6 +172,12 @@ def _redacted_error(err: Exception, hosts: list[bridge.ReolinkHostHandle]) -> st
         probatio.Optional("max_streams", default=4): probatio.All(
             int, probatio.Range(min=1, max=PROBE_HARD_MAX_STREAMS)
         ),
+        probatio.Optional("playback_test", default=False): bool,
+        probatio.Optional("playback_only", default=False): bool,
+        probatio.Optional("playback_concurrency_test", default=False): bool,
+        probatio.Optional("playback_max_streams", default=4): probatio.All(
+            int, probatio.Range(min=1, max=PROBE_PLAYBACK_HARD_MAX_STREAMS)
+        ),
     }
 )
 @websocket_api.require_admin
@@ -221,6 +228,12 @@ async def ws_probe(
         include_battery=msg["include_battery"],
         concurrency_test=msg["concurrency_test"],
         max_streams=msg["max_streams"],
+        playback=PlaybackOptions(
+            enabled=msg["playback_test"],
+            only=msg["playback_only"],
+            concurrency_test=msg["playback_concurrency_test"],
+            max_streams=msg["playback_max_streams"],
+        ),
     )
 
     def progress(message: str) -> None:

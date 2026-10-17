@@ -13,8 +13,10 @@ custom_components/reolink_viewer/
   catalog.py         # loads catalog/*.json; catalog keys for entities
   catalog/           # categories.json, settings-catalog.json (keyed by domain, key)
   scheduler.py       # per-host queue: concurrency limit, priorities, de-duplication
-  media.py           # ffmpeg time-to-first-frame, HTTP time-to-first-byte
+  media.py           # ffmpeg time-to-first-frame, HTTP first byte / ranged and paced GET
+  mp4.py             # minimal MP4 box reader (layout from a few Range requests)
   probe.py           # Phase 0 hardware probe
+  probe_playback.py  # Phase 2 gate: recording playback check (opt-in probe section)
   websocket_api.py   # reolink_viewer/status, /devices, /device, /catalog, /probe
   models.py          # runtime data of the config entry
   translations/en.json

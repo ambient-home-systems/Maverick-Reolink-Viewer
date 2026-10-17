@@ -1911,6 +1911,10 @@ var ct = 6e3, lt = class extends W {
 		_includeBattery: { state: !0 },
 		_concurrency: { state: !0 },
 		_maxStreams: { state: !0 },
+		_playback: { state: !0 },
+		_playbackOnly: { state: !0 },
+		_playbackConcurrency: { state: !0 },
+		_playbackStreams: { state: !0 },
 		_copied: { state: !0 },
 		_route: { state: !0 },
 		_toast: { state: !0 }
@@ -1922,7 +1926,7 @@ var ct = 6e3, lt = class extends W {
 		this._route = Ne(window.location.hash);
 	};
 	constructor() {
-		super(), this.narrow = !1, this._probe = { status: "idle" }, this._includeBattery = !1, this._concurrency = !1, this._maxStreams = 4, this._copied = !1, this._route = { view: "list" }, this.addEventListener(Ae, (e) => {
+		super(), this.narrow = !1, this._probe = { status: "idle" }, this._includeBattery = !1, this._concurrency = !1, this._maxStreams = 4, this._playback = !1, this._playbackOnly = !1, this._playbackConcurrency = !1, this._playbackStreams = 4, this._copied = !1, this._route = { view: "list" }, this.addEventListener(Ae, (e) => {
 			this.navigate(e.detail);
 		}), this.addEventListener(je, (e) => {
 			this.showToast(e.detail);
@@ -2053,6 +2057,56 @@ var ct = 6e3, lt = class extends W {
         </select>
         sub streams at once on one camera per device, stopping at the first failure
       </label>
+      <label>
+        <input
+          type="checkbox"
+          .checked=${this._playback}
+          ?disabled=${e}
+          @change=${(e) => {
+			this._playback = e.target.checked;
+		}}
+        />
+        Test recording playback: HTTP range requests, MP4 layout, download speed and a
+        day of file sizes, on one recent recording per camera (main and sub)
+      </label>
+      <label class="nested">
+        <input
+          type="checkbox"
+          .checked=${this._playbackOnly}
+          ?disabled=${e || !this._playback}
+          @change=${(e) => {
+			this._playbackOnly = e.target.checked;
+		}}
+        />
+        Only this test (skip the live and recorded-video method tests)
+      </label>
+      <label class="nested">
+        <input
+          type="checkbox"
+          .checked=${this._playbackConcurrency}
+          ?disabled=${e || !this._playback}
+          @change=${(e) => {
+			this._playbackConcurrency = e.target.checked;
+		}}
+        />
+        Test simultaneous playback: plays up to
+        <select
+          .value=${String(this._playbackStreams)}
+          ?disabled=${e || !this._playback || !this._playbackConcurrency}
+          @change=${(e) => {
+			this._playbackStreams = Number(e.target.value);
+		}}
+        >
+          ${[
+			2,
+			3,
+			4,
+			5,
+			6
+		].map((e) => P`<option value=${e} ?selected=${e === this._playbackStreams}>${e}</option>`)}
+        </select>
+        recordings at once, one per camera, stopping at the first failure
+      </label>
       <div class="actions">
         ${e ? P`<button @click=${() => {
 			this._cancelProbe();
@@ -2111,7 +2165,11 @@ var ct = 6e3, lt = class extends W {
 		let t = Te(this.hass, {
 			include_battery: this._includeBattery,
 			concurrency_test: this._concurrency,
-			max_streams: this._maxStreams
+			max_streams: this._maxStreams,
+			playback_test: this._playback,
+			playback_only: this._playback && this._playbackOnly,
+			playback_concurrency_test: this._playback && this._playbackConcurrency,
+			playback_max_streams: this._playbackStreams
 		}, (e) => {
 			this._probe.status === "running" && (this._probe = {
 				...this._probe,
@@ -2182,6 +2240,9 @@ var ct = 6e3, lt = class extends W {
       label {
         display: block;
         margin: 8px 0;
+      }
+      label.nested {
+        margin-inline-start: 24px;
       }
       .actions {
         display: flex;
