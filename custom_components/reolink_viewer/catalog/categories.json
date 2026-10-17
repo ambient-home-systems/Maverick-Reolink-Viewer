@@ -1,0 +1,292 @@
+{
+  "version": 1,
+  "categories": [
+    {
+      "id": "events",
+      "title": "Detection events",
+      "description": "What the camera is detecting right now: motion, AI objects, doorbell presses."
+    },
+    {
+      "id": "detection",
+      "title": "Detection tuning",
+      "description": "How sensitive motion, PIR and AI detection are, and how long an object must be seen."
+    },
+    {
+      "id": "smart_zones",
+      "title": "Smart event zones",
+      "description": "Lines and zones drawn in the Reolink app: crossline, intrusion, linger and item detection."
+    },
+    {
+      "id": "image",
+      "title": "Image",
+      "description": "Brightness, colour, exposure, HDR and day/night behaviour of the picture."
+    },
+    {
+      "id": "lighting",
+      "title": "Lights and night vision",
+      "description": "Floodlight, infrared lights and indicator LEDs."
+    },
+    {
+      "id": "streams",
+      "title": "Streams and encoding",
+      "description": "Camera streams and the resolution, codec, frame rate and bit rate behind them."
+    },
+    {
+      "id": "recording",
+      "title": "Recording",
+      "description": "When and how the camera or NVR records."
+    },
+    {
+      "id": "notifications",
+      "title": "Notifications and alerts",
+      "description": "Push, email and FTP alerts, and alarm actions on events."
+    },
+    {
+      "id": "audio",
+      "title": "Audio and chime",
+      "description": "Volumes, quick replies, ringtones and chimes."
+    },
+    {
+      "id": "siren",
+      "title": "Siren",
+      "description": "The built-in siren."
+    },
+    {
+      "id": "ptz",
+      "title": "Pan, tilt and zoom",
+      "description": "Moving the camera, presets, patrol, guard position, zoom, focus and auto tracking."
+    },
+    {
+      "id": "privacy",
+      "title": "Privacy",
+      "description": "Privacy mode and privacy masks."
+    },
+    {
+      "id": "power",
+      "title": "Battery and power",
+      "description": "Battery level, charging and power-saving work modes."
+    },
+    {
+      "id": "system",
+      "title": "System and maintenance",
+      "description": "Firmware, restart, time, storage, CPU, Wi-Fi and scenes."
+    }
+  ],
+  "entities": {
+    "binary_sensor": {
+      "animal": "events",
+      "crossline_dog_cat": "smart_zones",
+      "crossline_person": "smart_zones",
+      "crossline_vehicle": "smart_zones",
+      "cry": "events",
+      "face": "events",
+      "forgotten_item": "smart_zones",
+      "intrusion_dog_cat": "smart_zones",
+      "intrusion_person": "smart_zones",
+      "intrusion_vehicle": "smart_zones",
+      "io_input": "events",
+      "linger_dog_cat": "smart_zones",
+      "linger_person": "smart_zones",
+      "linger_vehicle": "smart_zones",
+      "motion": "events",
+      "non-motor_vehicle": "events",
+      "package": "events",
+      "person": "events",
+      "pet": "events",
+      "sleep": "power",
+      "taken_item": "smart_zones",
+      "tamper": "notifications",
+      "vehicle": "events",
+      "visitor": "events"
+    },
+    "button": {
+      "guard_go_to": "ptz",
+      "guard_set": "ptz",
+      "pre_siren": "siren",
+      "ptz_auto": "ptz",
+      "ptz_calibrate": "ptz",
+      "ptz_down": "ptz",
+      "ptz_left": "ptz",
+      "ptz_left_down": "ptz",
+      "ptz_left_up": "ptz",
+      "ptz_right": "ptz",
+      "ptz_right_down": "ptz",
+      "ptz_right_up": "ptz",
+      "ptz_stop": "ptz",
+      "ptz_up": "ptz",
+      "ptz_zoom_in": "ptz",
+      "ptz_zoom_out": "ptz",
+      "reboot": "system",
+      "sync_time": "system"
+    },
+    "camera": {
+      "ext": "streams",
+      "ext_lens_0": "streams",
+      "ext_lens_1": "streams",
+      "main": "streams",
+      "main_lens_0": "streams",
+      "main_lens_1": "streams",
+      "snapshots_main": "streams",
+      "snapshots_main_lens_0": "streams",
+      "snapshots_main_lens_1": "streams",
+      "snapshots_sub": "streams",
+      "snapshots_sub_lens_0": "streams",
+      "snapshots_sub_lens_1": "streams",
+      "sub": "streams",
+      "sub_lens_0": "streams",
+      "sub_lens_1": "streams",
+      "telephoto_main": "streams",
+      "telephoto_snapshots_main": "streams",
+      "telephoto_snapshots_sub": "streams",
+      "telephoto_sub": "streams"
+    },
+    "light": {
+      "floodlight": "lighting",
+      "status_led": "lighting"
+    },
+    "number": {
+      "ai_animal_delay": "detection",
+      "ai_animal_sensitivity": "detection",
+      "ai_face_delay": "detection",
+      "ai_face_sensitivity": "detection",
+      "ai_non_motor_vehicle_delay": "detection",
+      "ai_non_motor_vehicle_sensitivity": "detection",
+      "ai_package_delay": "detection",
+      "ai_package_sensitivity": "detection",
+      "ai_person_delay": "detection",
+      "ai_person_sensitivity": "detection",
+      "ai_pet_delay": "detection",
+      "ai_pet_sensitivity": "detection",
+      "ai_vehicle_delay": "detection",
+      "ai_vehicle_sensitivity": "detection",
+      "alarm_volume": "audio",
+      "audio_noise_reduction": "audio",
+      "auto_quick_reply_time": "audio",
+      "auto_track_disappear_time": "ptz",
+      "auto_track_limit_left": "ptz",
+      "auto_track_limit_right": "ptz",
+      "auto_track_stop_time": "ptz",
+      "crossline_sensitivity": "smart_zones",
+      "cry_sensitivity": "detection",
+      "day_night_switch_threshold": "image",
+      "floodlight_brightness": "lighting",
+      "floodlight_event_brightness": "lighting",
+      "floodlight_event_flash_time": "lighting",
+      "floodlight_event_on_time": "lighting",
+      "focus": "ptz",
+      "forgotten_item_delay": "smart_zones",
+      "forgotten_item_sensitivity": "smart_zones",
+      "guard_return_time": "ptz",
+      "image_brightness": "image",
+      "image_contrast": "image",
+      "image_hue": "image",
+      "image_saturation": "image",
+      "image_sharpness": "image",
+      "intrusion_delay": "smart_zones",
+      "intrusion_sensitivity": "smart_zones",
+      "ir_brightness": "lighting",
+      "linger_delay": "smart_zones",
+      "linger_sensitivity": "smart_zones",
+      "message_volume": "audio",
+      "motion_sensitivity": "detection",
+      "pir_interval": "detection",
+      "pir_sensitivity": "detection",
+      "pre_record_battery_stop": "power",
+      "pre_record_time": "recording",
+      "silent_time": "audio",
+      "taken_item_delay": "smart_zones",
+      "taken_item_sensitivity": "smart_zones",
+      "volume": "audio",
+      "volume_doorbell": "audio",
+      "volume_speak": "audio",
+      "zoom": "ptz"
+    },
+    "select": {
+      "anti_flicker": "image",
+      "auto_quick_reply_message": "audio",
+      "auto_track_method": "ptz",
+      "binning_mode": "image",
+      "day_night_mode": "image",
+      "doorbell_led": "lighting",
+      "exposure": "image",
+      "floodlight_event_mode": "lighting",
+      "floodlight_mode": "lighting",
+      "hdr": "image",
+      "hub_alarm_ringtone": "audio",
+      "hub_visitor_ringtone": "audio",
+      "main_bit_rate": "streams",
+      "main_encoding": "streams",
+      "main_frame_rate": "streams",
+      "motion_tone": "audio",
+      "package_tone": "audio",
+      "packing_time": "recording",
+      "people_tone": "audio",
+      "pet_tone": "audio",
+      "play_quick_reply_message": "audio",
+      "post_rec_time": "recording",
+      "pre_record_fps": "recording",
+      "ptz_preset": "ptz",
+      "scene_mode": "system",
+      "sub_bit_rate": "streams",
+      "sub_encoding": "streams",
+      "sub_frame_rate": "streams",
+      "vehicle_tone": "audio",
+      "visitor_tone": "audio",
+      "work_mode_battery": "power",
+      "work_mode_powered": "recording"
+    },
+    "sensor": {
+      "animal_type": "events",
+      "battery": "power",
+      "battery_state": "power",
+      "battery_temperature": "power",
+      "cpu_usage": "system",
+      "day_night_state": "image",
+      "hdd_storage": "system",
+      "person_type": "events",
+      "ptz_pan_position": "ptz",
+      "ptz_tilt_position": "ptz",
+      "sd_storage": "system",
+      "vehicle_type": "events",
+      "wifi_signal": "system"
+    },
+    "siren": {
+      "siren": "siren"
+    },
+    "switch": {
+      "auto_focus": "ptz",
+      "auto_tracking": "ptz",
+      "doorbell_button_sound": "audio",
+      "email": "notifications",
+      "ftp_upload": "notifications",
+      "guard_return": "ptz",
+      "hardwired_chime_enabled": "audio",
+      "hdr": "image",
+      "hub_ringtone_on_event": "audio",
+      "ir_lights": "lighting",
+      "led": "lighting",
+      "manual_record": "recording",
+      "pir_enabled": "detection",
+      "pir_reduce_alarm": "detection",
+      "pre_record": "recording",
+      "pre_siren_on_event": "siren",
+      "privacy_mask": "privacy",
+      "privacy_mask_lens": "privacy",
+      "privacy_mode": "privacy",
+      "ptz_patrol": "ptz",
+      "push_notifications": "notifications",
+      "record": "recording",
+      "record_audio": "recording",
+      "rule": "system",
+      "siren_on_event": "siren",
+      "tamper_enabled": "notifications"
+    },
+    "time": {
+      "floodlight_schedule_end": "lighting",
+      "floodlight_schedule_start": "lighting"
+    },
+    "update": {
+      "firmware": "system"
+    }
+  }
+}

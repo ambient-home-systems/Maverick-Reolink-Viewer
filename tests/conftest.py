@@ -38,8 +38,11 @@ from homeassistant.helpers.device_registry import format_mac
 from .ha_reolink_mock import (
     TEST_BC_CON,
     TEST_BC_PORT,
+    TEST_CAM_NAME,
     TEST_HOST,
+    TEST_HOST2,
     TEST_MAC,
+    TEST_MAC_CAM,
     TEST_NVR_NAME,
     TEST_PORT,
     TEST_UID,
@@ -55,6 +58,7 @@ TEST_SERIAL = "SN0123456789XYZ"
 TEST_TOKEN = "tok3n-abcdef"
 # Camera's "current" time.
 TEST_NOW = datetime(2026, 10, 17, 12, 0, 0)
+DIRECT_CAM_MODEL = "CX810"
 
 SECRETS = (TEST_PASSWORD, TEST_UID, TEST_UID_CAM, TEST_SERIAL, TEST_TOKEN)
 
@@ -113,6 +117,11 @@ def _init_probe_mock(host_mock: MagicMock) -> None:
     host_mock.sleeping.return_value = False
     host_mock.is_doorbell.return_value = False
     host_mock.supported.side_effect = _supported
+    host_mock.whiteled_event_mode.return_value = "off"
+    host_mock.rtsp_port = 554
+    host_mock.rtmp_port = 1935
+    host_mock.onvif_port = 8000
+    host_mock.ai_supported_types.return_value = ["people", "vehicle"]
     host_mock.set_net_port = AsyncMock()
     host_mock.get_vod_source = AsyncMock(
         side_effect=lambda ch, filename, stream, request_type: (
@@ -166,6 +175,70 @@ def reolink_host_class() -> Generator[MagicMock]:
         _init_host_mock(host_mock_class.return_value)
         _init_probe_mock(host_mock_class.return_value)
         yield host_mock_class
+
+
+@pytest.fixture
+def direct_camera(reolink_host_class: MagicMock) -> MagicMock:
+    """A camera added directly that is also NVR channel 0 (same UID)."""
+    camera = MagicMock()
+    _init_host_mock(camera)
+    _init_probe_mock(camera)
+    camera.is_nvr = False
+    camera.uid = TEST_UID_CAM
+    camera.mac_address = TEST_MAC_CAM
+    camera.nvr_name = TEST_CAM_NAME
+    camera.model = DIRECT_CAM_MODEL
+    camera.camera_model.return_value = DIRECT_CAM_MODEL
+    camera.camera_uid.return_value = TEST_UID_CAM
+    camera.serial.return_value = None
+    camera.baichuan.mac_address.return_value = None
+    # A camera without an SD card does not record locally.
+    camera.hdd_list = []
+    nvr = reolink_host_class.return_value
+    reolink_host_class.side_effect = lambda host, *args, **kwargs: (
+        camera if host == TEST_HOST2 else nvr
+    )
+    return camera
+
+
+@pytest.fixture
+def direct_camera_entry(hass: HomeAssistant) -> MockConfigEntry:
+    """Config entry of the directly added camera."""
+    entry = MockConfigEntry(
+        domain=REOLINK_DOMAIN,
+        unique_id=format_mac(TEST_MAC_CAM),
+        data={
+            CONF_HOST: TEST_HOST2,
+            CONF_USERNAME: TEST_USERNAME,
+            CONF_PASSWORD: TEST_PASSWORD,
+            CONF_PORT: TEST_PORT,
+            CONF_USE_HTTPS: True,
+            CONF_SUPPORTS_PRIVACY_MODE: True,
+            CONF_BC_PORT: TEST_BC_PORT,
+            CONF_BC_ONLY: False,
+            CONF_BC_CONNECT: TEST_BC_CON,
+            CONF_UID: TEST_UID_CAM,
+        },
+        options={CONF_PROTOCOL: DEFAULT_PROTOCOL},
+        title=TEST_CAM_NAME,
+    )
+    entry.add_to_hass(hass)
+    return entry
+
+
+@pytest.fixture
+async def loaded_with_entities(
+    hass: HomeAssistant,
+    reolink_host: MagicMock,
+    reolink_entry: MockConfigEntry,
+    viewer_entry: MockConfigEntry,
+) -> MockConfigEntry:
+    """Set up HA's Reolink integration with its entity platforms, then the viewer."""
+    assert await hass.config_entries.async_setup(reolink_entry.entry_id)
+    await hass.async_block_till_done()
+    assert await hass.config_entries.async_setup(viewer_entry.entry_id)
+    await hass.async_block_till_done()
+    return reolink_entry
 
 
 @pytest.fixture
