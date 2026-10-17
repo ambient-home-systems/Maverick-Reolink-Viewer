@@ -147,6 +147,11 @@ def test_catalog_entries_are_well_formed() -> None:
         ("update", "firmware"),
         ("siren", "siren"),
         ("switch", "push_notifications"),
+        ("switch", "guard_return"),
+        ("select", "work_mode_battery"),
+        ("select", "scene_mode"),
+        ("select", "floodlight_mode"),
+        ("select", "auto_quick_reply_message"),
     ],
 )
 def test_harmful_actions_are_disruptive(domain: str, key: str) -> None:
@@ -162,3 +167,30 @@ def test_catalog_key_fallbacks() -> None:
     assert catalog_key("sensor", None, None) is None
     assert CATALOG.category("sensor", None) == OTHER_CATEGORY
     assert not CATALOG.has_entry("sensor", None)
+
+
+@pytest.mark.parametrize(
+    ("domain", "key", "when"),
+    [
+        ("switch", "guard_return", "on"),
+        ("select", "work_mode_battery", "any"),
+        ("select", "scene_mode", "any"),
+        ("select", "floodlight_mode", "any"),
+        ("select", "auto_quick_reply_message", "any"),
+    ],
+)
+def test_confirmation_rules(domain: str, key: str, when: str) -> None:
+    """Entries that act on their own confirm when (and only when) they should."""
+    entry = CATALOG.settings["entities"][domain][key]
+    assert entry["disruptive_when"] == when
+    assert entry["impact_note"]
+
+
+def test_siren_text_matches_reolink_aio() -> None:
+    """The duration is a repeat count and a volume changes the speaker volume."""
+    entry = CATALOG.settings["entities"]["siren"]["siren"]
+    text = entry["what_it_does"] + entry["notes"]
+    assert "repeat count" in text
+    assert "permanently changes" in text
+    assert "number.volume" in entry["related"]
+    assert "Home Hub" in entry["notes"]
