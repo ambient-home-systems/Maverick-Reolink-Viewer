@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { fetchDevices, runProbe, toError } from "./api";
+import { enableEntity, fetchCatalog, fetchDevice, fetchDevices, runProbe, toError } from "./api";
 import { makeHass, okDevices } from "./test-fixtures";
 
 const OPTIONS = { include_battery: false, concurrency_test: true, max_streams: 3 };
@@ -13,6 +13,31 @@ describe("api", () => {
     const result = await fetchDevices(hass);
     expect(result.hosts).toHaveLength(1);
     expect(hass.sent).toEqual([{ type: "reolink_viewer/devices" }]);
+  });
+
+  it("fetches one device and enables entities", async () => {
+    const hass = makeHass(okDevices());
+    await fetchDevice(hass, "dev-cam");
+    await expect(enableEntity(hass, "switch.ftp_upload")).resolves.toEqual({ reload_delay: 30 });
+    expect(hass.sent).toEqual([
+      { type: "reolink_viewer/device", device_id: "dev-cam" },
+      { type: "config/entity_registry/update", entity_id: "switch.ftp_upload", disabled_by: null },
+    ]);
+  });
+
+  it("fetches the catalog once per connection and retries failures", async () => {
+    const hass = makeHass(okDevices());
+    const callWS = hass.callWS.bind(hass);
+    let fail = true;
+    hass.callWS = <T>(message: Record<string, unknown>) =>
+      // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
+      fail ? Promise.reject({ code: "x", message: "down" }) : callWS<T>(message);
+    await expect(fetchCatalog(hass)).rejects.toEqual({ code: "x", message: "down" });
+    fail = false;
+    const first = await fetchCatalog(hass);
+    const second = await fetchCatalog(hass);
+    expect(first).toBe(second);
+    expect(hass.sent.filter((m) => m.type === "reolink_viewer/catalog")).toHaveLength(1);
   });
 
   it("streams progress and resolves with the report", async () => {

@@ -9,11 +9,15 @@ built-in [Reolink integration](https://www.home-assistant.io/integrations/reolin
   (person, vehicle, animal, face, package, visitor, ...) and recording thumbnails
 - smooth recorded-video playback and low-latency live view
 
-**Status: Phase 0 done** (foundations and hardware discovery). The integration adds a
-**Reolink** sidebar panel that lists your Reolink hosts and channels and, for admins,
-runs a read-only hardware probe whose JSON report fills the
-[hardware matrix](docs/hardware-matrix.md). Live view, playback and settings come in
-later phases.
+**Status: Phase 1 code complete** (device details and every setting; v0.1.0, waiting
+on the hardware checklist in the [plan](docs/IMPLEMENTATION_PLAN.md#phase-1-status-2026-10-17)).
+The **Reolink** sidebar panel lists your NVRs, Home Hubs and cameras (a camera that is
+in Home Assistant both via an NVR and directly is shown once). Each device has an
+**Overview** (latest snapshot, model, firmware, streams, network, ports, storage,
+battery, features) and a **Settings** tab with every entity the Reolink integration
+creates, grouped by category, each with a plain-language explanation, search, and a
+confirmation before disruptive actions. Admins can enable disabled entities and run a
+read-only hardware probe. Playback and live view come in later phases.
 
 Requires Home Assistant 2026.10 or newer with the Reolink integration set up.
 

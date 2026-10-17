@@ -9,13 +9,13 @@ import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry, MockUser
 from pytest_homeassistant_custom_component.typing import WebSocketGenerator
 
-from custom_components.reolink_viewer import probe
+from custom_components.reolink_viewer import bridge, probe
 from custom_components.reolink_viewer.media import ByteResult, FrameResult
 from homeassistant.components.ffmpeg import FFmpegManager
 from homeassistant.core import HomeAssistant
 
-from .conftest import SECRETS
-from .ha_reolink_mock import TEST_HOST_MODEL
+from .conftest import SECRETS, TEST_PASSWORD
+from .ha_reolink_mock import TEST_UID
 
 
 @pytest.fixture(autouse=True)
@@ -42,53 +42,16 @@ async def test_devices(
     hass: HomeAssistant,
     hass_ws_client: WebSocketGenerator,
     loaded_viewer: MockConfigEntry,
-    loaded_reolink: MockConfigEntry,
 ) -> None:
-    """The device list comes from the bridge."""
+    """The device list has hosts and cameras (details in test_devices.py)."""
     client = await hass_ws_client(hass)
     await client.send_json_auto_id({"type": "reolink_viewer/devices"})
     msg = await client.receive_json()
     assert msg["success"], msg
     result = msg["result"]
     assert result["degraded"] is False
-    (host,) = result["hosts"]
-    assert host["entry_id"] == loaded_reolink.entry_id
-    assert host["model"] == TEST_HOST_MODEL
-    assert host["device_type"] == "nvr"
-    assert host["channels"][0]["main"]["codec"] == "h264"
-
-
-async def test_devices_degraded(
-    hass: HomeAssistant,
-    hass_ws_client: WebSocketGenerator,
-    reolink_host: MagicMock,
-    loaded_viewer: MockConfigEntry,
-) -> None:
-    """When internals changed, devices come from the device registry."""
-    del reolink_host.get_vod_source
-    client = await hass_ws_client(hass)
-    await client.send_json_auto_id({"type": "reolink_viewer/devices"})
-    msg = await client.receive_json()
-    result = msg["result"]
-    assert result["degraded"] is True
-    assert result["hosts"] == []
-    assert result["devices"]
-    assert "get_vod_source" in result["compat"]["errors"][0]
-
-
-async def test_devices_bridge_error_degrades(
-    hass: HomeAssistant,
-    hass_ws_client: WebSocketGenerator,
-    reolink_host: MagicMock,
-    loaded_viewer: MockConfigEntry,
-) -> None:
-    """An unexpected bridge error degrades instead of failing the panel."""
-    reolink_host.camera_name.side_effect = RuntimeError("boom")
-    client = await hass_ws_client(hass)
-    await client.send_json_auto_id({"type": "reolink_viewer/devices"})
-    result = (await client.receive_json())["result"]
-    assert result["degraded"] is True
-    assert "bridge error: boom" in result["compat"]["errors"]
+    assert result["compat"]["ok"] is True
+    assert {"hosts", "cameras"} <= set(result)
 
 
 async def test_status(
@@ -106,7 +69,7 @@ async def test_status(
     assert msg["result"]["scheduler"] == {}
 
 
-@pytest.mark.parametrize("command", ["status", "devices", "probe"])
+@pytest.mark.parametrize("command", ["status", "devices", "probe", "device"])
 async def test_not_loaded(
     hass: HomeAssistant,
     hass_ws_client: WebSocketGenerator,
@@ -116,7 +79,8 @@ async def test_not_loaded(
     """Commands fail cleanly when the entry is not loaded."""
     await hass.config_entries.async_unload(loaded_viewer.entry_id)
     client = await hass_ws_client(hass)
-    await client.send_json_auto_id({"type": f"reolink_viewer/{command}"})
+    extra = {"device_id": "x"} if command == "device" else {}
+    await client.send_json_auto_id({"type": f"reolink_viewer/{command}", **extra})
     msg = await client.receive_json()
     assert not msg["success"]
     assert msg["error"]["code"] == "not_loaded"
@@ -145,7 +109,7 @@ async def test_probe(
     assert events[0]["type"] == "progress"
     report = events[-1]["report"]
     assert report["ffmpeg_version"] == "7.1"
-    assert report["integration_version"] == "0.0.2"
+    assert report["integration_version"] == "0.1.0"
     assert report["options"]["concurrency_test"] is False
     assert report["hosts"][0]["channels"][0]["live"]["rtsp"]["sub"]["ok"] is True
     text = str(report)
@@ -245,3 +209,43 @@ async def test_probe_unexpected_error(
         client = await hass_ws_client(hass)
         events = await _collect_probe(client, {})
     assert events[-1] == {"type": "error", "message": "crash"}
+
+
+async def test_probe_error_is_redacted(
+    hass: HomeAssistant,
+    hass_ws_client: WebSocketGenerator,
+    loaded_viewer: MockConfigEntry,
+) -> None:
+    """The top-level error message never carries URLs, addresses or secrets."""
+    error = RuntimeError(
+        f"failed rtsp://admin:{TEST_PASSWORD}@1.2.3.4:554/x on {TEST_UID} at 1.2.3.4"
+    )
+    with patch.object(probe.Prober, "async_run", side_effect=error):
+        client = await hass_ws_client(hass)
+        events = await _collect_probe(client, {})
+    message = events[-1]["message"]
+    assert events[-1]["type"] == "error"
+    for secret in (*SECRETS, "1.2.3.4", "rtsp://"):
+        assert secret not in message
+    assert message == "failed <url> on <redacted> at <ip>"
+
+
+async def test_probe_hosts_incompatible(
+    hass: HomeAssistant,
+    hass_ws_client: WebSocketGenerator,
+    loaded_viewer: MockConfigEntry,
+) -> None:
+    """An IncompatibleError while listing hosts is a clear error before the ack."""
+    with patch.object(
+        bridge,
+        "async_get_hosts",
+        side_effect=bridge.IncompatibleError("Reolink runtime_data has no 'host'"),
+    ):
+        client = await hass_ws_client(hass)
+        await client.send_json_auto_id({"type": "reolink_viewer/probe"})
+        msg = await client.receive_json()
+    assert not msg["success"]
+    assert msg["error"]["code"] == "incompatible"
+    assert msg["error"]["message"] == (
+        "Reolink integration internals changed: Reolink runtime_data has no 'host'"
+    )

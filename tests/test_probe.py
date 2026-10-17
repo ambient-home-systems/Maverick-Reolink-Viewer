@@ -623,3 +623,107 @@ async def test_probe_job_uses_lowest_priority(
     assert run.await_count > 20
     assert {c.kwargs["priority"] for c in run.await_args_list} == {Priority.PREFETCH}
     assert {c.args[0] for c in run.await_args_list} == {loaded_reolink.entry_id}
+
+
+async def test_probe_media_job_errors_are_recorded(
+    hass: HomeAssistant,
+    reolink_host: MagicMock,
+    loaded_reolink: MockConfigEntry,
+    scheduler: Scheduler,
+    fake_media: FakeMedia,
+) -> None:
+    """A media job that raises (e.g. the scheduler's timeout) is recorded per step."""
+
+    async def broken(*_args: Any, **_kwargs: Any) -> Any:
+        raise TimeoutError
+
+    reolink_host.is_nvr = False
+    with (
+        patch.object(probe, "async_first_frame", broken),
+        patch.object(probe, "async_first_bytes", broken),
+    ):
+        report = await _prober(hass, scheduler).async_run()
+    await scheduler.async_shutdown()
+    ch = report["hosts"][0]["channels"][0]
+    assert ch["live"]["rtsp"]["main"] == {"ok": False, "error": "timeout"}
+    methods = ch["vod"]["sub"]["methods"]
+    assert methods["DOWNLOAD"]["ok"] is False
+    assert methods["DOWNLOAD"]["error"] == "timeout"
+    assert "prepare_ms" in methods["DOWNLOAD"]
+    assert methods["RTMP"]["error"] == "timeout"
+
+
+async def test_probe_one_host_failing_does_not_fail_the_report(
+    hass: HomeAssistant,
+    loaded_reolink: MockConfigEntry,
+    scheduler: Scheduler,
+    fake_media: FakeMedia,
+) -> None:
+    """An unexpected error in one host is recorded; the other hosts still finish."""
+    (handle,) = bridge.async_get_hosts(hass)
+    prober = Prober(
+        scheduler,
+        [handle, handle],
+        options=ProbeOptions(),
+        compat=bridge.async_check_compat(hass),
+        ffmpeg_binary="ffmpeg",
+        ffmpeg_version="7.1",
+        session=MagicMock(),
+        integration_version="0.0.1",
+    )
+    real = Prober._probe_host
+
+    async def flaky(self: Prober, index: int, host: Any) -> dict[str, Any]:
+        if index == 1:
+            raise RuntimeError("unexpected")
+        return await real(self, index, host)
+
+    with patch.object(Prober, "_probe_host", flaky):
+        report = await prober.async_run()
+    await scheduler.async_shutdown()
+    assert report["hosts"][0] == {"id": "host1", "error": "RuntimeError: unexpected"}
+    assert report["hosts"][1]["id"] == "host2"
+    assert report["hosts"][1]["channels"]
+
+
+async def test_probe_cancel_stops_every_host(
+    hass: HomeAssistant,
+    loaded_reolink: MockConfigEntry,
+    scheduler: Scheduler,
+    fake_media: FakeMedia,
+) -> None:
+    """Cancelling the probe cancels the probes of all hosts, not just one."""
+    (handle,) = bridge.async_get_hosts(hass)
+    prober = Prober(
+        scheduler,
+        [handle, handle],
+        options=ProbeOptions(),
+        compat=bridge.async_check_compat(hass),
+        ffmpeg_binary="ffmpeg",
+        ffmpeg_version="7.1",
+        session=MagicMock(),
+        integration_version="0.0.1",
+    )
+    started: list[int] = []
+    cancelled: list[int] = []
+    both_started = asyncio.Event()
+
+    async def hang(self: Prober, index: int, host: Any) -> dict[str, Any]:
+        started.append(index)
+        if len(started) == 2:
+            both_started.set()
+        try:
+            await asyncio.sleep(3600)
+        except asyncio.CancelledError:
+            cancelled.append(index)
+            raise
+        return {}
+
+    with patch.object(Prober, "_probe_host", hang):
+        task = asyncio.create_task(prober.async_run())
+        await both_started.wait()
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+    await scheduler.async_shutdown()
+    assert sorted(cancelled) == [1, 2]

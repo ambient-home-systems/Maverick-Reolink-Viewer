@@ -17,6 +17,7 @@ from collections.abc import Iterable
 from dataclasses import asdict, dataclass, field, fields, is_dataclass
 from datetime import datetime, tzinfo
 from enum import StrEnum
+import hashlib
 import importlib
 from importlib.metadata import PackageNotFoundError, version
 import logging
@@ -281,6 +282,8 @@ def _check_static() -> list[str]:
     reolink_host = getattr(host_mod, "ReolinkHost", None)
     if reolink_host is None or not hasattr(reolink_host, "api"):
         errors.append("ReolinkHost.api is missing")
+    elif not hasattr(reolink_host, "unique_id"):
+        errors.append("ReolinkHost.unique_id is missing")
 
     host_cls = getattr(api_mod, "Host", None)
     if host_cls is None:
@@ -323,6 +326,14 @@ def _api_of(entry: ConfigEntry) -> Host:
 
     Checked by duck typing: the attributes we use must exist.
     """
+    return _host_of(entry)[1]
+
+
+def _host_of(entry: ConfigEntry) -> tuple[str, Host]:
+    """Return (ReolinkHost.unique_id, reolink_aio Host) of a loaded entry or raise.
+
+    The unique id is the base of the Reolink integration's device identifiers.
+    """
     runtime_data = getattr(entry, "runtime_data", None)
     if runtime_data is None:
         raise IncompatibleError(f"Reolink entry {entry.title!r} has no runtime_data")
@@ -340,7 +351,10 @@ def _api_of(entry: ConfigEntry) -> Host:
     )
     if missing:
         raise IncompatibleError(f"reolink_aio Host is missing: {', '.join(missing)}")
-    return cast("Host", api)
+    unique_id = getattr(host, "unique_id", None)
+    if not isinstance(unique_id, str) or not unique_id:
+        raise IncompatibleError("Reolink runtime_data.host has no 'unique_id'")
+    return unique_id, cast("Host", api)
 
 
 @callback
@@ -366,7 +380,7 @@ def async_get_hosts(hass: HomeAssistant) -> list[ReolinkHostHandle]:
     integration are picked up.
     """
     return [
-        ReolinkHostHandle(entry, _api_of(entry))
+        _handle(entry)
         for entry in hass.config_entries.async_loaded_entries(REOLINK_DOMAIN)
     ]
 
@@ -381,7 +395,12 @@ def async_get_host(hass: HomeAssistant, entry_id: str) -> ReolinkHostHandle:
         or entry not in hass.config_entries.async_loaded_entries(REOLINK_DOMAIN)
     ):
         raise HostNotFoundError(entry_id)
-    return ReolinkHostHandle(entry, _api_of(entry))
+    return _handle(entry)
+
+
+def _handle(entry: ConfigEntry) -> ReolinkHostHandle:
+    unique_id, api = _host_of(entry)
+    return ReolinkHostHandle(entry, api, unique_id)
 
 
 @callback
@@ -420,10 +439,15 @@ def _safe(func: Any, *args: Any) -> Any:
 class ReolinkHostHandle:
     """Typed access to one loaded Reolink host."""
 
-    def __init__(self, entry: ConfigEntry, api: Host) -> None:
-        """Initialize the handle."""
+    def __init__(self, entry: ConfigEntry, api: Host, unique_id: str) -> None:
+        """Initialize the handle.
+
+        ``unique_id`` is the Reolink integration's ReolinkHost.unique_id (the
+        host's UID or MAC). It is a secret: never send it to a client.
+        """
         self._entry = entry
         self._api = api
+        self._unique_id = unique_id
 
     @property
     def entry_id(self) -> str:
@@ -434,6 +458,20 @@ class ReolinkHostHandle:
     def is_nvr(self) -> bool:
         """Return True for NVRs and Home Hubs."""
         return bool(self._api.is_nvr)
+
+    @property
+    def title(self) -> str:
+        """Return the Reolink config entry title."""
+        return self._entry.title
+
+    def channels(self) -> list[int]:
+        """Return the channels in use."""
+        return list(self._api.channels)
+
+    @property
+    def is_hub(self) -> bool:
+        """Return True for Home Hubs."""
+        return bool(self._api.is_hub)
 
     @property
     def rtmp_enabled(self) -> bool | None:
@@ -496,6 +534,155 @@ class ReolinkHostHandle:
             sub=self._encoding(channel, "sub"),
         )
 
+    # ---- Device registry mapping and cached details (no I/O) ----
+
+    def classify_device(self, identifiers: Iterable[tuple[str, str]]) -> DeviceRef:
+        """Return what a device registry entry of this host's entry represents.
+
+        Mirrors the identifiers the Reolink integration gives its devices
+        (homeassistant/components/reolink/entity.py): the host itself,
+        ``<id>_ch<N>`` / ``<id>_<camera uid>`` for NVR channels, ``<id>_lens<N>``
+        for the lenses of dual-lens cameras and ``<id>_chime<N>`` for chimes.
+        """
+        api = self._api
+        uid = self._unique_id
+        channel_ids: dict[str, int] = {}
+        for ch in api.channels:
+            channel_ids[f"{uid}_ch{ch}"] = ch
+            if (cam_uid := _safe(api.camera_uid, ch)) and cam_uid != _UNKNOWN:
+                channel_ids[f"{uid}_{cam_uid}"] = ch
+        for domain, ident in identifiers:
+            if domain != REOLINK_DOMAIN:
+                continue
+            if ident == uid:
+                # A camera added directly is a host with its camera on channel 0.
+                channel = None if api.is_nvr else _first(api.channels)
+                return DeviceRef(DeviceRole.HOST, channel)
+            if ident in channel_ids:
+                return DeviceRef(DeviceRole.CHANNEL, channel_ids[ident])
+            suffix = ident.removeprefix(f"{uid}_")
+            if suffix != ident:
+                if (lens := _int_suffix(suffix, "lens")) is not None:
+                    return DeviceRef(DeviceRole.LENS, lens)
+                if _int_suffix(suffix, "chime") is not None:
+                    return DeviceRef(DeviceRole.CHIME, None)
+        return DeviceRef(DeviceRole.OTHER, None)
+
+    def host_details(self) -> dict[str, Any]:
+        """Return a curated, client-safe summary of the host (cached data only)."""
+        api = self._api
+        storage = [
+            {
+                "index": index,
+                "type": _safe(api.hdd_type, index),
+                "used_percent": _safe(api.hdd_storage, index),
+                "available": _safe(api.hdd_available, index),
+            }
+            for index in _safe(lambda: api.hdd_list) or []
+        ]
+        wifi = bool(_safe(api.wifi_connection))
+        return {
+            "model": _safe(lambda: api.model),
+            "model_id": _safe(api.item_number),
+            "hardware_version": _safe(lambda: api.hardware_version),
+            "firmware_version": _safe(lambda: api.sw_version),
+            "device_type": "hub" if api.is_hub else ("nvr" if api.is_nvr else "camera"),
+            "channels": len(api.channels),
+            "stream_protocol": _safe(lambda: api.protocol),
+            "baichuan_only": bool(api.baichuan_only),
+            "network": {
+                "connection": "wifi" if wifi else "lan",
+                "wifi_signal_dbm": _safe(api.wifi_signal) if wifi else None,
+            },
+            "ports": {
+                "http": {
+                    "port": _safe(lambda: api.port),
+                    "https": _safe(lambda: api.use_https),
+                },
+                "rtsp": {
+                    "enabled": api.rtsp_enabled,
+                    "port": _safe(lambda: api.rtsp_port),
+                },
+                "rtmp": {
+                    "enabled": api.rtmp_enabled,
+                    "port": _safe(lambda: api.rtmp_port),
+                },
+                "onvif": {
+                    "enabled": api.onvif_enabled,
+                    "port": _safe(lambda: api.onvif_port),
+                },
+            },
+            "storage": storage,
+            "cpu_usage": _safe(lambda: api.cpu_usage),
+            "capabilities": _capabilities(api, None, _HOST_CAPABILITIES),
+        }
+
+    def channel_details(self, channel: int) -> dict[str, Any]:
+        """Return a curated, client-safe summary of one channel (cached data only)."""
+        api = self._api
+        info = self._channel_info(channel)
+        wifi = bool(_safe(api.wifi_connection, channel))
+        battery = None
+        if info.is_battery:
+            status = _safe(api.battery_status, channel)
+            battery = {
+                "percent": _safe(api.battery_percentage, channel),
+                "temperature_c": _safe(api.battery_temperature, channel),
+                "status": _BATTERY_STATUS.get(status) if status is not None else None,
+            }
+        return {
+            "channel": channel,
+            "name": info.name,
+            "model": info.model,
+            "model_id": _safe(api.item_number, channel),
+            "hardware_version": info.hardware_version,
+            "firmware_version": info.firmware_version,
+            "online": info.online,
+            "sleeping": info.sleeping,
+            "is_battery": info.is_battery,
+            "is_doorbell": info.is_doorbell,
+            "is_dual_lens": bool(_safe(lambda: api.is_dual_lens)),
+            "supports_replay": info.supports_replay,
+            "supports_stream": info.supports_stream,
+            "encodings": {"main": asdict(info.main), "sub": asdict(info.sub)},
+            "network": {
+                "connection": "wifi" if wifi else "lan",
+                "wifi_signal_dbm": _safe(api.wifi_signal, channel) if wifi else None,
+            },
+            "battery": battery,
+            "ai_types": sorted(_safe(api.ai_supported_types, channel) or []),
+            "capabilities": _capabilities(api, channel, _CHANNEL_CAPABILITIES),
+        }
+
+    def records_locally(self, channel: int) -> bool:
+        """Return True if this host stores recordings of the channel.
+
+        An NVR or Home Hub records its channels; a camera added directly records
+        only when it has a storage device (SD card) and replay support.
+        """
+        api = self._api
+        if not _safe(api.supported, channel, "replay"):
+            return False
+        return bool(api.is_nvr) or bool(_safe(lambda: api.hdd_list))
+
+    def _fingerprints(self, channel: int) -> frozenset[str]:
+        """Return identifiers of the camera on a channel (secret: never output)."""
+        api = self._api
+        if api.is_nvr:
+            values = [
+                _safe(api.camera_uid, channel),
+                _safe(api.serial, channel),
+                _safe(api.baichuan.mac_address, channel),
+            ]
+        else:
+            values = [
+                _safe(lambda: api.uid),
+                _safe(api.serial, None),
+                _safe(api.serial, channel),
+                _safe(lambda: api.mac_address),
+            ]
+        return frozenset(v for v in map(_normalize_id, values) if v is not None)
+
     def secrets(self) -> list[str]:
         """Return values that must never appear in output."""
         api = self._api
@@ -505,6 +692,7 @@ class ReolinkHostHandle:
             # reolink-aio error messages carry "Host: <address>:<port>".
             self._entry.data.get(CONF_HOST),
             self._entry.unique_id,
+            self._unique_id,
             _safe(lambda: api.uid),
             _safe(lambda: api.mac_address),
             _safe(api.serial, None),
@@ -627,6 +815,141 @@ class ReolinkHostHandle:
         return bytes(
             await self._api.baichuan.snapshot_past(channel, when, stream, ffmpeg_binary)
         )
+
+
+class DeviceRole(StrEnum):
+    """What a Reolink device registry entry represents."""
+
+    HOST = "host"
+    CHANNEL = "channel"
+    LENS = "lens"
+    CHIME = "chime"
+    OTHER = "other"
+
+
+@dataclass(frozen=True, slots=True)
+class DeviceRef:
+    """A device registry entry, classified.
+
+    ``channel`` is the camera channel for CHANNEL and LENS devices, and for the
+    HOST device of a camera added directly (channel 0).
+    """
+
+    role: DeviceRole
+    channel: int | None
+
+
+_UNKNOWN = "Unknown"
+_BATTERY_STATUS = {0: "discharging", 1: "charging", 2: "chargecomplete"}
+
+# reolink-aio capability flags worth showing, with their labels.
+_HOST_CAPABILITIES: dict[str, str] = {
+    "hdd": "Local storage",
+    "wifi": "Wi-Fi",
+    "update": "Firmware update",
+    "reboot": "Remote restart",
+    "hub_audio": "Hub audio",
+    "ONVIF": "ONVIF",
+}
+_CHANNEL_CAPABILITIES: dict[str, str] = {
+    "ptz": "PTZ",
+    "pan_tilt": "Pan and tilt",
+    "zoom": "Optical zoom",
+    "auto_focus": "Autofocus",
+    "auto_track": "Auto tracking",
+    "floodLight": "Floodlight",
+    "siren": "Siren",
+    "ir_lights": "Infrared night vision",
+    "status_led": "Status LED",
+    "HDR": "HDR",
+    "dayNight": "Day/night switching",
+    "PIR": "PIR sensor",
+    "motion_detection": "Motion detection",
+    "privacy_mask": "Privacy mask",
+    "recording": "Recording",
+    "replay": "Playback",
+    "quick_reply": "Quick reply",
+    "chime": "Chime",
+    "battery": "Battery",
+}
+
+
+def _capabilities(api: Any, channel: int | None, labels: dict[str, str]) -> list[str]:
+    return [
+        label for cap, label in labels.items() if _safe(api.supported, channel, cap)
+    ]
+
+
+def _first(values: Iterable[int]) -> int | None:
+    return next(iter(values), None)
+
+
+def _int_suffix(text: str, prefix: str) -> int | None:
+    rest = text.removeprefix(prefix)
+    if rest == text or not rest.isdigit():
+        return None
+    return int(rest)
+
+
+def _normalize_id(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    value = value.strip().upper().replace(":", "").replace("-", "")
+    if len(value) < 6 or value == _UNKNOWN.upper():
+        return None
+    return value
+
+
+@callback
+def async_camera_groups(
+    hosts: Iterable[ReolinkHostHandle],
+) -> dict[tuple[str, int], str]:
+    """Find cameras that are in HA more than once (via an NVR and directly).
+
+    Matches channels by camera UID, serial number or MAC address. Returns an
+    opaque group id per ``(entry_id, channel)`` that belongs to a duplicate
+    group; cameras seen once are not in the result. The ids are derived from
+    the entry ids and channels only, never from the identifiers.
+    """
+    members: list[tuple[tuple[str, int], frozenset[str]]] = []
+    for host in hosts:
+        for channel in host.channels():
+            try:
+                fingerprints = host._fingerprints(channel)  # noqa: SLF001
+            except Exception:  # noqa: BLE001 - grouping is best effort
+                _LOGGER.debug("Cannot read identifiers of %s", host.entry_id)
+                continue
+            if fingerprints:
+                members.append(((host.entry_id, channel), fingerprints))
+
+    # Union-find over shared identifiers.
+    parent = list(range(len(members)))
+
+    def find(i: int) -> int:
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    owner: dict[str, int] = {}
+    for index, (_ref, fingerprints) in enumerate(members):
+        for value in fingerprints:
+            if (other := owner.setdefault(value, index)) != index:
+                parent[find(index)] = find(other)
+
+    groups: dict[int, list[tuple[str, int]]] = {}
+    for index, (ref, _fp) in enumerate(members):
+        groups.setdefault(find(index), []).append(ref)
+    result: dict[tuple[str, int], str] = {}
+    for refs in groups.values():
+        if len({entry_id for entry_id, _ch in refs}) < 2:
+            continue
+        digest = hashlib.sha256(
+            "|".join(f"{e}:{c}" for e, c in sorted(refs)).encode()
+        ).hexdigest()[:16]
+        for ref in refs:
+            result[ref] = f"g{digest}"
+    return result
 
 
 def _trigger_names(triggers: Iterable[Any] | Any) -> tuple[str, ...]:
