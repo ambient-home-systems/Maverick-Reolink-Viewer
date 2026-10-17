@@ -16,7 +16,7 @@ put on it:
 
 | Phase | Outcome | Difficulty | Estimate | Status |
 | --- | --- | --- | --- | --- |
-| 0 | Foundations, CI, adapter layer, hardware discovery | High | 1–2 wk | Done (2026-10-17); one optional re-probe listed under Phase 0 decisions |
+| 0 | Foundations, CI, adapter layer, hardware discovery | High | 1–2 wk | Done (2026-10-17) |
 | 1 | Device details and every setting, with explanations | Standard (catalog) / High (panel shell) | 2–3 wk | Not started |
 | 2 | Event timeline, thumbnails, smooth playback | High (backend) / Very high (player) | 3–5 wk | Not started |
 | 3 | Live view via go2rtc, grid, fullscreen, PTZ | High | 3–4 wk | Not started |
@@ -139,7 +139,7 @@ bridge's compatibility check catches it on day one.
 | 5. Panel shell (`panel_custom` + `StaticPathConfig`) listing devices | Done |
 | 6. `reolink_viewer/probe` (admin) + "Run probe" button with JSON download | Done |
 | 7. `docs/hardware-matrix.md` template + `scripts/probe_to_matrix.py` | Done; matrix waits on the first probe report |
-| Exit: probe run on every owned device, matrix filled, decisions recorded | Done: first run 2026-10-17 on the RLN36 NVR (6 channels) and 3 directly added cameras; see [hardware-matrix.md](hardware-matrix.md) |
+| Exit: probe run on every owned device, matrix filled, decisions recorded | Done: two runs on 2026-10-17 on the RLN36 NVR (6 channels) and 3 directly added cameras; see [hardware-matrix.md](hardware-matrix.md) |
 
 How the probe stays safe:
 
@@ -185,18 +185,23 @@ worth knowing:
 
 ### Phase 0 decisions
 
-Recorded 2026-10-17 from the first probe run (evidence in
-[hardware-matrix.md](hardware-matrix.md)). Owned hardware: an RLN36 NVR with a
-Reolink Duo 3 PoE, two RLC-520A, an E1 Pro, a CX410 and a CX810; the CX410 and CX810
-are also added to HA directly; an E1 Zoom is added directly only. No battery cameras,
-Home Hubs or doorbells.
+Recorded 2026-10-17 from two probe runs (evidence in
+[hardware-matrix.md](hardware-matrix.md)). Owned hardware:
+
+- an RLN36 NVR with a Reolink Duo 3 PoE, two RLC-520A, an E1 Pro, a CX410 and a CX810;
+- the CX410 and CX810 are also added to HA directly, only to get better streaming;
+  the owner may remove those direct entries once live view through the NVR is good;
+- an E1 Zoom added directly only. It doesn't record by design: it's used for
+  snapshots of the washer/dryer panels.
+
+There are no battery cameras, Home Hubs or doorbells.
 
 | Decision | Value | Evidence |
 | --- | --- | --- |
-| Default live source per model | **RTSP for main and sub on every model** (Duo 3 PoE, RLC-520A, E1 Pro, CX410, CX810, E1 Zoom), via the NVR or directly. **HTTP-FLV for `ext`** (RTSP has no `ext`) and as the fallback when RTSP fails. RTMP is not used. | RTSP main was the fastest on every channel (1.7–2.8 s vs 2.1–4.7 s); sub streams took 2.2–9.7 s on every protocol, set by the key-frame interval rather than the protocol; RTMP is off on the directly added cameras and offers no gain. |
-| VOD method per device type | **NVR: `DOWNLOAD`** (MP4 over HTTP). Not `PLAYBACK` (404), not `NVR_DOWNLOAD` (2–18 s prepare, then disconnects, and leaves the NVR busy). NVR `FLV` VOD is unconfirmed, so it's not used until a re-probe. **Standalone cameras and Home Hubs: no decision**: none owned record locally. | DOWNLOAD's first byte arrived in 158–394 ms on all 6 channels, main and sub. |
+| Default live source per model | **RTSP for main and sub on every model** (Duo 3 PoE, RLC-520A, E1 Pro, CX410, CX810, E1 Zoom), via the NVR or directly. **HTTP-FLV for `ext`** (RTSP has no `ext`) and as the fallback when RTSP fails. RTMP is not used. | RTSP main was the fastest on 17 of 18 samples (1.5–3.0 s vs 2.1–4.7 s). RTSP sub beat FLV on 12 of 18 samples (4 slower, 2 ties). Sub streams take 1.7–9.7 s on every protocol, set mostly by the key-frame interval. RTMP is off on the directly added cameras and offers no gain. |
+| VOD method per device type | **NVR: `DOWNLOAD`** (MP4 over HTTP). Not `PLAYBACK` (404), not `FLV` (the NVR disconnects it, even when it runs first), not `NVR_DOWNLOAD` (2–18 s prepare, then disconnects, and leaves the NVR busy). **Standalone cameras and Home Hubs: no decision**: none owned record locally. | DOWNLOAD's first byte arrived in 157–649 ms on all 6 channels, main and sub, in both runs. |
 | H.265 strategy | **No transcoding by default.** Grid and timeline scrubbing use sub streams (H.264 everywhere). HD view: use the H.265 main only when the browser says it can decode it at that resolution (`MediaCapabilities.decodingInfo` with the real width/height; Safari and the iOS Companion app decode HEVC in hardware); otherwise use the H.264 `ext` stream. The Duo 3's 7680×2160 main exceeds the 4096-pixel width limit of many hardware decoders, so its default HD stream is `ext` (2560×720). An opt-in VAAPI/QSV H.265→H.264 transcode on the x86 host stays a Phase 4 option. | 4 of 9 main streams are H.265 (Duo 3, RLC-520A "Garage", CX810, E1 Zoom); every sub and ext stream is H.264. |
-| Per-host concurrency limit | **NVR: 4. Standalone cameras: 3.** (The scheduler default stays 2 for unknown device types.) Revisit after a re-probe with up to 6 streams. | 4 simultaneous FLV sub streams worked on the NVR and on each direct camera with no failures, so 4 is a floor. |
+| Per-host concurrency limit | **NVR: 6. Standalone cameras: 3.** The scheduler default stays 2 for unknown device types. Applied when Phase 2 adds the first real traffic. | The NVR opened 6 simultaneous sub streams on one channel in ~2.7 s each, with no slowdown (6 is the probe's maximum). The direct cameras also reached 6, but slowed down from 4 streams (CX810: 3.6 s to 7.7 s). |
 
 Consequences for later phases:
 
@@ -207,19 +212,19 @@ Consequences for later phases:
 - **Playback (Phase 2)** builds on NVR `DOWNLOAD`. Not yet measured: whether it
   honours HTTP `Range` for seeking, and how fast it starts mid-file. The probe read
   only the first 64 KB.
-- **Thumbnails:** `snapshot_past` answers in 160–300 ms, fast enough for timeline
+- **Thumbnails:** `snapshot_past` answers in 160–490 ms, fast enough for timeline
   hover previews through the thumbnail queue.
-- **Day searches take 1–4 s per channel**, so the planned timeline caching is
+- **Day searches take 1–5 s per channel**, so the planned timeline caching is
   required, not optional.
 - **Duplicate cameras:** the CX410 and CX810 appear twice (via the NVR and directly).
-  Phase 1 should group them as one camera. Live view may use either source; playback
-  must use the NVR.
-- The E1 Zoom has no recordings anywhere the integration can see, so it gets live
-  view only.
-
-Optional follow-up: re-run the probe on this build with **Test concurrent streams =
-6**. It settles NVR FLV VOD (now tested before `NVR_DOWNLOAD`) and finds the real
-stream ceiling.
+  Phase 1 should group them as one camera, and playback must use the NVR. Phase 3
+  should measure live view through the NVR against the direct connection, so the
+  owner can decide whether to drop the direct entries.
+- **NVR limits not measured:** the stream test ran on one NVR channel. The NVR's
+  total across all channels (6 sub streams for a grid, plus a main for full screen)
+  is still unmeasured. Phase 3 adds a multi-channel test before the grid ships.
+- **E1 Zoom:** snapshot-only by design, so it gets snapshots and live view. Phase 1
+  should make snapshots the primary view for it.
 
 Owner's setup (answers to PLAN.md's open decisions, 2026-10-17):
 

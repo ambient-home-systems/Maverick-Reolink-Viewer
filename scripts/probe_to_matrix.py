@@ -97,10 +97,13 @@ def _via(host: dict[str, Any]) -> str:
     return "direct"
 
 
-def _concurrency(host: dict[str, Any]) -> str:
+def _concurrency(host: dict[str, Any], channel: dict[str, Any]) -> str:
     conc = host.get("concurrency") or {}
     if "skipped" in conc:
         return "not tested"
+    if "channel" in conc and conc["channel"] != channel.get("channel"):
+        # The test runs on one channel per host.
+        return f"tested on ch{conc['channel']}"
     if not conc.get("ok"):
         return cell(conc)
     max_ok = conc.get("max_ok", 0)
@@ -142,7 +145,7 @@ def live_rows(reports: Iterable[dict[str, Any]]) -> list[str]:
                     _codec(ch.get("encodings", {}), "main"),
                     _codec(ch.get("encodings", {}), "sub"),
                     *live_cells,
-                    _concurrency(host),
+                    _concurrency(host, ch),
                 ]
             )
             + " |"
