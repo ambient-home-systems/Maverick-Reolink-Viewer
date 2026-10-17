@@ -895,7 +895,7 @@
       "pre_siren": {
         "title": "Pre-siren",
         "summary": "Plays the short pre-alarm tone now.",
-        "what_it_does": "Plays the camera's pre-alarm warning sound once (Baichuan `PreAlarm`). Reolink describes the pre-alarm as a short tone of about 3 seconds.",
+        "what_it_does": "Plays the camera's pre-alarm warning sound once (Baichuan `PreAlarm`). Reolink says the pre-alarm sound may last about 3 seconds.",
         "tradeoffs": "",
         "related": [
           "switch.pre_siren_on_event",
@@ -959,8 +959,8 @@
       "ptz_calibrate": {
         "title": "PTZ calibrate",
         "summary": "Recalibrates pan/tilt positioning.",
-        "what_it_does": "Runs the camera's PTZ calibration (reolink-aio `PtzCheck`): it moves to its end stops and back to re-learn positions. Reolink suggests it when presets or the guard point drift or movement is not smooth.",
-        "tradeoffs": "PTZ control is unavailable while it runs.",
+        "what_it_does": "Runs the camera's PTZ calibration (reolink-aio `PtzCheck`). Reolink says calibration moves the camera to a reference position, then to centre horizontally and vertically, with a model-specific method (not a full rotation in every direction). Reolink suggests it when presets or the guard point drift or movement is not smooth.",
+        "tradeoffs": "PTZ control is disabled while it runs.",
         "related": [
           "button.guard_set",
           "select.ptz_preset"
@@ -968,7 +968,7 @@
         "requires": "PTZ cameras that support calibration",
         "impact": "disruptive",
         "disruptive_when": "any",
-        "impact_note": "The camera sweeps through its full range and ends at a different view.",
+        "impact_note": "The camera moves on its own during calibration and ends at a different view; PTZ control is unavailable meanwhile.",
         "sources": [
           {
             "title": "Reolink: Introduction to Reolink Camera Calibration",
@@ -3634,7 +3634,7 @@
       "motion_sensitivity": {
         "title": "Motion sensitivity",
         "summary": "How sensitive the camera's basic motion detection is.",
-        "what_it_does": "Sets the motion detection sensitivity, 1-50, where a higher value reacts to smaller movements (reolink-aio `set_md_sensitivity`, `SetMdAlarm`/`SetAlarm`). This is pixel-based motion detection, separate from the AI person/vehicle/animal sensitivities.",
+        "what_it_does": "Sets the motion detection sensitivity, 1-50, where a higher value reacts to smaller movements (reolink-aio `set_md_sensitivity`). This is pixel-based motion detection, separate from the AI person/vehicle/animal sensitivities.",
         "tradeoffs": "Higher values catch more motion but trigger more false alerts (leaves, rain, lighting changes); lower values can miss real movement.",
         "related": [
           "binary_sensor.motion",
@@ -3663,7 +3663,7 @@
           "reolink_aio",
           "reolink_support"
         ],
-        "notes": "Range 1-50, same scale as the Reolink app. reolink-aio converts it to the camera's internal inverted value. If the camera uses a sensitivity schedule in the Reolink app, this sets the default value."
+        "notes": "Range 1-50, same scale as the Reolink app. reolink-aio converts it to the camera's internal inverted value (51 - value). On firmware with GetMdAlarm v1 or newer it sends `SetMdAlarm` with `useNewSens` on and one default sensitivity (`newSens.sensDef`). On older firmware it sends `SetAlarm` and writes the value to every period of the sensitivity schedule, so any per-period schedule set in the Reolink app is lost."
       },
       "pir_interval": {
         "title": "PIR interval",
@@ -4101,7 +4101,9 @@
           "number.volume_speak"
         ],
         "requires": "Doorbells with quick reply messages",
-        "impact": "safe",
+        "impact": "disruptive",
+        "disruptive_when": "any",
+        "impact_note": "With a message selected, the doorbell answers visitors on its own with that recorded message.",
         "sources": [
           {
             "title": "How to Set up Quick Reply",
@@ -4188,7 +4190,7 @@
           "reolink_aio",
           "reolink_support"
         ],
-        "notes": "Disabled by default in Home Assistant; enable the entity to use it. The Reolink app shows only Auto and Off; On is exposed by the camera API."
+        "notes": "Disabled by default in Home Assistant; enable the entity to use it. Reolink's article says the app shows only Auto and Off, for the RLC-1212A, RLC-1224A, B1200, P341C, D1200, P345C and CX810; On is exposed by the camera API."
       },
       "day_night_mode": {
         "title": "Day night mode",
@@ -4347,7 +4349,9 @@
           "time.floodlight_schedule_end"
         ],
         "requires": "Cameras with a floodlight or spotlight",
-        "impact": "safe",
+        "impact": "disruptive",
+        "disruptive_when": "any",
+        "impact_note": "On or Schedule can light the scene at once; Off can leave colour night video dark.",
         "sources": [
           {
             "title": "How to Configure Spotlight Settings for Your Camera",
@@ -4492,7 +4496,7 @@
         "requires": "Cameras that expose Clear stream encoder settings",
         "impact": "disruptive",
         "disruptive_when": "any",
-        "impact_note": "Changing encoder settings restarts the Clear stream and changes recording quality.",
+        "impact_note": "Changes the Clear stream quality and recording; the camera may interrupt the stream while applying it (Reolink says only that a resolution change reboots the camera).",
         "sources": [
           {
             "title": "Reolink Stream Settings Guide (Resolution, Frame Rate, Bitrate & More)",
@@ -4528,7 +4532,7 @@
         "requires": "Cameras that allow changing the Clear stream encoding",
         "impact": "disruptive",
         "disruptive_when": "any",
-        "impact_note": "Restarts the Clear stream; H.265 may stop it playing in your browser.",
+        "impact_note": "Changes the Clear stream codec, which may interrupt the stream while the camera applies it; H.265 may stop it playing in your browser.",
         "sources": [
           {
             "title": "How to Set Up Reolink Encoding Format for Optimal Video Quality and Efficiency",
@@ -4564,7 +4568,7 @@
         "requires": "Cameras that expose Clear stream encoder settings",
         "impact": "disruptive",
         "disruptive_when": "any",
-        "impact_note": "Changing encoder settings restarts the Clear stream and changes recording quality.",
+        "impact_note": "Changes the Clear stream quality and recording; the camera may interrupt the stream while applying it (Reolink says only that a resolution change reboots the camera).",
         "sources": [
           {
             "title": "Reolink Stream Settings Guide (Resolution, Frame Rate, Bitrate & More)",
@@ -4802,7 +4806,7 @@
       "post_rec_time": {
         "title": "Post-recording time",
         "summary": "How long the camera keeps recording after a motion or alarm event ends.",
-        "what_it_does": "Sets the post-motion record duration (SetRec `postRec`), choosing from the durations the device offers; Reolink lists e.g. 15 s/30 s/1 min for cameras and 1/2/5/10 min for NVRs. Auto appears on models with AI-based post-recording. Applies to alarm (event) recording.",
+        "what_it_does": "Sets the post-motion record duration (SetRec `postRec`), choosing from the durations the device offers. Reolink lists 15 s/30 s/1 min for PoE and Wi-Fi cameras, 8 s/15 s/30 s for battery cameras and 1/2/5/10 min for NVRs, and some models (e.g. Go Ranger PT) fix it at 15 s. Auto appears on models with AI-based post-recording. Applies to alarm (event) recording.",
         "tradeoffs": "Longer times capture more of what happens after an event but use more storage (and battery on battery cameras).",
         "related": [
           "switch.record",
@@ -4917,11 +4921,8 @@
         ],
         "requires": "Reolink Home Hubs with scene mode",
         "impact": "disruptive",
-        "disruptive_when": [
-          "disarm",
-          "home"
-        ],
-        "impact_note": "Disarmed stops alarms, notifications and recording; Home silences alerts and the siren.",
+        "disruptive_when": "any",
+        "impact_note": "Switching scenes changes alarms, notifications and recording at once: Disarmed stops them, Home silences alerts and the siren, Away enables full alarms.",
         "sources": [
           {
             "title": "Introduction to Scene Mode for Reolink Home Hub",
@@ -4953,7 +4954,7 @@
         "requires": "Cameras that expose Fluent stream encoder settings",
         "impact": "disruptive",
         "disruptive_when": "any",
-        "impact_note": "Changing encoder settings restarts the Fluent stream.",
+        "impact_note": "Changes the Fluent stream quality and recording; the camera may interrupt the stream while applying it (Reolink says only that a resolution change reboots the camera).",
         "sources": [
           {
             "title": "Reolink Stream Settings Guide (Resolution, Frame Rate, Bitrate & More)",
@@ -4989,7 +4990,7 @@
         "requires": "Cameras that allow changing the Fluent stream encoding",
         "impact": "disruptive",
         "disruptive_when": "any",
-        "impact_note": "Restarts the Fluent stream; H.265 may stop it playing in your browser.",
+        "impact_note": "Changes the Fluent stream codec, which may interrupt the stream while the camera applies it; H.265 may stop it playing in your browser.",
         "sources": [
           {
             "title": "How to Set Up Reolink Encoding Format for Optimal Video Quality and Efficiency",
@@ -5025,7 +5026,7 @@
         "requires": "Cameras that expose Fluent stream encoder settings",
         "impact": "disruptive",
         "disruptive_when": "any",
-        "impact_note": "Changing encoder settings restarts the Fluent stream.",
+        "impact_note": "Changes the Fluent stream quality and recording; the camera may interrupt the stream while applying it (Reolink says only that a resolution change reboots the camera).",
         "sources": [
           {
             "title": "Reolink Stream Settings Guide (Resolution, Frame Rate, Bitrate & More)",
@@ -5135,13 +5136,8 @@
         ],
         "requires": "Battery cameras connected directly to Home Assistant (not via an NVR)",
         "impact": "disruptive",
-        "disruptive_when": [
-          "power_saving",
-          "pre_recording",
-          "continuous_recording",
-          "always_on_custom"
-        ],
-        "impact_note": "Always-on modes drain the battery heavily; Power saving records less.",
+        "disruptive_when": "any",
+        "impact_note": "Changes how the battery camera records and how fast the battery drains: always-on modes drain it heavily, Power saving records less.",
         "sources": [
           {
             "title": "Introduction to Battery Mode on Reolink Battery-powered Cameras",
@@ -5624,17 +5620,18 @@
       "siren": {
         "title": "Siren",
         "summary": "Sounds the camera's or hub's siren now.",
-        "what_it_does": "Turning on plays the siren until turned off, or for the given duration; a volume can be set too (reolink-aio `AudioAlarmPlay`). Some models take up to 5 seconds to go quiet after turn-off.",
-        "tradeoffs": "",
+        "what_it_does": "Turning on plays the siren until turned off. With a duration, Home Assistant passes it to reolink-aio as a repeat count, not seconds (`AudioAlarmPlay` `alarm_mode` \"times\", roughly 5 seconds per repeat in reolink-aio). With a volume, a camera first calls `set_volume`, which permanently changes the camera's speaker volume (the Volume number entity). Some models take up to 5 seconds to go quiet after turn-off.",
+        "tradeoffs": "A volume set while sounding the siren stays afterwards and also changes normal camera audio such as two-way talk and alerts.",
         "related": [
           "switch.siren_on_event",
           "number.alarm_volume",
-          "button.pre_siren"
+          "button.pre_siren",
+          "number.volume"
         ],
         "requires": "Cameras with a siren; Home Hubs (hub siren, turn-on only)",
         "impact": "disruptive",
         "disruptive_when": "on",
-        "impact_note": "Makes a loud alarm sound.",
+        "impact_note": "Makes a loud alarm sound. Setting a volume also permanently changes the camera speaker volume.",
         "sources": [
           {
             "title": "Home Assistant: Reolink siren entities",
@@ -5659,7 +5656,7 @@
           "reolink_aio",
           "reolink_support"
         ],
-        "notes": "The Home Hub siren entity supports turn-on and volume only."
+        "notes": "The Home Hub siren entity supports turn-on and volume only. On a Home Hub, turning on with a volume only sets the hub alarm volume (`set_hub_audio`) and does not sound the siren; turning on without a volume sounds it."
       }
     },
     "switch": {
@@ -5700,7 +5697,7 @@
         "title": "Auto tracking",
         "summary": "PTZ camera follows a detected person, vehicle or animal.",
         "what_it_does": "When on, the camera pans/tilts (or digitally tracks, on TrackMix) to follow a detected target, then returns to its starting position after the target stops or disappears for the set times (reolink-aio `SetAiCfg`).",
-        "tradeoffs": "Keeps the subject in view but moves the camera away from its normal view; manual PTZ use interrupts tracking.",
+        "tradeoffs": "Keeps the subject in view but moves the camera away from its normal view; Reolink's troubleshooting advice suggests manual PTZ use can delay tracking.",
         "related": [
           "number.auto_track_disappear_time",
           "number.auto_track_stop_time",
@@ -5843,7 +5840,7 @@
         "title": "Guard return",
         "summary": "PTZ camera goes back to its guard (monitor) position when idle.",
         "what_it_does": "When on, the camera returns to the saved guard position after it has not been moved and nothing was detected for the Guard return time (reolink-aio `SetPtzGuard` `benable`).",
-        "tradeoffs": "",
+        "tradeoffs": "Keeps the camera on its monitored spot, but it will leave a view you set manually once the return time passes.",
         "related": [
           "number.guard_return_time",
           "button.guard_set",
@@ -5851,7 +5848,9 @@
           "switch.auto_tracking"
         ],
         "requires": "PTZ cameras with a guard/monitor point",
-        "impact": "safe",
+        "impact": "disruptive",
+        "disruptive_when": "on",
+        "impact_note": "With guard return on, the camera moves back to its guard position on its own after the return time, away from wherever it was pointed.",
         "sources": [
           {
             "title": "Home Assistant: Reolink number entities",
@@ -6013,7 +6012,7 @@
           "reolink_aio",
           "reolink_support"
         ],
-        "notes": "Some models (e.g. RLC-812A, RLC-824A, CX410, CX810) do not offer this option, per Reolink."
+        "notes": "Reolink's article says its steps apply to all cameras except the RLC-812A, RLC-824A, CX410, CX410W, CX810 and E1 Outdoor CX, which do not offer this option."
       },
       "led": {
         "title": "LED",
@@ -6241,7 +6240,7 @@
         "title": "Privacy mask",
         "summary": "Blacks out the areas you drew as privacy masks.",
         "what_it_does": "Turns the configured privacy-mask rectangles on or off (reolink-aio `SetMask`). Masked areas appear black in live view and recordings.",
-        "tradeoffs": "Hidden areas are not recorded; motion in a masked area can still trigger detection unless excluded from the detection zone.",
+        "tradeoffs": "Hidden areas are not recorded. Reolink does not document whether motion in a masked area is still detected; exclude it from the detection zone if that matters.",
         "related": [
           "switch.privacy_mode",
           "camera.main"
@@ -6276,7 +6275,7 @@
         "title": "Privacy mask lens",
         "summary": "Privacy mask for one lens of a dual-lens camera.",
         "what_it_does": "Same as Privacy mask, but for a single lens of a dual-lens camera (reolink-aio `SetMask` on that lens's channel).",
-        "tradeoffs": "Hidden areas are not recorded; motion in a masked area can still trigger detection unless excluded from the detection zone.",
+        "tradeoffs": "Hidden areas are not recorded. Reolink does not document whether motion in a masked area is still detected; exclude it from the detection zone if that matters.",
         "related": [
           "switch.privacy_mask",
           "switch.privacy_mode"
@@ -6310,7 +6309,7 @@
       "privacy_mode": {
         "title": "Privacy mode",
         "summary": "Shuts the camera's video and alarms off for privacy.",
-        "what_it_does": "When on, the camera stops live view, streams and alarms and shuts down its API, so almost all other entities become unavailable until it is turned off (Baichuan `SetPrivacyMode`). Reolink says the camera restarts when this changes.",
+        "what_it_does": "When on, the camera stops live view, streams and alarms and shuts down its API, so almost all other entities become unavailable until it is turned off (Baichuan `SetPrivacyMode`).",
         "tradeoffs": "Full privacy, but no recording, detection or notifications while on.",
         "related": [
           "switch.privacy_mask",
@@ -6340,7 +6339,7 @@
           "reolink_aio",
           "reolink_support"
         ],
-        "notes": "Stays available while on. Turn it off before changing other settings in automations. Reolink: only the super admin can change it."
+        "notes": "Stays available while on. Turn it off before changing other settings in automations. The German version of Reolink's article says only the super admin account can turn it on or off; the English text was not checked. Whether the camera restarts when it changes is not confirmed."
       },
       "ptz_patrol": {
         "title": "PTZ patrol",
