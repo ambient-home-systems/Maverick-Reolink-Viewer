@@ -43,7 +43,13 @@ from . import bridge
 from .bridge import VodFile, VodMethod
 from .devices import PlaybackSource
 from .mp4 import BoxScanner
-from .mp4index import build_index, free_box, plan_reserve
+from .mp4index import (
+    OffsetShifter,
+    OffsetShiftError,
+    build_index,
+    free_box,
+    plan_reserve,
+)
 from .scheduler import Priority, Scheduler, StreamTicket
 from .timeconv import from_ms
 
@@ -62,7 +68,8 @@ SUFFIX = ".mp4"
 PART_SUFFIX = ".part"
 # Part of each file's cache id: bumping it retires files of an older layout
 # (they become unknown files, evicted first). 2: segment index added.
-LAYOUT = 2
+# 3: also indexed when fragments use absolute offsets (the NVR's do).
+LAYOUT = 3
 
 
 class VodCacheError(Exception):
@@ -143,6 +150,8 @@ class VodCache:
         self._session = session
         self._entries: dict[str, Entry] = {}
         self._media: dict[str, dict[str, Any]] = {}
+        # Recordings whose offsets could not be shifted: cached without index.
+        self._no_index: set[str] = set()
         self._media_store: Store[dict[str, Any]] = Store(hass, 1, MEDIA_STORE_KEY)
         self._closed = False
 
@@ -277,8 +286,11 @@ class VodCache:
         scanner = BoxScanner(max_boxes=3)
         duration_s = (rec.end_ms - rec.start_ms) / 1000
         head = bytearray()
-        planned = False
+        planned = rec.cache_id in self._no_index
+        if planned:
+            entry.timing["indexed"] = "no: offsets could not be shifted before"
         index_at = reserve = 0
+        shifter: OffsetShifter | None = None
         fd = await self._hass.async_add_executor_job(_open_write, entry.part_path)
         try:
             async with self._session().get(
@@ -308,10 +320,17 @@ class VodCache:
                         planned = True
                         if plan.insert_at is not None:
                             index_at, reserve = plan.insert_at, plan.reserve
-                            head[index_at:index_at] = free_box(reserve)
+                            rest = bytes(head[index_at:])
+                            del head[index_at:]
+                            head += free_box(reserve)
+                            # Absolute data offsets after the room move with it.
+                            shifter = OffsetShifter(reserve)
+                            head += self._shift(rec, shifter, rest)
                         else:
                             entry.timing["indexed"] = f"no: {plan.reason}"
                         chunk = bytes(head)
+                    elif shifter is not None:
+                        chunk = self._shift(rec, shifter, chunk)
                     buffer += chunk
                     # Write small at first so playback can start at once.
                     if len(buffer) >= (WRITE_BATCH if entry.written else 64 * 1024):
@@ -319,6 +338,8 @@ class VodCache:
                         buffer.clear()
                 if not planned:
                     buffer += head
+                if shifter is not None:
+                    buffer += shifter.finish()
                 if buffer:
                     await self._write(entry, fd, bytes(buffer))
             if reserve:
@@ -332,6 +353,14 @@ class VodCache:
         seconds = max(time.monotonic() - began, 1e-3)
         entry.timing["mbit_s"] = round(entry.written * 8 / seconds / 1e6, 1)
         await self._remember_media(rec, scanner, entry.timing.get("indexed"))
+
+    def _shift(self, rec: Recording, shifter: OffsetShifter, data: bytes) -> bytes:
+        try:
+            return shifter.feed(data)
+        except OffsetShiftError as err:
+            # The next fill of this recording leaves the file as it is.
+            self._no_index.add(rec.cache_id)
+            raise VodCacheError(f"cannot shift offsets for the index: {err}") from err
 
     async def _write_index(
         self, entry: Entry, fd: int, index_at: int, reserve: int

@@ -14,15 +14,18 @@ import pytest
 from custom_components.reolink_viewer import bridge, vodcache
 from custom_components.reolink_viewer.bridge import CameraUrl, VodFile, VodMethod
 from custom_components.reolink_viewer.devices import PlaybackSource
+from custom_components.reolink_viewer.mp4index import OffsetShifter, OffsetShiftError
 from custom_components.reolink_viewer.scheduler import Priority, Scheduler
 from custom_components.reolink_viewer.vodcache import Recording, VodCache, VodCacheError
 from homeassistant.core import HomeAssistant
 
 from .mp4_fixtures import FTYP, av_moov, fragmented_av, mp4_file
+from .test_mp4index import _tfhd_bases
 
 SOURCE = PlaybackSource("cam1", "Garage", "entry1", 16)
 BODY = mp4_file(moov_first=True, mdat_bytes=600_000)
 FRAG = fragmented_av(20)
+FRAG_ABSOLUTE = fragmented_av(20, absolute=True)
 
 
 def rec(name: str = "0-16-1-20261017120000-00000", stream: str = "sub") -> Recording:
@@ -48,11 +51,11 @@ async def media(socket_enabled: None) -> AsyncGenerator[Server]:
             return web.Response(status=404)
         if name == "empty":
             return web.Response(body=b"", content_type="video/mp4")
-        body = FRAG if name == "frag" else BODY
+        body = {"frag": FRAG, "fragabs": FRAG_ABSOLUTE}.get(name, BODY)
         resp = web.StreamResponse(headers={"Content-Type": "video/mp4"})
         resp.enable_chunked_encoding()
         await resp.prepare(request)
-        if name == "frag":
+        if name.startswith("frag"):
             # The header in small pieces: the fill waits for the first moof.
             for start in range(0, 3000, 300):
                 await resp.write(body[start : start + 300])
@@ -338,3 +341,39 @@ async def test_index_failure_keeps_the_recording(
     stored = entry.path.read_bytes()
     head = len(FTYP + av_moov())
     assert stored[head + 4 : head + 8] == b"free"
+
+
+async def test_absolute_offsets_are_shifted_for_the_index(
+    cache: tuple[VodCache, Scheduler, FakeHost], media: Server
+) -> None:
+    """The NVR's absolute offsets move with the room left for the index."""
+    vc, _sched, _host = cache
+    entry = await vc.async_open(rec("fragabs"))
+    await vc.async_wait(entry, complete=True)
+    assert entry.timing["indexed"] == "yes"
+    stored = entry.path.read_bytes()
+    bases = _tfhd_bases(stored)
+    assert len(bases) == 40
+    assert all(moof == base for moof, base in bases)
+
+
+async def test_unshiftable_stream_is_cached_without_index(
+    cache: tuple[VodCache, Scheduler, FakeHost],
+    media: Server,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A stream the shifter cannot follow fails once, then is kept as it is."""
+    vc, _sched, _host = cache
+
+    def broken(self: OffsetShifter, data: bytes) -> bytes:
+        raise OffsetShiftError("odd box")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(OffsetShifter, "feed", broken)
+        entry = await vc.async_open(rec("fragabs"))
+        with pytest.raises(VodCacheError, match="cannot shift offsets"):
+            await vc.async_wait(entry, complete=True)
+    again = await vc.async_open(rec("fragabs"))
+    await vc.async_wait(again, complete=True)
+    assert again.timing["indexed"] == "no: offsets could not be shifted before"
+    assert again.path.read_bytes() == FRAG_ABSOLUTE

@@ -8,8 +8,10 @@ it jump straight to the fragment it needs.
 
 The cache reserves room for the index while it downloads (:func:`plan_reserve`
 places a ``free`` box after ``moov``) and fills it in once the file is
-complete (:func:`build_index`), so no byte of the recording moves. Files whose
-fragments use absolute data offsets are left as they are.
+complete (:func:`build_index`). Everything after the reserved box moves by its
+size. The NVR's track fragments give absolute file positions
+(``base_data_offset`` in ``tfhd``), so :class:`OffsetShifter` adds that size to
+each as the file streams by.
 """
 
 from dataclasses import dataclass
@@ -22,6 +24,8 @@ from .mp4 import Box, parse_box_header
 
 # Give up planning when moov and the first moof are not within this prefix.
 PLAN_LIMIT = 1024 * 1024
+# A moof is held whole to shift its offsets; larger ones end the fill.
+MAX_MOOF = 4 * 1024 * 1024
 # Room for one reference per second per track (the NVR's fragments are ~2 s).
 _REFS_PER_SECOND = 1.0
 _SPARE_REFS = 32
@@ -74,8 +78,8 @@ def plan_reserve(prefix: bytes, duration_s: float) -> Plan | None:
     """Decide from the start of a download where to reserve the index.
 
     Returns None while more bytes are needed. The box goes right after moov
-    when moov is followed by a moof whose track fragments use offsets relative
-    to the moof (moving later bytes then changes nothing they point at).
+    when moov is followed by a moof. The bytes after it are then fed through
+    an :class:`OffsetShifter`.
     """
     offset = 0
     moov: Box | None = None
@@ -90,8 +94,6 @@ def plan_reserve(prefix: bytes, duration_s: float) -> Plan | None:
                 return Plan(None, reason=f"{box.type} after moov")
             if len(prefix) < box.end:
                 return _undecided(prefix, "first moof incomplete")
-            if _absolute_offsets(prefix[box.payload : box.end]):
-                return Plan(None, reason="absolute data offsets")
             tracks = _count(prefix[moov.payload : moov.end], "trak")
             if not tracks:
                 return Plan(None, reason="no tracks")
@@ -102,6 +104,107 @@ def plan_reserve(prefix: bytes, duration_s: float) -> Plan | None:
             if len(prefix) < box.end:
                 return _undecided(prefix, "moov incomplete")
             moov = box
+        offset = box.end
+
+
+class OffsetShiftError(Exception):
+    """The stream cannot be followed to shift its offsets."""
+
+
+class OffsetShifter:
+    """Add ``shift`` to every absolute data offset of a streaming MP4.
+
+    Feed it the bytes that follow the reserved box, from a top-level box
+    boundary, in order. Each moof is held until it is complete, its
+    ``tfhd.base_data_offset`` values are moved, and it is passed on; other
+    boxes pass through as they come. An ``mfra`` (absolute offsets too) is
+    turned into a ``free`` box, which players skip.
+    """
+
+    def __init__(self, shift: int) -> None:
+        """Initialize the shifter."""
+        self._shift = shift
+        self._pending = bytearray()  # an incomplete box header or moof
+        self._passing = 0  # bytes of the current box still to pass through
+        self._to_end = False  # the current box runs to the end of the stream
+
+    def feed(self, data: bytes) -> bytes:
+        """Return the bytes ready to write (the input, shifted, maybe later)."""
+        out = bytearray()
+        view = memoryview(data)
+        while view:
+            if self._to_end:
+                out += view
+                break
+            if self._passing:
+                n = min(self._passing, len(view))
+                out += view[:n]
+                view = view[n:]
+                self._passing -= n
+                continue
+            # What is needed can grow once more of the header is known.
+            take = min(len(view), self._need() - len(self._pending))
+            self._pending += view[:take]
+            view = view[take:]
+            if len(self._pending) >= self._need():
+                out += self._box_ready()
+        return bytes(out)
+
+    def finish(self) -> bytes:
+        """Return what is left at the end of the stream (passed on as it is)."""
+        rest, self._pending = bytes(self._pending), bytearray()
+        return rest
+
+    def _need(self) -> int:
+        """How many bytes the pending box needs before it can be handled."""
+        if len(self._pending) < 8:
+            return 8
+        size = int.from_bytes(self._pending[:4], "big")
+        if size == 1:
+            if len(self._pending) < 16:
+                return 16
+            size = int.from_bytes(self._pending[8:16], "big")
+        if self._pending[4:8] == b"moof" and size:
+            if size > MAX_MOOF:
+                raise OffsetShiftError(f"moof of {size} bytes")
+            return size
+        return len(self._pending)  # the header is enough
+
+    def _box_ready(self) -> bytes:
+        box = parse_box_header(bytes(self._pending[:16]), 0)
+        if box is None:
+            raise OffsetShiftError("unparseable box header")
+        data, self._pending = self._pending, bytearray()
+        if box.type == "moof":
+            _shift_moof(data, box.header, self._shift)
+            return bytes(data)
+        if box.type == "mfra":
+            data[4:8] = b"free"
+        if box.size is None:
+            self._to_end = True
+        else:
+            self._passing = box.size - len(data)
+        return bytes(data)
+
+
+def _shift_moof(moof: bytearray, header: int, shift: int) -> None:
+    """Move every tfhd.base_data_offset of a moof (in place)."""
+    offset = header
+    while offset + 8 <= len(moof):
+        box = parse_box_header(bytes(moof[offset : offset + 16]), offset)
+        if box is None or box.end is None or box.end > len(moof):
+            raise OffsetShiftError("malformed moof")
+        if box.type == "traf":
+            child = box.payload
+            while child + 8 <= box.end:
+                inner = parse_box_header(bytes(moof[child : child + 16]), child)
+                if inner is None or inner.end is None or inner.end > box.end:
+                    raise OffsetShiftError("malformed traf")
+                at = inner.payload
+                if inner.type == "tfhd" and moof[at + 3] & _TFHD_BASE_OFFSET:
+                    (base,) = struct.unpack_from(">Q", moof, at + 8)
+                    struct.pack_into(">Q", moof, at + 8, base + shift)
+                child = inner.end
         offset = box.end
 
 
@@ -180,16 +283,6 @@ def _children(data: bytes) -> list[tuple[str, bytes]]:
 
 def _count(data: bytes, box_type: str) -> int:
     return sum(1 for t, _ in _children(data) if t == box_type)
-
-
-def _absolute_offsets(moof: bytes) -> bool:
-    for box_type, traf in _children(moof):
-        if box_type != "traf":
-            continue
-        for child_type, payload in _children(traf):
-            if child_type == "tfhd" and _flags(payload) & _TFHD_BASE_OFFSET:
-                return True
-    return False
 
 
 def _flags(payload: bytes) -> int:
