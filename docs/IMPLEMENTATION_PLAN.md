@@ -18,7 +18,7 @@ put on it:
 | --- | --- | --- | --- | --- |
 | 0 | Foundations, CI, adapter layer, hardware discovery | High | 1–2 wk | Done (2026-10-17) |
 | 1 | Device details and every setting, with explanations | Standard (catalog) / High (panel shell) | 2–3 wk | Done (2026-10-17) |
-| 2 | Event timeline, thumbnails, smooth playback | High (backend) / Very high (player) | 3–5 wk | In progress: 2A built; timeline and auto-advance targets met on hardware (v0.2.3); slow video start traced to thumbnails holding the browser's connections, fixed in v0.2.4, re-check pending. 2B not started |
+| 2 | Event timeline, thumbnails, smooth playback | High (backend) / Very high (player) | 3–5 wk | In progress: 2A built; timeline and auto-advance targets met on hardware; video start inside long recordings still 1.6–2.8 s after v0.2.4, measured per request in v0.2.5. 2B not started |
 | 3 | Live view via go2rtc, grid, fullscreen, PTZ | High | 3–4 wk | Not started |
 | 4 | Performance, mobile, packaging, first release | Standard | 2–3 wk | Not started |
 | 5 | Optional R&D: Baichuan live/playback | Very high | 4–8 wk, time-boxed with gates | Not started |
@@ -425,7 +425,7 @@ gets no Playback tab.
 | 2. Backend: scheduler limits + stream budget, event list from the bridge, timeline commands and cache, UTC conversion with DST, thumbnails, VOD and clip views | Done (v0.2.0): see "2A as built" below |
 | 2. Frontend: Playback tab, canvas timeline, calendar, event list, simple player, debug panel | Done (v0.2.0): checked in Chromium with synthetic recordings (desktop and iPhone-sized layout) |
 | Exit on LAN: timeline < 1 s cached, < 3 s cold | **Met** (v0.2.2, three cameras): today 49–198 ms, recent past days 56–126 ms from the background fetch, cached 54–276 ms. A day older than a week still costs the NVR's 4–6 s search on first open |
-| Exit on LAN: clicking an event starts video in < 2 s on the sub stream | v0.2.3: 521–605 ms in short recordings (pass). 1077–5428 ms deep inside 25-minute recordings (fail): thumbnail requests held the browser's connections. Fixed in v0.2.4; re-check pending |
+| Exit on LAN: clicking an event starts video in < 2 s on the sub stream | Short recordings: 521–605 ms (pass). Deep inside long recordings, v0.2.4: 1631–2842 ms in a 130 MB file and 1841–1944 ms in a 56 MB file (fail), still growing with file size. v0.2.5 reports each video request's timing to show why |
 | Exit on LAN: auto-advance to the next file | **Met** (v0.2.3, three cameras): through the preloaded file, with gaps of 3, 5 and 80 ms |
 
 What the playback check measures (`probe_playback.py`, opt-in, read-only, every
@@ -678,6 +678,39 @@ recordings carried an index, yet Chrome took 1–5 s to report metadata.
   most), and is cleared when the day changes. Thumbnails are cacheable, so
   each card then shows its image from the browser cache.
   - **Result:** the same harness started the first event in 131 ms.
+
+#### Fifth hardware check (2026-10-19, v0.2.4, Chrome on the LAN)
+
+| Camera | Events → first frame | Recording | Notes |
+| --- | --- | --- | --- |
+| Front Yard Left | 6149 (URL 3935 ms), 1944, 1841 ms | 56 MB, indexed | auto-advance gap 580 ms |
+| Front Yard Right | 2842, 1631, 1714 ms | 130 MB, cached before a restart | auto-advance gap 0 ms |
+
+Front Yard Right's first run showed no events: "event search failed (ApiError)".
+Changing the day and back showed them. So the NVR's event search fails now
+and then and works when asked again.
+
+Findings and changes (v0.2.5):
+
+1. **The play URL waited for an NVR search (3.9 s).** Finding the recording
+   to play went through the day's 60 s refresh. It now uses the copy of the
+   day in memory, and searches again only if the recording is not in it.
+2. **Intermittent event search failures.**
+   - The bridge asks once more after 1 s.
+   - A copy of today whose event search failed is never served from memory
+     or as a stale copy.
+   - The panel asks again after 10 s, up to 3 times in a row.
+   - The report names the device's code (e.g. "ApiError -12").
+3. **Video start still grows with file size** (about 1 s plus 12 ms per MB,
+   close to this LAN's transfer rate). That suggests Chrome reads the whole
+   file, although files rebuilt like the NVR's start from the index in
+   Chromium for H.264 (0.18 MB read) and VP9. The playback check now lists
+   each video request Chrome makes for an event: when it started, how long it
+   waited for a connection, the server's answer time and how long it ran.
+   Recordings loaded from disk after a restart report whether they are
+   indexed. If Chrome reads the whole file despite the index, the next step
+   is to store cached recordings as plain (non-fragmented, `moov` first)
+   MP4, which every browser seeks in at once.
 
 #### 2A as built (v0.2.0)
 

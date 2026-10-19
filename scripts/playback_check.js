@@ -82,6 +82,27 @@
     if (cache.error) parts.push(`error ${cache.error}`);
     return `server: ${parts.join(", ")}`;
   };
+  // The video requests Chrome finished or cancelled since `began`: when each
+  // started, how long it waited for a connection, the server's answer time and
+  // how long the transfer ran. One long transfer = the whole file was read.
+  const requestReport = (began, playedUrl) => {
+    const token = playedUrl ? new URL(playedUrl, location.href).pathname : "";
+    const entries = performance
+      .getEntriesByType("resource")
+      .filter((e) => e.initiatorType === "video" && e.startTime >= began - 5);
+    if (!entries.length) return "requests: none finished yet";
+    const sent = entries.filter((e) => e.requestStart > 0);
+    const parts = sent.slice(0, 10).map((e, i) => {
+      const mine = token && new URL(e.name).pathname === token ? "" : " (other file)";
+      return (
+        `#${i + 1}${mine} +${Math.round(e.startTime - began)} ms: wait ${Math.round(e.requestStart - e.startTime)}` +
+        ` · answer ${Math.round(e.responseStart - e.requestStart)} · ran ${Math.round(e.responseEnd - e.responseStart)} ms`
+      );
+    });
+    const more = sent.length > 10 ? ` | … ${sent.length - 10} more` : "";
+    const unsent = entries.length - sent.length;
+    return `requests: ${sent.length} sent${unsent ? `, ${unsent} cancelled before sending` : ""}: ${parts.join(" | ")}${more}`;
+  };
   // Times of the video element's events after a play request.
   const watchVideo = (began) => {
     const seen = {};
@@ -136,6 +157,8 @@
   if (!events.length) log("B skipped: no events today");
   for (const ev of events) {
     const seg = day.segments.find((s) => ev.start >= s.start && ev.start < s.end);
+    performance.clearResourceTimings();
+    performance.setResourceTimingBufferSize(1000);
     const began = performance.now();
     const video = watchVideo(began);
     await el.playAt(ev.start, began);
@@ -148,6 +171,8 @@
         ` [URL ${ms(m.urlMs)} · metadata ${ms(video.seen.loadedmetadata)} · seeked ${ms(video.seen.seeked)} · playing ${ms(video.seen.playing)}]` +
         ` ${m.delivery ?? "?"} · ${m.stream ?? "?"} ${m.codec ?? ""}${el._playFailure ? ` FAILED: ${el._playFailure}` : ""}`,
     );
+    await sleep(300);
+    log(`     ${requestReport(began, el._playing?.url)}`);
     if (seg) log(`     ${await fillReport(seg)}`);
     await sleep(2000);
   }
