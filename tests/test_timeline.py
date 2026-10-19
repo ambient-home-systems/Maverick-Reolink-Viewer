@@ -57,6 +57,7 @@ class FakeHost:
         self.searches: list[tuple[datetime, datetime, str]] = []
         self.day_searches = 0
         self.fail = False
+        self.events_fail = False
         self.gate: asyncio.Event | None = None
         self.days: list[date] = []
 
@@ -72,6 +73,8 @@ class FakeHost:
         if self.fail:
             raise RuntimeError("device busy")
         files = [f for f in self.files[stream] if f.end >= start and f.start <= end]
+        if self.events_fail:
+            return DaySearch(files, [], "ApiError")
         events = [e for e in self.events if e.end >= start and e.start <= end]
         return DaySearch(files, events)
 
@@ -422,3 +425,60 @@ def test_match_segment() -> None:
     c = Segment(1010, 1990, "c", None, [])
     assert match_segment([a, b, c], target) is b
     assert match_segment([Segment(3000, 4000, "x", None, [])], target) is None
+
+
+async def test_failed_event_search_keeps_events_and_searches_again(
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    host: FakeHost,
+    service: TimelineService,
+    clock: Clock,
+) -> None:
+    """Events found before survive a failed event search, which is retried."""
+    host.files["sub"] = [vf(wall(2026, 10, 17, 12, 55), 1)]
+    host.events = [
+        VodEvent(
+            wall(2026, 10, 17, 12, 55, 10),
+            wall(2026, 10, 17, 12, 55, 30),
+            ("PERSON",),
+            "20261017125500",
+        )
+    ]
+    day, _ = await service.async_day(SOURCE, date(2026, 10, 17))
+    assert len(day.events) == 1
+
+    # The refresh's event search fails: the event stays.
+    host.events_fail = True
+    clock.advance(70)
+    day, timing = await service.async_day(SOURCE, date(2026, 10, 17))
+    assert timing["cache"] == "incremental"
+    assert len(day.events) == 1
+    assert day.events_error == "ApiError"
+    first_window = host.searches[-1][0]
+    # The next refresh searches the same window again.
+    host.events_fail = False
+    clock.advance(70)
+    day, _ = await service.async_day(SOURCE, date(2026, 10, 17))
+    assert host.searches[-1][0] == first_window
+    assert day.events_error is None
+
+    # A past day whose event search failed is not kept: it is searched again.
+    host.events_fail = True
+    past, _ = await service.async_day(SOURCE, date(2026, 10, 15))
+    assert not past.complete
+    searches = len(host.searches)
+    await service.async_day(SOURCE, date(2026, 10, 15))
+    assert len(host.searches) == searches + 1
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=11))
+    await hass.async_block_till_done()
+    stored = hass_storage.get(f"reolink_viewer.timeline.{SOURCE.key}", {})
+    assert "2026-10-15" not in stored.get("data", {}).get("sub", {})
+
+    # A day stored with a failed event search (older versions) is searched again.
+    host.events_fail = False
+    data = await service._data(SOURCE.key)
+    data["sub"]["2026-10-14"] = Day(
+        "2026-10-14", 0, 1, complete=True, events_error="ApiError"
+    ).to_dict()
+    _, timing = await service.async_day(SOURCE, date(2026, 10, 14))
+    assert timing["cache"] == "fresh"
