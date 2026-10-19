@@ -303,7 +303,7 @@ async def test_months(
 async def test_warm_uses_prefetch_priority(
     host: FakeHost, service: TimelineService
 ) -> None:
-    """Warming searches today for each camera at prefetch priority; errors pass."""
+    """Warming searches at prefetch priority; errors pass."""
     priorities: list[Priority] = []
     real_run = Scheduler.run
 
@@ -315,7 +315,34 @@ async def test_warm_uses_prefetch_priority(
         await service.async_warm([SOURCE])
         host.fail = True
         await service.async_warm([PlaybackSource("cam2", "Yard", "entry1", 5)])
-    assert priorities == [Priority.PREFETCH, Priority.PREFETCH]
+    # Today, then October's recording days, for each camera.
+    assert priorities == [Priority.PREFETCH] * 4
+
+
+async def test_warm_fetches_recent_past_days_once(
+    hass: HomeAssistant, host: FakeHost, service: TimelineService
+) -> None:
+    """Past days with recordings are searched once, newest first, then kept."""
+    host.days = [date(2026, 10, 16), date(2026, 10, 12), date(2026, 10, 2)]
+    host.files["sub"] = [
+        vf(wall(2026, 10, 16, 9, 0), 2),
+        vf(wall(2026, 10, 12, 9, 0), 2),
+    ]
+    await service.async_warm([SOURCE])
+    searched = [start.date() for start, _end, _stream in host.searches]
+    # Today, then the two recorded days of the last week (not 2 October).
+    assert searched == [date(2026, 10, 17), date(2026, 10, 16), date(2026, 10, 12)]
+    _, timing = await service.async_day(SOURCE, date(2026, 10, 12))
+    assert timing["cache"] == "memory"
+    # Stored days are not searched again.
+    await service.async_warm([SOURCE])
+    assert len(host.searches) == 3  # today is still within its TTL
+
+    # Only one past-day warm runs at a time.
+    service._warming_past = True
+    service.clear()
+    await service.async_warm([PlaybackSource("cam2", "Yard", "entry1", 5)])
+    assert host.day_searches == 1  # no month search for the second camera
 
 
 async def test_segment_lookup(host: FakeHost, service: TimelineService) -> None:
