@@ -17,12 +17,17 @@ function decoder(): DecodingInfo | undefined {
   return decodingInfo ? decodingInfo.bind(caps) : undefined;
 }
 
-/** Can this browser play the main stream described by `info`? */
+/**
+ * Can this browser play the main stream described by `info`? With no
+ * information yet (no main recording cached), HD may be tried: the player
+ * falls back to the sub stream if it fails, and the first main recording
+ * cached tells the next check what it is.
+ */
 export async function canPlayMain(
   info: MediaInfo | null,
   decodingInfo: DecodingInfo | undefined = decoder(),
 ): Promise<StreamDecision> {
-  if (!info) return { main: false, reason: "main stream not seen yet" };
+  if (!info) return { main: true, reason: "not tried yet: falls back to SD if this browser cannot play it" };
   if (!info.width || !info.height) return { main: false, reason: "main stream size unknown" };
   const size = `${info.codec} at ${info.width}×${info.height}`;
   if (!decodingInfo) {

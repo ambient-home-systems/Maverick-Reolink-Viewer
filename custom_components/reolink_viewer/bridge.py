@@ -14,7 +14,7 @@ Methods on :class:`ReolinkHostHandle` that perform device I/O are prefixed with
 """
 
 import asyncio
-from collections.abc import Iterable
+from collections.abc import Awaitable, Iterable
 from dataclasses import asdict, dataclass, field, fields, is_dataclass
 from datetime import date, datetime, tzinfo
 from enum import StrEnum
@@ -23,6 +23,7 @@ import importlib
 from importlib.metadata import PackageNotFoundError, version
 import logging
 import re
+import time
 from typing import TYPE_CHECKING, Any, cast
 
 from homeassistant.config_entries import ConfigEntry
@@ -275,6 +276,8 @@ class DaySearch:
     files: list[VodFile]
     events: list[VodEvent]
     events_error: str | None = None
+    # How long each search took (ms): "files_ms" and "events_ms".
+    timing: dict[str, float] = field(default_factory=dict)
 
 
 def _reolink_time_id(value: datetime) -> str:
@@ -829,10 +832,25 @@ class ReolinkHostHandle:
         ``start``/``end`` are device wall-clock times. An event search failure
         leaves the recordings usable (``events_error``).
         """
+        timing: dict[str, float] = {}
+
+        async def timed[T](name: str, call: Awaitable[T]) -> T:
+            began = time.monotonic()
+            try:
+                return await call
+            finally:
+                timing[name] = round((time.monotonic() - began) * 1000, 1)
+
         files_result, events_result = await asyncio.gather(
-            self._api.request_vod_files(channel, start, end, stream=stream),
-            self._api.baichuan.search_vod_type(
-                channel=channel, start=start, end=end, stream=stream
+            timed(
+                "files_ms",
+                self._api.request_vod_files(channel, start, end, stream=stream),
+            ),
+            timed(
+                "events_ms",
+                self._api.baichuan.search_vod_type(
+                    channel=channel, start=start, end=end, stream=stream
+                ),
             ),
             return_exceptions=True,
         )
@@ -843,9 +861,9 @@ class ReolinkHostHandle:
         if isinstance(events_result, BaseException):
             if isinstance(events_result, asyncio.CancelledError):
                 raise events_result
-            return DaySearch(files, [], f"{type(events_result).__name__}")
+            return DaySearch(files, [], f"{type(events_result).__name__}", timing)
         _by_id, by_trigger = events_result
-        return DaySearch(files, _events(by_trigger))
+        return DaySearch(files, _events(by_trigger), timing=timing)
 
     async def async_recording_days(
         self, channel: int, start: datetime, end: datetime
@@ -1063,12 +1081,18 @@ def _vod_file(f: Any, stream: str) -> VodFile:
 
 
 def _events(by_trigger: Any) -> list[VodEvent]:
-    """Flatten the Baichuan search: one event per item, with all its types."""
+    """Flatten the Baichuan search: one event per moment, with all its types.
+
+    An item listed under several triggers is one event. The NVR also sends a
+    separate alarm record per detection type for the same moment (a vehicle
+    and the motion it caused start together): records of the same recording
+    that start at the same second are merged, ending at the latest end.
+    """
     seen: dict[int, Any] = {}
     for items in by_trigger.values():
         for item in items:
             seen.setdefault(id(item), item)
-    events = []
+    merged: dict[tuple[str, datetime], VodEvent] = {}
     for item in seen.values():
         try:
             start = item.start_time.replace(tzinfo=None)
@@ -1077,9 +1101,12 @@ def _events(by_trigger: Any) -> list[VodEvent]:
         except Exception:  # skip malformed items
             _LOGGER.debug("Skipping a malformed event", exc_info=True)
             continue
-        events.append(VodEvent(start, end, _trigger_names(item.bc_triggers), file_id))
-    events.sort(key=lambda e: (e.start, e.end))
-    return events
+        types = _trigger_names(item.bc_triggers)
+        if (known := merged.get((file_id, start))) is not None:
+            types = tuple(dict.fromkeys((*known.types, *types)))
+            end = max(end, known.end)
+        merged[file_id, start] = VodEvent(start, end, types, file_id)
+    return sorted(merged.values(), key=lambda e: (e.start, e.end))
 
 
 def _trigger_names(triggers: Iterable[Any] | Any) -> tuple[str, ...]:

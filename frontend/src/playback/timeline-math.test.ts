@@ -199,7 +199,10 @@ describe("codec decisions", () => {
     });
     expect((await canPlayMain(info, answer(false))).main).toBe(false);
     expect((await canPlayMain(info, answer(true, false))).reason).toMatch(/smoothly/);
-    expect((await canPlayMain(null, answer(true))).reason).toBe("main stream not seen yet");
+    // Never seen: HD may be tried (the player falls back to SD).
+    const untried = await canPlayMain(null, answer(false));
+    expect(untried.main).toBe(true);
+    expect(untried.reason).toMatch(/not tried yet/);
     expect((await canPlayMain({ ...info, width: null }, answer(true))).main).toBe(false);
     expect((await canPlayMain(info, undefined)).main).toBe(false);
     expect((await canPlayMain(info, () => Promise.reject(new Error("x")))).main).toBe(false);

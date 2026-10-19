@@ -175,6 +175,16 @@ async def test_past_day_cached_in_memory_and_store(
     assert again.segments == day.segments
     assert len(host.searches) == 1
 
+    # Days stored in an older format are searched again; months are kept.
+    stored["format"] = 1
+    stored["months"]["2026-09"] = [3]
+    older = TimelineService(hass, Scheduler(default_limit=2))
+    _, timing = await older.async_day(SOURCE, date(2026, 10, 16))
+    assert timing["cache"] == "fresh"
+    assert len(host.searches) == 2
+    days, timing = await older.async_days(SOURCE, 2026, 9)
+    assert (days, timing["cache"]) == ([3], "store")
+
 
 async def test_today_ttl_and_incremental_refresh(
     host: FakeHost, service: TimelineService, clock: Clock
@@ -201,8 +211,14 @@ async def test_today_ttl_and_incremental_refresh(
         vf(wall(2026, 10, 17, 13, 0, 20), 0.5),
     ]
     clock.advance(40)
+    # A caller that accepts an older copy gets it at once, without a search.
+    stale, timing = await service.async_day(SOURCE, date(2026, 10, 17), max_age=900)
+    assert (timing["cache"], timing["age_s"]) == ("stale", 70)
+    assert len(stale.segments) == 2
+    assert len(host.searches) == 1
     day, timing = await service.async_day(SOURCE, date(2026, 10, 17))
     assert timing["cache"] == "incremental"
+    assert timing["queue_ms"] >= 0
     start, end, _stream = host.searches[-1]
     assert start == wall(2026, 10, 17, 12, 50)
     assert end == clock.now

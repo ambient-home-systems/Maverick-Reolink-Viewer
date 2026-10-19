@@ -381,6 +381,10 @@ async def ws_timeline_days(
         probatio.Required("device_id"): str,
         probatio.Required("date"): probatio.All(str, _date),
         probatio.Optional("stream", default="sub"): STREAM,
+        # Accept a copy of today this many seconds old (then ask again).
+        probatio.Optional("max_age", default=0): probatio.All(
+            int, probatio.Range(min=0, max=3600)
+        ),
     }
 )
 @websocket_api.async_response
@@ -395,7 +399,7 @@ async def ws_timeline_day(
     entry, source = resolved
     try:
         day, timing = await entry.runtime_data.timeline.async_day(
-            source, msg["date"], msg["stream"]
+            source, msg["date"], msg["stream"], max_age=msg["max_age"]
         )
     except TimelineError as err:
         connection.send_error(msg["id"], ERR_SEARCH_FAILED, str(err))
