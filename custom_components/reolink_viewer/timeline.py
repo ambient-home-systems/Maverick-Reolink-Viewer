@@ -49,6 +49,8 @@ STORAGE_KEY = "reolink_viewer.timeline.{key}"
 # Stored days of an older format are searched again (months are kept).
 # 2: the NVR's per-type alarm records for one moment are merged into one event.
 DAYS_FORMAT = 2
+# Past days fetched in the background when the panel opens.
+WARM_PAST_DAYS = 7
 SAVE_DELAY = 10.0
 MAX_STORED_DAYS = 120
 MAX_MEMORY_DAYS = 400
@@ -234,6 +236,7 @@ class TimelineService:
         self._stored: dict[str, dict[str, Any]] = {}
         self._inflight: dict[tuple[Any, ...], asyncio.Future[Any]] = {}
         self._months: dict[tuple[str, int, int], tuple[float, list[int], bool]] = {}
+        self._warming_past = False
 
     # ---- Storage ----
 
@@ -488,17 +491,57 @@ class TimelineService:
     # ---- Warming and lookup ----
 
     async def async_warm(self, sources: list[PlaybackSource]) -> None:
-        """Fetch today for each camera at prefetch priority (errors are logged)."""
+        """Fetch today for each camera, then recent past days not stored yet.
 
-        async def one(source: PlaybackSource) -> None:
+        All at prefetch priority; errors are logged. Today is fetched for every
+        camera at once. Past days with recordings (last WARM_PAST_DAYS) follow
+        one search at a time, yesterday first for every camera: a day search
+        on the NVR takes several seconds, and past days are kept for good, so
+        each is searched once.
+        """
+
+        async def today(source: PlaybackSource) -> None:
             try:
                 host = bridge.async_get_host(self._hass, source.entry_id)
-                today = local_now(host.timezone()).date()
-                await self.async_day(source, today, "sub", Priority.PREFETCH)
+                now = local_now(host.timezone()).date()
+                await self.async_day(source, now, "sub", Priority.PREFETCH)
             except Exception as err:  # noqa: BLE001 - warming is best effort
                 _LOGGER.debug("Warming %s failed: %s", source.name, err)
 
-        await asyncio.gather(*(one(s) for s in sources))
+        await asyncio.gather(*(today(s) for s in sources))
+        if self._warming_past:
+            return
+        self._warming_past = True
+        try:
+            todo = [(s, await self._past_days_to_warm(s)) for s in sources]
+            for n in range(WARM_PAST_DAYS):
+                for source, days in todo:
+                    if n < len(days):
+                        await self._warm_day(source, days[n])
+        finally:
+            self._warming_past = False
+
+    async def _past_days_to_warm(self, source: PlaybackSource) -> list[date]:
+        """Recent past days with recordings that are not stored, newest first."""
+        try:
+            host = bridge.async_get_host(self._hass, source.entry_id)
+            now = local_now(host.timezone()).date()
+            wanted = [now - timedelta(days=n) for n in range(1, WARM_PAST_DAYS + 1)]
+            recorded: set[date] = set()
+            for year, month in sorted({(d.year, d.month) for d in wanted}):
+                days, _ = await self.async_days(source, year, month, Priority.PREFETCH)
+                recorded.update(date(year, month, d) for d in days)
+            stored = (await self._data(source.key))["sub"]
+        except Exception as err:  # noqa: BLE001 - warming is best effort
+            _LOGGER.debug("Warming %s failed: %s", source.name, err)
+            return []
+        return [d for d in wanted if d in recorded and d.isoformat() not in stored]
+
+    async def _warm_day(self, source: PlaybackSource, day: date) -> None:
+        try:
+            await self.async_day(source, day, "sub", Priority.PREFETCH)
+        except Exception as err:  # noqa: BLE001 - warming is best effort
+            _LOGGER.debug("Warming %s %s failed: %s", source.name, day, err)
 
     async def async_segment(
         self, source: PlaybackSource, day: date, stream: str, segment_id: str

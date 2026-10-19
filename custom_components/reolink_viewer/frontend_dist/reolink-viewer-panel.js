@@ -2948,19 +2948,20 @@ var fn = 6e4, pn = 10 * G, mn = 10, hn = class extends F {
 		this._playFailure = void 0, this._cursor = i.segment.start + i.offset;
 		let o = performance.now();
 		try {
-			let e = await Re(n, this._ref(i.segment), this._progressive);
+			let e = this._progressive && i.offset < 3e3, r = await Re(n, this._ref(i.segment), e);
 			if (a !== this._playSeq) return;
-			this._playing = e, this._metrics = {
+			this._playing = r, this._metrics = {
 				...this._metrics,
 				urlMs: performance.now() - o,
 				firstFrameMs: void 0,
 				gapMs: void 0,
-				stream: e.stream,
-				cache: e.cache,
-				codec: e.media?.codec ?? null
+				stream: r.stream,
+				cache: r.cache,
+				codec: r.media?.codec ?? null,
+				delivery: _n(e, this._progressive, r.cache.complete)
 			};
-			let r = Math.max(0, this._cursor - e.start);
-			await this._player?.play(gn(e), r, t), this._preloadAfter(i.segment, a);
+			let s = Math.max(0, this._cursor - r.start);
+			await this._player?.play(gn(r), s, t), this._preloadAfter(i.segment, a);
 		} catch (e) {
 			a === this._playSeq && this._playError(L(e).message);
 		}
@@ -3071,7 +3072,7 @@ var fn = 6e4, pn = 10 * G, mn = 10, hn = class extends F {
       </div>
       <div class="group">
         <button aria-label="Zoom out" ?disabled=${e === 0} @click=${() => this._timeline?.zoom(-1)}>−</button>
-        <span class="small muted zoom">${vn(this._view.span)}</span>
+        <span class="small muted zoom">${yn(this._view.span)}</span>
         <button
           aria-label="Zoom in"
           ?disabled=${e === q.length - 1}
@@ -3143,11 +3144,11 @@ var fn = 6e4, pn = 10 * G, mn = 10, hn = class extends F {
         <dt>Stream</dt>
         <dd>${e.stream ?? this._stream}${e.codec ? ` · ${e.codec}` : ""}</dd>
         <dt>Cache</dt>
-        <dd>${e.cache ? _n(e.cache) : "–"}</dd>
+        <dd>${e.cache ? vn(e.cache) : "–"}</dd>
         <dt>HD</dt>
         <dd>${this._hd.reason}</dd>
         <dt>Delivery</dt>
-        <dd>${this._progressive ? "progressive" : "whole file first (WebKit)"}</dd>
+        <dd>${e.delivery ?? (this._progressive ? "progressive" : "whole file first (WebKit)")}</dd>
         <dt>Day</dt>
         <dd>
           ${this._day ? `${this._day.segments.length} recordings, ${this._day.events.length} events${this._day.complete ? ", final" : ""}${this._day.events_error ? `, event search failed (${this._day.events_error})` : ""}` : "–"}
@@ -3362,17 +3363,20 @@ function gn(e) {
 		end: e.end
 	};
 }
-function _n(e) {
+function _n(e, t, n) {
+	return n ? "cached file (Range)" : e ? "progressive" : t ? "whole file first (to seek)" : "whole file first (WebKit)";
+}
+function vn(e) {
 	let t = `${(e.bytes / 1e6).toFixed(1)} MB`;
 	return e.error ? `failed: ${e.error}` : e.complete ? `cached (${t})` : `filling (${t} so far)`;
 }
-function vn(e) {
+function yn(e) {
 	return e >= 36e5 ? `${Math.round(e / 36e5)} h` : `${Math.round(e / G)} min`;
 }
 customElements.get("rv-playback") || customElements.define("rv-playback", hn);
 //#endregion
 //#region src/components/device-page.ts
-var yn = 1e3, bn = class extends F {
+var bn = 1e3, xn = class extends F {
 	static properties = {
 		hass: { attribute: !1 },
 		deviceId: { attribute: !1 },
@@ -3418,7 +3422,7 @@ var yn = 1e3, bn = class extends F {
 		try {
 			let [e, r] = await Promise.all([je(t, this.deviceId), Me(t)]);
 			if (n !== this._loadSeq) return;
-			this._catalog = r, this._device = e, this._error = void 0, this._watched = wn(e);
+			this._catalog = r, this._device = e, this._error = void 0, this._watched = Tn(e);
 		} catch (e) {
 			if (n !== this._loadSeq) return;
 			this._error = L(e).message;
@@ -3427,7 +3431,7 @@ var yn = 1e3, bn = class extends F {
 	_subscribeRegistry(e) {
 		this._unsubRegistry = e.connection.subscribeEvents((e) => {
 			let t = e.data?.entity_id;
-			(!t || this._device?.connections.some((e) => e.entities.some((e) => e.entity_id === t))) && (clearTimeout(this._reloadTimer), this._reloadTimer = setTimeout(() => void this.reload(), yn));
+			(!t || this._device?.connections.some((e) => e.entities.some((e) => e.entity_id === t))) && (clearTimeout(this._reloadTimer), this._reloadTimer = setTimeout(() => void this.reload(), bn));
 		}, "entity_registry_updated").catch(() => void 0);
 	}
 	render() {
@@ -3449,7 +3453,7 @@ var yn = 1e3, bn = class extends F {
               <span class="muted small">${t.model ?? ""}</span>
             </div>
             <div class="tabs" role="tablist">
-              ${Cn(e).map((e) => E`<button
+              ${wn(e).map((e) => E`<button
                   role="tab"
                   aria-selected=${this.tab === e ? "true" : "false"}
                   class=${this.tab === e ? "active" : ""}
@@ -3461,14 +3465,14 @@ var yn = 1e3, bn = class extends F {
 			});
 		}}
                 >
-                  ${xn[e]}
+                  ${Sn[e]}
                 </button>`)}
             </div>
             ${e.degraded ? E`<div class="banner warning small">
                   Degraded mode: the Reolink integration's internals changed, so device details are
                   missing. Settings still work.
                 </div>` : O}
-            ${this.tab === "playback" && Sn(e) ? E`<rv-playback
+            ${this.tab === "playback" && Cn(e) ? E`<rv-playback
                   .hass=${this.hass}
                   .deviceId=${t.id}
                   .cameraName=${t.name ?? ""}
@@ -3516,29 +3520,29 @@ var yn = 1e3, bn = class extends F {
         color: var(--primary-color);
       }
     `];
-}, xn = {
+}, Sn = {
 	overview: "Overview",
 	playback: "Playback",
 	settings: "Settings"
 };
-function Sn(e) {
+function Cn(e) {
 	return e.node.kind === "camera" && e.node.connections.some((e) => e.playback_source);
 }
-function Cn(e) {
-	return Sn(e) ? [
+function wn(e) {
+	return Cn(e) ? [
 		"overview",
 		"playback",
 		"settings"
 	] : ["overview", "settings"];
 }
-function wn(e) {
+function Tn(e) {
 	let t = e.connections.flatMap((e) => e.entities.map((e) => e.entity_id));
 	return e.node.kind === "camera" && e.node.snapshot_entity_id && t.push(e.node.snapshot_entity_id), t;
 }
-customElements.get("rv-device-page") || customElements.define("rv-device-page", bn);
+customElements.get("rv-device-page") || customElements.define("rv-device-page", xn);
 //#endregion
 //#region src/download.ts
-function Tn(e, t, n = document) {
+function En(e, t, n = document) {
 	let r = new Blob([JSON.stringify(e, null, 2)], { type: "application/json" }), i = URL.createObjectURL(r), a = n.createElement("a");
 	a.href = i, a.download = t, a.rel = "noopener", n.body.appendChild(a), a.click(), a.remove(), setTimeout(() => {
 		URL.revokeObjectURL(i);
@@ -3546,7 +3550,7 @@ function Tn(e, t, n = document) {
 }
 //#endregion
 //#region src/reolink-viewer-panel.ts
-var En = 6e3, Dn = class extends F {
+var Dn = 6e3, On = class extends F {
 	static properties = {
 		hass: { attribute: !1 },
 		narrow: { type: Boolean },
@@ -3598,7 +3602,7 @@ var En = 6e3, Dn = class extends F {
 	showToast(e) {
 		clearTimeout(this._toastTimer), this._toast = e, this._toastTimer = setTimeout(() => {
 			this._toast = void 0;
-		}, En);
+		}, Dn);
 	}
 	async _load() {
 		if (this.hass) {
@@ -3785,7 +3789,7 @@ var En = 6e3, Dn = class extends F {
           </p>
           <div class="actions">
             <button @click=${() => {
-				Tn(e.report, e.filename);
+				En(e.report, e.filename);
 			}}>
               Download again
             </button>
@@ -3830,7 +3834,7 @@ var En = 6e3, Dn = class extends F {
 				status: "done",
 				report: e,
 				filename: n
-			}, Tn(e, n);
+			}, En(e, n);
 		}, (e) => {
 			this._run === t && (this._run = void 0, this._probe = {
 				status: "error",
@@ -3929,6 +3933,6 @@ var En = 6e3, Dn = class extends F {
       }
     `];
 };
-customElements.get("reolink-viewer-panel") || customElements.define("reolink-viewer-panel", Dn);
+customElements.get("reolink-viewer-panel") || customElements.define("reolink-viewer-panel", On);
 //#endregion
-export { Dn as ReolinkViewerPanel };
+export { On as ReolinkViewerPanel };

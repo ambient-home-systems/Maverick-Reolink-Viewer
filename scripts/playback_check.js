@@ -1,7 +1,8 @@
 // Phase 2A playback check: paste into Chrome DevTools (Console) while the
 // Reolink panel's Playback tab is open for a camera. Read-only: it only loads
 // timelines and plays recordings, like clicking through the tab by hand.
-// It prints a report and copies it to the clipboard.
+// It prints a report and copies it to the clipboard. Run it on one camera at a
+// time: two tabs at once share the NVR and slow each other down.
 (async () => {
   const deep = (root, sel) => {
     const hit = root.querySelector(sel);
@@ -47,6 +48,40 @@
   };
   const mins = (v) => (v < 60000 ? `${Math.round(v / 1000)} s` : `${(v / 60000).toFixed(1)} min`);
   const player = () => el.renderRoot.querySelector("rv-player");
+  // The cache's record of how a recording was downloaded, once it is complete.
+  const fillReport = async (seg) => {
+    let cache = {};
+    for (let i = 0; i < 30; i += 1) {
+      try {
+        const answer = await el.hass.callWS({
+          type: "reolink_viewer/playback/url",
+          device_id: el.deviceId,
+          date: el._date,
+          segment_id: seg.id,
+          stream: el._metrics.stream ?? "sub",
+          progressive: false,
+        });
+        cache = answer.cache ?? {};
+      } catch (err) {
+        return `server: ${err?.message ?? err}`;
+      }
+      if (cache.complete || cache.error) break;
+      await sleep(1000);
+    }
+    const parts = [cache.cache === "disk" ? "from disk" : `fill (${cache.priority ?? "?"})`];
+    for (const [key, label] of [
+      ["wait_ms", "queue"],
+      ["headers_ms", "NVR headers"],
+      ["ttfb_ms", "NVR first byte"],
+      ["fill_ms", "download"],
+    ]) {
+      if (typeof cache[key] === "number") parts.push(`${label} ${ms(cache[key])}`);
+    }
+    if (cache.mbit_s !== undefined) parts.push(`${cache.mbit_s} Mbit/s`);
+    parts.push(`${((cache.bytes ?? 0) / 1e6).toFixed(1)} MB`, `index ${cache.indexed ?? "?"}`);
+    if (cache.error) parts.push(`error ${cache.error}`);
+    return `server: ${parts.join(", ")}`;
+  };
   // Times of the video element's events after a play request.
   const watchVideo = (began) => {
     const seen = {};
@@ -107,15 +142,13 @@
     const ok = await waitFor(() => el._metrics.firstFrameMs !== undefined || el._playFailure, 90000);
     video.stop();
     const m = el._metrics;
-    const c = el._playing?.cache ?? {};
-    const state = c.complete ? "cached" : "filling";
     const where = seg ? `${mins(ev.start - seg.start)} into a ${mins(seg.end - seg.start)} recording` : "no recording";
     log(
       `B  ${ev.types.join("+")} at ${clock(ev.start)} (${where}): first frame ${ok ? ms(m.firstFrameMs) : "none after 90 s"}` +
         ` [URL ${ms(m.urlMs)} · metadata ${ms(video.seen.loadedmetadata)} · seeked ${ms(video.seen.seeked)} · playing ${ms(video.seen.playing)}]` +
-        ` cache ${state} (${(c.bytes / 1e6).toFixed(1)} MB, index ${c.indexed ?? "?"}${c.fill_ms !== undefined ? `, fill ${ms(c.fill_ms)}` : ""})` +
-        ` ${m.stream ?? "?"} ${m.codec ?? ""}${el._playFailure ? ` FAILED: ${el._playFailure}` : ""}`,
+        ` ${m.delivery ?? "?"} · ${m.stream ?? "?"} ${m.codec ?? ""}${el._playFailure ? ` FAILED: ${el._playFailure}` : ""}`,
     );
+    if (seg) log(`     ${await fillReport(seg)}`);
     await sleep(2000);
   }
 
