@@ -349,7 +349,8 @@ class TimelineService:
                 return day_data, {"cache": "store", "total_ms": _ms(began)}
 
         is_today = day == now_local.date()
-        if is_today and cached is not None:
+        # A copy whose event search failed is searched again at once.
+        if is_today and cached is not None and cached.events_error is None:
             age = _wall_time() - cached.fetched_at
             if age < TODAY_TTL:
                 return cached, {"cache": "memory", "total_ms": _ms(began)}
@@ -564,17 +565,36 @@ class TimelineService:
     async def async_segment(
         self, source: PlaybackSource, day: date, stream: str, segment_id: str
     ) -> Segment:
-        """Find a recording to play: the sub segment, or the main one matching it."""
-        sub_day, _ = await self.async_day(source, day, "sub")
-        if (sub := sub_day.segment(segment_id)) is None:
+        """Find a recording to play: the sub segment, or the main one matching it.
+
+        The copy of the day in memory is used as it is (a refresh before the
+        play URL cost 3.9 s on the hardware check); the day is searched again
+        only if the recording is not in it (it may have started since).
+        """
+        sub = await self._find(source, day, "sub", lambda d: d.segment(segment_id))
+        if sub is None:
             raise TimelineError("unknown segment")
         if stream == "sub":
             return sub
-        main_day, _ = await self.async_day(source, day, "main")
-        best = match_segment(main_day.segments, sub)
+        best = await self._find(
+            source, day, "main", lambda d: match_segment(d.segments, sub)
+        )
         if best is None:
             raise TimelineError("no main-stream recording for this segment")
         return best
+
+    async def _find(
+        self,
+        source: PlaybackSource,
+        day: date,
+        stream: str,
+        pick: Callable[[Day], Segment | None],
+    ) -> Segment | None:
+        cached = self._memory.get((source.key, stream, day.isoformat()))
+        if cached is not None and (found := pick(cached)) is not None:
+            return found
+        fresh, _ = await self.async_day(source, day, stream)
+        return pick(fresh)
 
     def clear(self) -> None:
         """Drop the in-memory caches (the Store stays)."""

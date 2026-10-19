@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from reolink_aio.enums import VodRequestType
-from reolink_aio.exceptions import ReolinkError
+from reolink_aio.exceptions import ApiError, ReolinkError
 from reolink_aio.typings import VOD_search_status, VOD_trigger
 
 from custom_components.reolink_viewer import bridge
@@ -342,7 +342,10 @@ def test_redact_text() -> None:
 
 
 async def test_search_day_and_recording_days(
-    hass: HomeAssistant, reolink_host: MagicMock, loaded_reolink: MockConfigEntry
+    hass: HomeAssistant,
+    reolink_host: MagicMock,
+    loaded_reolink: MockConfigEntry,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """One window: recordings plus events (one per moment, all types)."""
     (host,) = bridge.async_get_hosts(hass)
@@ -379,7 +382,25 @@ async def test_search_day_and_recording_days(
     assert day.events[1].end == start + timedelta(minutes=33)
     assert day.events_error is None
 
-    # A failing event search keeps the recordings.
+    # An event search that fails once is asked again, and works.
+    monkeypatch.setattr(bridge, "EVENT_SEARCH_RETRY_DELAY", 0)
+    flaky = AsyncMock(
+        side_effect=[
+            ApiError("busy", rspCode=400),
+            ({}, {VOD_trigger.ANIMAL: [animal]}),
+        ]
+    )
+    reolink_host.baichuan.search_vod_type = flaky
+    day = await host.async_search_day(0, start, TEST_NOW, "sub")
+    assert flaky.await_count == 2
+    assert [e.types for e in day.events] == [("ANIMAL",)]
+    assert day.events_error is None
+    # Failing twice keeps the recordings and names the device's code.
+    reolink_host.baichuan.search_vod_type = AsyncMock(
+        side_effect=ApiError("busy", rspCode=-12)
+    )
+    day = await host.async_search_day(0, start, TEST_NOW, "sub")
+    assert day.events_error == "ApiError -12"
     reolink_host.baichuan.search_vod_type = AsyncMock(side_effect=ReolinkError("x"))
     day = await host.async_search_day(0, start, TEST_NOW, "sub")
     assert len(day.files) == 1
