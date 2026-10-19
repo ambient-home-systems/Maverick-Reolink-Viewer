@@ -29,7 +29,7 @@ var e = globalThis, t = e.ShadowRoot && (e.ShadyCSS === void 0 || e.ShadyCSS.nat
 	let t = "";
 	for (let n of e.cssRules) t += n.cssText;
 	return a(t);
-})(e) : e, { is: l, defineProperty: u, getOwnPropertyDescriptor: d, getOwnPropertyNames: f, getOwnPropertySymbols: p, getPrototypeOf: ee } = Object, m = globalThis, te = m.trustedTypes, ne = te ? te.emptyScript : "", re = m.reactiveElementPolyfillSupport, h = (e, t) => e, g = {
+})(e) : e, { is: l, defineProperty: u, getOwnPropertyDescriptor: d, getOwnPropertyNames: f, getOwnPropertySymbols: p, getPrototypeOf: ee } = Object, m = globalThis, te = m.trustedTypes, ne = te ? te.emptyScript : "", re = m.reactiveElementPolyfillSupport, h = (e, t) => e, ie = {
 	toAttribute(e, t) {
 		switch (t) {
 			case Boolean:
@@ -58,23 +58,23 @@ var e = globalThis, t = e.ShadowRoot && (e.ShadyCSS === void 0 || e.ShadyCSS.nat
 		}
 		return n;
 	}
-}, ie = (e, t) => !l(e, t), ae = {
+}, ae = (e, t) => !l(e, t), oe = {
 	attribute: !0,
 	type: String,
-	converter: g,
+	converter: ie,
 	reflect: !1,
 	useDefault: !1,
-	hasChanged: ie
+	hasChanged: ae
 };
 Symbol.metadata ??= Symbol("metadata"), m.litPropertyMetadata ??= /* @__PURE__ */ new WeakMap();
-var _ = class extends HTMLElement {
+var g = class extends HTMLElement {
 	static addInitializer(e) {
 		this._$Ei(), (this.l ??= []).push(e);
 	}
 	static get observedAttributes() {
 		return this.finalize(), this._$Eh && [...this._$Eh.keys()];
 	}
-	static createProperty(e, t = ae) {
+	static createProperty(e, t = oe) {
 		if (t.state && (t.attribute = !1), this._$Ei(), this.prototype.hasOwnProperty(e) && ((t = Object.create(t)).wrapped = !0), this.elementProperties.set(e, t), !t.noAccessor) {
 			let n = Symbol(), r = this.getPropertyDescriptor(e, n, t);
 			r !== void 0 && u(this.prototype, e, r);
@@ -100,7 +100,7 @@ var _ = class extends HTMLElement {
 		};
 	}
 	static getPropertyOptions(e) {
-		return this.elementProperties.get(e) ?? ae;
+		return this.elementProperties.get(e) ?? oe;
 	}
 	static _$Ei() {
 		if (this.hasOwnProperty(h("elementProperties"))) return;
@@ -171,14 +171,14 @@ var _ = class extends HTMLElement {
 	_$ET(e, t) {
 		let n = this.constructor.elementProperties.get(e), r = this.constructor._$Eu(e, n);
 		if (r !== void 0 && !0 === n.reflect) {
-			let i = (n.converter?.toAttribute === void 0 ? g : n.converter).toAttribute(t, n.type);
+			let i = (n.converter?.toAttribute === void 0 ? ie : n.converter).toAttribute(t, n.type);
 			this._$Em = e, i == null ? this.removeAttribute(r) : this.setAttribute(r, i), this._$Em = null;
 		}
 	}
 	_$AK(e, t) {
 		let n = this.constructor, r = n._$Eh.get(e);
 		if (r !== void 0 && this._$Em !== r) {
-			let e = n.getPropertyOptions(r), i = typeof e.converter == "function" ? { fromAttribute: e.converter } : e.converter?.fromAttribute === void 0 ? g : e.converter;
+			let e = n.getPropertyOptions(r), i = typeof e.converter == "function" ? { fromAttribute: e.converter } : e.converter?.fromAttribute === void 0 ? ie : e.converter;
 			this._$Em = r;
 			let a = i.fromAttribute(t, e.type);
 			this[r] = a ?? this._$Ej?.get(r) ?? a, this._$Em = null;
@@ -187,7 +187,7 @@ var _ = class extends HTMLElement {
 	requestUpdate(e, t, n, r = !1, i) {
 		if (e !== void 0) {
 			let a = this.constructor;
-			if (!1 === r && (i = this[e]), n ??= a.getPropertyOptions(e), !((n.hasChanged ?? ie)(i, t) || n.useDefault && n.reflect && i === this._$Ej?.get(e) && !this.hasAttribute(a._$Eu(e, n)))) return;
+			if (!1 === r && (i = this[e]), n ??= a.getPropertyOptions(e), !((n.hasChanged ?? ae)(i, t) || n.useDefault && n.reflect && i === this._$Ej?.get(e) && !this.hasAttribute(a._$Eu(e, n)))) return;
 			this.C(e, t, n);
 		}
 		!1 === this.isUpdatePending && (this._$ES = this._$EP());
@@ -251,37 +251,37 @@ var _ = class extends HTMLElement {
 	updated(e) {}
 	firstUpdated(e) {}
 };
-_.elementStyles = [], _.shadowRootOptions = { mode: "open" }, _[h("elementProperties")] = /* @__PURE__ */ new Map(), _[h("finalized")] = /* @__PURE__ */ new Map(), re?.({ ReactiveElement: _ }), (m.reactiveElementVersions ??= []).push("2.1.2");
+g.elementStyles = [], g.shadowRootOptions = { mode: "open" }, g[h("elementProperties")] = /* @__PURE__ */ new Map(), g[h("finalized")] = /* @__PURE__ */ new Map(), re?.({ ReactiveElement: g }), (m.reactiveElementVersions ??= []).push("2.1.2");
 //#endregion
 //#region node_modules/lit-html/lit-html.js
-var oe = globalThis, se = (e) => e, v = oe.trustedTypes, ce = v ? v.createPolicy("lit-html", { createHTML: (e) => e }) : void 0, le = "$lit$", y = `lit$${Math.random().toFixed(9).slice(2)}$`, ue = "?" + y, de = `<${ue}>`, b = document, x = () => b.createComment(""), S = (e) => e === null || typeof e != "object" && typeof e != "function", C = Array.isArray, fe = (e) => C(e) || typeof e?.[Symbol.iterator] == "function", pe = "[ 	\n\f\r]", w = /<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g, me = /-->/g, he = />/g, T = RegExp(`>|${pe}(?:([^\\s"'>=/]+)(${pe}*=${pe}*(?:[^ \t\n\f\r"'\`<>=]|("|')|))|$)`, "g"), ge = /'/g, _e = /"/g, ve = /^(?:script|style|textarea|title)$/i, E = ((e) => (t, ...n) => ({
+var _ = globalThis, se = (e) => e, v = _.trustedTypes, ce = v ? v.createPolicy("lit-html", { createHTML: (e) => e }) : void 0, le = "$lit$", y = `lit$${Math.random().toFixed(9).slice(2)}$`, ue = "?" + y, de = `<${ue}>`, b = document, x = () => b.createComment(""), S = (e) => e === null || typeof e != "object" && typeof e != "function", C = Array.isArray, fe = (e) => C(e) || typeof e?.[Symbol.iterator] == "function", w = "[ 	\n\f\r]", T = /<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g, pe = /-->/g, me = />/g, E = RegExp(`>|${w}(?:([^\\s"'>=/]+)(${w}*=${w}*(?:[^ \t\n\f\r"'\`<>=]|("|')|))|$)`, "g"), he = /'/g, ge = /"/g, _e = /^(?:script|style|textarea|title)$/i, D = ((e) => (t, ...n) => ({
 	_$litType$: e,
 	strings: t,
 	values: n
-}))(1), D = Symbol.for("lit-noChange"), O = Symbol.for("lit-nothing"), ye = /* @__PURE__ */ new WeakMap(), k = b.createTreeWalker(b, 129);
-function be(e, t) {
+}))(1), O = Symbol.for("lit-noChange"), k = Symbol.for("lit-nothing"), ve = /* @__PURE__ */ new WeakMap(), A = b.createTreeWalker(b, 129);
+function ye(e, t) {
 	if (!C(e) || !e.hasOwnProperty("raw")) throw Error("invalid template strings array");
 	return ce === void 0 ? t : ce.createHTML(t);
 }
-var xe = (e, t) => {
-	let n = e.length - 1, r = [], i, a = t === 2 ? "<svg>" : t === 3 ? "<math>" : "", o = w;
+var be = (e, t) => {
+	let n = e.length - 1, r = [], i, a = t === 2 ? "<svg>" : t === 3 ? "<math>" : "", o = T;
 	for (let t = 0; t < n; t++) {
 		let n = e[t], s, c, l = -1, u = 0;
-		for (; u < n.length && (o.lastIndex = u, c = o.exec(n), c !== null);) u = o.lastIndex, o === w ? c[1] === "!--" ? o = me : c[1] === void 0 ? c[2] === void 0 ? c[3] !== void 0 && (o = T) : (ve.test(c[2]) && (i = RegExp("</" + c[2], "g")), o = T) : o = he : o === T ? c[0] === ">" ? (o = i ?? w, l = -1) : c[1] === void 0 ? l = -2 : (l = o.lastIndex - c[2].length, s = c[1], o = c[3] === void 0 ? T : c[3] === "\"" ? _e : ge) : o === _e || o === ge ? o = T : o === me || o === he ? o = w : (o = T, i = void 0);
-		let d = o === T && e[t + 1].startsWith("/>") ? " " : "";
-		a += o === w ? n + de : l >= 0 ? (r.push(s), n.slice(0, l) + le + n.slice(l) + y + d) : n + y + (l === -2 ? t : d);
+		for (; u < n.length && (o.lastIndex = u, c = o.exec(n), c !== null);) u = o.lastIndex, o === T ? c[1] === "!--" ? o = pe : c[1] === void 0 ? c[2] === void 0 ? c[3] !== void 0 && (o = E) : (_e.test(c[2]) && (i = RegExp("</" + c[2], "g")), o = E) : o = me : o === E ? c[0] === ">" ? (o = i ?? T, l = -1) : c[1] === void 0 ? l = -2 : (l = o.lastIndex - c[2].length, s = c[1], o = c[3] === void 0 ? E : c[3] === "\"" ? ge : he) : o === ge || o === he ? o = E : o === pe || o === me ? o = T : (o = E, i = void 0);
+		let d = o === E && e[t + 1].startsWith("/>") ? " " : "";
+		a += o === T ? n + de : l >= 0 ? (r.push(s), n.slice(0, l) + le + n.slice(l) + y + d) : n + y + (l === -2 ? t : d);
 	}
-	return [be(e, a + (e[n] || "<?>") + (t === 2 ? "</svg>" : t === 3 ? "</math>" : "")), r];
-}, A = class e {
+	return [ye(e, a + (e[n] || "<?>") + (t === 2 ? "</svg>" : t === 3 ? "</math>" : "")), r];
+}, j = class e {
 	constructor({ strings: t, _$litType$: n }, r) {
 		let i;
 		this.parts = [];
-		let a = 0, o = 0, s = t.length - 1, c = this.parts, [l, u] = xe(t, n);
-		if (this.el = e.createElement(l, r), k.currentNode = this.el.content, n === 2 || n === 3) {
+		let a = 0, o = 0, s = t.length - 1, c = this.parts, [l, u] = be(t, n);
+		if (this.el = e.createElement(l, r), A.currentNode = this.el.content, n === 2 || n === 3) {
 			let e = this.el.content.firstChild;
 			e.replaceWith(...e.childNodes);
 		}
-		for (; (i = k.nextNode()) !== null && c.length < s;) {
+		for (; (i = A.nextNode()) !== null && c.length < s;) {
 			if (i.nodeType === 1) {
 				if (i.hasAttributes()) for (let e of i.getAttributeNames()) if (e.endsWith(le)) {
 					let t = u[o++], n = i.getAttribute(e).split(y), r = /([.?@])?(.*)/.exec(t);
@@ -290,17 +290,17 @@ var xe = (e, t) => {
 						index: a,
 						name: r[2],
 						strings: n,
-						ctor: r[1] === "." ? Ce : r[1] === "?" ? we : r[1] === "@" ? Te : N
+						ctor: r[1] === "." ? Se : r[1] === "?" ? Ce : r[1] === "@" ? we : P
 					}), i.removeAttribute(e);
 				} else e.startsWith(y) && (c.push({
 					type: 6,
 					index: a
 				}), i.removeAttribute(e));
-				if (ve.test(i.tagName)) {
+				if (_e.test(i.tagName)) {
 					let e = i.textContent.split(y), t = e.length - 1;
 					if (t > 0) {
 						i.textContent = v ? v.emptyScript : "";
-						for (let n = 0; n < t; n++) i.append(e[n], x()), k.nextNode(), c.push({
+						for (let n = 0; n < t; n++) i.append(e[n], x()), A.nextNode(), c.push({
 							type: 2,
 							index: ++a
 						});
@@ -328,12 +328,12 @@ var xe = (e, t) => {
 		return n.innerHTML = e, n;
 	}
 };
-function j(e, t, n = e, r) {
-	if (t === D) return t;
+function M(e, t, n = e, r) {
+	if (t === O) return t;
 	let i = r === void 0 ? n._$Cl : n._$Co?.[r], a = S(t) ? void 0 : t._$litDirective$;
-	return i?.constructor !== a && (i?._$AO?.(!1), a === void 0 ? i = void 0 : (i = new a(e), i._$AT(e, n, r)), r === void 0 ? n._$Cl = i : (n._$Co ??= [])[r] = i), i !== void 0 && (t = j(e, i._$AS(e, t.values), i, r)), t;
+	return i?.constructor !== a && (i?._$AO?.(!1), a === void 0 ? i = void 0 : (i = new a(e), i._$AT(e, n, r)), r === void 0 ? n._$Cl = i : (n._$Co ??= [])[r] = i), i !== void 0 && (t = M(e, i._$AS(e, t.values), i, r)), t;
 }
-var Se = class {
+var xe = class {
 	constructor(e, t) {
 		this._$AV = [], this._$AN = void 0, this._$AD = e, this._$AM = t;
 	}
@@ -345,27 +345,27 @@ var Se = class {
 	}
 	u(e) {
 		let { el: { content: t }, parts: n } = this._$AD, r = (e?.creationScope ?? b).importNode(t, !0);
-		k.currentNode = r;
-		let i = k.nextNode(), a = 0, o = 0, s = n[0];
+		A.currentNode = r;
+		let i = A.nextNode(), a = 0, o = 0, s = n[0];
 		for (; s !== void 0;) {
 			if (a === s.index) {
 				let t;
-				s.type === 2 ? t = new M(i, i.nextSibling, this, e) : s.type === 1 ? t = new s.ctor(i, s.name, s.strings, this, e) : s.type === 6 && (t = new Ee(i, this, e)), this._$AV.push(t), s = n[++o];
+				s.type === 2 ? t = new N(i, i.nextSibling, this, e) : s.type === 1 ? t = new s.ctor(i, s.name, s.strings, this, e) : s.type === 6 && (t = new Te(i, this, e)), this._$AV.push(t), s = n[++o];
 			}
-			a !== s?.index && (i = k.nextNode(), a++);
+			a !== s?.index && (i = A.nextNode(), a++);
 		}
-		return k.currentNode = b, r;
+		return A.currentNode = b, r;
 	}
 	p(e) {
 		let t = 0;
 		for (let n of this._$AV) n !== void 0 && (n.strings === void 0 ? n._$AI(e[t]) : (n._$AI(e, n, t), t += n.strings.length - 2)), t++;
 	}
-}, M = class e {
+}, N = class e {
 	get _$AU() {
 		return this._$AM?._$AU ?? this._$Cv;
 	}
 	constructor(e, t, n, r) {
-		this.type = 2, this._$AH = O, this._$AN = void 0, this._$AA = e, this._$AB = t, this._$AM = n, this.options = r, this._$Cv = r?.isConnected ?? !0;
+		this.type = 2, this._$AH = k, this._$AN = void 0, this._$AA = e, this._$AB = t, this._$AM = n, this.options = r, this._$Cv = r?.isConnected ?? !0;
 	}
 	get parentNode() {
 		let e = this._$AA.parentNode, t = this._$AM;
@@ -378,7 +378,7 @@ var Se = class {
 		return this._$AB;
 	}
 	_$AI(e, t = this) {
-		e = j(this, e, t), S(e) ? e === O || e == null || e === "" ? (this._$AH !== O && this._$AR(), this._$AH = O) : e !== this._$AH && e !== D && this._(e) : e._$litType$ === void 0 ? e.nodeType === void 0 ? fe(e) ? this.k(e) : this._(e) : this.T(e) : this.$(e);
+		e = M(this, e, t), S(e) ? e === k || e == null || e === "" ? (this._$AH !== k && this._$AR(), this._$AH = k) : e !== this._$AH && e !== O && this._(e) : e._$litType$ === void 0 ? e.nodeType === void 0 ? fe(e) ? this.k(e) : this._(e) : this.T(e) : this.$(e);
 	}
 	O(e) {
 		return this._$AA.parentNode.insertBefore(e, this._$AB);
@@ -387,19 +387,19 @@ var Se = class {
 		this._$AH !== e && (this._$AR(), this._$AH = this.O(e));
 	}
 	_(e) {
-		this._$AH !== O && S(this._$AH) ? this._$AA.nextSibling.data = e : this.T(b.createTextNode(e)), this._$AH = e;
+		this._$AH !== k && S(this._$AH) ? this._$AA.nextSibling.data = e : this.T(b.createTextNode(e)), this._$AH = e;
 	}
 	$(e) {
-		let { values: t, _$litType$: n } = e, r = typeof n == "number" ? this._$AC(e) : (n.el === void 0 && (n.el = A.createElement(be(n.h, n.h[0]), this.options)), n);
+		let { values: t, _$litType$: n } = e, r = typeof n == "number" ? this._$AC(e) : (n.el === void 0 && (n.el = j.createElement(ye(n.h, n.h[0]), this.options)), n);
 		if (this._$AH?._$AD === r) this._$AH.p(t);
 		else {
-			let e = new Se(r, this), n = e.u(this.options);
+			let e = new xe(r, this), n = e.u(this.options);
 			e.p(t), this.T(n), this._$AH = e;
 		}
 	}
 	_$AC(e) {
-		let t = ye.get(e.strings);
-		return t === void 0 && ye.set(e.strings, t = new A(e)), t;
+		let t = ve.get(e.strings);
+		return t === void 0 && ve.set(e.strings, t = new j(e)), t;
 	}
 	k(t) {
 		C(this._$AH) || (this._$AH = [], this._$AR());
@@ -416,7 +416,7 @@ var Se = class {
 	setConnected(e) {
 		this._$AM === void 0 && (this._$Cv = e, this._$AP?.(e));
 	}
-}, N = class {
+}, P = class {
 	get tagName() {
 		return this.element.tagName;
 	}
@@ -424,47 +424,47 @@ var Se = class {
 		return this._$AM._$AU;
 	}
 	constructor(e, t, n, r, i) {
-		this.type = 1, this._$AH = O, this._$AN = void 0, this.element = e, this.name = t, this._$AM = r, this.options = i, n.length > 2 || n[0] !== "" || n[1] !== "" ? (this._$AH = Array(n.length - 1).fill(/* @__PURE__ */ new String()), this.strings = n) : this._$AH = O;
+		this.type = 1, this._$AH = k, this._$AN = void 0, this.element = e, this.name = t, this._$AM = r, this.options = i, n.length > 2 || n[0] !== "" || n[1] !== "" ? (this._$AH = Array(n.length - 1).fill(/* @__PURE__ */ new String()), this.strings = n) : this._$AH = k;
 	}
 	_$AI(e, t = this, n, r) {
 		let i = this.strings, a = !1;
-		if (i === void 0) e = j(this, e, t, 0), a = !S(e) || e !== this._$AH && e !== D, a && (this._$AH = e);
+		if (i === void 0) e = M(this, e, t, 0), a = !S(e) || e !== this._$AH && e !== O, a && (this._$AH = e);
 		else {
 			let r = e, o, s;
-			for (e = i[0], o = 0; o < i.length - 1; o++) s = j(this, r[n + o], t, o), s === D && (s = this._$AH[o]), a ||= !S(s) || s !== this._$AH[o], s === O ? e = O : e !== O && (e += (s ?? "") + i[o + 1]), this._$AH[o] = s;
+			for (e = i[0], o = 0; o < i.length - 1; o++) s = M(this, r[n + o], t, o), s === O && (s = this._$AH[o]), a ||= !S(s) || s !== this._$AH[o], s === k ? e = k : e !== k && (e += (s ?? "") + i[o + 1]), this._$AH[o] = s;
 		}
 		a && !r && this.j(e);
 	}
 	j(e) {
-		e === O ? this.element.removeAttribute(this.name) : this.element.setAttribute(this.name, e ?? "");
+		e === k ? this.element.removeAttribute(this.name) : this.element.setAttribute(this.name, e ?? "");
 	}
-}, Ce = class extends N {
+}, Se = class extends P {
 	constructor() {
 		super(...arguments), this.type = 3;
 	}
 	j(e) {
-		this.element[this.name] = e === O ? void 0 : e;
+		this.element[this.name] = e === k ? void 0 : e;
 	}
-}, we = class extends N {
+}, Ce = class extends P {
 	constructor() {
 		super(...arguments), this.type = 4;
 	}
 	j(e) {
-		this.element.toggleAttribute(this.name, !!e && e !== O);
+		this.element.toggleAttribute(this.name, !!e && e !== k);
 	}
-}, Te = class extends N {
+}, we = class extends P {
 	constructor(e, t, n, r, i) {
 		super(e, t, n, r, i), this.type = 5;
 	}
 	_$AI(e, t = this) {
-		if ((e = j(this, e, t, 0) ?? O) === D) return;
-		let n = this._$AH, r = e === O && n !== O || e.capture !== n.capture || e.once !== n.once || e.passive !== n.passive, i = e !== O && (n === O || r);
+		if ((e = M(this, e, t, 0) ?? k) === O) return;
+		let n = this._$AH, r = e === k && n !== k || e.capture !== n.capture || e.once !== n.once || e.passive !== n.passive, i = e !== k && (n === k || r);
 		r && this.element.removeEventListener(this.name, this, n), i && this.element.addEventListener(this.name, this, e), this._$AH = e;
 	}
 	handleEvent(e) {
 		typeof this._$AH == "function" ? this._$AH.call(this.options?.host ?? this.element, e) : this._$AH.handleEvent(e);
 	}
-}, Ee = class {
+}, Te = class {
 	constructor(e, t, n) {
 		this.element = e, this.type = 6, this._$AN = void 0, this._$AM = t, this.options = n;
 	}
@@ -472,18 +472,18 @@ var Se = class {
 		return this._$AM._$AU;
 	}
 	_$AI(e) {
-		j(this, e);
+		M(this, e);
 	}
-}, De = oe.litHtmlPolyfillSupport;
-De?.(A, M), (oe.litHtmlVersions ??= []).push("3.3.3");
-var Oe = (e, t, n) => {
+}, Ee = _.litHtmlPolyfillSupport;
+Ee?.(j, N), (_.litHtmlVersions ??= []).push("3.3.3");
+var De = (e, t, n) => {
 	let r = n?.renderBefore ?? t, i = r._$litPart$;
 	if (i === void 0) {
 		let e = n?.renderBefore ?? null;
-		r._$litPart$ = i = new M(t.insertBefore(x(), e), e, void 0, n ?? {});
+		r._$litPart$ = i = new N(t.insertBefore(x(), e), e, void 0, n ?? {});
 	}
 	return i._$AI(e), i;
-}, P = globalThis, F = class extends _ {
+}, F = globalThis, I = class extends g {
 	constructor() {
 		super(...arguments), this.renderOptions = { host: this }, this._$Do = void 0;
 	}
@@ -493,7 +493,7 @@ var Oe = (e, t, n) => {
 	}
 	update(e) {
 		let t = this.render();
-		this.hasUpdated || (this.renderOptions.isConnected = this.isConnected), super.update(e), this._$Do = Oe(t, this.renderRoot, this.renderOptions);
+		this.hasUpdated || (this.renderOptions.isConnected = this.isConnected), super.update(e), this._$Do = De(t, this.renderRoot, this.renderOptions);
 	}
 	connectedCallback() {
 		super.connectedCallback(), this._$Do?.setConnected(!0);
@@ -502,21 +502,21 @@ var Oe = (e, t, n) => {
 		super.disconnectedCallback(), this._$Do?.setConnected(!1);
 	}
 	render() {
-		return D;
+		return O;
 	}
 };
-F._$litElement$ = !0, F.finalized = !0, P.litElementHydrateSupport?.({ LitElement: F });
-var ke = P.litElementPolyfillSupport;
-ke?.({ LitElement: F }), (P.litElementVersions ??= []).push("4.2.2");
+I._$litElement$ = !0, I.finalized = !0, F.litElementHydrateSupport?.({ LitElement: I });
+var Oe = F.litElementPolyfillSupport;
+Oe?.({ LitElement: I }), (F.litElementVersions ??= []).push("4.2.2");
 //#endregion
 //#region src/api.ts
-var Ae = (e) => e.callWS({ type: "reolink_viewer/devices" }), je = (e, t) => e.callWS({
+var ke = (e) => e.callWS({ type: "reolink_viewer/devices" }), Ae = (e, t) => e.callWS({
 	type: "reolink_viewer/device",
 	device_id: t
-}), I = /* @__PURE__ */ new WeakMap();
+}), je = /* @__PURE__ */ new WeakMap();
 function Me(e) {
-	let t = I.get(e.connection);
-	return t || (t = e.callWS({ type: "reolink_viewer/catalog" }), I.set(e.connection, t), t.catch(() => I.delete(e.connection))), t;
+	let t = je.get(e.connection);
+	return t || (t = e.callWS({ type: "reolink_viewer/catalog" }), je.set(e.connection, t), t.catch(() => je.delete(e.connection))), t;
 }
 var Ne = (e, t) => e.callWS({
 	type: "config/entity_registry/update",
@@ -769,12 +769,12 @@ function Ye(e) {
 }
 //#endregion
 //#region src/components/device-list.ts
-var Xe = class extends F {
+var Xe = class extends I {
 	static properties = { devices: { attribute: !1 } };
 	render() {
 		let e = this.devices;
-		if (!e) return E`<p class="muted">Loading devices…</p>`;
-		if (!e.hosts.length && !e.cameras.length) return E`<section class="card">
+		if (!e) return D`<p class="muted">Loading devices…</p>`;
+		if (!e.hosts.length && !e.cameras.length) return D`<section class="card">
         <h2>No Reolink devices</h2>
         <p class="muted">
           Set up your cameras, NVRs or Home Hubs in the Reolink integration first; they appear
@@ -782,19 +782,19 @@ var Xe = class extends F {
         </p>
       </section>`;
 		let t = new Map(e.cameras.map((e) => [e.id, e])), n = e.cameras.filter((e) => e.host_id === null);
-		return E`
+		return D`
       ${e.hosts.map((e) => this._renderHost(e, t))}
-      ${n.length ? E`<section class="card">
+      ${n.length ? D`<section class="card">
             <h2>Cameras added directly</h2>
             <ul class="devices">
               ${n.map((e) => this._renderCamera(e))}
             </ul>
-          </section>` : O}
+          </section>` : k}
     `;
 	}
 	_renderHost(e, t) {
 		let n = e.camera_ids.map((e) => t.get(e)).filter((e) => e !== void 0);
-		return E`<section class="card">
+		return D`<section class="card">
       <div class="host-header">
         <button class="link title" @click=${() => {
 			V(this, {
@@ -810,14 +810,14 @@ var Xe = class extends F {
       <p class="muted small">
         ${[e.model, e.sw_version && `firmware ${e.sw_version}`].filter(Boolean).join(" · ")}
       </p>
-      ${n.length ? E`<ul class="devices">
+      ${n.length ? D`<ul class="devices">
             ${n.map((t) => this._renderCamera(t, e))}
-          </ul>` : E`<p class="muted">No cameras on this ${R(e.kind)}.</p>`}
+          </ul>` : D`<p class="muted">No cameras on this ${R(e.kind)}.</p>`}
     </section>`;
 	}
 	_renderCamera(e, t) {
 		let n = t ? e.connections.find((e) => e.host_id === t.id)?.channel : void 0, r = t !== void 0 && e.connections.some((e) => e.via === "direct");
-		return E`<li>
+		return D`<li>
       <button
         class="row"
         @click=${() => {
@@ -829,17 +829,17 @@ var Xe = class extends F {
 		}}
       >
         <span class="name">
-          ${n == null ? O : E`<span class="muted">Ch ${n + 1}</span> `}${e.name ?? "Camera"}
+          ${n == null ? k : D`<span class="muted">Ch ${n + 1}</span> `}${e.name ?? "Camera"}
         </span>
         <span class="muted small">${e.model ?? ""}</span>
         <span class="badges">
           ${Ze(e)}
-          ${r ? E`<span class="badge" title="Also added to Home Assistant directly"
+          ${r ? D`<span class="badge" title="Also added to Home Assistant directly"
                 >+ direct</span
-              >` : O}
-          ${e.primary_view === "snapshot" ? E`<span class="badge" title="Does not record: snapshots are its main view"
+              >` : k}
+          ${e.primary_view === "snapshot" ? D`<span class="badge" title="Does not record: snapshots are its main view"
                 >snapshots</span
-              >` : O}
+              >` : k}
         </span>
       </button>
     </li>`;
@@ -900,7 +900,7 @@ var Xe = class extends F {
 };
 function Ze(e) {
 	let t = e.status;
-	return t.online === !1 ? E`<span class="badge warning">offline</span>` : t.sleeping ? E`<span class="badge">sleeping</span>` : O;
+	return t.online === !1 ? D`<span class="badge warning">offline</span>` : t.sleeping ? D`<span class="badge">sleeping</span>` : k;
 }
 customElements.get("rv-device-list") || customElements.define("rv-device-list", Xe);
 //#endregion
@@ -1035,7 +1035,7 @@ var ct = 1e4, lt = class {
 	get size() {
 		return this._pending.size;
 	}
-}, ut = 1, dt = class extends F {
+}, ut = 1, dt = class extends I {
 	static properties = {
 		hass: { attribute: !1 },
 		device: { attribute: !1 },
@@ -1088,9 +1088,9 @@ var ct = 1e4, lt = class {
 	}
 	render() {
 		let e = this.connection;
-		if (!this.device || !e) return E`<p class="muted">No settings.</p>`;
+		if (!this.device || !e) return D`<p class="muted">No settings.</p>`;
 		let t = this._rows(e), n = e.entities.filter((e) => e.disabled_by !== null).length, r = tt(this.catalog).filter((e) => t.has(e.id));
-		return E`
+		return D`
       <div class="toolbar">
         <input
           class="search"
@@ -1114,27 +1114,27 @@ var ct = 1e4, lt = class {
         </label>
       </div>
       ${this._renderConnections()}
-      ${this._showDisabled ? E`<p class="banner info small">
+      ${this._showDisabled ? D`<p class="banner info small">
             Home Assistant creates some Reolink entities disabled.
             ${this.hass?.user?.is_admin ? "Enabling one makes Home Assistant reload the Reolink integration entry for this device after about 30 seconds; its entities are briefly unavailable and the new one appears then." : "An administrator can enable them."}
-          </p>` : O}
-      ${r.length ? r.map((e) => E`<section class="category">
+          </p>` : k}
+      ${r.length ? r.map((e) => D`<section class="category">
               <h3>${e.title}</h3>
               <p class="muted small">${e.description}</p>
               <ul class="rows">
                 ${(t.get(e.id) ?? []).map((e) => this._renderRow(e))}
               </ul>
-            </section>`) : E`<p class="muted">No settings match “${this._search}”.</p>`}
+            </section>`) : D`<p class="muted">No settings match “${this._search}”.</p>`}
       ${this._renderConfirm()}
     `;
 	}
 	_renderConnections() {
 		let e = this.device?.connections ?? [];
-		if (e.length < 2) return O;
+		if (e.length < 2) return k;
 		let t = this.connection;
-		return E`<div class="connections" role="radiogroup" aria-label="Settings via">
+		return D`<div class="connections" role="radiogroup" aria-label="Settings via">
       <span class="small muted">Settings via</span>
-      ${e.map((e, n) => E`<button
+      ${e.map((e, n) => D`<button
           role="radio"
           aria-checked=${e === t ? "true" : "false"}
           class=${e === t ? "primary" : ""}
@@ -1151,20 +1151,20 @@ var ct = 1e4, lt = class {
 	}
 	_renderRow(e) {
 		let { entity: t, entry: n, label: r } = e, i = this._open.has(t.entity_id);
-		return E`<li class="row" data-entity-id=${t.entity_id}>
+		return D`<li class="row" data-entity-id=${t.entity_id}>
       <div class="info">
         <div class="label">
           ${r}
-          ${t.sub_device ? E`<span class="badge">${t.sub_device}</span>` : O}
-          ${t.disabled_by === null ? O : E`<span class="badge">disabled</span>`}
-          ${t.hidden_by === null ? O : E`<span class="badge">hidden</span>`}
-          ${t.entity_category === "diagnostic" ? E`<span class="badge">diagnostic</span>` : O}
-          ${n?.impact === "disruptive" ? E`<span class="badge warning" title=${n.impact_note ?? ""}>disruptive</span>` : O}
+          ${t.sub_device ? D`<span class="badge">${t.sub_device}</span>` : k}
+          ${t.disabled_by === null ? k : D`<span class="badge">disabled</span>`}
+          ${t.hidden_by === null ? k : D`<span class="badge">hidden</span>`}
+          ${t.entity_category === "diagnostic" ? D`<span class="badge">diagnostic</span>` : k}
+          ${n?.impact === "disruptive" ? D`<span class="badge warning" title=${n.impact_note ?? ""}>disruptive</span>` : k}
         </div>
-        ${n ? E`<div class="muted small">${n.summary}</div>` : O}
+        ${n ? D`<div class="muted small">${n.summary}</div>` : k}
       </div>
       <div class="control">${this._renderControl(t, r)}</div>
-      ${n ? E`<details
+      ${n ? D`<details
             class="about"
             .open=${i}
             @toggle=${(e) => {
@@ -1172,8 +1172,8 @@ var ct = 1e4, lt = class {
 		}}
           >
             <summary class="small">About this setting</summary>
-            ${i ? this._renderAbout(n) : O}
-          </details>` : O}
+            ${i ? this._renderAbout(n) : k}
+          </details>` : k}
     </li>`;
 	}
 	_setOpen(e, t) {
@@ -1183,20 +1183,20 @@ var ct = 1e4, lt = class {
 	}
 	_renderAbout(e) {
 		let t = e.related.map((e) => et(this.catalog, e)?.title).filter((e) => e !== void 0);
-		return E`<div class="about-body small">
-      ${e.verification === "unverified" ? E`<p class="unverified">
+		return D`<div class="about-body small">
+      ${e.verification === "unverified" ? D`<p class="unverified">
             <span class="badge warning">unverified</span> Reolink does not document exactly what
             this does; the text says only what is known.
-          </p>` : O}
+          </p>` : k}
       <p>${e.what_it_does}</p>
-      ${e.tradeoffs ? E`<p><strong>Trade-offs:</strong> ${e.tradeoffs}</p>` : O}
-      ${e.impact === "disruptive" ? E`<p><strong>Impact:</strong> ${e.impact_note}</p>` : O}
+      ${e.tradeoffs ? D`<p><strong>Trade-offs:</strong> ${e.tradeoffs}</p>` : k}
+      ${e.impact === "disruptive" ? D`<p><strong>Impact:</strong> ${e.impact_note}</p>` : k}
       <p><strong>Requires:</strong> ${e.requires}</p>
-      ${e.notes ? E`<p>${e.notes}</p>` : O}
-      ${t.length ? E`<p><strong>Related:</strong> ${t.join(", ")}</p>` : O}
+      ${e.notes ? D`<p>${e.notes}</p>` : k}
+      ${t.length ? D`<p><strong>Related:</strong> ${t.join(", ")}</p>` : k}
       <p>
         <strong>Sources:</strong>
-        ${e.sources.map((e, t) => E`${t ? ", " : ""}<a href=${e.url} target="_blank" rel="noreferrer"
+        ${e.sources.map((e, t) => D`${t ? ", " : ""}<a href=${e.url} target="_blank" rel="noreferrer"
               >${e.title}</a
             >`)}
       </p>
@@ -1204,14 +1204,14 @@ var ct = 1e4, lt = class {
 	}
 	_renderControl(e, t) {
 		if (e.disabled_by !== null) {
-			if (!this.hass?.user?.is_admin) return E`<span class="muted small">Disabled</span>`;
+			if (!this.hass?.user?.is_admin) return D`<span class="muted small">Disabled</span>`;
 			let n = this._enabling.has(e.entity_id);
-			return E`<button ?disabled=${n} @click=${() => void this._enable(e, t)}>
+			return D`<button ?disabled=${n} @click=${() => void this._enable(e, t)}>
         ${n ? "Enabling…" : "Enable"}
       </button>`;
 		}
 		let n = this.hass?.states[e.entity_id];
-		if (!n) return E`<span class="muted small">Not loaded yet</span>`;
+		if (!n) return D`<span class="muted small">Not loaded yet</span>`;
 		let r = e.entity_id, i = this.writes.isPending(r), a = this.writes.valueFor(r), o = n.state === "unavailable" || i;
 		switch (e.domain) {
 			case "switch":
@@ -1219,7 +1219,7 @@ var ct = 1e4, lt = class {
 			case "light": return this._light(e, t, n, a, o && !i);
 			case "number": return this._number(e, t, n, a, o);
 			case "select": return this._select(e, t, n, a, o);
-			case "time": return E`<input
+			case "time": return D`<input
           type="time"
           step="1"
           aria-label=${t}
@@ -1230,19 +1230,19 @@ var ct = 1e4, lt = class {
 				r && this._write(e, t, r, "any");
 			}}
         />`;
-			case "button": return E`<button
+			case "button": return D`<button
           ?disabled=${o}
           @click=${() => void this._write(e, t, "press", "any")}
         >
           ${i ? "Pressing…" : "Press"}
         </button>`;
 			case "update": return this._update(e, t, n, i);
-			default: return E`<span class="value">${pt(n, e.domain)}</span>`;
+			default: return D`<span class="value">${pt(n, e.domain)}</span>`;
 		}
 	}
 	_toggle(e, t, n, r) {
 		let i = n === !0;
-		return E`<button
+		return D`<button
       class="toggle ${i ? "on" : ""}"
       role="switch"
       aria-label=${t}
@@ -1255,8 +1255,8 @@ var ct = 1e4, lt = class {
 	}
 	_light(e, t, n, r, i) {
 		let a = n.attributes.supported_color_modes, o = Array.isArray(a) && a.some((e) => e !== "onoff"), s = n.attributes.brightness, c = typeof s == "number" ? Math.round(s / 255 * 100) : 0, l = typeof r == "boolean" ? r : n.state === "on";
-		return E`<span class="light">
-      ${o && l ? E`<input
+		return D`<span class="light">
+      ${o && l ? D`<input
             type="range"
             min="1"
             max="100"
@@ -1267,7 +1267,7 @@ var ct = 1e4, lt = class {
 			let r = Number(n.target.value);
 			this._write(e, t, r, "on", st(r));
 		}}
-          />` : O}
+          />` : k}
       ${this._toggle(e, t, l, i)}
     </span>`;
 	}
@@ -1276,8 +1276,8 @@ var ct = 1e4, lt = class {
 			let r = n.target, i = Number(r.value);
 			r.value === "" || !Number.isFinite(i) || i < o || i > s ? r.value = f : i !== d && this._write(e, t, i, "any");
 		};
-		return E`<span class="number">
-      ${a.mode === "box" ? O : E`<input
+		return D`<span class="number">
+      ${a.mode === "box" ? k : D`<input
             type="range"
             min=${o}
             max=${s}
@@ -1302,12 +1302,12 @@ var ct = 1e4, lt = class {
         ?disabled=${i}
         @change=${p}
       />
-      ${l ? E`<span class="unit muted small">${l}</span>` : O}
+      ${l ? D`<span class="unit muted small">${l}</span>` : k}
     </span>`;
 	}
 	_select(e, t, n, r, i) {
 		let a = Array.isArray(n.attributes.options) ? n.attributes.options.map(String) : [], o = typeof r == "string" ? r : n.state;
-		return E`<select
+		return D`<select
       aria-label=${t}
       ?disabled=${i}
       @change=${(n) => {
@@ -1315,23 +1315,23 @@ var ct = 1e4, lt = class {
 			r.value = o, this._write(e, t, i, { option: i });
 		}}
     >
-      ${a.includes(o) ? O : E`<option value="" selected>—</option>`}
-      ${a.map((e) => E`<option value=${e} ?selected=${e === o}>${e}</option>`)}
+      ${a.includes(o) ? k : D`<option value="" selected>—</option>`}
+      ${a.map((e) => D`<option value=${e} ?selected=${e === o}>${e}</option>`)}
     </select>`;
 	}
 	_update(e, t, n, r) {
 		let i = n.attributes, a = typeof i.installed_version == "string" ? i.installed_version : "?", o = typeof i.latest_version == "string" ? i.latest_version : null, s = typeof i.supported_features == "number" ? i.supported_features : 0, c = i.in_progress === !0 || r, l = n.state === "on" && (s & ut) !== 0;
-		return E`<span class="update small">
+		return D`<span class="update small">
       <span>
-        ${a}${o && o !== a ? E` → <strong>${o}</strong>` : O}
-        ${n.state === "off" ? E`<span class="muted">(up to date)</span>` : O}
+        ${a}${o && o !== a ? D` → <strong>${o}</strong>` : k}
+        ${n.state === "off" ? D`<span class="muted">(up to date)</span>` : k}
       </span>
-      ${l || c ? E`<button
+      ${l || c ? D`<button
             ?disabled=${c}
             @click=${() => void this._write(e, t, "install", "any")}
           >
             ${c ? "Installing…" : "Install"}
-          </button>` : O}
+          </button>` : k}
     </span>`;
 	}
 	async _write(e, t, n, r, i) {
@@ -1366,7 +1366,7 @@ var ct = 1e4, lt = class {
 	}
 	_renderConfirm() {
 		let e = this._confirm;
-		return e ? E`<div class="scrim" @click=${() => {
+		return e ? D`<div class="scrim" @click=${() => {
 			e.resolve(!1);
 		}}>
       <div
@@ -1390,7 +1390,7 @@ var ct = 1e4, lt = class {
 		}}>Continue</button>
         </div>
       </div>
-    </div>` : O;
+    </div>` : k;
 	}
 	async _enable(e, t) {
 		let n = this.hass;
@@ -1580,7 +1580,7 @@ var mt = 3e4, ht = {
 	people: "person",
 	dog_cat: "animal",
 	"non-motor_vehicle": "bicycle"
-}, gt = class extends F {
+}, gt = class extends I {
 	static properties = {
 		hass: { attribute: !1 },
 		device: { attribute: !1 },
@@ -1614,16 +1614,16 @@ var mt = 3e4, ht = {
 	}
 	render() {
 		let e = this.device;
-		if (!e) return E``;
+		if (!e) return D``;
 		let t = e.node;
-		return E`
+		return D`
       ${t.kind === "camera" ? this._renderSnapshot(t) : this._renderCameras()}
       ${e.connections.map((t) => this._renderConnection(t, e))}
     `;
 	}
 	_renderSnapshot(e) {
 		let t = this.snapshotUrl(), n = e.primary_view === "snapshot";
-		return E`<section class="card snapshot ${n ? "primary" : ""}">
+		return D`<section class="card snapshot ${n ? "primary" : ""}">
       <div class="header">
         <h2>Latest snapshot</h2>
         <button
@@ -1635,11 +1635,11 @@ var mt = 3e4, ht = {
           Refresh
         </button>
       </div>
-      ${n ? E`<p class="muted small">
+      ${n ? D`<p class="muted small">
             This camera does not record, so snapshots are its main view. The picture refreshes
             every ${mt / 1e3} seconds while this page is open.
-          </p>` : O}
-      ${t ? E`<img src=${t} alt="Latest snapshot of ${e.name ?? "the camera"}" />` : E`<p class="muted">
+          </p>` : k}
+      ${t ? D`<img src=${t} alt="Latest snapshot of ${e.name ?? "the camera"}" />` : D`<p class="muted">
             No snapshot: enable one of this camera's stream entities (for example
             <em>Fluent</em>) in the Settings tab.
           </p>`}
@@ -1647,7 +1647,7 @@ var mt = 3e4, ht = {
 	}
 	_renderCameras() {
 		let e = this.device?.node;
-		return e?.kind === "camera" ? O : E`<section class="card">
+		return e?.kind === "camera" ? k : D`<section class="card">
       <h2>${R(e?.kind ?? "nvr")}</h2>
       <p class="muted small">${e?.camera_ids.length ?? 0} cameras; open one from the list.</p>
       <button class="link" @click=${() => {
@@ -1657,17 +1657,17 @@ var mt = 3e4, ht = {
 	}
 	_renderConnection(e, t) {
 		let n = e.details, r = t.node.kind === "camera";
-		return E`<section class="card">
+		return D`<section class="card">
       <div class="header">
         <h2>${r ? ft(e) : "Device"}</h2>
-        ${e.playback_source ? E`<span class="badge accent">playback source</span>` : O}
-        ${e.channel !== void 0 && e.channel !== null && e.via === "nvr" ? E`<span class="badge">channel ${e.channel + 1}</span>` : O}
+        ${e.playback_source ? D`<span class="badge accent">playback source</span>` : k}
+        ${e.channel !== void 0 && e.channel !== null && e.via === "nvr" ? D`<span class="badge">channel ${e.channel + 1}</span>` : k}
       </div>
-      ${n === null ? E`<p class="muted">
+      ${n === null ? D`<p class="muted">
             Details are unavailable${t.degraded ? " in degraded mode" : ""}.
-          </p>` : E`
-            ${n.channel ? _t(n.channel) : O}
-            ${e.via === "direct" || !r ? vt(n.host) : O}
+          </p>` : D`
+            ${n.channel ? _t(n.channel) : k}
+            ${e.via === "direct" || !r ? vt(n.host) : k}
           `}
       <p class="muted small">
         ${e.entities.length} entities
@@ -1709,9 +1709,9 @@ var mt = 3e4, ht = {
 };
 function _t(e) {
 	let t = e.online ? e.sleeping ? "sleeping" : "online" : "offline";
-	return E`<dl class="facts">
+	return D`<dl class="facts">
     <dt>Model</dt>
-    <dd>${e.model}${e.model_id ? E` <span class="muted">(${e.model_id})</span>` : O}</dd>
+    <dd>${e.model}${e.model_id ? D` <span class="muted">(${e.model_id})</span>` : k}</dd>
     <dt>Hardware</dt>
     <dd>${e.hardware_version}</dd>
     <dt>Firmware</dt>
@@ -1724,23 +1724,23 @@ function _t(e) {
     <dd>${Ue(e.encodings.sub)}</dd>
     <dt>Network</dt>
     <dd>${yt(e.network)}</dd>
-    ${e.battery ? E`<dt>Battery</dt>
+    ${e.battery ? D`<dt>Battery</dt>
           <dd>
             ${e.battery.percent ?? "?"}%${e.battery.status ? ` · ${e.battery.status}` : ""}${e.battery.temperature_c === null ? "" : ` · ${e.battery.temperature_c} °C`}
-          </dd>` : O}
+          </dd>` : k}
     <dt>Recordings</dt>
     <dd>${e.supports_replay ? "playback supported" : "no playback"}</dd>
-    ${e.ai_types.length ? E`<dt>AI detection</dt>
-          <dd>${e.ai_types.map((e) => ht[e] ?? e).join(", ")}</dd>` : O}
-    ${e.capabilities.length ? E`<dt>Features</dt>
-          <dd class="chips">${e.capabilities.map((e) => E`<span class="badge">${e}</span>`)}</dd>` : O}
+    ${e.ai_types.length ? D`<dt>AI detection</dt>
+          <dd>${e.ai_types.map((e) => ht[e] ?? e).join(", ")}</dd>` : k}
+    ${e.capabilities.length ? D`<dt>Features</dt>
+          <dd class="chips">${e.capabilities.map((e) => D`<span class="badge">${e}</span>`)}</dd>` : k}
   </dl>`;
 }
 function vt(e) {
 	let t = e.ports;
-	return E`<dl class="facts">
-    ${e.device_type === "camera" ? O : E`<dt>Model</dt>
-          <dd>${e.model ?? "?"}${e.model_id ? E` <span class="muted">(${e.model_id})</span>` : O}</dd>
+	return D`<dl class="facts">
+    ${e.device_type === "camera" ? k : D`<dt>Model</dt>
+          <dd>${e.model ?? "?"}${e.model_id ? D` <span class="muted">(${e.model_id})</span>` : k}</dd>
           <dt>Hardware</dt>
           <dd>${e.hardware_version ?? "?"}</dd>
           <dt>Firmware</dt>
@@ -1761,13 +1761,13 @@ function vt(e) {
     <dd>${e.stream_protocol ?? "?"}</dd>
     <dt>Storage</dt>
     <dd>
-      ${e.storage.length ? e.storage.map((e, t) => E`${t ? E`<br />` : O}${e.type ?? "disk"} ${e.index + 1}:
+      ${e.storage.length ? e.storage.map((e, t) => D`${t ? D`<br />` : k}${e.type ?? "disk"} ${e.index + 1}:
               ${e.used_percent === null ? "?" : `${e.used_percent}% used`}${e.available === !1 ? " (not available)" : ""}`) : "none"}
     </dd>
-    ${e.cpu_usage === null ? O : E`<dt>CPU</dt>
+    ${e.cpu_usage === null ? k : D`<dt>CPU</dt>
           <dd>${e.cpu_usage}%</dd>`}
-    ${e.capabilities.length ? E`<dt>Host features</dt>
-          <dd class="chips">${e.capabilities.map((e) => E`<span class="badge">${e}</span>`)}</dd>` : O}
+    ${e.capabilities.length ? D`<dt>Host features</dt>
+          <dd class="chips">${e.capabilities.map((e) => D`<span class="badge">${e}</span>`)}</dd>` : k}
   </dl>`;
 }
 function yt(e) {
@@ -2056,7 +2056,7 @@ var qt = [
 	4,
 	5,
 	6
-], Jt = class extends F {
+], Jt = class extends I {
 	static properties = {
 		year: { type: Number },
 		month: { type: Number },
@@ -2094,21 +2094,21 @@ var qt = [
 			weekday: "narrow",
 			timeZone: "UTC"
 		})), [n, r] = Gt(this.year, this.month, 1), i = this.today !== void 0 && Kt(n, r, 1) > this.today;
-		return E`<div class="head">
+		return D`<div class="head">
         <button class="text" aria-label="Previous month" @click=${() => {
 			this._move(-1);
 		}}>‹</button>
-        <span class="title">${e}${this.loading ? E` <span class="muted small">…</span>` : O}</span>
+        <span class="title">${e}${this.loading ? D` <span class="muted small">…</span>` : k}</span>
         <button class="text" aria-label="Next month" ?disabled=${i} @click=${() => {
 			this._move(1);
 		}}>›</button>
       </div>
       <div class="grid" role="grid">
-        ${t.map((e) => E`<span class="dow" role="columnheader">${e}</span>`)}
+        ${t.map((e) => D`<span class="dow" role="columnheader">${e}</span>`)}
         ${Wt(this.year, this.month, this.firstDay).flat().map((e) => {
-			if (e === null) return E`<span></span>`;
+			if (e === null) return D`<span></span>`;
 			let t = Kt(this.year, this.month, e), n = this.today !== void 0 && t > this.today, r = this.days.has(e);
-			return E`<button
+			return D`<button
               role="gridcell"
               class="day ${t === this.selected ? "selected" : ""} ${t === this.today ? "today" : ""}"
               ?disabled=${n}
@@ -2118,7 +2118,7 @@ var qt = [
 				this._emit("rv-day", { date: t });
 			}}
             >
-              ${e}${r ? E`<span class="dot"></span>` : O}
+              ${e}${r ? D`<span class="dot"></span>` : k}
             </button>`;
 		})}
       </div>`;
@@ -2241,7 +2241,7 @@ function en(e) {
 	} catch {}
 	return +!/^en-(US|CA)|^ja|^he/.test(e ?? navigator.language);
 }
-var tn = class extends F {
+var tn = class extends I {
 	static properties = {
 		events: { attribute: !1 },
 		thumbs: { attribute: !1 },
@@ -2265,7 +2265,7 @@ var tn = class extends F {
 	}
 	_card(e) {
 		let t = Bt(e.types), n = this.thumbs.get(e.start);
-		return E`<li>
+		return D`<li>
       <button
         class="card ${this.current !== void 0 && this.current >= e.start && this.current < e.end ? "active" : ""}"
         aria-label="${e.types.map(Vt).join(", ")} at ${Q(e.start, this.timeZone, !0)}"
@@ -2278,30 +2278,30 @@ var tn = class extends F {
 		}}
       >
         <span class="thumb" style="border-color: ${X(t)}">
-          ${n ? E`<img src=${n} alt="" loading="lazy" decoding="async" />` : O}
+          ${n ? D`<img src=${n} alt="" loading="lazy" decoding="async" />` : k}
         </span>
         <span class="meta">
           <span class="types">
-            ${e.types.map((e) => E`<span class="badge" style="background: ${X(e)}; color: white">${Vt(e)}</span>`)}
+            ${e.types.map((e) => D`<span class="badge" style="background: ${X(e)}; color: white">${Vt(e)}</span>`)}
           </span>
           <span class="when">
             ${Q(e.start, this.timeZone, !0)}
             <span class="muted">· ${Zt(e.end - e.start)}</span>
-            ${e.ambiguous ? E`<span class="muted" title="Recorded in the hour repeated when clocks went back"> · time ±1 h</span>` : O}
+            ${e.ambiguous ? D`<span class="muted" title="Recorded in the hour repeated when clocks went back"> · time ±1 h</span>` : k}
           </span>
         </span>
       </button>
     </li>`;
 	}
 	render() {
-		if (!this.events.length) return E`<p class="muted">No events for the selected filters.</p>`;
+		if (!this.events.length) return D`<p class="muted">No events for the selected filters.</p>`;
 		let e = this.events.length - this._shown;
-		return E`<ul>
+		return D`<ul>
         ${this.visible.map((e) => this._card(e))}
       </ul>
-      ${e > 0 ? E`<button class="more" @click=${() => {
+      ${e > 0 ? D`<button class="more" @click=${() => {
 			this._shown += 60;
-		}}>Show ${Math.min(e, 60)} more (${e} left)</button>` : O}`;
+		}}>Show ${Math.min(e, 60)} more (${e} left)</button>` : k}`;
 	}
 	static styles = [B, o`
       ul {
@@ -2361,7 +2361,7 @@ var tn = class extends F {
 customElements.get("rv-event-list") || customElements.define("rv-event-list", tn);
 //#endregion
 //#region src/playback/player.ts
-var nn = class extends F {
+var nn = class extends I {
 	static properties = {
 		muted: { type: Boolean },
 		_active: { state: !0 },
@@ -2491,7 +2491,7 @@ var nn = class extends F {
 		n.getAttribute("src") && (e === this._active ? this._fail(n.error?.message || `media error ${n.error?.code ?? "?"}`) : this._items[e] = void 0);
 	}
 	_renderVideo(e) {
-		return E`<video
+		return D`<video
       data-slot=${e}
       class=${e === this._active ? "active" : "hidden"}
       playsinline
@@ -2519,7 +2519,7 @@ var nn = class extends F {
     ></video>`;
 	}
 	render() {
-		return E`<div class="frame">${this._renderVideo(0)}${this._renderVideo(1)}</div>`;
+		return D`<div class="frame">${this._renderVideo(0)}${this._renderVideo(1)}</div>`;
 	}
 	static styles = o`
     :host {
@@ -2549,7 +2549,57 @@ var nn = class extends F {
   `;
 };
 customElements.get("rv-player") || customElements.define("rv-player", nn);
-var rn = 4, $ = 76, an = 18, on = 22, sn = 26, cn = 52, ln = 16, un = class extends F {
+//#endregion
+//#region src/playback/thumb-loader.ts
+var rn = class {
+	_concurrency;
+	_create;
+	_queue = [];
+	_active = /* @__PURE__ */ new Set();
+	_paused = !1;
+	constructor(e = 2, t = () => new Image()) {
+		this._concurrency = e, this._create = t;
+	}
+	load(e) {
+		return new Promise((t) => {
+			this._queue.push({
+				url: e,
+				resolve: t
+			}), this._pump();
+		});
+	}
+	pause() {
+		this._paused = !0;
+	}
+	resume() {
+		this._paused = !1, this._pump();
+	}
+	clear() {
+		for (let e of this._queue.splice(0)) e.resolve(!1);
+		for (let { job: e, image: t } of this._active) t.onload = t.onerror = null, t.src = "", e.resolve(!1);
+		this._active.clear();
+	}
+	get pending() {
+		return this._queue.length + this._active.size;
+	}
+	_pump() {
+		for (; !this._paused && this._active.size < this._concurrency;) {
+			let e = this._queue.shift();
+			if (!e) return;
+			let t = this._create(), n = {
+				job: e,
+				image: t
+			}, r = (t) => {
+				this._active.delete(n) && (e.resolve(t), this._pump());
+			};
+			t.onload = () => {
+				r(!0);
+			}, t.onerror = () => {
+				r(!1);
+			}, this._active.add(n), t.src = e.url;
+		}
+	}
+}, an = 4, $ = 76, on = 18, sn = 22, cn = 26, ln = 52, un = 16, dn = class extends I {
 	static properties = {
 		day: { attribute: !1 },
 		events: { attribute: !1 },
@@ -2630,12 +2680,12 @@ var rn = 4, $ = 76, an = 18, on = 22, sn = 26, cn = 52, ln = 16, un = class exte
 			pointerId: e.pointerId,
 			x: this._x(e),
 			moved: !1
-		}, dn(this._canvas, e.pointerId, !0));
+		}, fn(this._canvas, e.pointerId, !0));
 	}
 	_onPointerMove(e) {
 		let t = this._x(e), n = this._drag;
 		if (n && n.pointerId === e.pointerId) {
-			if (Math.abs(t - n.x) > rn && (n.moved = !0), n.moved) {
+			if (Math.abs(t - n.x) > an && (n.moved = !0), n.moved) {
 				let e = this.timeAt(t);
 				this._emit("rv-scrub", { time: e }), this._scheduleHover(e, t);
 			}
@@ -2643,7 +2693,7 @@ var rn = 4, $ = 76, an = 18, on = 22, sn = 26, cn = 52, ln = 16, un = class exte
 	}
 	_onPointerUp(e) {
 		let t = this._drag;
-		t && t.pointerId === e.pointerId && (this._drag = void 0, dn(this._canvas, e.pointerId, !1), this._emit("rv-seek", { time: this.timeAt(this._x(e)) }), e.pointerType !== "mouse" && this._endHover());
+		t && t.pointerId === e.pointerId && (this._drag = void 0, fn(this._canvas, e.pointerId, !1), this._emit("rv-seek", { time: this.timeAt(this._x(e)) }), e.pointerType !== "mouse" && this._endHover());
 	}
 	_scheduleHover(e, t) {
 		clearTimeout(this._hoverTimer), this._hoverTimer = setTimeout(() => {
@@ -2702,27 +2752,27 @@ var rn = 4, $ = 76, an = 18, on = 22, sn = 26, cn = 52, ln = 16, un = class exte
 			if (p.now < p.end) {
 				r.fillStyle = a("--secondary-background-color", "#f2f2f2");
 				let e = Math.max(0, u(p.now));
-				r.fillRect(e, on, t - e, 54);
+				r.fillRect(e, sn, t - e, 54);
 			}
 			r.globalAlpha = .85, r.fillStyle = c;
 			for (let e of Mt(p.segments, l, t)) {
 				let n = Math.max(0, u(e.start)), i = Math.min(t, u(e.end));
-				r.fillRect(n, on, Math.max(1, i - n), sn);
+				r.fillRect(n, sn, Math.max(1, i - n), cn);
 			}
 			r.globalAlpha = 1;
 			for (let e of this.events) {
 				if (e.end < l.start || e.start > l.start + l.span) continue;
 				let t = u(e.start), n = Math.max(3, u(e.end) - t);
-				r.fillStyle = X(Bt(e.types)), r.fillRect(t, cn, n, ln);
+				r.fillStyle = X(Bt(e.types)), r.fillRect(t, ln, n, un);
 			}
 		}
 		if (this.cursor !== void 0) {
 			let e = Math.round(u(this.cursor)) + .5;
-			r.strokeStyle = a("--accent-color", "#ff9800"), r.lineWidth = 2, r.beginPath(), r.moveTo(e, an), r.lineTo(e, $), r.stroke();
+			r.strokeStyle = a("--accent-color", "#ff9800"), r.lineWidth = 2, r.beginPath(), r.moveTo(e, on), r.lineTo(e, $), r.stroke();
 		}
 	}
 	render() {
-		return E`<canvas
+		return D`<canvas
       role="slider"
       tabindex="0"
       aria-label="Recording timeline"
@@ -2771,15 +2821,15 @@ var rn = 4, $ = 76, an = 18, on = 22, sn = 26, cn = 52, ln = 16, un = class exte
     }
   `;
 };
-function dn(e, t, n) {
+function fn(e, t, n) {
 	try {
 		n ? e?.setPointerCapture(t) : e?.releasePointerCapture(t);
 	} catch {}
 }
-customElements.get("rv-timeline") || customElements.define("rv-timeline", un);
+customElements.get("rv-timeline") || customElements.define("rv-timeline", dn);
 //#endregion
 //#region src/components/playback.ts
-var fn = 6e4, pn = 10 * G, mn = 10, hn = class extends F {
+var pn = 6e4, mn = 10 * G, hn = 10, gn = 8e3, _n = class extends I {
 	static properties = {
 		hass: { attribute: !1 },
 		deviceId: { attribute: !1 },
@@ -2807,6 +2857,8 @@ var fn = 6e4, pn = 10 * G, mn = 10, hn = class extends F {
 	_hoverSeq = 0;
 	_monthSeq = 0;
 	_thumbsRequested = /* @__PURE__ */ new Set();
+	thumbLoader = new rn();
+	_thumbPause;
 	_refreshTimer;
 	_lastCursorPaint = 0;
 	_progressive = St();
@@ -2845,10 +2897,10 @@ var fn = 6e4, pn = 10 * G, mn = 10, hn = class extends F {
 				keepView: !0,
 				quiet: !0
 			});
-		}, fn);
+		}, pn);
 	}
 	disconnectedCallback() {
-		super.disconnectedCallback(), clearInterval(this._refreshTimer), this._player?.stop();
+		super.disconnectedCallback(), clearInterval(this._refreshTimer), this._player?.stop(), this.thumbLoader.clear(), clearTimeout(this._thumbPause);
 	}
 	willUpdate(e) {
 		if ((e.has("deviceId") || e.has("hass")) && this.hass && this.deviceId && !this._date) {
@@ -2926,7 +2978,7 @@ var fn = 6e4, pn = 10 * G, mn = 10, hn = class extends F {
 	}
 	_warmLongRecording(e) {
 		let t = this.hass, n = this._cursor === void 0 ? e.segments.at(-1) : Nt(e.segments, this._cursor);
-		!t || !n || n.end - n.start < pn || ze(t, this._ref(n)).catch(() => void 0);
+		!t || !n || n.end - n.start < mn || ze(t, this._ref(n)).catch(() => void 0);
 	}
 	_ref(e, t = this._stream) {
 		return {
@@ -2945,7 +2997,7 @@ var fn = 6e4, pn = 10 * G, mn = 10, hn = class extends F {
 			return;
 		}
 		let a = ++this._playSeq;
-		this._playFailure = void 0, this._cursor = i.segment.start + i.offset;
+		this._playFailure = void 0, this._pauseThumbs(), this._cursor = i.segment.start + i.offset;
 		let o = performance.now();
 		try {
 			let e = this._progressive && i.offset < 3e3, r = await Re(n, this._ref(i.segment), e);
@@ -2958,10 +3010,10 @@ var fn = 6e4, pn = 10 * G, mn = 10, hn = class extends F {
 				stream: r.stream,
 				cache: r.cache,
 				codec: r.media?.codec ?? null,
-				delivery: _n(e, this._progressive, r.cache.complete)
+				delivery: yn(e, this._progressive, r.cache.complete)
 			};
 			let s = Math.max(0, this._cursor - r.start);
-			await this._player?.play(gn(r), s, t), this._preloadAfter(i.segment, a);
+			await this._player?.play(vn(r), s, t), this._preloadAfter(i.segment, a);
 		} catch (e) {
 			a === this._playSeq && this._playError(L(e).message);
 		}
@@ -2972,7 +3024,7 @@ var fn = 6e4, pn = 10 * G, mn = 10, hn = class extends F {
 		else try {
 			let e = await Re(n, this._ref(a), this._progressive);
 			if (t !== this._playSeq) return;
-			await this._player?.preload(gn(e));
+			await this._player?.preload(vn(e));
 		} catch {}
 	}
 	_onAdvanced(e) {
@@ -2986,8 +3038,16 @@ var fn = 6e4, pn = 10 * G, mn = 10, hn = class extends F {
 		let t = this._day?.segments ?? [], n = t.findIndex((t) => t.id === e), r = n >= 0 ? t[n + 1] : void 0;
 		r && this.playAt(r.start);
 	}
+	_pauseThumbs() {
+		this.thumbLoader.pause(), clearTimeout(this._thumbPause), this._thumbPause = setTimeout(() => {
+			this._resumeThumbs();
+		}, gn);
+	}
+	_resumeThumbs() {
+		clearTimeout(this._thumbPause), this.thumbLoader.resume();
+	}
 	_playError(e) {
-		this._stream === "main" ? (this._stream = "sub", H(this, `HD failed (${e}); back to the sub stream`, "error"), this._cursor !== void 0 && this.playAt(this._cursor)) : (this._playFailure = e, H(this, `Playback failed: ${e}`, "error"));
+		this._resumeThumbs(), this._stream === "main" ? (this._stream = "sub", H(this, `HD failed (${e}); back to the sub stream`, "error"), this._cursor !== void 0 && this.playAt(this._cursor)) : (this._playFailure = e, H(this, `Playback failed: ${e}`, "error"));
 	}
 	_onTime(e) {
 		let t = performance.now();
@@ -3013,7 +3073,7 @@ var fn = 6e4, pn = 10 * G, mn = 10, hn = class extends F {
 		i > this._today || this._selectDate(i);
 	}
 	_selectDate(e) {
-		this._date = e, this._player?.stop(), this._playing = void 0, this._thumbs = /* @__PURE__ */ new Map(), this._thumbsRequested.clear(), this._loadDay(e);
+		this._date = e, this._player?.stop(), this._playing = void 0, this.thumbLoader.clear(), this._thumbs = /* @__PURE__ */ new Map(), this._thumbsRequested.clear(), this._loadDay(e);
 		let [t, n] = e.split("-").map(Number);
 		t && n && (t !== this._month.year || n !== this._month.month) && this._loadMonth(t, n);
 	}
@@ -3045,8 +3105,13 @@ var fn = 6e4, pn = 10 * G, mn = 10, hn = class extends F {
 		if (t && n.length) {
 			n.forEach((e) => this._thumbsRequested.add(e));
 			try {
-				let e = await Be(t, this.deviceId, n, mn), r = new Map(this._thumbs);
-				e.urls.forEach((e, t) => r.set(n[t] ?? e.time, e.url)), this._thumbs = r;
+				let e = await Be(t, this.deviceId, n, hn), r = this._date;
+				e.urls.forEach((e, t) => {
+					let i = n[t] ?? e.time;
+					this.thumbLoader.load(e.url).then((t) => {
+						!t || r !== this._date ? this._thumbsRequested.delete(i) : this._thumbs = new Map(this._thumbs).set(i, e.url);
+					});
+				});
 			} catch {
 				n.forEach((e) => this._thumbsRequested.delete(e));
 			}
@@ -3054,7 +3119,7 @@ var fn = 6e4, pn = 10 * G, mn = 10, hn = class extends F {
 	}
 	_renderToolbar() {
 		let e = Dt(this._view.span);
-		return E`<div class="toolbar">
+		return D`<div class="toolbar">
       <div class="group">
         <button aria-label="Previous event" title="Previous event" @click=${() => {
 			this._jump(-1);
@@ -3072,7 +3137,7 @@ var fn = 6e4, pn = 10 * G, mn = 10, hn = class extends F {
       </div>
       <div class="group">
         <button aria-label="Zoom out" ?disabled=${e === 0} @click=${() => this._timeline?.zoom(-1)}>−</button>
-        <span class="small muted zoom">${yn(this._view.span)}</span>
+        <span class="small muted zoom">${xn(this._view.span)}</span>
         <button
           aria-label="Zoom in"
           ?disabled=${e === q.length - 1}
@@ -3096,16 +3161,16 @@ var fn = 6e4, pn = 10 * G, mn = 10, hn = class extends F {
 			this._setStream("main");
 		}}
         >HD</button>
-        ${this._playing ? E`<a class="button" href=${this._playing.clip_url} download>Download clip</a>` : O}
+        ${this._playing ? D`<a class="button" href=${this._playing.clip_url} download>Download clip</a>` : k}
       </div>
     </div>`;
 	}
 	_renderFilters() {
 		let e = Ht(this._day?.events ?? []);
-		return e.length ? E`<div class="chips" role="group" aria-label="Event types">
+		return e.length ? D`<div class="chips" role="group" aria-label="Event types">
       ${e.map((e) => {
 			let t = !this._hidden.has(e);
-			return E`<button
+			return D`<button
           class="chip ${t ? "on" : ""}"
           aria-pressed=${t ? "true" : "false"}
           style="--chip: ${X(e)}"
@@ -3118,24 +3183,24 @@ var fn = 6e4, pn = 10 * G, mn = 10, hn = class extends F {
           <span class="muted">${this._day?.events.filter((t) => t.types.includes(e)).length ?? 0}</span>
         </button>`;
 		})}
-    </div>` : O;
+    </div>` : k;
 	}
 	_renderHover() {
 		let e = this._hover;
-		return e ? E`<div class="hover" style="left: ${Math.max(0, e.x - 80)}px">
-      ${e.gap ? O : e.url ? E`<img src=${e.url} alt="" />` : E`<div class="noimg"></div>`}
+		return e ? D`<div class="hover" style="left: ${Math.max(0, e.x - 80)}px">
+      ${e.gap ? k : e.url ? D`<img src=${e.url} alt="" />` : D`<div class="noimg"></div>`}
       <span>${Q(e.time, this._zone, !0)}${e.gap ? " · no recording" : ""}</span>
-    </div>` : O;
+    </div>` : k;
 	}
 	_renderDebug() {
 		let e = this._metrics, t = (e) => e === void 0 ? "–" : `${Math.round(e)} ms`, n = e.timelineServer;
-		return E`<details class="debug">
+		return D`<details class="debug">
       <summary class="small muted">Debug</summary>
       <dl class="facts">
         <dt>Time to timeline</dt>
         <dd>
           ${t(e.timelineMs)}
-          ${n ? E`<span class="muted">(server: ${n.cache ?? "?"}${n.search_ms === void 0 ? "" : `, search ${Math.round(n.search_ms)} ms`})</span>` : O}
+          ${n ? D`<span class="muted">(server: ${n.cache ?? "?"}${n.search_ms === void 0 ? "" : `, search ${Math.round(n.search_ms)} ms`})</span>` : k}
         </dd>
         <dt>Time to first frame</dt>
         <dd>${t(e.firstFrameMs)} <span class="muted">(URL ${t(e.urlMs)})</span></dd>
@@ -3144,7 +3209,7 @@ var fn = 6e4, pn = 10 * G, mn = 10, hn = class extends F {
         <dt>Stream</dt>
         <dd>${e.stream ?? this._stream}${e.codec ? ` · ${e.codec}` : ""}</dd>
         <dt>Cache</dt>
-        <dd>${e.cache ? vn(e.cache) : "–"}</dd>
+        <dd>${e.cache ? bn(e.cache) : "–"}</dd>
         <dt>HD</dt>
         <dd>${this._hd.reason}</dd>
         <dt>Delivery</dt>
@@ -3158,7 +3223,7 @@ var fn = 6e4, pn = 10 * G, mn = 10, hn = class extends F {
 	}
 	render() {
 		let e = this._day, t = this._zone;
-		return E`
+		return D`
       <div class="layout">
         <div class="main">
           <rv-player
@@ -3166,7 +3231,7 @@ var fn = 6e4, pn = 10 * G, mn = 10, hn = class extends F {
 			this._metrics = {
 				...this._metrics,
 				firstFrameMs: e.detail.ms
-			};
+			}, this._resumeThumbs();
 		}}
             @rv-advanced=${(e) => {
 			this._onAdvanced(e.detail);
@@ -3199,8 +3264,8 @@ var fn = 6e4, pn = 10 * G, mn = 10, hn = class extends F {
               ${this._loading ? " · loading…" : ""}
             </span>
           </div>
-          ${this._error ? E`<div class="banner error" role="alert">Could not load recordings: ${this._error}</div>` : O}
-          ${this._playFailure ? E`<div class="banner error" role="alert">Playback failed: ${this._playFailure}</div>` : O}
+          ${this._error ? D`<div class="banner error" role="alert">Could not load recordings: ${this._error}</div>` : k}
+          ${this._playFailure ? D`<div class="banner error" role="alert">Playback failed: ${this._playFailure}</div>` : k}
           <div class="timeline-wrap">
             ${this._renderHover()}
             <rv-timeline
@@ -3225,7 +3290,7 @@ var fn = 6e4, pn = 10 * G, mn = 10, hn = class extends F {
             ></rv-timeline>
           </div>
           ${this._renderToolbar()} ${this._renderFilters()}
-          ${e && !e.segments.length && !this._loading ? E`<p class="muted">No recordings on this day.</p>` : O}
+          ${e && !e.segments.length && !this._loading ? D`<p class="muted">No recordings on this day.</p>` : k}
           ${this._renderDebug()}
         </div>
         <div class="side">
@@ -3355,7 +3420,7 @@ var fn = 6e4, pn = 10 * G, mn = 10, hn = class extends F {
       }
     `];
 };
-function gn(e) {
+function vn(e) {
 	return {
 		url: e.url,
 		segmentId: e.segment_id,
@@ -3363,20 +3428,20 @@ function gn(e) {
 		end: e.end
 	};
 }
-function _n(e, t, n) {
+function yn(e, t, n) {
 	return n ? "cached file (Range)" : e ? "progressive" : t ? "whole file first (to seek)" : "whole file first (WebKit)";
 }
-function vn(e) {
+function bn(e) {
 	let t = `${(e.bytes / 1e6).toFixed(1)} MB`;
 	return e.error ? `failed: ${e.error}` : e.complete ? `cached (${t})` : `filling (${t} so far)`;
 }
-function yn(e) {
+function xn(e) {
 	return e >= 36e5 ? `${Math.round(e / 36e5)} h` : `${Math.round(e / G)} min`;
 }
-customElements.get("rv-playback") || customElements.define("rv-playback", hn);
+customElements.get("rv-playback") || customElements.define("rv-playback", _n);
 //#endregion
 //#region src/components/device-page.ts
-var bn = 1e3, xn = class extends F {
+var Sn = 1e3, Cn = class extends I {
 	static properties = {
 		hass: { attribute: !1 },
 		deviceId: { attribute: !1 },
@@ -3420,9 +3485,9 @@ var bn = 1e3, xn = class extends F {
 		let n = ++this._loadSeq;
 		e || (this._device = void 0, this._error = void 0);
 		try {
-			let [e, r] = await Promise.all([je(t, this.deviceId), Me(t)]);
+			let [e, r] = await Promise.all([Ae(t, this.deviceId), Me(t)]);
 			if (n !== this._loadSeq) return;
-			this._catalog = r, this._device = e, this._error = void 0, this._watched = Tn(e);
+			this._catalog = r, this._device = e, this._error = void 0, this._watched = Dn(e);
 		} catch (e) {
 			if (n !== this._loadSeq) return;
 			this._error = L(e).message;
@@ -3431,29 +3496,29 @@ var bn = 1e3, xn = class extends F {
 	_subscribeRegistry(e) {
 		this._unsubRegistry = e.connection.subscribeEvents((e) => {
 			let t = e.data?.entity_id;
-			(!t || this._device?.connections.some((e) => e.entities.some((e) => e.entity_id === t))) && (clearTimeout(this._reloadTimer), this._reloadTimer = setTimeout(() => void this.reload(), bn));
+			(!t || this._device?.connections.some((e) => e.entities.some((e) => e.entity_id === t))) && (clearTimeout(this._reloadTimer), this._reloadTimer = setTimeout(() => void this.reload(), Sn));
 		}, "entity_registry_updated").catch(() => void 0);
 	}
 	render() {
 		this.renderCount += 1;
 		let e = this._device, t = e?.node;
-		return E`
+		return D`
       <div class="header">
         <button class="text back" @click=${() => {
 			V(this, { view: "list" });
 		}} aria-label="Back to all devices">← All devices</button>
       </div>
-      ${this._error ? E`<div class="banner error" role="alert">Could not load the device: ${this._error}</div>` : O}
-      ${t ? E`<div class="title">
+      ${this._error ? D`<div class="banner error" role="alert">Could not load the device: ${this._error}</div>` : k}
+      ${t ? D`<div class="title">
               <h2>${t.name ?? "Reolink device"}</h2>
               <span class="badge">${R(t.kind)}</span>
-              ${t.kind === "camera" && t.connections.length > 1 ? E`<span class="badge" title="In Home Assistant via the NVR and directly"
+              ${t.kind === "camera" && t.connections.length > 1 ? D`<span class="badge" title="In Home Assistant via the NVR and directly"
                     >${t.connections.length} connections</span
-                  >` : O}
+                  >` : k}
               <span class="muted small">${t.model ?? ""}</span>
             </div>
             <div class="tabs" role="tablist">
-              ${wn(e).map((e) => E`<button
+              ${En(e).map((e) => D`<button
                   role="tab"
                   aria-selected=${this.tab === e ? "true" : "false"}
                   class=${this.tab === e ? "active" : ""}
@@ -3465,23 +3530,23 @@ var bn = 1e3, xn = class extends F {
 			});
 		}}
                 >
-                  ${Sn[e]}
+                  ${wn[e]}
                 </button>`)}
             </div>
-            ${e.degraded ? E`<div class="banner warning small">
+            ${e.degraded ? D`<div class="banner warning small">
                   Degraded mode: the Reolink integration's internals changed, so device details are
                   missing. Settings still work.
-                </div>` : O}
-            ${this.tab === "playback" && Cn(e) ? E`<rv-playback
+                </div>` : k}
+            ${this.tab === "playback" && Tn(e) ? D`<rv-playback
                   .hass=${this.hass}
                   .deviceId=${t.id}
                   .cameraName=${t.name ?? ""}
-                ></rv-playback>` : this.tab === "overview" || this.tab === "playback" ? E`<rv-overview .hass=${this.hass} .device=${e}></rv-overview>` : E`<rv-settings
+                ></rv-playback>` : this.tab === "overview" || this.tab === "playback" ? D`<rv-overview .hass=${this.hass} .device=${e}></rv-overview>` : D`<rv-settings
                   .hass=${this.hass}
                   .device=${e}
                   .catalog=${this._catalog}
                   @rv-entity-enabled=${() => void this.reload()}
-                ></rv-settings>`}` : this._error ? O : E`<p class="muted">Loading…</p>`}
+                ></rv-settings>`}` : this._error ? k : D`<p class="muted">Loading…</p>`}
     `;
 	}
 	static styles = [B, o`
@@ -3520,29 +3585,29 @@ var bn = 1e3, xn = class extends F {
         color: var(--primary-color);
       }
     `];
-}, Sn = {
+}, wn = {
 	overview: "Overview",
 	playback: "Playback",
 	settings: "Settings"
 };
-function Cn(e) {
+function Tn(e) {
 	return e.node.kind === "camera" && e.node.connections.some((e) => e.playback_source);
 }
-function wn(e) {
-	return Cn(e) ? [
+function En(e) {
+	return Tn(e) ? [
 		"overview",
 		"playback",
 		"settings"
 	] : ["overview", "settings"];
 }
-function Tn(e) {
+function Dn(e) {
 	let t = e.connections.flatMap((e) => e.entities.map((e) => e.entity_id));
 	return e.node.kind === "camera" && e.node.snapshot_entity_id && t.push(e.node.snapshot_entity_id), t;
 }
-customElements.get("rv-device-page") || customElements.define("rv-device-page", xn);
+customElements.get("rv-device-page") || customElements.define("rv-device-page", Cn);
 //#endregion
 //#region src/download.ts
-function En(e, t, n = document) {
+function On(e, t, n = document) {
 	let r = new Blob([JSON.stringify(e, null, 2)], { type: "application/json" }), i = URL.createObjectURL(r), a = n.createElement("a");
 	a.href = i, a.download = t, a.rel = "noopener", n.body.appendChild(a), a.click(), a.remove(), setTimeout(() => {
 		URL.revokeObjectURL(i);
@@ -3550,7 +3615,7 @@ function En(e, t, n = document) {
 }
 //#endregion
 //#region src/reolink-viewer-panel.ts
-var Dn = 6e3, On = class extends F {
+var kn = 6e3, An = class extends I {
 	static properties = {
 		hass: { attribute: !1 },
 		narrow: { type: Boolean },
@@ -3602,13 +3667,13 @@ var Dn = 6e3, On = class extends F {
 	showToast(e) {
 		clearTimeout(this._toastTimer), this._toast = e, this._toastTimer = setTimeout(() => {
 			this._toast = void 0;
-		}, Dn);
+		}, kn);
 	}
 	async _load() {
 		if (this.hass) {
 			this._loading = !0;
 			try {
-				this._devices = await Ae(this.hass), this._loadError = void 0, !this._warmed && !this._devices.degraded && (this._warmed = !0, Le(this.hass).catch(() => void 0));
+				this._devices = await ke(this.hass), this._loadError = void 0, !this._warmed && !this._devices.degraded && (this._warmed = !0, Le(this.hass).catch(() => void 0));
 			} catch (e) {
 				this._loadError = L(e).message;
 			} finally {
@@ -3621,48 +3686,48 @@ var Dn = 6e3, On = class extends F {
 	}
 	render() {
 		let e = this._route;
-		return E`
+		return D`
       <div class="toolbar">
         <ha-menu-button .hass=${this.hass} .narrow=${this.narrow}></ha-menu-button>
         <div class="title">Reolink</div>
-        ${e.view === "list" ? E`<button class="text" @click=${() => void this._load()} ?disabled=${this._loading}>
+        ${e.view === "list" ? D`<button class="text" @click=${() => void this._load()} ?disabled=${this._loading}>
               Refresh
-            </button>` : O}
+            </button>` : k}
       </div>
       <main>
-        ${e.view === "device" ? E`<rv-device-page
+        ${e.view === "device" ? D`<rv-device-page
               .hass=${this.hass}
               .deviceId=${e.id}
               .tab=${e.tab}
-            ></rv-device-page>` : E`${this._renderBanner()}
-              ${this._loadError ? O : E`<rv-device-list .devices=${this._devices}></rv-device-list>`}
-              ${this._isAdmin ? this._renderProbe() : O}`}
+            ></rv-device-page>` : D`${this._renderBanner()}
+              ${this._loadError ? k : D`<rv-device-list .devices=${this._devices}></rv-device-list>`}
+              ${this._isAdmin ? this._renderProbe() : k}`}
       </main>
-      ${this._toast ? E`<div class="toast ${this._toast.kind}" role="status" aria-live="polite">
+      ${this._toast ? D`<div class="toast ${this._toast.kind}" role="status" aria-live="polite">
             <span>${this._toast.message}</span>
             <button class="text" aria-label="Dismiss" @click=${() => {
 			this._toast = void 0;
 		}}>✕</button>
-          </div>` : O}
+          </div>` : k}
     `;
 	}
 	_renderBanner() {
-		if (this._loadError) return E`<div class="banner error" role="alert">
+		if (this._loadError) return D`<div class="banner error" role="alert">
         Could not load devices: ${this._loadError}
       </div>`;
 		let e = this._devices;
-		return e?.degraded ? E`<div class="banner warning" role="alert">
+		return e?.degraded ? D`<div class="banner warning" role="alert">
       <strong>Degraded mode.</strong> The Reolink integration's internals changed in this
       Home Assistant release, so only the device registry's information is shown, duplicate
       cameras are not merged and the probe is disabled. Settings still work.
       <ul>
-        ${e.compat.errors.map((e) => E`<li>${e}</li>`)}
+        ${e.compat.errors.map((e) => D`<li>${e}</li>`)}
       </ul>
-    </div>` : O;
+    </div>` : k;
 	}
 	_renderProbe() {
 		let e = this._probe.status === "running", t = e || !this._devices || this._devices.degraded;
-		return E`<section class="card">
+		return D`<section class="card">
       <h2>Hardware probe</h2>
       <p class="muted">
         Measures which live and recorded-video methods work on each camera and how fast
@@ -3703,7 +3768,7 @@ var Dn = 6e3, On = class extends F {
 			4,
 			5,
 			6
-		].map((e) => E`<option value=${e} ?selected=${e === this._maxStreams}>${e}</option>`)}
+		].map((e) => D`<option value=${e} ?selected=${e === this._maxStreams}>${e}</option>`)}
         </select>
         sub streams at once on one camera per device, stopping at the first failure
       </label>
@@ -3753,16 +3818,16 @@ var Dn = 6e3, On = class extends F {
 			4,
 			5,
 			6
-		].map((e) => E`<option value=${e} ?selected=${e === this._playbackStreams}>${e}</option>`)}
+		].map((e) => D`<option value=${e} ?selected=${e === this._playbackStreams}>${e}</option>`)}
         </select>
         recordings at once, one per camera, stopping at the first failure
       </label>
       <div class="actions">
-        ${e ? E`<button @click=${() => {
+        ${e ? D`<button @click=${() => {
 			this._cancelProbe();
 		}}>
               Cancel
-            </button>` : E`<button class="primary" ?disabled=${t} @click=${() => {
+            </button>` : D`<button class="primary" ?disabled=${t} @click=${() => {
 			this._startProbe();
 		}}>
               Run probe
@@ -3774,22 +3839,22 @@ var Dn = 6e3, On = class extends F {
 	_renderProbeState() {
 		let e = this._probe;
 		switch (e.status) {
-			case "idle": return O;
-			case "running": return E`<div class="progress" aria-live="polite">
+			case "idle": return k;
+			case "running": return D`<div class="progress" aria-live="polite">
           <p>Probing… this can take several minutes on an NVR.</p>
           <ol class="log">
-            ${e.log.map((e) => E`<li>${e}</li>`)}
+            ${e.log.map((e) => D`<li>${e}</li>`)}
           </ol>
         </div>`;
-			case "error": return E`<div class="banner error" role="alert">Probe failed: ${e.message}</div>`;
-			case "done": return E`<div class="done">
+			case "error": return D`<div class="banner error" role="alert">Probe failed: ${e.message}</div>`;
+			case "done": return D`<div class="done">
           <p>
             Done. The report was saved as <code>${e.filename}</code>. If your browser or
             the Companion app blocked the download, use Copy JSON instead.
           </p>
           <div class="actions">
             <button @click=${() => {
-				En(e.report, e.filename);
+				On(e.report, e.filename);
 			}}>
               Download again
             </button>
@@ -3834,7 +3899,7 @@ var Dn = 6e3, On = class extends F {
 				status: "done",
 				report: e,
 				filename: n
-			}, En(e, n);
+			}, On(e, n);
 		}, (e) => {
 			this._run === t && (this._run = void 0, this._probe = {
 				status: "error",
@@ -3933,6 +3998,6 @@ var Dn = 6e3, On = class extends F {
       }
     `];
 };
-customElements.get("reolink-viewer-panel") || customElements.define("reolink-viewer-panel", On);
+customElements.get("reolink-viewer-panel") || customElements.define("reolink-viewer-panel", An);
 //#endregion
-export { On as ReolinkViewerPanel };
+export { An as ReolinkViewerPanel };
