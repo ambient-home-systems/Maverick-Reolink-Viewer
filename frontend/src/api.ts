@@ -143,12 +143,19 @@ export const fetchTimelineDays = (
     month,
   });
 
+/** `maxAge` (s): accept a copy of today that old at once (timing cache "stale"). */
 export const fetchTimelineDay = (
   hass: HomeAssistant,
   deviceId: string,
   date: string,
+  maxAge = 0,
 ): Promise<TimelineDay> =>
-  hass.callWS<TimelineDay>({ type: "reolink_viewer/timeline/day", device_id: deviceId, date });
+  hass.callWS<TimelineDay>({
+    type: "reolink_viewer/timeline/day",
+    device_id: deviceId,
+    date,
+    ...(maxAge > 0 ? { max_age: maxAge } : {}),
+  });
 
 /** Fetch today's timeline of every recording camera in the background. */
 export const warmTimelines = (hass: HomeAssistant): Promise<{ cameras: number }> =>

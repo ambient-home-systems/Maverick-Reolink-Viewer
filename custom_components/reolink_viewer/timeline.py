@@ -46,6 +46,9 @@ _LOGGER = logging.getLogger(__name__)
 
 STORAGE_VERSION = 1
 STORAGE_KEY = "reolink_viewer.timeline.{key}"
+# Stored days of an older format are searched again (months are kept).
+# 2: the NVR's per-type alarm records for one moment are merged into one event.
+DAYS_FORMAT = 2
 SAVE_DELAY = 10.0
 MAX_STORED_DAYS = 120
 MAX_MEMORY_DAYS = 400
@@ -242,6 +245,10 @@ class TimelineService:
             self._stores[key] = store
             loaded = await store.async_load()
             data = loaded if isinstance(loaded, dict) else {}
+            if data.get("format") != DAYS_FORMAT:
+                for stream in STREAMS:
+                    data.pop(stream, None)
+                data["format"] = DAYS_FORMAT
             for name in (*STREAMS, "months"):
                 data.setdefault(name, {})
             self._stored[key] = data
@@ -293,8 +300,14 @@ class TimelineService:
         day: date,
         stream: str = "sub",
         priority: Priority = Priority.PLAYBACK,
+        max_age: float = 0,
     ) -> tuple[Day, dict[str, Any]]:
-        """Return one day of recordings and events, from cache when possible."""
+        """Return one day of recordings and events, from cache when possible.
+
+        Today is searched again after TODAY_TTL. With ``max_age``, a copy of
+        today up to that many seconds old is returned at once instead (timing
+        cache "stale"), for a caller that shows it and then asks again.
+        """
         began = time.monotonic()
         host = bridge.async_get_host(self._hass, source.entry_id)
         tz = host.timezone()
@@ -320,12 +333,13 @@ class TimelineService:
                 return day_data, {"cache": "store", "total_ms": _ms(began)}
 
         is_today = day == now_local.date()
-        if (
-            is_today
-            and cached is not None
-            and _wall_time() - cached.fetched_at < TODAY_TTL
-        ):
-            return cached, {"cache": "memory", "total_ms": _ms(began)}
+        if is_today and cached is not None:
+            age = _wall_time() - cached.fetched_at
+            if age < TODAY_TTL:
+                return cached, {"cache": "memory", "total_ms": _ms(began)}
+            if age < max_age:
+                timing = {"cache": "stale", "age_s": round(age), "total_ms": _ms(began)}
+                return cached, timing
 
         async def fetch() -> tuple[Day, dict[str, Any]]:
             return await self._fetch_day(
@@ -367,12 +381,18 @@ class TimelineService:
             previous = None
         incremental = previous is not None
         searched = time.monotonic()
+        started: list[float] = []
+
+        async def job() -> bridge.DaySearch:
+            started.append(time.monotonic())
+            return await host.async_search_day(
+                source.channel, window_start, window_end, stream
+            )
+
         try:
             search = await self._scheduler.run(
                 source.entry_id,
-                lambda: host.async_search_day(
-                    source.channel, window_start, window_end, stream
-                ),
+                job,
                 priority=priority,
                 key=("day", source.channel, stream, window_start, window_end),
                 timeout=SEARCH_TIMEOUT,
@@ -400,6 +420,8 @@ class TimelineService:
         timing = {
             "cache": "incremental" if incremental else "fresh",
             "search_ms": search_ms,
+            "queue_ms": round((started[0] - searched) * 1000, 1) if started else None,
+            **search.timing,
             "segments": len(day.segments),
         }
         return day, timing

@@ -18,7 +18,7 @@ put on it:
 | --- | --- | --- | --- | --- |
 | 0 | Foundations, CI, adapter layer, hardware discovery | High | 1–2 wk | Done (2026-10-17) |
 | 1 | Device details and every setting, with explanations | Standard (catalog) / High (panel shell) | 2–3 wk | Done (2026-10-17) |
-| 2 | Event timeline, thumbnails, smooth playback | High (backend) / Very high (player) | 3–5 wk | In progress: 2A built (v0.2.0); its LAN exit criteria await the hardware check. 2B not started |
+| 2 | Event timeline, thumbnails, smooth playback | High (backend) / Very high (player) | 3–5 wk | In progress: 2A built; first hardware check on 2026-10-19 missed two targets, fixed in v0.2.1, re-check pending. 2B not started |
 | 3 | Live view via go2rtc, grid, fullscreen, PTZ | High | 3–4 wk | Not started |
 | 4 | Performance, mobile, packaging, first release | Standard | 2–3 wk | Not started |
 | 5 | Optional R&D: Baichuan live/playback | Very high | 4–8 wk, time-boxed with gates | Not started |
@@ -424,9 +424,9 @@ gets no Playback tab.
 | 1. Follow-up check (v0.1.2): MP4 layout through the plain GET, server-side seek with `start=`, file-name shape, full-speed parallel downloads | Done: run 4 on 2026-10-17; the open questions are settled below |
 | 2. Backend: scheduler limits + stream budget, event list from the bridge, timeline commands and cache, UTC conversion with DST, thumbnails, VOD and clip views | Done (v0.2.0): see "2A as built" below |
 | 2. Frontend: Playback tab, canvas timeline, calendar, event list, simple player, debug panel | Done (v0.2.0): checked in Chromium with synthetic recordings (desktop and iPhone-sized layout) |
-| Exit on LAN: timeline < 1 s cached, < 3 s cold | Awaiting the hardware check (debug panel: "Time to timeline") |
-| Exit on LAN: clicking an event starts video in < 2 s on the sub stream | Awaiting the hardware check (debug panel: "Time to first frame") |
-| Exit on LAN: auto-advance to the next file | Awaiting the hardware check. With synthetic files in Chromium the swap took about 1 ms |
+| Exit on LAN: timeline < 1 s cached, < 3 s cold | v0.2.0: cached past day 148 ms (pass). Today 1469 ms (an incremental search, fail) and an unopened past day 3830 ms (fail). v0.2.1 shows today at once; re-check pending |
+| Exit on LAN: clicking an event starts video in < 2 s on the sub stream | v0.2.0: 2190–5264 ms with the files already cached (fail). Cause found and fixed in v0.2.1 (segment index); re-check pending |
+| Exit on LAN: auto-advance to the next file | Not measured yet: the camera tested had no two touching recordings that day. With synthetic files in Chromium the swap took about 1 ms |
 
 What the playback check measures (`probe_playback.py`, opt-in, read-only, every
 request a prefetch-priority scheduler job, reads bounded in bytes and time, no URL
@@ -531,6 +531,47 @@ Settled by run 4 (v0.1.2):
      `ambiguous`, which the timeline shows.
    - **Skipped hour:** times in the hour skipped when clocks spring forward cannot
      occur and are mapped with the standard offset.
+
+#### First hardware check (2026-10-19, v0.2.0, Chrome on the LAN)
+
+Measured with `scripts/playback_check.js` on Front Yard Right (via the NVR):
+
+| Check | Result | Server |
+| --- | --- | --- |
+| Today, as the tab opened | 1469 ms | incremental search |
+| 2026-10-16, first open | 3830 ms | fresh search |
+| 2026-10-16 again | 148 ms | memory |
+| Event → first frame (3 events, files already cached) | 5264, 2259, 2190 ms | URL 54–167 ms |
+| Auto-advance | not measured | no touching recordings |
+
+Findings and fixes (v0.2.1):
+
+1. **Slow first frame on cached files.** Given a fragmented MP4 without an
+   index over HTTP Range, Chrome reads the whole file before it reports
+   metadata. In Chromium tests on a 6 MB file at 50 Mbit/s, metadata took
+   1.2 s. The NVR's recordings are larger, which explains 2–5 s.
+   - **Fix:** the cache leaves room after `moov` while it downloads and writes
+     one `sidx` per track there once the file is complete (`mp4index.py`). No
+     recording byte moves. Files whose fragments use absolute offsets are left
+     alone.
+   - **Result:** on the same test file, first frame took 0.13–0.18 s instead of
+     1.3–1.9 s. ffmpeg's own `global_sidx` gave 0.2–0.26 s.
+   - Files cached by v0.2.0 are retired (cache layout 2).
+2. **Today's timeline waited for the NVR.** Even an incremental search costs
+   about 1.5 s. The panel now asks for a copy of today up to 15 minutes old
+   (`max_age`), shows it at once, then refreshes it quietly. The panel warms
+   today for every camera when it opens.
+3. **Duplicate events.** The NVR sends one alarm record per detection type for
+   the same moment (VEHICLE and MOTION at 9:17:28 were two events; 44 events
+   for 11 recordings). Records of the same recording that start at the same
+   second are now one event with all its types. Stored days of the old
+   format are searched again.
+4. **HD could never be enabled.** HD waited for the main stream's codec, which
+   is learned only once a main recording has been cached. HD can now be tried
+   before that; the player falls back to SD if the browser cannot play it.
+5. **Cold day search (3.8 s).** Not changed yet. The server timing now
+   separates the queue wait, the recording search and the event search, so
+   the next run shows which part is slow.
 
 #### 2A as built (v0.2.0)
 

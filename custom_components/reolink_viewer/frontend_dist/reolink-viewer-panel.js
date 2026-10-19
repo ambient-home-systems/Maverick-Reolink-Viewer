@@ -564,10 +564,11 @@ var Fe = (e, t, n, r) => e.callWS({
 	device_id: t,
 	year: n,
 	month: r
-}), Ie = (e, t, n) => e.callWS({
+}), Ie = (e, t, n, r = 0) => e.callWS({
 	type: "reolink_viewer/timeline/day",
 	device_id: t,
-	date: n
+	date: n,
+	...r > 0 ? { max_age: r } : {}
 }), Le = (e) => e.callWS({ type: "reolink_viewer/timeline/warm" }), Re = (e, t, n) => e.callWS({
 	type: "reolink_viewer/playback/url",
 	device_id: t.deviceId,
@@ -1781,8 +1782,8 @@ function bt() {
 }
 async function xt(e, t = bt()) {
 	if (!e) return {
-		main: !1,
-		reason: "main stream not seen yet"
+		main: !0,
+		reason: "not tried yet: falls back to SD if this browser cannot play it"
 	};
 	if (!e.width || !e.height) return {
 		main: !1,
@@ -2862,30 +2863,34 @@ var fn = 6e4, pn = 10 * G, mn = 10, hn = class extends F {
 	async _loadDay(e, t = {}) {
 		let n = this.hass;
 		if (!n) return;
-		let r = ++this._daySeq, i = performance.now();
+		let r = ++this._daySeq, i = performance.now(), a = !1;
 		t.quiet || (this._loading = !0);
 		try {
-			let a = await Ie(n, this.deviceId, e);
+			let o = await Ie(n, this.deviceId, e, t.quiet ? 0 : 900);
 			if (r !== this._daySeq) return;
-			let o = !this._day || this._day.date !== a.date;
-			if (this._day = a, this._error = void 0, o || !t.keepView) {
+			let s = !this._day || this._day.date !== o.date;
+			if (this._day = o, this._error = void 0, s || !t.keepView) {
 				this._view = J({
-					start: a.start,
-					span: a.end - a.start
-				}, a);
-				let e = a.events.at(-1)?.start ?? a.segments.at(-1)?.start;
+					start: o.start,
+					span: o.end - o.start
+				}, o);
+				let e = o.events.at(-1)?.start ?? o.segments.at(-1)?.start;
 				this._cursor = e;
-			} else this._view = J(this._view, a);
+			} else this._view = J(this._view, o);
 			await this.updateComplete, t.quiet || (this._metrics = {
 				...this._metrics,
 				timelineMs: performance.now() - i,
-				timelineServer: a.timing
-			}), this._warmLongRecording(a);
+				timelineServer: o.timing
+			}), this._warmLongRecording(o), a = !t.quiet && o.timing.cache === "stale";
 		} catch (e) {
 			r === this._daySeq && (this._error = L(e).message);
 		} finally {
 			r === this._daySeq && (this._loading = !1);
 		}
+		a && await this._loadDay(e, {
+			keepView: !0,
+			quiet: !0
+		});
 	}
 	async _loadMonth(e, t) {
 		let n = this.hass;

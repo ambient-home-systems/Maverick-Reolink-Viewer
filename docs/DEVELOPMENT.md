@@ -20,6 +20,7 @@ custom_components/reolink_viewer/
   timeconv.py        # camera-local time -> UTC (device DST rules, repeated-hour hints)
   timeline.py        # day/month timelines: permanent cache for past days, 60 s for today
   vodcache.py        # disk cache of recordings: fills under the stream budget, LRU
+  mp4index.py        # writes a sidx index into cached recordings (fast browser seeks)
   thumbnails.py      # recording thumbnails: time buckets, de-duplication, disk LRU
   views.py           # signed, short-lived /vod, /clip, /thumb URLs (no camera URLs)
   websocket_api.py   # status, devices, catalog, probe, timeline/*, playback/*, thumbnail/*
@@ -30,7 +31,7 @@ frontend/            # Lit + TypeScript panel, built with Vite
   src/components/    # device list, device page, overview, settings, playback tab
   src/playback/      # timeline canvas + math, calendar, event list, player, codec checks
 tests/               # pytest-homeassistant-custom-component
-scripts/             # setup_dev.sh, probe_to_matrix.py
+scripts/             # setup_dev.sh, probe_to_matrix.py, playback_check.js (paste into the browser console)
 ```
 
 ## Environment

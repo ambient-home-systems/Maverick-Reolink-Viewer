@@ -5,7 +5,7 @@ import type { PlaybackUrl, TimelineDay } from "../types";
 import { playsProgressive } from "../playback/codec";
 import "./playback";
 import { TOAST_EVENT } from "./navigation";
-import { describeCache, type RvPlayback } from "./playback";
+import { STALE_TODAY_S, describeCache, type RvPlayback } from "./playback";
 
 const T0 = Date.UTC(2026, 9, 17, 4, 0); // midnight EDT, 17 Oct 2026
 const MIN = 60_000;
@@ -266,6 +266,18 @@ describe("rv-playback", () => {
     await el.playAt(T0 + 61 * MIN);
     await el.updateComplete;
     expect(el._playFailure).toBeUndefined();
+  });
+
+  it("shows a recent copy of today at once, then refreshes it", async () => {
+    const hass = playbackHass(makeDay({ timing: { cache: "stale", age_s: 300 } }));
+    const el = await mount(hass);
+    const days = sentOf(hass, "reolink_viewer/timeline/day");
+    expect(days[0]).toMatchObject({ date: "2026-10-17", max_age: STALE_TODAY_S });
+    // The refresh asks for the current copy (no max_age).
+    expect(days).toHaveLength(2);
+    expect(days[1]).not.toHaveProperty("max_age");
+    expect(el._metrics.timelineServer?.cache).toBe("stale");
+    expect(el._loading).toBe(false);
   });
 
   it("describes the cache state", () => {

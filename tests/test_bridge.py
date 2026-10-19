@@ -344,13 +344,16 @@ def test_redact_text() -> None:
 async def test_search_day_and_recording_days(
     hass: HomeAssistant, reolink_host: MagicMock, loaded_reolink: MockConfigEntry
 ) -> None:
-    """One window: recordings plus individual events (one per item, all types)."""
+    """One window: recordings plus events (one per moment, all types)."""
     (host,) = bridge.async_get_hosts(hass)
     start = TEST_NOW - timedelta(hours=2)
     both = make_vod_file(start, 2, name="20261017100000")
     both.bc_triggers = VOD_trigger.PERSON | VOD_trigger.VEHICLE
     animal = make_vod_file(start + timedelta(minutes=30), 1, name="20261017103000")
     animal.bc_triggers = VOD_trigger.ANIMAL
+    # The NVR's separate motion record for the same moment, lasting longer.
+    motion = make_vod_file(start + timedelta(minutes=30), 3, name="20261017103000")
+    motion.bc_triggers = VOD_trigger.MOTION
     reolink_host.baichuan.search_vod_type = AsyncMock(
         return_value=(
             {},
@@ -358,6 +361,7 @@ async def test_search_day_and_recording_days(
                 VOD_trigger.PERSON: [both],
                 VOD_trigger.VEHICLE: [both],
                 VOD_trigger.ANIMAL: [animal],
+                VOD_trigger.MOTION: [motion],
             },
         )
     )
@@ -368,10 +372,11 @@ async def test_search_day_and_recording_days(
     assert file.playback.tzinfo is None
     assert [(e.types, e.file_id) for e in day.events] == [
         (("VEHICLE", "PERSON"), "20261017100000"),
-        (("ANIMAL",), "20261017103000"),
+        (("ANIMAL", "MOTION"), "20261017103000"),
     ]
     assert day.events[0].start == start
     assert day.events[0].end == start + timedelta(minutes=2)
+    assert day.events[1].end == start + timedelta(minutes=33)
     assert day.events_error is None
 
     # A failing event search keeps the recordings.

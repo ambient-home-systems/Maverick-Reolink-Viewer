@@ -42,6 +42,8 @@ import { toast } from "./navigation";
 
 /** Re-read today's timeline this often while the tab is open. */
 export const TODAY_REFRESH_MS = 60_000;
+/** Show a copy of today up to this old (s) at once, then refresh it quietly. */
+export const STALE_TODAY_S = 900;
 /** Recordings at least this long are on continuously recording cameras. */
 const LONG_RECORDING_MS = 10 * MINUTE;
 /** Thumbnails of the event list: one per 10 s. */
@@ -190,9 +192,10 @@ export class RvPlayback extends LitElement {
     if (!hass) return;
     const seq = ++this._daySeq;
     const began = performance.now();
+    let stale = false;
     if (!options.quiet) this._loading = true;
     try {
-      const day = await fetchTimelineDay(hass, this.deviceId, date);
+      const day = await fetchTimelineDay(hass, this.deviceId, date, options.quiet ? 0 : STALE_TODAY_S);
       if (seq !== this._daySeq) return;
       const first = !this._day || this._day.date !== day.date;
       this._day = day;
@@ -209,11 +212,14 @@ export class RvPlayback extends LitElement {
         this._metrics = { ...this._metrics, timelineMs: performance.now() - began, timelineServer: day.timing };
       }
       this._warmLongRecording(day);
+      stale = !options.quiet && day.timing.cache === "stale";
     } catch (err) {
       if (seq === this._daySeq) this._error = toError(err).message;
     } finally {
       if (seq === this._daySeq) this._loading = false;
     }
+    // Shown at once from an older copy: now fetch the current one.
+    if (stale) await this._loadDay(date, { keepView: true, quiet: true });
   }
 
   private async _loadMonth(year: number, month: number): Promise<void> {

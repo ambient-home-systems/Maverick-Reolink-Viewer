@@ -118,6 +118,16 @@ async def test_timeline_commands(
     assert msg["success"] is False
     msg = await _ws(
         client,
+        {
+            "type": "reolink_viewer/timeline/day",
+            "device_id": camera,
+            "date": DAY,
+            "max_age": 7200,
+        },
+    )
+    assert msg["success"] is False  # max_age is capped at an hour
+    msg = await _ws(
+        client,
         {"type": "reolink_viewer/timeline/day", "device_id": "nope", "date": DAY},
     )
     assert msg["error"]["code"] == "not_found"

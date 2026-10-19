@@ -11,17 +11,18 @@ from aiohttp import ClientSession, web
 from aiohttp.test_utils import TestServer
 import pytest
 
-from custom_components.reolink_viewer import bridge
+from custom_components.reolink_viewer import bridge, vodcache
 from custom_components.reolink_viewer.bridge import CameraUrl, VodFile, VodMethod
 from custom_components.reolink_viewer.devices import PlaybackSource
 from custom_components.reolink_viewer.scheduler import Priority, Scheduler
 from custom_components.reolink_viewer.vodcache import Recording, VodCache, VodCacheError
 from homeassistant.core import HomeAssistant
 
-from .mp4_fixtures import fragmented_file, mp4_file
+from .mp4_fixtures import FTYP, av_moov, fragmented_av, mp4_file
 
 SOURCE = PlaybackSource("cam1", "Garage", "entry1", 16)
 BODY = mp4_file(moov_first=True, mdat_bytes=600_000)
+FRAG = fragmented_av(20)
 
 
 def rec(name: str = "0-16-1-20261017120000-00000", stream: str = "sub") -> Recording:
@@ -47,10 +48,16 @@ async def media(socket_enabled: None) -> AsyncGenerator[Server]:
             return web.Response(status=404)
         if name == "empty":
             return web.Response(body=b"", content_type="video/mp4")
-        body = fragmented_file(20) if name == "frag" else BODY
+        body = FRAG if name == "frag" else BODY
         resp = web.StreamResponse(headers={"Content-Type": "video/mp4"})
         resp.enable_chunked_encoding()
         await resp.prepare(request)
+        if name == "frag":
+            # The header in small pieces: the fill waits for the first moof.
+            for start in range(0, 3000, 300):
+                await resp.write(body[start : start + 300])
+                await asyncio.sleep(0.01)
+            body = body[3000:]
         await resp.write(body[:100_000])
         if name == "slow":
             await gate.wait()
@@ -142,6 +149,31 @@ async def test_fill_and_read(
     assert vc.media_info(SOURCE, "main") is None
     assert vc.stats()["entries"] == 1
     assert entry.public()["complete"] is True
+    # A plain MP4 is stored as it came; there is nothing to index.
+    assert entry.timing["indexed"] == "no: mdat after moov"
+    assert info["indexed"] == "no: mdat after moov"
+
+
+async def test_fragmented_recordings_get_an_index(
+    cache: tuple[VodCache, Scheduler, FakeHost], media: Server
+) -> None:
+    """Room for a sidx is left after moov and filled in once complete."""
+    vc, _sched, _host = cache
+    entry = await vc.async_open(rec("frag"))
+    await vc.async_wait(entry, complete=True)
+    assert entry.timing["indexed"] == "yes"
+    stored = entry.path.read_bytes()
+    head = len(FTYP + av_moov())
+    assert stored[:head] == FRAG[:head]
+    room = len(stored) - len(FRAG)
+    assert stored[head + room :] == FRAG[head:]
+    assert stored[head + 4 : head + 8] == b"sidx"
+    assert entry.written == len(stored)
+    assert await _read(vc, entry) == stored
+    info = vc.media_info(SOURCE, "sub")
+    assert info is not None
+    assert info["indexed"] == "yes"
+    assert info["codec"] == "avc1.640033"
 
 
 async def test_readers_follow_a_fill(
@@ -285,3 +317,24 @@ def test_cache_id_reveals_nothing() -> None:
     assert a.cache_id != b.cache_id
     assert "x" not in a.cache_id
     assert len(a.cache_id) == 32
+
+
+async def test_index_failure_keeps_the_recording(
+    cache: tuple[VodCache, Scheduler, FakeHost],
+    media: Server,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """If the index cannot be built, the file is still cached and playable."""
+    vc, _sched, _host = cache
+
+    def broken(path: str, at: int, size: int) -> bytes:
+        raise OSError("disk hiccup")
+
+    monkeypatch.setattr(vodcache, "build_index", broken)
+    entry = await vc.async_open(rec("frag"))
+    await vc.async_wait(entry, complete=True)
+    assert entry.complete
+    assert entry.timing["indexed"] == "no: index not built"
+    stored = entry.path.read_bytes()
+    head = len(FTYP + av_moov())
+    assert stored[head + 4 : head + 8] == b"free"
