@@ -96,3 +96,86 @@ def fragmented_file(fragments: int = 3) -> bytes:
     for _ in range(fragments):
         data += box("moof", box("mfhd", bytes(8))) + box("mdat", bytes(1000))
     return data
+
+
+VIDEO_TIMESCALE = 90_000
+AUDIO_TIMESCALE = 16_000
+FRAME = 3600  # 25 fps
+AUDIO_FRAME = 1024
+FRAMES = 50  # 2 s fragments
+AUDIO_FRAMES = 31
+SYNC = 0x02000000  # sample_depends_on = 2 (an I frame)
+NON_SYNC = 0x01010000
+
+
+def _tkhd(track_id: int) -> bytes:
+    return full_box("tkhd", struct.pack(">IIIII", 0, 0, track_id, 0, 0) + bytes(60))
+
+
+def _mdhd(timescale: int) -> bytes:
+    return full_box("mdhd", struct.pack(">IIIIHH", 0, 0, timescale, 0, 0, 0))
+
+
+def av_trak(track_id: int, timescale: int, handler: str, entry: bytes) -> bytes:
+    """Build a trak with a track id and a media timescale."""
+    stsd = full_box("stsd", struct.pack(">I", 1) + entry)
+    minf = box("minf", box("vmhd", bytes(12)) + box("stbl", stsd))
+    mdia = box("mdia", _mdhd(timescale) + hdlr(handler) + minf)
+    return box("trak", _tkhd(track_id) + mdia)
+
+
+def _trex(track_id: int, duration: int) -> bytes:
+    return full_box("trex", struct.pack(">IIIII", track_id, 1, duration, 0, 0))
+
+
+def _tfhd(track_id: int, flags: int, extra: bytes) -> bytes:
+    return box("tfhd", struct.pack(">I", flags) + struct.pack(">I", track_id) + extra)
+
+
+def _moof(index: int, *, absolute: bool, non_sync: bool) -> bytes:
+    base_flags = 0x01 if absolute else 0x020000
+    base_extra = struct.pack(">Q", 0) if absolute else b""
+    video_run = struct.pack(">II", 0x001 | 0x004 | 0x100 | 0x200, FRAMES)
+    video_run += struct.pack(">iI", 0, NON_SYNC if non_sync else SYNC)
+    video_run += b"".join(struct.pack(">II", FRAME, 100) for _ in range(FRAMES))
+    video = box(
+        "traf",
+        _tfhd(1, base_flags, base_extra)
+        + full_box("tfdt", struct.pack(">Q", index * FRAMES * FRAME), version=1)
+        + box("trun", video_run),
+    )
+    audio_run = struct.pack(">II", 0x001 | 0x200, AUDIO_FRAMES) + struct.pack(">i", 0)
+    audio_run += b"".join(struct.pack(">I", 10) for _ in range(AUDIO_FRAMES))
+    audio = box(
+        "traf",
+        _tfhd(2, base_flags | 0x08, base_extra + struct.pack(">I", AUDIO_FRAME))
+        + full_box("tfdt", struct.pack(">I", index * AUDIO_FRAMES * AUDIO_FRAME))
+        + box("trun", audio_run),
+    )
+    return box("moof", box("mfhd", struct.pack(">II", 0, index + 1)) + video + audio)
+
+
+def av_moov() -> bytes:
+    """Build the moov of an NVR-like fragmented file (1 s placeholder duration)."""
+    return box(
+        "moov",
+        mvhd(1)
+        + av_trak(1, VIDEO_TIMESCALE, "vide", visual_entry("avc1", 640, 360, AVCC))
+        + av_trak(2, AUDIO_TIMESCALE, "soun", audio_entry("mp4a", ESDS))
+        + box("mvex", _trex(1, FRAME) + _trex(2, AUDIO_FRAME)),
+    )
+
+
+def fragmented_av(
+    fragments: int = 4,
+    *,
+    absolute: bool = False,
+    non_sync: frozenset[int] = frozenset(),
+) -> bytes:
+    """Build an NVR-like fragmented MP4: 2 s fragments of video and audio."""
+    data = FTYP + av_moov()
+    for i in range(fragments):
+        payload = bytes((i * 31 + j) & 0xFF for j in range(FRAMES * 100 + 310))
+        data += _moof(i, absolute=absolute, non_sync=i in non_sync)
+        data += box("mdat", payload)
+    return data

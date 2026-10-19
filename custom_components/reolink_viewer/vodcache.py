@@ -13,7 +13,10 @@ served from the cache, with Range, by ``views.py``:
 - least-recently-used complete files are evicted above the size cap; files
   being filled or read are never evicted;
 - the first fill of a camera's stream records its codec and size (from the
-  ``moov``) for the browser's MediaCapabilities check.
+  ``moov``) for the browser's MediaCapabilities check;
+- room is left after the ``moov`` for a segment index (``mp4index.py``),
+  written once the file is complete, so browsers seek without reading the
+  whole file first.
 
 File I/O runs in the executor; device I/O goes through the scheduler.
 """
@@ -27,6 +30,7 @@ import logging
 import os
 from pathlib import Path
 import shutil
+import struct
 import time
 from typing import Any
 
@@ -39,6 +43,7 @@ from . import bridge
 from .bridge import VodFile, VodMethod
 from .devices import PlaybackSource
 from .mp4 import BoxScanner
+from .mp4index import build_index, free_box, plan_reserve
 from .scheduler import Priority, Scheduler, StreamTicket
 from .timeconv import from_ms
 
@@ -55,6 +60,9 @@ MIN_FREE_BYTES = 2 * 1024**3
 MEDIA_STORE_KEY = "reolink_viewer.media"
 SUFFIX = ".mp4"
 PART_SUFFIX = ".part"
+# Part of each file's cache id: bumping it retires files of an older layout
+# (they become unknown files, evicted first). 2: segment index added.
+LAYOUT = 2
 
 
 class VodCacheError(Exception):
@@ -75,7 +83,7 @@ class Recording:
     @property
     def cache_id(self) -> str:
         """Return the file name stem (reveals no identifier)."""
-        raw = f"{self.source.key}|{self.stream}|{self.name}"
+        raw = f"{LAYOUT}|{self.source.key}|{self.stream}|{self.name}"
         return hashlib.sha256(raw.encode()).hexdigest()[:32]
 
 
@@ -267,6 +275,10 @@ class VodCache:
             timeout=URL_TIMEOUT,
         )
         scanner = BoxScanner(max_boxes=3)
+        duration_s = (rec.end_ms - rec.start_ms) / 1000
+        head = bytearray()
+        planned = False
+        index_at = reserve = 0
         fd = await self._hass.async_add_executor_job(_open_write, entry.part_path)
         try:
             async with self._session().get(
@@ -280,19 +292,37 @@ class VodCache:
                 entry.timing["headers_ms"] = _ms(began)
                 buffer = bytearray()
                 first = True
-                async for chunk in resp.content.iter_chunked(CHUNK):
+                async for received in resp.content.iter_chunked(CHUNK):
+                    chunk = received
                     if first:
                         entry.timing["ttfb_ms"] = _ms(began)
                         first = False
                     if scanner.bytes_seen < 64 * 1024:
                         scanner.feed(chunk)
+                    if not planned:
+                        # Hold the first bytes until the index room is placed.
+                        head += chunk
+                        plan = plan_reserve(bytes(head), duration_s)
+                        if plan is None:
+                            continue
+                        planned = True
+                        if plan.insert_at is not None:
+                            index_at, reserve = plan.insert_at, plan.reserve
+                            head[index_at:index_at] = free_box(reserve)
+                        else:
+                            entry.timing["indexed"] = f"no: {plan.reason}"
+                        chunk = bytes(head)
                     buffer += chunk
                     # Write small at first so playback can start at once.
                     if len(buffer) >= (WRITE_BATCH if entry.written else 64 * 1024):
                         await self._write(entry, fd, bytes(buffer))
                         buffer.clear()
+                if not planned:
+                    buffer += head
                 if buffer:
                     await self._write(entry, fd, bytes(buffer))
+            if reserve:
+                await self._write_index(entry, fd, index_at, reserve)
         finally:
             await self._hass.async_add_executor_job(os.close, fd)
         if entry.written == 0:
@@ -301,7 +331,22 @@ class VodCache:
         entry.complete = True
         seconds = max(time.monotonic() - began, 1e-3)
         entry.timing["mbit_s"] = round(entry.written * 8 / seconds / 1e6, 1)
-        await self._remember_media(rec, scanner)
+        await self._remember_media(rec, scanner, entry.timing.get("indexed"))
+
+    async def _write_index(
+        self, entry: Entry, fd: int, index_at: int, reserve: int
+    ) -> None:
+        """Fill the room left after moov with the segment index."""
+        try:
+            index = await self._hass.async_add_executor_job(
+                build_index, str(entry.part_path), index_at, reserve
+            )
+            if index is not None:
+                await self._hass.async_add_executor_job(os.pwrite, fd, index, index_at)
+        except (OSError, ValueError, IndexError, struct.error) as err:
+            _LOGGER.debug("Indexing %s failed: %s", entry.recording.cache_id[:8], err)
+            index = None
+        entry.timing["indexed"] = "yes" if index is not None else "no: index not built"
 
     async def _write(self, entry: Entry, fd: int, data: bytes) -> None:
         await self._hass.async_add_executor_job(_write_all, fd, data)
@@ -402,7 +447,9 @@ class VodCache:
 
     # ---- Media info ----
 
-    async def _remember_media(self, rec: Recording, scanner: BoxScanner) -> None:
+    async def _remember_media(
+        self, rec: Recording, scanner: BoxScanner, indexed: str | None
+    ) -> None:
         layout = await scanner.async_layout()
         video = next((t for t in layout.tracks if t.handler == "vide"), None)
         audio = next((t for t in layout.tracks if t.handler == "soun"), None)
@@ -414,6 +461,7 @@ class VodCache:
             "height": video.height,
             "audio": audio.codec if audio is not None else None,
             "fragmented": layout.fragmented,
+            "indexed": indexed,
             "seen": datetime.now(UTC).isoformat(),
         }
         self._media.setdefault(rec.source.key, {})[rec.stream] = info
