@@ -18,7 +18,7 @@ put on it:
 | --- | --- | --- | --- | --- |
 | 0 | Foundations, CI, adapter layer, hardware discovery | High | 1–2 wk | Done (2026-10-17) |
 | 1 | Device details and every setting, with explanations | Standard (catalog) / High (panel shell) | 2–3 wk | Done (2026-10-17) |
-| 2 | Event timeline, thumbnails, smooth playback | High (backend) / Very high (player) | 3–5 wk | In progress: 2A built; timeline targets met on hardware (v0.2.2); video start and auto-advance fixes in v0.2.3, re-check pending. 2B not started |
+| 2 | Event timeline, thumbnails, smooth playback | High (backend) / Very high (player) | 3–5 wk | In progress: 2A built; timeline and auto-advance targets met on hardware (v0.2.3); video start inside long recordings still 1–5 s, under investigation. 2B not started |
 | 3 | Live view via go2rtc, grid, fullscreen, PTZ | High | 3–4 wk | Not started |
 | 4 | Performance, mobile, packaging, first release | Standard | 2–3 wk | Not started |
 | 5 | Optional R&D: Baichuan live/playback | Very high | 4–8 wk, time-boxed with gates | Not started |
@@ -425,8 +425,8 @@ gets no Playback tab.
 | 2. Backend: scheduler limits + stream budget, event list from the bridge, timeline commands and cache, UTC conversion with DST, thumbnails, VOD and clip views | Done (v0.2.0): see "2A as built" below |
 | 2. Frontend: Playback tab, canvas timeline, calendar, event list, simple player, debug panel | Done (v0.2.0): checked in Chromium with synthetic recordings (desktop and iPhone-sized layout) |
 | Exit on LAN: timeline < 1 s cached, < 3 s cold | **Met** (v0.2.2, three cameras): today 49–198 ms, recent past days 56–126 ms from the background fetch, cached 54–276 ms. A day older than a week still costs the NVR's 4–6 s search on first open |
-| Exit on LAN: clicking an event starts video in < 2 s on the sub stream | v0.2.2: 127–1517 ms on two cameras (pass). 2717 ms deep inside a 204 MB recording (fail): the NVR's absolute offsets kept the index out. Fixed in v0.2.3; re-check pending |
-| Exit on LAN: auto-advance to the next file | v0.2.2: worked on two cameras, with gaps of 0.9 and 1.6 s (the next file had no index), but not on a third, cause unknown. v0.2.3 indexes those files and the script reports how auto-advance ended. Re-check pending |
+| Exit on LAN: clicking an event starts video in < 2 s on the sub stream | v0.2.3: 521–605 ms in short recordings (pass). 1077–5428 ms deep inside 25-minute recordings, although they are cached and indexed (fail). Being investigated with `scripts/inspect_recording.js` |
+| Exit on LAN: auto-advance to the next file | **Met** (v0.2.3, three cameras): through the preloaded file, with gaps of 3, 5 and 80 ms |
 
 What the playback check measures (`probe_playback.py`, opt-in, read-only, every
 request a prefetch-priority scheduler job, reads bounded in bytes and time, no URL
@@ -643,6 +643,27 @@ Findings and fixes (v0.2.3):
 4. **Auto-advance "no" on Back Yard.** The cause is still unknown. The script
    now reports how auto-advance ended: through the preloaded file, by reloading,
    or stuck, with the player's state.
+
+#### Fourth hardware check (2026-10-19, v0.2.3, Chrome on the LAN)
+
+| Camera | Events → first frame | Recording (server) | Auto-advance |
+| --- | --- | --- | --- |
+| Front Yard Right | 2158, 2325, 5428 ms (18–23 min into a 24 min file) | 104 MB, indexed, cached | yes, preloaded, 3 ms |
+| Front Yard Left | 1470, 1452, 1077 ms (22–23 min into a 25 min file) | 27 MB, indexed, cached | yes, preloaded, 5 ms |
+| Back Yard | 521, 605, 572 ms (short recordings) | 1.6–2.5 MB, indexed | yes, preloaded, 80 ms |
+
+The timeline stayed under 0.5 s everywhere. The exception was one past day on Front
+Yard Right (5.3 s): its stored copy had a failed event search, so it was
+searched again, as v0.2.3 intends.
+
+**Open question.** Long recordings now carry an index, yet Chrome still takes
+1–5 s to report metadata, growing with file size, as if it read the whole
+file. With a test file built like the NVR's (25 minutes, absolute fragment
+offsets, indexed by the same code), Chromium needed 20 ms instead of
+0.85–3.2 s. So something in the NVR's real files must differ.
+`scripts/inspect_recording.js` prints a cached recording's structure (boxes,
+tracks, the first and last fragments, and whether each index entry lands on
+a fragment) to find out what.
 
 #### 2A as built (v0.2.0)
 
