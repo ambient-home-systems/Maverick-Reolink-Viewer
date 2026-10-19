@@ -132,9 +132,10 @@ def _tfhd(track_id: int, flags: int, extra: bytes) -> bytes:
     return box("tfhd", struct.pack(">I", flags) + struct.pack(">I", track_id) + extra)
 
 
-def _moof(index: int, *, absolute: bool, non_sync: bool) -> bytes:
-    base_flags = 0x01 if absolute else 0x020000
-    base_extra = struct.pack(">Q", 0) if absolute else b""
+def _moof(index: int, *, base: int | None, non_sync: bool) -> bytes:
+    """Build a moof; ``base``: an absolute base data offset (the moof's own)."""
+    base_flags = 0x020000 if base is None else 0x01
+    base_extra = b"" if base is None else struct.pack(">Q", base)
     video_run = struct.pack(">II", 0x001 | 0x004 | 0x100 | 0x200, FRAMES)
     video_run += struct.pack(">iI", 0, NON_SYNC if non_sync else SYNC)
     video_run += b"".join(struct.pack(">II", FRAME, 100) for _ in range(FRAMES))
@@ -172,10 +173,15 @@ def fragmented_av(
     absolute: bool = False,
     non_sync: frozenset[int] = frozenset(),
 ) -> bytes:
-    """Build an NVR-like fragmented MP4: 2 s fragments of video and audio."""
+    """Build an NVR-like fragmented MP4: 2 s fragments of video and audio.
+
+    ``absolute``: each tfhd gives its moof's file position as base_data_offset,
+    as the NVR does.
+    """
     data = FTYP + av_moov()
     for i in range(fragments):
         payload = bytes((i * 31 + j) & 0xFF for j in range(FRAMES * 100 + 310))
-        data += _moof(i, absolute=absolute, non_sync=i in non_sync)
+        base = len(data) if absolute else None
+        data += _moof(i, base=base, non_sync=i in non_sync)
         data += box("mdat", payload)
     return data

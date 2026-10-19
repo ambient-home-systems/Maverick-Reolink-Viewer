@@ -4,10 +4,15 @@ from pathlib import Path
 import struct
 from typing import NamedTuple
 
+import pytest
+
 from custom_components.reolink_viewer.mp4index import (
+    MAX_MOOF,
     MAX_RESERVE,
     MIN_RESERVE,
     PLAN_LIMIT,
+    OffsetShifter,
+    OffsetShiftError,
     Plan,
     build_index,
     free_box,
@@ -110,10 +115,7 @@ def test_plan_waits_then_places_the_room_after_moov() -> None:
 
 
 def test_plan_leaves_other_layouts_alone() -> None:
-    """Absolute offsets, plain files and odd starts are not touched."""
-    assert plan_reserve(fragmented_av(absolute=True), 8) == Plan(
-        None, reason="absolute data offsets"
-    )
+    """Plain files and odd starts are not touched."""
     assert plan_reserve(mp4_file(mdat_bytes=1000), 8) == Plan(
         None, reason="mdat after moov"
     )
@@ -198,3 +200,75 @@ def test_index_reads_other_fragment_encodings(tmp_path: Path) -> None:
     assert video.sap == [0]  # the first sample is not a sync sample
     # The audio track has no fragment here: an empty reference.
     assert audio.durations == [0]
+
+
+def _tfhd_bases(data: bytes) -> list[tuple[int, int]]:
+    """(moof position, base_data_offset) of every tfhd with an absolute offset."""
+    found = []
+    for kind, offset, size in _boxes(data):
+        if kind != "moof":
+            continue
+        moof = data[offset : offset + size]
+        at = 8
+        while at < len(moof):
+            traf_size, traf_kind = struct.unpack(">I4s", moof[at : at + 8])
+            if traf_kind == b"traf":
+                tfhd_flags = int.from_bytes(moof[at + 17 : at + 20], "big")
+                if tfhd_flags & 1:
+                    (base,) = struct.unpack(">Q", moof[at + 24 : at + 32])
+                    found.append((offset, base))
+            at += traf_size
+    return found
+
+
+def _shifted(data: bytes, shift: int, piece: int) -> bytes:
+    shifter = OffsetShifter(shift)
+    out = b"".join(
+        shifter.feed(data[i : i + piece]) for i in range(0, len(data), piece)
+    )
+    return out + shifter.finish()
+
+
+def test_absolute_offsets_move_with_the_index(tmp_path: Path) -> None:
+    """The NVR's absolute offsets still point at their moofs after the room."""
+    data = fragmented_av(4, absolute=True)
+    assert all(moof == base for moof, base in _tfhd_bases(data))
+    plan = plan_reserve(data, 8)
+    assert plan is not None
+    assert plan.insert_at == HEAD
+    for piece in (1, 7, 300, 100_000):
+        rest = _shifted(data[HEAD:], plan.reserve, piece)
+        assert len(rest) == len(data) - HEAD
+        stored = data[:HEAD] + free_box(plan.reserve) + rest
+        bases = _tfhd_bases(stored)
+        assert len(bases) == 8  # two track fragments per moof
+        assert all(moof == base for moof, base in bases)
+    path = tmp_path / "rec.mp4"
+    path.write_bytes(stored)
+    index = build_index(str(path), HEAD, plan.reserve)
+    assert index is not None
+    # Relative offsets are left alone.
+    relative = fragmented_av(2)
+    assert _shifted(relative[HEAD:], 4096, 50) == relative[HEAD:]
+
+
+def test_shifter_handles_odd_boxes() -> None:
+    """mfra becomes free; boxes to the end pass; broken streams are refused."""
+    mfra = box("mfra", bytes(20))
+    to_end = struct.pack(">I4s", 0, b"mdat") + bytes(30)
+    out = _shifted(mfra + to_end, 100, 3)
+    assert out == box("free", bytes(20)) + to_end
+    # A 64-bit size header passes through.
+    large = struct.pack(">I4sQ", 1, b"mdat", 16 + 5) + bytes(5)
+    assert _shifted(large, 100, 4) == large
+    # An incomplete box at the end is passed on as it is.
+    assert _shifted(box("moof", bytes(40))[:20], 100, 6) == box("moof", bytes(40))[:20]
+    with pytest.raises(OffsetShiftError, match="moof of"):
+        OffsetShifter(8).feed(struct.pack(">I4s", MAX_MOOF + 1, b"moof"))
+    with pytest.raises(OffsetShiftError, match="unparseable"):
+        OffsetShifter(8).feed(b"\x00\x00\x00\x10\x01\x02\x03\x04" + bytes(8))
+    with pytest.raises(OffsetShiftError, match="malformed moof"):
+        OffsetShifter(8).feed(box("moof", struct.pack(">I4s", 99, b"traf")))
+    bad_traf = box("traf", struct.pack(">I4s", 99, b"tfhd"))
+    with pytest.raises(OffsetShiftError, match="malformed traf"):
+        OffsetShifter(8).feed(box("moof", bad_traf))

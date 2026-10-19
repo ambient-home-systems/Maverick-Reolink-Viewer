@@ -163,16 +163,35 @@
     log("C  skipped: no two touching recordings today");
   } else {
     const [a, b] = pairs[0];
+    const seen = [];
+    const onAdvanced = () => seen.push("advanced");
+    const onEnded = () => seen.push("ended");
+    player()?.addEventListener("rv-advanced", onAdvanced);
+    player()?.addEventListener("rv-ended", onEnded);
     await el.playAt(Math.max(a.start, a.end - 8000), performance.now());
     await waitFor(() => el._metrics.firstFrameMs !== undefined || el._playFailure, 120000);
-    const before = el._metrics.gapMs;
-    const moved = await waitFor(
-      () => el.renderRoot.querySelector("rv-player")?.current?.segmentId === b.id && el._metrics.gapMs !== before,
-      45000,
-    );
+    const moved = await waitFor(() => player()?.current?.segmentId === b.id && seen.length > 0, 45000);
+    if (moved && !seen.includes("advanced")) {
+      // Reloaded: wait for its first frame too.
+      await waitFor(() => el._metrics.firstFrameMs !== undefined || el._playFailure, 60000);
+    }
+    player()?.removeEventListener("rv-advanced", onAdvanced);
+    player()?.removeEventListener("rv-ended", onEnded);
+    const p = player();
+    let how;
+    if (!moved) {
+      how =
+        `no: on ${p?.current?.segmentId === a.id ? "the first" : p?.current ? "another" : "no"} recording` +
+        ` at ${p?.time !== undefined ? clock(p.time) : "?"}, ${p?.paused ? "paused" : "playing"},` +
+        ` next ${p?.preloaded ? "preloaded" : "not preloaded"}, events [${seen.join(", ")}]`;
+    } else if (seen.includes("advanced")) {
+      how = `yes (preloaded) · gap ${ms(el._metrics.gapMs)}`;
+    } else {
+      how = `yes, by reloading (the next file was not preloaded) · first frame ${ms(el._metrics.firstFrameMs)}`;
+    }
     log(
-      `C  Moved on by itself at ${clock(a.end)} (from a ${mins(a.end - a.start)} recording): ${moved ? "yes" : "no"}` +
-        ` · gap ${moved ? ms(el._metrics.gapMs) : "–"}${el._playFailure ? ` FAILED: ${el._playFailure}` : ""}`,
+      `C  Moved on by itself at ${clock(a.end)} (from a ${mins(a.end - a.start)} recording): ${how}` +
+        `${el._playFailure ? ` FAILED: ${el._playFailure}` : ""}`,
     );
   }
   player()?.pause();

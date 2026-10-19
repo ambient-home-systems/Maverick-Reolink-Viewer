@@ -210,14 +210,25 @@ def convert_search(
 
 
 def merge_window(
-    day: Day, segments: list[Segment], events: list[Event], window_start: int
+    day: Day,
+    segments: list[Segment],
+    events: list[Event],
+    window_start: int,
+    *,
+    keep_events: bool = False,
 ) -> None:
-    """Replace what a refresh window covers with its new results."""
+    """Replace what a refresh window covers with its new results.
+
+    ``keep_events``: the window's event search failed, so the events found
+    before are kept as they are.
+    """
     kept = [s for s in day.segments if s.end < window_start]
     by_start = {s.start: s for s in kept}
     for seg in segments:
         by_start[seg.start] = seg
     day.segments = sorted(by_start.values(), key=lambda s: s.start)
+    if keep_events:
+        return
     old_events = [e for e in day.events if e.start < window_start]
     seen = {(e.start, e.end, tuple(e.types)) for e in old_events}
     new_events = [e for e in events if (e.start, e.end, tuple(e.types)) not in seen]
@@ -331,7 +342,9 @@ class TimelineService:
         data = await self._data(source.key)
         if (stored := data[stream].get(iso)) is not None:
             day_data = Day.from_dict(stored)
-            if day_data.complete:
+            # A day stored by an older version despite a failed event search
+            # is searched again.
+            if day_data.complete and day_data.events_error is None:
                 self._remember(mkey, day_data)
                 return day_data, {"cache": "store", "total_ms": _ms(began)}
 
@@ -404,17 +417,22 @@ class TimelineService:
             raise TimelineError(f"day search failed: {type(err).__name__}") from err
         search_ms = _ms(searched)
         segments, events, hint = convert_search(search, tz)
+        failed = search.events_error is not None
         if previous is not None:
             day = previous
             window_ms = epoch_ms(utc_candidates(window_start, tz)[0])
-            merge_window(day, segments, events, window_ms)
+            merge_window(day, segments, events, window_ms, keep_events=failed)
         else:
             day = Day(empty.date, empty.start, empty.end, segments, events)
         day.events_error = search.events_error
         day.hint_source = hint or day.hint_source
-        day.searched_until = window_end.isoformat()
+        # After a failed event search the window is searched again next time
+        # (from the start of the day if nothing was searched before), and the
+        # day is not final, so it is neither kept for good nor stored.
+        if not failed:
+            day.searched_until = window_end.isoformat()
         day.fetched_at = _wall_time()
-        day.complete = now_local >= day_end_wall + DAY_SETTLE
+        day.complete = now_local >= day_end_wall + DAY_SETTLE and not failed
         self._remember((source.key, stream, empty.date), day)
         if day.complete:
             data = await self._data(source.key)

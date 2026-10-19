@@ -18,7 +18,7 @@ put on it:
 | --- | --- | --- | --- | --- |
 | 0 | Foundations, CI, adapter layer, hardware discovery | High | 1–2 wk | Done (2026-10-17) |
 | 1 | Device details and every setting, with explanations | Standard (catalog) / High (panel shell) | 2–3 wk | Done (2026-10-17) |
-| 2 | Event timeline, thumbnails, smooth playback | High (backend) / Very high (player) | 3–5 wk | In progress: 2A built; hardware checks on 2026-10-19 (v0.2.0, v0.2.1) found issues, fixed in v0.2.2, re-check pending. 2B not started |
+| 2 | Event timeline, thumbnails, smooth playback | High (backend) / Very high (player) | 3–5 wk | In progress: 2A built; timeline targets met on hardware (v0.2.2); video start and auto-advance fixes in v0.2.3, re-check pending. 2B not started |
 | 3 | Live view via go2rtc, grid, fullscreen, PTZ | High | 3–4 wk | Not started |
 | 4 | Performance, mobile, packaging, first release | Standard | 2–3 wk | Not started |
 | 5 | Optional R&D: Baichuan live/playback | Very high | 4–8 wk, time-boxed with gates | Not started |
@@ -424,9 +424,9 @@ gets no Playback tab.
 | 1. Follow-up check (v0.1.2): MP4 layout through the plain GET, server-side seek with `start=`, file-name shape, full-speed parallel downloads | Done: run 4 on 2026-10-17; the open questions are settled below |
 | 2. Backend: scheduler limits + stream budget, event list from the bridge, timeline commands and cache, UTC conversion with DST, thumbnails, VOD and clip views | Done (v0.2.0): see "2A as built" below |
 | 2. Frontend: Playback tab, canvas timeline, calendar, event list, simple player, debug panel | Done (v0.2.0): checked in Chromium with synthetic recordings (desktop and iPhone-sized layout) |
-| Exit on LAN: timeline < 1 s cached, < 3 s cold | v0.2.1: today 53–154 ms and a cached past day 103–148 ms (pass). An unopened past day took 3.9–5.6 s (fail); v0.2.2 fetches the last 7 days in the background. Re-check pending |
-| Exit on LAN: clicking an event starts video in < 2 s on the sub stream | v0.2.1 (Back Yard, recordings still downloading): 233 and 490 ms (pass), and 3940 ms on the first click (fail, cause not yet known). The v0.2.2 script reports the download's timing. Re-check pending |
-| Exit on LAN: auto-advance to the next file | v0.2.1: failed on a 27-minute recording, because a seek into a recording still downloading starts at 0:00. Fixed in v0.2.2. Re-check pending |
+| Exit on LAN: timeline < 1 s cached, < 3 s cold | **Met** (v0.2.2, three cameras): today 49–198 ms, recent past days 56–126 ms from the background fetch, cached 54–276 ms. A day older than a week still costs the NVR's 4–6 s search on first open |
+| Exit on LAN: clicking an event starts video in < 2 s on the sub stream | v0.2.2: 127–1517 ms on two cameras (pass). 2717 ms deep inside a 204 MB recording (fail): the NVR's absolute offsets kept the index out. Fixed in v0.2.3; re-check pending |
+| Exit on LAN: auto-advance to the next file | v0.2.2: worked on two cameras, with gaps of 0.9 and 1.6 s (the next file had no index), but not on a third, cause unknown. v0.2.3 indexes those files and the script reports how auto-advance ended. Re-check pending |
 
 What the playback check measures (`probe_playback.py`, opt-in, read-only, every
 request a prefetch-priority scheduler job, reads bounded in bytes and time, no URL
@@ -606,6 +606,43 @@ Findings and fixes (v0.2.2):
    the same time on one NVR. The script now reports each download's queue
    wait, NVR first byte, download time and speed, and whether the index was
    written. It also warns against running two checks at once.
+
+#### Third hardware check (2026-10-19, v0.2.2, Chrome on the LAN)
+
+| Camera | Today | Past day, first open | Events → first frame (server) | Auto-advance |
+| --- | --- | --- | --- | --- |
+| Front Yard Right | 49 ms | 56 ms (stored by the background fetch) | 2717 ms, 35.5 min into a 204 MB file (cached, no index) | yes, gap 1586 ms |
+| Back Yard | 198 ms (stale copy) | 100 ms (stored) | 706 ms (whole file first: download 493 ms), then 136 and 127 ms | no (12 s recording at midnight) |
+| Front Yard Left | 152 ms (stale copy) | 126 ms (stored) | 976, 1517, 1034 ms, 39 min into a 59 MB file (cached, no index) | yes, gap 922 ms |
+
+The NVR sends a recording's first byte in 126–147 ms and downloads at 44–211 Mbit/s. The queue wait was 0–5 ms.
+
+Findings and fixes (v0.2.3):
+
+1. **The NVR's recordings were never indexed.** Every download reported
+   "index no: absolute data offsets": the NVR's track fragments give absolute
+   file positions (`tfhd.base_data_offset`). Without an index Chrome reads the
+   whole file first, which took 2.7 s for 204 MB.
+   - **Fix:** while the file streams in, an `OffsetShifter` adds the size of
+     the reserved room to every absolute offset. Each moof is held until it is
+     complete; mdat bytes pass straight through. An `mfra` box is turned into
+     `free`.
+   - If a stream cannot be followed, that recording fails once and is then
+     cached as it is.
+   - Files cached before are retired (cache layout 3).
+2. **Auto-advance gaps of 0.9–1.6 s** are likely the same cause: the next file
+   was cached but not indexed, so Chrome read all of it at the switch.
+3. **A failed event search lost events.** Today's refresh replaced its window's
+   events with nothing when the NVR's event search failed (Front Yard Right
+   reported `ApiError`). A past day whose event search failed was also stored
+   for good without events.
+   - **Fix:** the earlier events are kept and the window is searched again on
+     the next refresh. Such a day is never final, so it is neither stored nor
+     kept in memory for good. Days stored that way by older versions are
+     searched again.
+4. **Auto-advance "no" on Back Yard.** The cause is still unknown. The script
+   now reports how auto-advance ended: through the preloaded file, by reloading,
+   or stuck, with the player's state.
 
 #### 2A as built (v0.2.0)
 
