@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { makeHass, okDevices, type FakeHass } from "../test-fixtures";
 import type { PlaybackUrl, TimelineDay } from "../types";
 import { playsProgressive } from "../playback/codec";
+import { ThumbLoader } from "../playback/thumb-loader";
 import "./playback";
 import { TOAST_EVENT } from "./navigation";
 import { STALE_TODAY_S, deliveryOf, describeCache, type RvPlayback } from "./playback";
@@ -75,8 +76,21 @@ function playbackHass(day: TimelineDay = makeDay()): FakeHass {
   return hass;
 }
 
+/** happy-dom never loads images: these load as soon as they get a URL. */
+const instantImage = () => {
+  const image = {
+    onload: null as (() => void) | null,
+    onerror: null as (() => void) | null,
+    set src(value: string) {
+      if (value) queueMicrotask(() => image.onload?.());
+    },
+  };
+  return image;
+};
+
 async function mount(hass: FakeHass): Promise<RvPlayback> {
   const el = document.createElement("rv-playback");
+  el.thumbLoader = new ThumbLoader(2, instantImage);
   el.hass = hass;
   el.deviceId = "dev-cam";
   el.cameraName = "Front Yard";
@@ -96,6 +110,7 @@ beforeEach(() => {
 afterEach(() => {
   document.body.innerHTML = "";
   vi.useRealTimers();
+  vi.restoreAllMocks();
 });
 
 describe("rv-playback", () => {
@@ -227,6 +242,7 @@ describe("rv-playback", () => {
     );
     await flush();
     expect(sentOf(hass, "reolink_viewer/thumbnail/urls").at(-1)).toMatchObject({ times: [1, 2], bucket: 10 });
+    await flush();
     expect(el._thumbs.get(2)).toBe("/thumb/2");
 
     const calendar = el.renderRoot.querySelector("rv-calendar");
@@ -294,6 +310,26 @@ describe("rv-playback", () => {
     expect(deliveryOf(true, true, false)).toBe("progressive");
     expect(deliveryOf(false, false, false)).toBe("whole file first (WebKit)");
     expect(deliveryOf(false, true, true)).toBe("cached file (Range)");
+  });
+
+  it("holds back thumbnails while a recording starts", async () => {
+    const hass = playbackHass();
+    const el = await mount(hass);
+    const loader = el.thumbLoader;
+    const pause = vi.spyOn(loader, "pause");
+    const resume = vi.spyOn(loader, "resume");
+    // happy-dom refuses video.play(), which counts as a failed start (resume).
+    vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
+    await el.playAt(T0 + 60 * MIN + 1_000);
+    expect(pause).toHaveBeenCalled();
+    expect(resume).not.toHaveBeenCalled();
+    const video = el.renderRoot.querySelector("rv-player")?.renderRoot.querySelector("video");
+    video?.dispatchEvent(new Event("playing"));
+    expect(resume).toHaveBeenCalledTimes(1);
+    // A day change drops the thumbnails still queued.
+    const clear = vi.spyOn(loader, "clear");
+    el.renderRoot.querySelector<HTMLButtonElement>('button[aria-label="Previous day"]')?.click();
+    expect(clear).toHaveBeenCalled();
   });
 
   it("describes the cache state", () => {

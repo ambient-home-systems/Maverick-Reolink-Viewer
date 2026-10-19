@@ -15,6 +15,7 @@ import "../playback/calendar";
 import "../playback/event-list";
 import "../playback/player";
 import type { AdvanceDetail, FirstFrameDetail, PlayItem, RvPlayer } from "../playback/player";
+import { ThumbLoader } from "../playback/thumb-loader";
 import { dateIn, firstDayOfWeek, formatClock, formatDay } from "../playback/time";
 import "../playback/timeline";
 import type { HoverDetail, RvTimeline, TimeDetail } from "../playback/timeline";
@@ -54,6 +55,8 @@ export const STALE_TODAY_S = 900;
 const LONG_RECORDING_MS = 10 * MINUTE;
 /** Thumbnails of the event list: one per 10 s. */
 const EVENT_THUMB_BUCKET = 10;
+/** Thumbnail loads wait at most this long for a recording to start. */
+export const THUMB_PAUSE_MAX_MS = 8_000;
 
 export interface Metrics {
   timelineMs?: number;
@@ -124,6 +127,9 @@ export class RvPlayback extends LitElement {
   private _hoverSeq = 0;
   private _monthSeq = 0;
   private _thumbsRequested = new Set<number>();
+  /** Loads event thumbnails a few at a time (replaceable in tests). */
+  thumbLoader = new ThumbLoader();
+  private _thumbPause: ReturnType<typeof setTimeout> | undefined;
   private _refreshTimer: ReturnType<typeof setInterval> | undefined;
   private _lastCursorPaint = 0;
   private readonly _progressive = playsProgressive();
@@ -179,6 +185,8 @@ export class RvPlayback extends LitElement {
     super.disconnectedCallback();
     clearInterval(this._refreshTimer);
     this._player?.stop();
+    this.thumbLoader.clear();
+    clearTimeout(this._thumbPause);
   }
 
   protected override willUpdate(changed: PropertyValues<this>): void {
@@ -283,6 +291,7 @@ export class RvPlayback extends LitElement {
     }
     const seq = ++this._playSeq;
     this._playFailure = undefined;
+    this._pauseThumbs();
     this._cursor = target.segment.start + target.offset;
     const began = performance.now();
     try {
@@ -343,7 +352,22 @@ export class RvPlayback extends LitElement {
     if (next) void this.playAt(next.start);
   }
 
+  /** Keep connections free for the recording until its first frame. */
+  private _pauseThumbs(): void {
+    this.thumbLoader.pause();
+    clearTimeout(this._thumbPause);
+    this._thumbPause = setTimeout(() => {
+      this._resumeThumbs();
+    }, THUMB_PAUSE_MAX_MS);
+  }
+
+  private _resumeThumbs(): void {
+    clearTimeout(this._thumbPause);
+    this.thumbLoader.resume();
+  }
+
   private _playError(message: string): void {
+    this._resumeThumbs();
     if (this._stream === "main") {
       this._stream = "sub";
       toast(this, `HD failed (${message}); back to the sub stream`, "error");
@@ -396,6 +420,7 @@ export class RvPlayback extends LitElement {
     this._date = date;
     this._player?.stop();
     this._playing = undefined;
+    this.thumbLoader.clear();
     this._thumbs = new Map();
     this._thumbsRequested.clear();
     void this._loadDay(date);
@@ -433,9 +458,17 @@ export class RvPlayback extends LitElement {
     wanted.forEach((t) => this._thumbsRequested.add(t));
     try {
       const result = await fetchThumbnailUrls(hass, this.deviceId, wanted, EVENT_THUMB_BUCKET);
-      const next = new Map(this._thumbs);
-      result.urls.forEach((u, i) => next.set(wanted[i] ?? u.time, u.url));
-      this._thumbs = next;
+      const date = this._date;
+      result.urls.forEach((u, i) => {
+        const time = wanted[i] ?? u.time;
+        void this.thumbLoader.load(u.url).then((loaded) => {
+          if (!loaded || date !== this._date) {
+            this._thumbsRequested.delete(time);
+            return;
+          }
+          this._thumbs = new Map(this._thumbs).set(time, u.url);
+        });
+      });
     } catch {
       wanted.forEach((t) => this._thumbsRequested.delete(t));
     }
@@ -578,6 +611,7 @@ export class RvPlayback extends LitElement {
           <rv-player
             @rv-first-frame=${(e: CustomEvent<FirstFrameDetail>) => {
               this._metrics = { ...this._metrics, firstFrameMs: e.detail.ms };
+              this._resumeThumbs();
             }}
             @rv-advanced=${(e: CustomEvent<AdvanceDetail>) => {
               this._onAdvanced(e.detail);
