@@ -30,7 +30,7 @@ frontend/            # Lit + TypeScript panel, built with Vite
   src/components/    # device list, device page, overview, settings, playback tab
   src/playback/      # timeline canvas + math, calendar, event list, player, codec checks
 tests/               # pytest-homeassistant-custom-component
-scripts/             # setup_dev.sh, probe_to_matrix.py
+scripts/             # setup_dev.sh, probe_to_matrix.py, playback_check.js (paste into the browser console)
 ```
 
 ## Environment
