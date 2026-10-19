@@ -14,7 +14,7 @@ Methods on :class:`ReolinkHostHandle` that perform device I/O are prefixed with
 """
 
 import asyncio
-from collections.abc import Awaitable, Iterable
+from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import asdict, dataclass, field, fields, is_dataclass
 from datetime import date, datetime, tzinfo
 from enum import StrEnum
@@ -834,21 +834,22 @@ class ReolinkHostHandle:
         """
         timing: dict[str, float] = {}
 
-        async def timed[T](name: str, call: Awaitable[T]) -> T:
+        async def timed[T](name: str, call: Callable[[], Awaitable[T]]) -> T:
+            # The call is made here, so a cancelled search leaves nothing unawaited.
             began = time.monotonic()
             try:
-                return await call
+                return await call()
             finally:
                 timing[name] = round((time.monotonic() - began) * 1000, 1)
 
         files_result, events_result = await asyncio.gather(
             timed(
                 "files_ms",
-                self._api.request_vod_files(channel, start, end, stream=stream),
+                lambda: self._api.request_vod_files(channel, start, end, stream=stream),
             ),
             timed(
                 "events_ms",
-                self._api.baichuan.search_vod_type(
+                lambda: self._api.baichuan.search_vod_type(
                     channel=channel, start=start, end=end, stream=stream
                 ),
             ),

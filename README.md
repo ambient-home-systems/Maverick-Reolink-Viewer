@@ -19,7 +19,7 @@ creates, grouped by category, each with a plain-language explanation, search, an
 confirmation before disruptive actions. Admins can enable disabled entities and run a
 read-only hardware probe.
 
-**Phase 2A (v0.2.1, hardware check in progress):** cameras that record to the NVR
+**Phase 2A (v0.2.2, hardware check in progress):** cameras that record to the NVR
 get a **Playback** tab: a zoomable timeline of the day with colored markers for each
 detection type, hover thumbnails, a calendar, an event list, and a player that moves
 on to the next recording by itself. Live view comes in a later phase.

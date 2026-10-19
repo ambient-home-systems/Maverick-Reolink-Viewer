@@ -5,7 +5,7 @@ import type { PlaybackUrl, TimelineDay } from "../types";
 import { playsProgressive } from "../playback/codec";
 import "./playback";
 import { TOAST_EVENT } from "./navigation";
-import { STALE_TODAY_S, describeCache, type RvPlayback } from "./playback";
+import { STALE_TODAY_S, deliveryOf, describeCache, type RvPlayback } from "./playback";
 
 const T0 = Date.UTC(2026, 9, 17, 4, 0); // midnight EDT, 17 Oct 2026
 const MIN = 60_000;
@@ -278,6 +278,22 @@ describe("rv-playback", () => {
     expect(days[1]).not.toHaveProperty("max_age");
     expect(el._metrics.timelineServer?.cache).toBe("stale");
     expect(el._loading).toBe(false);
+  });
+
+  it("asks for the whole file to start deep inside a recording", async () => {
+    const hass = playbackHass();
+    const el = await mount(hass);
+    // A browser that plays while downloading (happy-dom reports WebKit).
+    Object.defineProperty(el, "_progressive", { value: true });
+    await el.playAt(T0 + 60 * MIN + 1_000);
+    await el.playAt(T0 + 60 * MIN + 10_000);
+    const urls = sentOf(hass, "reolink_viewer/playback/url").filter((m) => m.segment_id === "s1");
+    // Near the start: progressive. Ten seconds in: the whole file, to seek.
+    expect(urls.map((m) => m.progressive)).toEqual([true, false]);
+    expect(el._metrics.delivery).toBe("whole file first (to seek)");
+    expect(deliveryOf(true, true, false)).toBe("progressive");
+    expect(deliveryOf(false, false, false)).toBe("whole file first (WebKit)");
+    expect(deliveryOf(false, true, true)).toBe("cached file (Range)");
   });
 
   it("describes the cache state", () => {

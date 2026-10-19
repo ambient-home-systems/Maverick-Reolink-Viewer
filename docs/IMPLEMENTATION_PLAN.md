@@ -18,7 +18,7 @@ put on it:
 | --- | --- | --- | --- | --- |
 | 0 | Foundations, CI, adapter layer, hardware discovery | High | 1–2 wk | Done (2026-10-17) |
 | 1 | Device details and every setting, with explanations | Standard (catalog) / High (panel shell) | 2–3 wk | Done (2026-10-17) |
-| 2 | Event timeline, thumbnails, smooth playback | High (backend) / Very high (player) | 3–5 wk | In progress: 2A built; first hardware check on 2026-10-19 missed two targets, fixed in v0.2.1, re-check pending. 2B not started |
+| 2 | Event timeline, thumbnails, smooth playback | High (backend) / Very high (player) | 3–5 wk | In progress: 2A built; hardware checks on 2026-10-19 (v0.2.0, v0.2.1) found issues, fixed in v0.2.2, re-check pending. 2B not started |
 | 3 | Live view via go2rtc, grid, fullscreen, PTZ | High | 3–4 wk | Not started |
 | 4 | Performance, mobile, packaging, first release | Standard | 2–3 wk | Not started |
 | 5 | Optional R&D: Baichuan live/playback | Very high | 4–8 wk, time-boxed with gates | Not started |
@@ -424,9 +424,9 @@ gets no Playback tab.
 | 1. Follow-up check (v0.1.2): MP4 layout through the plain GET, server-side seek with `start=`, file-name shape, full-speed parallel downloads | Done: run 4 on 2026-10-17; the open questions are settled below |
 | 2. Backend: scheduler limits + stream budget, event list from the bridge, timeline commands and cache, UTC conversion with DST, thumbnails, VOD and clip views | Done (v0.2.0): see "2A as built" below |
 | 2. Frontend: Playback tab, canvas timeline, calendar, event list, simple player, debug panel | Done (v0.2.0): checked in Chromium with synthetic recordings (desktop and iPhone-sized layout) |
-| Exit on LAN: timeline < 1 s cached, < 3 s cold | v0.2.0: cached past day 148 ms (pass). Today 1469 ms (an incremental search, fail) and an unopened past day 3830 ms (fail). v0.2.1 shows today at once; re-check pending |
-| Exit on LAN: clicking an event starts video in < 2 s on the sub stream | v0.2.0: 2190–5264 ms with the files already cached (fail). Cause found and fixed in v0.2.1 (segment index); re-check pending |
-| Exit on LAN: auto-advance to the next file | Not measured yet: the camera tested had no two touching recordings that day. With synthetic files in Chromium the swap took about 1 ms |
+| Exit on LAN: timeline < 1 s cached, < 3 s cold | v0.2.1: today 53–154 ms and a cached past day 103–148 ms (pass). An unopened past day took 3.9–5.6 s (fail); v0.2.2 fetches the last 7 days in the background. Re-check pending |
+| Exit on LAN: clicking an event starts video in < 2 s on the sub stream | v0.2.1 (Back Yard, recordings still downloading): 233 and 490 ms (pass), and 3940 ms on the first click (fail, cause not yet known). The v0.2.2 script reports the download's timing. Re-check pending |
+| Exit on LAN: auto-advance to the next file | v0.2.1: failed on a 27-minute recording, because a seek into a recording still downloading starts at 0:00. Fixed in v0.2.2. Re-check pending |
 
 What the playback check measures (`probe_playback.py`, opt-in, read-only, every
 request a prefetch-priority scheduler job, reads bounded in bytes and time, no URL
@@ -572,6 +572,40 @@ Findings and fixes (v0.2.1):
 5. **Cold day search (3.8 s).** Not changed yet. The server timing now
    separates the queue wait, the recording search and the event search, so
    the next run shows which part is slow.
+
+#### Second hardware check (2026-10-19, v0.2.1, Chrome on the LAN)
+
+| Camera | Today | Past day, first open (server) | Same day again | Events → first frame | Auto-advance |
+| --- | --- | --- | --- | --- | --- |
+| Front Yard Left | 53 ms (memory) | 5555 ms (recordings 3158, events 5476 ms) | 103 ms | no events today | — |
+| Front Yard Right | 60 ms (stale copy, 119 s) | 4943 ms (recordings 2442, events 4882 ms) | 116 ms | no events today | no (27 min recording) |
+| Back Yard | 154 ms (stale copy, 160 s) | 3894 ms (recordings 3815, events 1814 ms) | 148 ms | 3940, 233, 490 ms (downloading) | — |
+
+Findings and fixes (v0.2.2):
+
+1. **Seeking inside a recording that is still downloading starts at 0:00.**
+   - While filling, the recording is streamed with no length, so the browser
+     cannot seek in it. Reproduced in Chromium: a requested start of 3 s or
+     80 s both began at 0.26 s.
+   - This is why auto-advance failed: playback started 8 s before the end of
+     a 27-minute recording and went to the beginning instead.
+   - **Fix:** a start more than 3 s into a recording that is not cached asks
+     for the whole file first. The server answers once the download is done,
+     with Range and the segment index. Nearer the start, playback still
+     begins while the file downloads. The debug panel's Delivery line shows
+     which was used.
+2. **Cold past days.** Both NVR searches are slow on their own: the recording
+   search took 2.4–3.8 s and the event search 1.8–5.5 s. They already run in
+   parallel, and the queue wait was 0.
+   - **Fix:** when the panel opens, the last 7 days with recordings are
+     fetched in the background for every camera, one search at a time at
+     prefetch priority, yesterday first. They are kept for good, so each
+     day is searched once.
+3. **One slow first click (3940 ms, recording still downloading).** The other
+   two clicks on that camera took 233 and 490 ms. Two cameras' checks ran at
+   the same time on one NVR. The script now reports each download's queue
+   wait, NVR first byte, download time and speed, and whether the index was
+   written. It also warns against running two checks at once.
 
 #### 2A as built (v0.2.0)
 

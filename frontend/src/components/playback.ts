@@ -42,6 +42,12 @@ import { toast } from "./navigation";
 
 /** Re-read today's timeline this often while the tab is open. */
 export const TODAY_REFRESH_MS = 60_000;
+/**
+ * While a recording is still downloading it is streamed without a length, and
+ * the browser cannot seek in it (playback silently starts at 0:00). A start
+ * further into the file than this asks for the whole file first instead.
+ */
+export const PROGRESSIVE_SEEK_LIMIT_MS = 3_000;
 /** Show a copy of today up to this old (s) at once, then refresh it quietly. */
 export const STALE_TODAY_S = 900;
 /** Recordings at least this long are on continuously recording cameras. */
@@ -59,6 +65,7 @@ export interface Metrics {
   cache?: CacheStatus | undefined;
   codec?: string | null;
   hd?: string;
+  delivery?: string;
   note?: string;
 }
 
@@ -279,7 +286,8 @@ export class RvPlayback extends LitElement {
     this._cursor = target.segment.start + target.offset;
     const began = performance.now();
     try {
-      const playback = await fetchPlaybackUrl(hass, this._ref(target.segment), this._progressive);
+      const progressive = this._progressive && target.offset < PROGRESSIVE_SEEK_LIMIT_MS;
+      const playback = await fetchPlaybackUrl(hass, this._ref(target.segment), progressive);
       if (seq !== this._playSeq) return;
       this._playing = playback;
       this._metrics = {
@@ -290,6 +298,7 @@ export class RvPlayback extends LitElement {
         stream: playback.stream,
         cache: playback.cache,
         codec: playback.media?.codec ?? null,
+        delivery: deliveryOf(progressive, this._progressive, playback.cache.complete),
       };
       // Main and sub recordings start a few seconds apart: keep the wall time.
       const offset = Math.max(0, this._cursor - playback.start);
@@ -549,7 +558,7 @@ export class RvPlayback extends LitElement {
         <dt>HD</dt>
         <dd>${this._hd.reason}</dd>
         <dt>Delivery</dt>
-        <dd>${this._progressive ? "progressive" : "whole file first (WebKit)"}</dd>
+        <dd>${m.delivery ?? (this._progressive ? "progressive" : "whole file first (WebKit)")}</dd>
         <dt>Day</dt>
         <dd>
           ${this._day
@@ -774,6 +783,13 @@ export class RvPlayback extends LitElement {
 
 function toItem(playback: PlaybackUrl): PlayItem {
   return { url: playback.url, segmentId: playback.segment_id, start: playback.start, end: playback.end };
+}
+
+/** How the last recording was delivered, for the debug panel. */
+export function deliveryOf(progressive: boolean, browserProgressive: boolean, cached: boolean): string {
+  if (cached) return "cached file (Range)";
+  if (progressive) return "progressive";
+  return browserProgressive ? "whole file first (to seek)" : "whole file first (WebKit)";
 }
 
 /** The debug panel's one-line cache state. */
