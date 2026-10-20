@@ -454,8 +454,11 @@ async def test_failed_event_search_keeps_events_and_searches_again(
     assert timing["cache"] == "incremental"
     assert len(day.events) == 1
     assert day.events_error == "ApiError"
-    # Within the TTL, that copy is not served as it is, even to a stale-OK caller.
+    # That copy is not current: a stale-OK caller gets it at once (to show while
+    # it asks again), any other caller gets a new search.
     _, timing = await service.async_day(SOURCE, date(2026, 10, 17), max_age=900)
+    assert timing["cache"] == "stale"
+    _, timing = await service.async_day(SOURCE, date(2026, 10, 17))
     assert timing["cache"] == "incremental"
     first_window = host.searches[-1][0]
     # The next refresh searches the same window again.

@@ -21,6 +21,7 @@ custom_components/reolink_viewer/
   timeline.py        # day/month timelines: permanent cache for past days, 60 s for today
   vodcache.py        # disk cache of recordings: fills under the stream budget, LRU
   mp4index.py        # writes a sidx index into cached recordings (fast browser seeks)
+  remux.py           # rewrites cached recordings as plain MP4 with ffmpeg (no re-encoding)
   thumbnails.py      # recording thumbnails: time buckets, de-duplication, disk LRU
   views.py           # signed, short-lived /vod, /clip, /thumb URLs (no camera URLs)
   websocket_api.py   # status, devices, catalog, probe, timeline/*, playback/*, thumbnail/*

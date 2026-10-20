@@ -349,10 +349,11 @@ class TimelineService:
                 return day_data, {"cache": "store", "total_ms": _ms(began)}
 
         is_today = day == now_local.date()
-        # A copy whose event search failed is searched again at once.
-        if is_today and cached is not None and cached.events_error is None:
+        if is_today and cached is not None:
             age = _wall_time() - cached.fetched_at
-            if age < TODAY_TTL:
+            # A copy whose event search failed is never current: it is searched
+            # again at once (a caller accepting a stale copy still gets it first).
+            if age < TODAY_TTL and cached.events_error is None:
                 return cached, {"cache": "memory", "total_ms": _ms(began)}
             if age < max_age:
                 timing = {"cache": "stale", "age_s": round(age), "total_ms": _ms(began)}

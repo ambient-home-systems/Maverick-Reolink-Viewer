@@ -18,7 +18,7 @@ put on it:
 | --- | --- | --- | --- | --- |
 | 0 | Foundations, CI, adapter layer, hardware discovery | High | 1–2 wk | Done (2026-10-17) |
 | 1 | Device details and every setting, with explanations | Standard (catalog) / High (panel shell) | 2–3 wk | Done (2026-10-17) |
-| 2 | Event timeline, thumbnails, smooth playback | High (backend) / Very high (player) | 3–5 wk | In progress: 2A built; timeline and auto-advance targets met on hardware; video start inside long recordings still 1.6–2.8 s after v0.2.4, measured per request in v0.2.5. 2B not started |
+| 2 | Event timeline, thumbnails, smooth playback | High (backend) / Very high (player) | 3–5 wk | In progress: 2A built; timeline and auto-advance targets met on hardware; video start inside long recordings still 1.2–3 s in v0.2.5 because Chrome reads fragmented recordings whole; v0.2.6 rewrites cached recordings as plain MP4. 2B not started |
 | 3 | Live view via go2rtc, grid, fullscreen, PTZ | High | 3–4 wk | Not started |
 | 4 | Performance, mobile, packaging, first release | Standard | 2–3 wk | Not started |
 | 5 | Optional R&D: Baichuan live/playback | Very high | 4–8 wk, time-boxed with gates | Not started |
@@ -425,7 +425,7 @@ gets no Playback tab.
 | 2. Backend: scheduler limits + stream budget, event list from the bridge, timeline commands and cache, UTC conversion with DST, thumbnails, VOD and clip views | Done (v0.2.0): see "2A as built" below |
 | 2. Frontend: Playback tab, canvas timeline, calendar, event list, simple player, debug panel | Done (v0.2.0): checked in Chromium with synthetic recordings (desktop and iPhone-sized layout) |
 | Exit on LAN: timeline < 1 s cached, < 3 s cold | **Met** (v0.2.2, three cameras): today 49–198 ms, recent past days 56–126 ms from the background fetch, cached 54–276 ms. A day older than a week still costs the NVR's 4–6 s search on first open |
-| Exit on LAN: clicking an event starts video in < 2 s on the sub stream | Short recordings: 521–605 ms (pass). Deep inside long recordings, v0.2.4: 1631–2842 ms in a 130 MB file and 1841–1944 ms in a 56 MB file (fail), still growing with file size. v0.2.5 reports each video request's timing to show why |
+| Exit on LAN: clicking an event starts video in < 2 s on the sub stream | Short recordings: 521–605 ms (pass). Deep inside long recordings, v0.2.4: 1631–2842 ms in a 130 MB file and 1841–1944 ms in a 56 MB file (fail), still growing with file size. v0.2.5: 1231–3034 ms; Chrome reads the whole fragmented file first. v0.2.6 serves cached recordings as plain MP4 |
 | Exit on LAN: auto-advance to the next file | **Met** (v0.2.3, three cameras): through the preloaded file, with gaps of 3, 5 and 80 ms |
 
 What the playback check measures (`probe_playback.py`, opt-in, read-only, every
@@ -711,6 +711,35 @@ Findings and changes (v0.2.5):
    indexed. If Chrome reads the whole file despite the index, the next step
    is to store cached recordings as plain (non-fragmented, `moov` first)
    MP4, which every browser seeks in at once.
+
+#### Sixth hardware check (2026-10-20, v0.2.5, Chrome on the LAN)
+
+| Camera | Events → first frame | Notes |
+| --- | --- | --- |
+| Front Yard Right | 2306, 12035, 3034 ms | first event: one request ran 2065 ms (97 MB, the whole file), then the seek request took 63 ms. Second event: not cached and 3 s or more in, so the whole file was downloaded first (answer 9811 ms) |
+| Front Yard Left | 1231, 642, 4143 ms | today took 5916 ms (fresh search: the copy in memory had a failed event search) |
+
+Auto-advance worked on both (gaps around 6 ms).
+
+Findings and changes (v0.2.6):
+
+1. **Chrome reads an indexed fragmented recording whole before it seeks.**
+   The request list proves it: one transfer of the whole file, then the seek.
+   Chromium on Linux used the index; the user's Chrome does not. So once a
+   recording is cached, the server rewrites it as a plain MP4 (`remux.py`:
+   `ffmpeg -c copy -movflags +faststart`, no re-encoding, one at a time, in
+   the background).
+   - Play URLs issued after the rewrite get the plain file; URLs issued
+     before keep the original so a playing video's bytes don't change. The
+     original is deleted 35 minutes later (after the longest URL lifetime).
+   - If ffmpeg fails, the original stays in use; the cache reports why.
+   - The playback check's `server:` line reports "plain MP4 yes" and the
+     rewrite time.
+2. **A failed copy of today cost 5.9 s.** v0.2.5 stopped serving it at all.
+   It is now shown at once (as a stale copy) and searched again in the
+   background.
+3. **Not addressed yet:** an event 3 s or more into a recording that is not
+   cached still waits for the whole download (about 10 s for 200 MB).
 
 #### 2A as built (v0.2.0)
 

@@ -1,5 +1,6 @@
 """Synthetic MP4 files for the box reader and the playback check."""
 
+from pathlib import Path
 import struct
 
 
@@ -185,3 +186,44 @@ def fragmented_av(
         data += _moof(i, base=base, non_sync=i in non_sync)
         data += box("mdat", payload)
     return data
+
+
+def real_fragmented(path: Path, seconds: int = 3) -> bool:
+    """Write a real fragmented MP4 (absolute offsets, like the NVR's) with ffmpeg.
+
+    Returns False when ffmpeg is not installed.
+    """
+    import shutil
+    import subprocess
+
+    ffmpeg = shutil.which("ffmpeg")
+    if ffmpeg is None:
+        return False
+    subprocess.run(
+        [
+            ffmpeg,
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            f"testsrc2=size=160x90:rate=10:duration={seconds}",
+            "-f",
+            "lavfi",
+            "-i",
+            f"sine=d={seconds}:sample_rate=16000",
+            "-c:v",
+            "mpeg4",
+            "-c:a",
+            "aac",
+            "-movflags",
+            "+frag_keyframe+empty_moov",
+            "-frag_duration",
+            "1000000",
+            str(path),
+        ],
+        check=True,
+    )
+    return True

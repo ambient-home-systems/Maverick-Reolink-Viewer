@@ -125,6 +125,7 @@ async def async_setup_entry(
         lambda: async_get_clientsession(
             hass, verify_ssl=False, ssl_cipher=SSLCipherList.INSECURE
         ),
+        ffmpeg_binary=get_ffmpeg_manager(hass).binary,
     )
     thumbnails = ThumbnailService(
         hass,

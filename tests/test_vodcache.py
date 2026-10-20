@@ -2,30 +2,38 @@
 
 import asyncio
 from collections.abc import AsyncGenerator
+from datetime import timedelta
 from pathlib import Path
 import shutil
+import time
 from typing import Any, NamedTuple
 from unittest.mock import patch
 
 from aiohttp import ClientSession, web
 from aiohttp.test_utils import TestServer
 import pytest
+from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
 from custom_components.reolink_viewer import bridge, vodcache
 from custom_components.reolink_viewer.bridge import CameraUrl, VodFile, VodMethod
 from custom_components.reolink_viewer.devices import PlaybackSource
 from custom_components.reolink_viewer.mp4index import OffsetShifter, OffsetShiftError
+from custom_components.reolink_viewer.remux import is_plain
 from custom_components.reolink_viewer.scheduler import Priority, Scheduler
 from custom_components.reolink_viewer.vodcache import Recording, VodCache, VodCacheError
 from homeassistant.core import HomeAssistant
+from homeassistant.util import dt as dt_util
 
-from .mp4_fixtures import FTYP, av_moov, fragmented_av, mp4_file
+from .mp4_fixtures import FTYP, av_moov, fragmented_av, mp4_file, real_fragmented
 from .test_mp4index import _tfhd_bases
 
 SOURCE = PlaybackSource("cam1", "Garage", "entry1", 16)
 BODY = mp4_file(moov_first=True, mdat_bytes=600_000)
 FRAG = fragmented_av(20)
 FRAG_ABSOLUTE = fragmented_av(20, absolute=True)
+# Bodies added by a test (name -> bytes).
+EXTRA: dict[str, bytes] = {}
+FFMPEG = shutil.which("ffmpeg")
 
 
 def rec(name: str = "0-16-1-20261017120000-00000", stream: str = "sub") -> Recording:
@@ -51,7 +59,9 @@ async def media(socket_enabled: None) -> AsyncGenerator[Server]:
             return web.Response(status=404)
         if name == "empty":
             return web.Response(body=b"", content_type="video/mp4")
-        body = {"frag": FRAG, "fragabs": FRAG_ABSOLUTE}.get(name, BODY)
+        body = EXTRA.get(name) or {"frag": FRAG, "fragabs": FRAG_ABSOLUTE}.get(
+            name, BODY
+        )
         resp = web.StreamResponse(headers={"Content-Type": "video/mp4"})
         resp.enable_chunked_encoding()
         await resp.prepare(request)
@@ -281,7 +291,11 @@ async def test_eviction_and_restart(
         assert not (tmp_path / "vod" / "stale.mp4.part").exists()
         found = await restarted.async_open(rec("two"))
         assert found.complete
-        assert found.timing == {"cache": "disk", "indexed": "no"}
+        assert found.timing == {
+            "cache": "disk",
+            "indexed": "no",
+            "flat": "no: ffmpeg not found",
+        }
         assert len(host.calls) == 3
 
 
@@ -377,3 +391,104 @@ async def test_unshiftable_stream_is_cached_without_index(
     await vc.async_wait(again, complete=True)
     assert again.timing["indexed"] == "no: offsets could not be shifted before"
     assert again.path.read_bytes() == FRAG_ABSOLUTE
+
+
+@pytest.fixture
+async def flat_cache(
+    hass: HomeAssistant, tmp_path: Path, media: Server
+) -> AsyncGenerator[VodCache]:
+    """A cache that rewrites recordings as plain MP4 with the real ffmpeg."""
+    host = FakeHost(media.server)
+    scheduler = Scheduler(default_limit=2, default_stream_limit=1)
+    async with ClientSession() as session:
+        with patch.object(bridge, "async_get_host", return_value=host):
+            cache = VodCache(
+                hass,
+                scheduler,
+                tmp_path / "vod",
+                10**9,
+                lambda: session,
+                ffmpeg_binary=FFMPEG,
+            )
+            await cache.async_setup()
+            yield cache
+            await cache.async_shutdown()
+    await scheduler.async_shutdown()
+
+
+@pytest.mark.skipif(FFMPEG is None, reason="ffmpeg is not installed")
+async def test_cached_recordings_become_plain_mp4(
+    hass: HomeAssistant, flat_cache: VodCache, tmp_path: Path
+) -> None:
+    """After a fill the recording is rewritten; old URLs keep the original."""
+    source = tmp_path / "real.mp4"
+    assert real_fragmented(source)
+    EXTRA["real"] = source.read_bytes()
+    try:
+        before = time.monotonic()
+        entry = await flat_cache.async_open(rec("real"))
+        await flat_cache.async_wait(entry, complete=True)
+        for task in list(flat_cache._flat_tasks):
+            await task
+        assert entry.timing["flat"] == "yes"
+        assert is_plain(entry.flat_path)
+        # A URL issued before the plain file existed keeps the original.
+        assert flat_cache.served_path(entry, before) == entry.path
+        assert flat_cache.served_path(entry, time.monotonic()) == entry.flat_path
+        # The original goes once such URLs have expired.
+        async_fire_time_changed(hass, dt_util.utcnow() + timedelta(minutes=36))
+        await hass.async_block_till_done()
+        assert not entry.path.exists()
+        assert flat_cache.served_path(entry, before) == entry.flat_path
+    finally:
+        EXTRA.pop("real", None)
+
+
+async def test_plain_files_found_at_startup(
+    hass: HomeAssistant, tmp_path: Path, media: Server
+) -> None:
+    """A plain copy wins over the original left by a previous run."""
+    directory = tmp_path / "vod"
+    directory.mkdir()
+    cache_id = rec().cache_id
+    (directory / f"{cache_id}.mp4").write_bytes(BODY)
+    (directory / f"{cache_id}.flat.mp4").write_bytes(b"plain")
+    (directory / f"{cache_id}.flat.mp4.part").write_bytes(b"half")
+    scheduler = Scheduler(default_limit=2)
+    cache = VodCache(hass, scheduler, directory, 10**9, lambda: None)  # type: ignore[arg-type,return-value]
+    await cache.async_setup()
+    assert sorted(p.name for p in directory.iterdir()) == [f"{cache_id}.flat.mp4"]
+    entry = await cache.async_open(rec())
+    assert entry.complete
+    assert entry.timing == {"cache": "disk", "flat": "yes"}
+    assert cache.served_path(entry, time.monotonic()) == entry.flat_path
+    await cache.async_shutdown()
+    await scheduler.async_shutdown()
+
+
+async def test_failed_rewrite_keeps_the_original(
+    hass: HomeAssistant, tmp_path: Path, media: Server
+) -> None:
+    """Without a working ffmpeg the indexed original is served."""
+    host = FakeHost(media.server)
+    scheduler = Scheduler(default_limit=2, default_stream_limit=1)
+    async with ClientSession() as session:
+        with patch.object(bridge, "async_get_host", return_value=host):
+            cache = VodCache(
+                hass,
+                scheduler,
+                tmp_path / "vod",
+                10**9,
+                lambda: session,
+                ffmpeg_binary=str(tmp_path / "no-such-ffmpeg"),
+            )
+            await cache.async_setup()
+            entry = await cache.async_open(rec("frag"))
+            await cache.async_wait(entry, complete=True)
+            for task in list(cache._flat_tasks):
+                await task
+            assert entry.timing["flat"].startswith("no: ")
+            assert entry.flat_at is None
+            assert cache.served_path(entry, time.monotonic()) == entry.path
+            await cache.async_shutdown()
+    await scheduler.async_shutdown()
