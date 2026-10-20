@@ -813,7 +813,7 @@ Known limits carried into 2B and Phase 4:
 | 2B step | Status |
 | --- | --- |
 | 0. Fix the recording cache (disk accounting, eviction, leases, deletion timers, open race), DST end and refresh window, shared thumbnail fetches; correct the MSE claim above | Done (v0.2.8), see "Step 0" below |
-| 1. Measure where it hasn't been (gate): desktop Chrome on the LAN, the iPhone Companion app on Wi-Fi, over Tailscale and over Nabu Casa | Check built (v0.2.8), sharpened in v0.2.9 and v0.2.10. Two desktop runs recorded (three player and cache bugs found and fixed); a LAN desktop run (Mac) and the three iPhone runs to come, see "Step 1 results" |
+| 1. Measure where it hasn't been (gate): desktop Chrome on the LAN, the iPhone Companion app on Wi-Fi, over Tailscale and over Nabu Casa | Check built (v0.2.8), sharpened in v0.2.9 and v0.2.10. Three desktop runs through Nabu Casa recorded (three player and cache bugs found and fixed); a LAN desktop run (Mac) and the three iPhone runs to come, see "Step 1 results" |
 | 2. Build what the evidence calls for (speeds, HD/SD keeping the position, uncached deep seeks, bounded memory and disk) | Not started (after the gate) |
 
 ##### Step 0: the recording cache (v0.2.8)
@@ -912,7 +912,7 @@ e.g. Front Yard Right, gives the deep-start and session parts):
 
 | Setup | Status |
 | --- | --- |
-| Desktop, through Nabu Casa | Runs 1 (v0.2.8) and 2 (v0.2.9), 2026-10-20, below: Brave in an HA add-on, loading HA through the Nabu Casa address |
+| Desktop, through Nabu Casa | Runs 1 (v0.2.8), 2 (v0.2.9) and 3 (v0.2.10), 2026-10-20, below: Brave in an HA add-on, loading HA through the Nabu Casa address |
 | Desktop on the LAN | To run on v0.2.10, from a Mac |
 | iPhone app, Wi-Fi (local) | To run on v0.2.10 |
 | iPhone app, Tailscale | To run on v0.2.10 |
@@ -1027,6 +1027,28 @@ Finding and fix (v0.2.10):
    (about 10 s for 180–204 MB) plus the browser reading the whole original
    at the link's speed (17–26 s here). The LAN and iPhone runs will show how
    much of the second part a fast link removes, and how WebKit behaves.
+
+**Desktop run 3** (v0.2.10, same browser and path, without the session;
+2026-10-20, Front Yard Left, whose hour-long sub recordings are about 58 MB):
+
+| Measure | Result |
+| --- | --- |
+| Timeline | today 169 ms, a past day 119 ms (store), again 176 ms, today again 199 ms: all under 1 s |
+| Events → first frame | 346, 245, 619 ms, all where asked. The first two were 11.1 min into today's recording still being written (11.4 min so far): the v0.2.10 copy handling at work |
+| Deep start, not cached | 8.8 s, 55 min into a 60 min recording: download 3.1 s (58 MB at 150 Mbit/s), then the browser read the whole original (5.5 s through Nabu Casa) |
+| Deep start, cached | 446 ms (plain file): under 2 s |
+| Auto-advance | gap 10 ms |
+| Rates | on pace at every rate. Dropped 0, 3, 0, 51 and 351 frames at 0.5–8× (4× and 8× need 59 and 117 fps, above the display's rate). 1× judged not smooth on 3 of 87 frames: the third run in a row with 3–5 dropped frames at 1× in this browser, which draws in software on the HA host |
+| Link | 63 Mbit/s (Nabu Casa) |
+| MSE, HD | as in runs 1 and 2 |
+
+Across the three runs the uncached deep start grows with the file: 8.8 s
+for 58 MB, 27.0 s for 180 MB, 36.6 s for 204 MB. Both parts scale with it:
+the download (at 146–159 Mbit/s from the NVR) and the whole-file read (at
+the link's 55–86 Mbit/s here). Reading only up to the target, and starting
+once those bytes are on disk, would cut both: on these files the target
+was 88–92 % in, so the download part would shrink a little and the read
+part to the `moov` plus a few seconds of video.
 
 #### 2A as built (v0.2.0)
 
