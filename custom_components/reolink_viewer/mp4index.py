@@ -250,6 +250,26 @@ def build_index(path: str, free_at: int, free_size: int) -> bytes | None:
     return _sidx(list(tracks.values()), fragments, free_size)
 
 
+def has_index(path: str) -> bool:
+    """Whether a cached file starts with a segment index (sidx before any moof).
+
+    Blocking: run it in an executor.
+    """
+    with open(path, "rb") as file:
+        size = os.fstat(file.fileno()).st_size
+        offset = 0
+        for _ in range(8):
+            box = parse_box_header(_read(file, offset, min(offset + 16, size)), offset)
+            if box is None or box.type in {"moof", "mdat"}:
+                return False
+            if box.type == "sidx":
+                return True
+            if box.end is None:
+                return False
+            offset = box.end
+    return False
+
+
 def _top_level(file: BinaryIO, size: int) -> list[Box]:
     boxes: list[Box] = []
     offset = 0

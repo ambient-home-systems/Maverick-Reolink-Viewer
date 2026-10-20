@@ -16,6 +16,7 @@ from custom_components.reolink_viewer.mp4index import (
     Plan,
     build_index,
     free_box,
+    has_index,
     plan_reserve,
 )
 
@@ -272,3 +273,17 @@ def test_shifter_handles_odd_boxes() -> None:
     bad_traf = box("traf", struct.pack(">I4s", 99, b"tfhd"))
     with pytest.raises(OffsetShiftError, match="malformed traf"):
         OffsetShifter(8).feed(box("moof", bad_traf))
+
+
+def test_has_index(tmp_path: Path) -> None:
+    """A cached file is recognised as indexed by its sidx before any moof."""
+    indexed, _plan = _indexed(tmp_path, fragmented_av(2))
+    path = tmp_path / "check.mp4"
+    path.write_bytes(indexed)
+    assert has_index(str(path))
+    path.write_bytes(fragmented_av(2))
+    assert not has_index(str(path))
+    path.write_bytes(mp4_file(mdat_bytes=1000))
+    assert not has_index(str(path))
+    path.write_bytes(b"\x00" * 10)
+    assert not has_index(str(path))

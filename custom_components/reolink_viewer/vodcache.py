@@ -48,6 +48,7 @@ from .mp4index import (
     OffsetShiftError,
     build_index,
     free_box,
+    has_index,
     plan_reserve,
 )
 from .scheduler import Priority, Scheduler, StreamTicket
@@ -208,7 +209,8 @@ class VodCache:
                     await self._hass.async_add_executor_job(path.stat)
                 ).st_size
                 entry.complete = True
-                entry.timing = {"cache": "disk"}
+                indexed = await self._hass.async_add_executor_job(has_index, str(path))
+                entry.timing = {"cache": "disk", "indexed": "yes" if indexed else "no"}
         entry.last_access = time.monotonic()
         if entry.complete:
             return entry

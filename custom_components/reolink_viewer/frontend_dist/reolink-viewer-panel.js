@@ -2829,7 +2829,7 @@ function fn(e, t, n) {
 customElements.get("rv-timeline") || customElements.define("rv-timeline", dn);
 //#endregion
 //#region src/components/playback.ts
-var pn = 6e4, mn = 10 * G, hn = 10, gn = 8e3, _n = class extends I {
+var pn = 6e4, mn = 1e4, hn = 10 * G, gn = 10, _n = 8e3, vn = class extends I {
 	static properties = {
 		hass: { attribute: !1 },
 		deviceId: { attribute: !1 },
@@ -2859,6 +2859,8 @@ var pn = 6e4, mn = 10 * G, hn = 10, gn = 8e3, _n = class extends I {
 	_thumbsRequested = /* @__PURE__ */ new Set();
 	thumbLoader = new rn();
 	_thumbPause;
+	_eventsRetry;
+	_eventsRetries = 0;
 	_refreshTimer;
 	_lastCursorPaint = 0;
 	_progressive = St();
@@ -2900,7 +2902,7 @@ var pn = 6e4, mn = 10 * G, hn = 10, gn = 8e3, _n = class extends I {
 		}, pn);
 	}
 	disconnectedCallback() {
-		super.disconnectedCallback(), clearInterval(this._refreshTimer), this._player?.stop(), this.thumbLoader.clear(), clearTimeout(this._thumbPause);
+		super.disconnectedCallback(), clearInterval(this._refreshTimer), this._player?.stop(), this.thumbLoader.clear(), clearTimeout(this._thumbPause), clearTimeout(this._eventsRetry);
 	}
 	willUpdate(e) {
 		if ((e.has("deviceId") || e.has("hass")) && this.hass && this.deviceId && !this._date) {
@@ -2933,7 +2935,7 @@ var pn = 6e4, mn = 10 * G, hn = 10, gn = 8e3, _n = class extends I {
 				...this._metrics,
 				timelineMs: performance.now() - i,
 				timelineServer: o.timing
-			}), this._warmLongRecording(o), a = !t.quiet && o.timing.cache === "stale";
+			}), this._warmLongRecording(o), a = !t.quiet && o.timing.cache === "stale", this._retryEventsSoon(o);
 		} catch (e) {
 			r === this._daySeq && (this._error = L(e).message);
 		} finally {
@@ -2943,6 +2945,14 @@ var pn = 6e4, mn = 10 * G, hn = 10, gn = 8e3, _n = class extends I {
 			keepView: !0,
 			quiet: !0
 		});
+	}
+	_retryEventsSoon(e) {
+		clearTimeout(this._eventsRetry), !e.events_error || e.complete ? this._eventsRetries = 0 : this._eventsRetries >= 3 || (this._eventsRetries += 1, this._eventsRetry = setTimeout(() => {
+			this._date === e.date && this._loadDay(e.date, {
+				keepView: !0,
+				quiet: !0
+			});
+		}, mn));
 	}
 	async _loadMonth(e, t) {
 		let n = this.hass;
@@ -2978,7 +2988,7 @@ var pn = 6e4, mn = 10 * G, hn = 10, gn = 8e3, _n = class extends I {
 	}
 	_warmLongRecording(e) {
 		let t = this.hass, n = this._cursor === void 0 ? e.segments.at(-1) : Nt(e.segments, this._cursor);
-		!t || !n || n.end - n.start < mn || ze(t, this._ref(n)).catch(() => void 0);
+		!t || !n || n.end - n.start < hn || ze(t, this._ref(n)).catch(() => void 0);
 	}
 	_ref(e, t = this._stream) {
 		return {
@@ -3010,10 +3020,10 @@ var pn = 6e4, mn = 10 * G, hn = 10, gn = 8e3, _n = class extends I {
 				stream: r.stream,
 				cache: r.cache,
 				codec: r.media?.codec ?? null,
-				delivery: yn(e, this._progressive, r.cache.complete)
+				delivery: bn(e, this._progressive, r.cache.complete)
 			};
 			let s = Math.max(0, this._cursor - r.start);
-			await this._player?.play(vn(r), s, t), this._preloadAfter(i.segment, a);
+			await this._player?.play(yn(r), s, t), this._preloadAfter(i.segment, a);
 		} catch (e) {
 			a === this._playSeq && this._playError(L(e).message);
 		}
@@ -3024,7 +3034,7 @@ var pn = 6e4, mn = 10 * G, hn = 10, gn = 8e3, _n = class extends I {
 		else try {
 			let e = await Re(n, this._ref(a), this._progressive);
 			if (t !== this._playSeq) return;
-			await this._player?.preload(vn(e));
+			await this._player?.preload(yn(e));
 		} catch {}
 	}
 	_onAdvanced(e) {
@@ -3041,7 +3051,7 @@ var pn = 6e4, mn = 10 * G, hn = 10, gn = 8e3, _n = class extends I {
 	_pauseThumbs() {
 		this.thumbLoader.pause(), clearTimeout(this._thumbPause), this._thumbPause = setTimeout(() => {
 			this._resumeThumbs();
-		}, gn);
+		}, _n);
 	}
 	_resumeThumbs() {
 		clearTimeout(this._thumbPause), this.thumbLoader.resume();
@@ -3105,7 +3115,7 @@ var pn = 6e4, mn = 10 * G, hn = 10, gn = 8e3, _n = class extends I {
 		if (t && n.length) {
 			n.forEach((e) => this._thumbsRequested.add(e));
 			try {
-				let e = await Be(t, this.deviceId, n, hn), r = this._date;
+				let e = await Be(t, this.deviceId, n, gn), r = this._date;
 				e.urls.forEach((e, t) => {
 					let i = n[t] ?? e.time;
 					this.thumbLoader.load(e.url).then((t) => {
@@ -3137,7 +3147,7 @@ var pn = 6e4, mn = 10 * G, hn = 10, gn = 8e3, _n = class extends I {
       </div>
       <div class="group">
         <button aria-label="Zoom out" ?disabled=${e === 0} @click=${() => this._timeline?.zoom(-1)}>−</button>
-        <span class="small muted zoom">${xn(this._view.span)}</span>
+        <span class="small muted zoom">${Sn(this._view.span)}</span>
         <button
           aria-label="Zoom in"
           ?disabled=${e === q.length - 1}
@@ -3209,7 +3219,7 @@ var pn = 6e4, mn = 10 * G, hn = 10, gn = 8e3, _n = class extends I {
         <dt>Stream</dt>
         <dd>${e.stream ?? this._stream}${e.codec ? ` · ${e.codec}` : ""}</dd>
         <dt>Cache</dt>
-        <dd>${e.cache ? bn(e.cache) : "–"}</dd>
+        <dd>${e.cache ? xn(e.cache) : "–"}</dd>
         <dt>HD</dt>
         <dd>${this._hd.reason}</dd>
         <dt>Delivery</dt>
@@ -3420,7 +3430,7 @@ var pn = 6e4, mn = 10 * G, hn = 10, gn = 8e3, _n = class extends I {
       }
     `];
 };
-function vn(e) {
+function yn(e) {
 	return {
 		url: e.url,
 		segmentId: e.segment_id,
@@ -3428,20 +3438,20 @@ function vn(e) {
 		end: e.end
 	};
 }
-function yn(e, t, n) {
+function bn(e, t, n) {
 	return n ? "cached file (Range)" : e ? "progressive" : t ? "whole file first (to seek)" : "whole file first (WebKit)";
 }
-function bn(e) {
+function xn(e) {
 	let t = `${(e.bytes / 1e6).toFixed(1)} MB`;
 	return e.error ? `failed: ${e.error}` : e.complete ? `cached (${t})` : `filling (${t} so far)`;
 }
-function xn(e) {
+function Sn(e) {
 	return e >= 36e5 ? `${Math.round(e / 36e5)} h` : `${Math.round(e / G)} min`;
 }
-customElements.get("rv-playback") || customElements.define("rv-playback", _n);
+customElements.get("rv-playback") || customElements.define("rv-playback", vn);
 //#endregion
 //#region src/components/device-page.ts
-var Sn = 1e3, Cn = class extends I {
+var Cn = 1e3, wn = class extends I {
 	static properties = {
 		hass: { attribute: !1 },
 		deviceId: { attribute: !1 },
@@ -3487,7 +3497,7 @@ var Sn = 1e3, Cn = class extends I {
 		try {
 			let [e, r] = await Promise.all([Ae(t, this.deviceId), Me(t)]);
 			if (n !== this._loadSeq) return;
-			this._catalog = r, this._device = e, this._error = void 0, this._watched = Dn(e);
+			this._catalog = r, this._device = e, this._error = void 0, this._watched = On(e);
 		} catch (e) {
 			if (n !== this._loadSeq) return;
 			this._error = L(e).message;
@@ -3496,7 +3506,7 @@ var Sn = 1e3, Cn = class extends I {
 	_subscribeRegistry(e) {
 		this._unsubRegistry = e.connection.subscribeEvents((e) => {
 			let t = e.data?.entity_id;
-			(!t || this._device?.connections.some((e) => e.entities.some((e) => e.entity_id === t))) && (clearTimeout(this._reloadTimer), this._reloadTimer = setTimeout(() => void this.reload(), Sn));
+			(!t || this._device?.connections.some((e) => e.entities.some((e) => e.entity_id === t))) && (clearTimeout(this._reloadTimer), this._reloadTimer = setTimeout(() => void this.reload(), Cn));
 		}, "entity_registry_updated").catch(() => void 0);
 	}
 	render() {
@@ -3518,7 +3528,7 @@ var Sn = 1e3, Cn = class extends I {
               <span class="muted small">${t.model ?? ""}</span>
             </div>
             <div class="tabs" role="tablist">
-              ${En(e).map((e) => D`<button
+              ${Dn(e).map((e) => D`<button
                   role="tab"
                   aria-selected=${this.tab === e ? "true" : "false"}
                   class=${this.tab === e ? "active" : ""}
@@ -3530,14 +3540,14 @@ var Sn = 1e3, Cn = class extends I {
 			});
 		}}
                 >
-                  ${wn[e]}
+                  ${Tn[e]}
                 </button>`)}
             </div>
             ${e.degraded ? D`<div class="banner warning small">
                   Degraded mode: the Reolink integration's internals changed, so device details are
                   missing. Settings still work.
                 </div>` : k}
-            ${this.tab === "playback" && Tn(e) ? D`<rv-playback
+            ${this.tab === "playback" && En(e) ? D`<rv-playback
                   .hass=${this.hass}
                   .deviceId=${t.id}
                   .cameraName=${t.name ?? ""}
@@ -3585,29 +3595,29 @@ var Sn = 1e3, Cn = class extends I {
         color: var(--primary-color);
       }
     `];
-}, wn = {
+}, Tn = {
 	overview: "Overview",
 	playback: "Playback",
 	settings: "Settings"
 };
-function Tn(e) {
+function En(e) {
 	return e.node.kind === "camera" && e.node.connections.some((e) => e.playback_source);
 }
-function En(e) {
-	return Tn(e) ? [
+function Dn(e) {
+	return En(e) ? [
 		"overview",
 		"playback",
 		"settings"
 	] : ["overview", "settings"];
 }
-function Dn(e) {
+function On(e) {
 	let t = e.connections.flatMap((e) => e.entities.map((e) => e.entity_id));
 	return e.node.kind === "camera" && e.node.snapshot_entity_id && t.push(e.node.snapshot_entity_id), t;
 }
-customElements.get("rv-device-page") || customElements.define("rv-device-page", Cn);
+customElements.get("rv-device-page") || customElements.define("rv-device-page", wn);
 //#endregion
 //#region src/download.ts
-function On(e, t, n = document) {
+function kn(e, t, n = document) {
 	let r = new Blob([JSON.stringify(e, null, 2)], { type: "application/json" }), i = URL.createObjectURL(r), a = n.createElement("a");
 	a.href = i, a.download = t, a.rel = "noopener", n.body.appendChild(a), a.click(), a.remove(), setTimeout(() => {
 		URL.revokeObjectURL(i);
@@ -3615,7 +3625,7 @@ function On(e, t, n = document) {
 }
 //#endregion
 //#region src/reolink-viewer-panel.ts
-var kn = 6e3, An = class extends I {
+var An = 6e3, jn = class extends I {
 	static properties = {
 		hass: { attribute: !1 },
 		narrow: { type: Boolean },
@@ -3667,7 +3677,7 @@ var kn = 6e3, An = class extends I {
 	showToast(e) {
 		clearTimeout(this._toastTimer), this._toast = e, this._toastTimer = setTimeout(() => {
 			this._toast = void 0;
-		}, kn);
+		}, An);
 	}
 	async _load() {
 		if (this.hass) {
@@ -3854,7 +3864,7 @@ var kn = 6e3, An = class extends I {
           </p>
           <div class="actions">
             <button @click=${() => {
-				On(e.report, e.filename);
+				kn(e.report, e.filename);
 			}}>
               Download again
             </button>
@@ -3899,7 +3909,7 @@ var kn = 6e3, An = class extends I {
 				status: "done",
 				report: e,
 				filename: n
-			}, On(e, n);
+			}, kn(e, n);
 		}, (e) => {
 			this._run === t && (this._run = void 0, this._probe = {
 				status: "error",
@@ -3998,6 +4008,6 @@ var kn = 6e3, An = class extends I {
       }
     `];
 };
-customElements.get("reolink-viewer-panel") || customElements.define("reolink-viewer-panel", An);
+customElements.get("reolink-viewer-panel") || customElements.define("reolink-viewer-panel", jn);
 //#endregion
-export { An as ReolinkViewerPanel };
+export { jn as ReolinkViewerPanel };

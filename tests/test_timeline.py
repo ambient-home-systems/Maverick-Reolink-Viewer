@@ -454,6 +454,9 @@ async def test_failed_event_search_keeps_events_and_searches_again(
     assert timing["cache"] == "incremental"
     assert len(day.events) == 1
     assert day.events_error == "ApiError"
+    # Within the TTL, that copy is not served as it is, even to a stale-OK caller.
+    _, timing = await service.async_day(SOURCE, date(2026, 10, 17), max_age=900)
+    assert timing["cache"] == "incremental"
     first_window = host.searches[-1][0]
     # The next refresh searches the same window again.
     host.events_fail = False
@@ -482,3 +485,30 @@ async def test_failed_event_search_keeps_events_and_searches_again(
     ).to_dict()
     _, timing = await service.async_day(SOURCE, date(2026, 10, 14))
     assert timing["cache"] == "fresh"
+
+
+async def test_segment_lookup_uses_a_recent_copy_of_today(
+    host: FakeHost, service: TimelineService, clock: Clock
+) -> None:
+    """Playing a recording does not wait for today to be searched again."""
+    host.files["sub"] = [vf(wall(2026, 10, 17, 12, 0), 2)]
+    day, _ = await service.async_day(SOURCE, date(2026, 10, 17))
+    seg_id = day.segments[0].public()["id"]
+    clock.advance(300)  # well past today's 60 s TTL
+    sub = await service.async_segment(SOURCE, date(2026, 10, 17), "sub", seg_id)
+    assert sub.start == day.segments[0].start
+    assert len(host.searches) == 1
+    # A failed event search does not hold the play URL back either.
+    host.events_fail = True
+    clock.advance(70)
+    await service.async_day(SOURCE, date(2026, 10, 17))
+    searches = len(host.searches)
+    await service.async_segment(SOURCE, date(2026, 10, 17), "sub", seg_id)
+    assert len(host.searches) == searches
+    host.events_fail = False
+    # A recording newer than the copy: today is searched again to find it.
+    host.files["sub"].append(vf(wall(2026, 10, 17, 13, 0), 1))
+    newer = str(epoch_ms(datetime(2026, 10, 17, 17, 0, tzinfo=UTC)))
+    found = await service.async_segment(SOURCE, date(2026, 10, 17), "sub", newer)
+    assert str(found.start) == newer
+    assert len(host.searches) == searches + 1

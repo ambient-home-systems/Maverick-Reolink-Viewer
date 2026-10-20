@@ -49,6 +49,10 @@ export const TODAY_REFRESH_MS = 60_000;
  * further into the file than this asks for the whole file first instead.
  */
 export const PROGRESSIVE_SEEK_LIMIT_MS = 3_000;
+/** After the NVR's event search failed, ask again this soon (not a minute later). */
+export const EVENTS_RETRY_MS = 10_000;
+/** Quick retries in a row before the normal refresh takes over. */
+export const EVENTS_RETRIES = 3;
 /** Show a copy of today up to this old (s) at once, then refresh it quietly. */
 export const STALE_TODAY_S = 900;
 /** Recordings at least this long are on continuously recording cameras. */
@@ -130,6 +134,8 @@ export class RvPlayback extends LitElement {
   /** Loads event thumbnails a few at a time (replaceable in tests). */
   thumbLoader = new ThumbLoader();
   private _thumbPause: ReturnType<typeof setTimeout> | undefined;
+  private _eventsRetry: ReturnType<typeof setTimeout> | undefined;
+  private _eventsRetries = 0;
   private _refreshTimer: ReturnType<typeof setInterval> | undefined;
   private _lastCursorPaint = 0;
   private readonly _progressive = playsProgressive();
@@ -187,6 +193,7 @@ export class RvPlayback extends LitElement {
     this._player?.stop();
     this.thumbLoader.clear();
     clearTimeout(this._thumbPause);
+    clearTimeout(this._eventsRetry);
   }
 
   protected override willUpdate(changed: PropertyValues<this>): void {
@@ -228,6 +235,7 @@ export class RvPlayback extends LitElement {
       }
       this._warmLongRecording(day);
       stale = !options.quiet && day.timing.cache === "stale";
+      this._retryEventsSoon(day);
     } catch (err) {
       if (seq === this._daySeq) this._error = toError(err).message;
     } finally {
@@ -235,6 +243,20 @@ export class RvPlayback extends LitElement {
     }
     // Shown at once from an older copy: now fetch the current one.
     if (stale) await this._loadDay(date, { keepView: true, quiet: true });
+  }
+
+  /** The day's event search failed: search again shortly, quietly. */
+  private _retryEventsSoon(day: TimelineDay): void {
+    clearTimeout(this._eventsRetry);
+    if (!day.events_error || day.complete) {
+      this._eventsRetries = 0;
+      return;
+    }
+    if (this._eventsRetries >= EVENTS_RETRIES) return;
+    this._eventsRetries += 1;
+    this._eventsRetry = setTimeout(() => {
+      if (this._date === day.date) void this._loadDay(day.date, { keepView: true, quiet: true });
+    }, EVENTS_RETRY_MS);
   }
 
   private async _loadMonth(year: number, month: number): Promise<void> {

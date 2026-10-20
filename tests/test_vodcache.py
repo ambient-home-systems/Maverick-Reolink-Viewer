@@ -281,7 +281,7 @@ async def test_eviction_and_restart(
         assert not (tmp_path / "vod" / "stale.mp4.part").exists()
         found = await restarted.async_open(rec("two"))
         assert found.complete
-        assert found.timing == {"cache": "disk"}
+        assert found.timing == {"cache": "disk", "indexed": "no"}
         assert len(host.calls) == 3
 
 

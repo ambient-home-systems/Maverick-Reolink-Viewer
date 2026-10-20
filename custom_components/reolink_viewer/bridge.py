@@ -38,6 +38,9 @@ if TYPE_CHECKING:
 
 _LOGGER = logging.getLogger(__name__)
 
+# The NVR's event search fails now and then and works when asked again.
+EVENT_SEARCH_RETRY_DELAY = 1.0
+
 # Attributes and methods of reolink_aio.api.Host that this integration relies on.
 REQUIRED_HOST_ATTRS: tuple[str, ...] = (
     "baichuan",
@@ -842,19 +845,18 @@ class ReolinkHostHandle:
             finally:
                 timing[name] = round((time.monotonic() - began) * 1000, 1)
 
-        files_result, events_result = await asyncio.gather(
+        results: tuple[Any, Any] = await asyncio.gather(
             timed(
                 "files_ms",
                 lambda: self._api.request_vod_files(channel, start, end, stream=stream),
             ),
             timed(
                 "events_ms",
-                lambda: self._api.baichuan.search_vod_type(
-                    channel=channel, start=start, end=end, stream=stream
-                ),
+                lambda: self._search_events(channel, start, end, stream),
             ),
             return_exceptions=True,
         )
+        files_result, events_result = results
         if isinstance(files_result, BaseException):
             raise files_result
         _statuses, raw_files = files_result
@@ -862,9 +864,24 @@ class ReolinkHostHandle:
         if isinstance(events_result, BaseException):
             if isinstance(events_result, asyncio.CancelledError):
                 raise events_result
-            return DaySearch(files, [], f"{type(events_result).__name__}", timing)
+            return DaySearch(files, [], _search_error(events_result), timing)
         _by_id, by_trigger = events_result
         return DaySearch(files, _events(by_trigger), timing=timing)
+
+    async def _search_events(
+        self, channel: int, start: datetime, end: datetime, stream: str
+    ) -> Any:
+        """Run the Baichuan event search, once more after a pause if it fails."""
+        try:
+            return await self._api.baichuan.search_vod_type(
+                channel=channel, start=start, end=end, stream=stream
+            )
+        except Exception as err:  # noqa: BLE001 - retried; a second failure is reported
+            _LOGGER.debug("Event search failed (%s), trying again", _search_error(err))
+            await asyncio.sleep(EVENT_SEARCH_RETRY_DELAY)
+            return await self._api.baichuan.search_vod_type(
+                channel=channel, start=start, end=end, stream=stream
+            )
 
     async def async_recording_days(
         self, channel: int, start: datetime, end: datetime
@@ -1108,6 +1125,12 @@ def _events(by_trigger: Any) -> list[VodEvent]:
             end = max(end, known.end)
         merged[file_id, start] = VodEvent(start, end, types, file_id)
     return sorted(merged.values(), key=lambda e: (e.start, e.end))
+
+
+def _search_error(err: BaseException) -> str:
+    """Name a failed search for the browser: the error type and the device's code."""
+    code = getattr(err, "rspCode", None)
+    return f"{type(err).__name__} {code}" if code is not None else type(err).__name__
 
 
 def _trigger_names(triggers: Iterable[Any] | Any) -> tuple[str, ...]:

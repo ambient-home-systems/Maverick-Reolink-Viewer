@@ -6,7 +6,7 @@ import { playsProgressive } from "../playback/codec";
 import { ThumbLoader } from "../playback/thumb-loader";
 import "./playback";
 import { TOAST_EVENT } from "./navigation";
-import { STALE_TODAY_S, deliveryOf, describeCache, type RvPlayback } from "./playback";
+import { EVENTS_RETRIES, EVENTS_RETRY_MS, STALE_TODAY_S, deliveryOf, describeCache, type RvPlayback } from "./playback";
 
 const T0 = Date.UTC(2026, 9, 17, 4, 0); // midnight EDT, 17 Oct 2026
 const MIN = 60_000;
@@ -330,6 +330,26 @@ describe("rv-playback", () => {
     const clear = vi.spyOn(loader, "clear");
     el.renderRoot.querySelector<HTMLButtonElement>('button[aria-label="Previous day"]')?.click();
     expect(clear).toHaveBeenCalled();
+  });
+
+  it("asks again soon when the event search failed", async () => {
+    vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
+    vi.setSystemTime(new Date(T0 + 12 * 60 * MIN));
+    const hass = playbackHass(makeDay({ events: [], events_error: "ApiError -12" }));
+    const el = document.createElement("rv-playback");
+    el.thumbLoader = new ThumbLoader(2, instantImage);
+    el.hass = hass;
+    el.deviceId = "dev-cam";
+    document.body.appendChild(el);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(sentOf(hass, "reolink_viewer/timeline/day")).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(EVENTS_RETRY_MS);
+    const days = sentOf(hass, "reolink_viewer/timeline/day");
+    expect(days).toHaveLength(2);
+    expect(days[1]).not.toHaveProperty("max_age");
+    // While it keeps failing: a few quick tries, then the normal refresh.
+    await vi.advanceTimersByTimeAsync(EVENTS_RETRY_MS * 5);
+    expect(sentOf(hass, "reolink_viewer/timeline/day")).toHaveLength(1 + EVENTS_RETRIES);
   });
 
   it("describes the cache state", () => {
