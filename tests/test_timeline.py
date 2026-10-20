@@ -58,6 +58,7 @@ class FakeHost:
         self.day_searches = 0
         self.fail = False
         self.events_fail = False
+        self.days_fail = False
         self.gate: asyncio.Event | None = None
         self.days: list[date] = []
 
@@ -82,7 +83,7 @@ class FakeHost:
         self, channel: int, start: datetime, end: datetime
     ) -> list[date]:
         self.day_searches += 1
-        if self.fail:
+        if self.fail or self.days_fail:
             raise RuntimeError("device busy")
         return [d for d in self.days if start.date() <= d <= end.date()]
 
@@ -318,8 +319,11 @@ async def test_warm_uses_prefetch_priority(
         await service.async_warm([SOURCE])
         host.fail = True
         await service.async_warm([PlaybackSource("cam2", "Yard", "entry1", 5)])
-    # Today, then October's recording days, for each camera.
-    assert priorities == [Priority.PREFETCH] * 4
+    # Today, then October's recording days; the second camera's today failed,
+    # so its past days are not searched.
+    assert priorities == [Priority.PREFETCH] * 3
+    status = service._warm_status[PlaybackSource("cam2", "Yard", "entry1", 5).key]
+    assert status.note == "not started: today failed (day search failed: RuntimeError)"
 
 
 async def test_warm_fetches_recent_past_days_once(
@@ -346,6 +350,48 @@ async def test_warm_fetches_recent_past_days_once(
     service.clear()
     await service.async_warm([PlaybackSource("cam2", "Yard", "entry1", 5)])
     assert host.day_searches == 1  # no month search for the second camera
+
+
+async def test_warm_retries_and_reports(
+    hass: HomeAssistant, host: FakeHost, service: TimelineService
+) -> None:
+    """A failed month search tries every day; failed days are tried once more."""
+    host.files["sub"] = [vf(wall(2026, 10, 16, 9, 0), 2)]
+    host.days_fail = True
+    host.events_fail = True
+    await service.async_warm([SOURCE])
+    searched = [start.date() for start, _end, _stream in host.searches]
+    # Today, then each of the last 7 days, then each again (events failed).
+    week = [date(2026, 10, 17) - timedelta(days=n) for n in range(1, 8)]
+    assert searched == [date(2026, 10, 17), *week, *week]
+    status = service._warm_status[SOURCE.key]
+    assert status.finished
+    assert status.note == "month search failed: RuntimeError, every day tried"
+    assert status.failed["2026-10-16"] == "event search: ApiError"
+
+    # Opening a day the fetch could not keep says why.
+    host.events_fail = False
+    host.days_fail = False
+    _, timing = await service.async_day(SOURCE, date(2026, 10, 16))
+    assert timing["cache"] == "fresh"
+    assert timing["warm"].startswith(
+        "failed (event search: ApiError); started 0 s ago, 0 of 7 days fetched"
+    )
+
+    # A later run fetches them and reports progress.
+    host.days = [date(2026, 10, 15)]
+    service.clear()
+    await service.async_warm([SOURCE])
+    status = service._warm_status[SOURCE.key]
+    assert (status.planned, status.done, status.failed) == (
+        ["2026-10-15"],
+        ["2026-10-15"],
+        {},
+    )
+    assert status.describe("2026-10-15").startswith("fetched;")
+    assert status.describe("2026-10-14").startswith("not planned;")
+    status.planned.append("2026-10-13")
+    assert status.describe("2026-10-13").startswith("not reached yet;")
 
 
 async def test_segment_lookup(host: FakeHost, service: TimelineService) -> None:
