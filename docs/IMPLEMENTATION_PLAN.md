@@ -913,7 +913,7 @@ e.g. Front Yard Right, gives the deep-start and session parts):
 | Setup | Status |
 | --- | --- |
 | Desktop, through Nabu Casa | Runs 1 (v0.2.8), 2 (v0.2.9) and 3 (v0.2.10), 2026-10-20, below: Brave in an HA add-on, loading HA through the Nabu Casa address |
-| Desktop on the LAN | To run on v0.2.10, from a Mac |
+| Desktop on the LAN | Run 4 (v0.2.10, 2026-10-20) below: Chrome on a Mac |
 | iPhone app, Wi-Fi (local) | To run on v0.2.10 |
 | iPhone app, Tailscale | To run on v0.2.10 |
 | iPhone app, Nabu Casa | To run on v0.2.10 |
@@ -1049,6 +1049,42 @@ the link's 55–86 Mbit/s here). Reading only up to the target, and starting
 once those bytes are on disk, would cut both: on these files the target
 was 88–92 % in, so the download part would shrink a little and the read
 part to the `moov` plus a few seconds of video.
+
+**Desktop run 4: Mac on the LAN** (v0.2.10, Chrome 155 on macOS, Front Yard
+Right, plain HTTP through a local name, HTTP/1.1, without the session;
+2026-10-20):
+
+| Measure | Result |
+| --- | --- |
+| Timeline | today 197 ms, a past day 107 ms (store), again 165 ms, today again 164 ms: all under 1 s |
+| Events → first frame | 256, 123, 204 ms, 10–11 min into today's recording still being written (19.4 min so far), all where asked |
+| Deep start, not cached | 16.1 s, 57 min into a 60 min recording: download 12.8 s (259 MB at 163 Mbit/s), then Chrome read the whole original in 3.1 s (about 665 Mbit/s) |
+| Deep start, cached | 273 ms (plain file): under 2 s |
+| Auto-advance | gap 0 ms |
+| Rates | on pace at every rate. Painted 8, 15, 30, 60 and 53 fps of 7, 15, 30, 60 and 120 needed, longest gaps 200, 100, 67, 18 and 33 ms: every frame shown on time up to 4×, and the display's rate at 8×. But `getVideoPlaybackQuality` counted every frame as dropped (45 of 45 … 360 of 360) while `requestVideoFrameCallback` saw each one painted: Chrome on macOS misreports the counter here, so the check's ✗ at 0.5–2× is wrong. Step 2's check judges by painted frames where the two disagree |
+| Link | 4 MiB in 368 ms (91 Mbit/s): too short a read for a fast link; the 259 MB transfer above ran at about 665 Mbit/s |
+| MSE | as in Chromium elsewhere: `MediaSource` plays the MSE-ready fragment and rejects the NVR's shapes; no `ManagedMediaSource` |
+
+What the desktop runs say for step 2 (the iPhone runs still to come):
+
+- **Every setup is within budget once a recording is cached**: cached deep
+  starts 0.27–1.3 s, events 0.12–0.62 s, auto-advance 0–10 ms, and starts
+  land where asked.
+- **The uncached deep start has two costs, and the link decides which
+  dominates.** On the LAN almost all of it is the NVR download (12.8 of
+  16.1 s; the browser's whole-file read took 3.1 s). Through Nabu Casa the
+  read dominates (17–26 s for 180–204 MB at 55–86 Mbit/s).
+  - Serving a "start here" or plain file instead of the whole original
+    removes the read: most of the remote cost, little of the LAN cost.
+  - Starting once the bytes up to the target are on disk cuts the
+    download in proportion to the target's place in the file: on average
+    about half, but little for an event near an hour's end (95 % here:
+    12.1 s instead of 12.8 s). Without server-side seek on the NVR, that is
+    the floor for a cold click.
+  - The other lever is to make cold clicks rare: a sub hour is 58–260 MB,
+    so the 8 GiB cache holds 30 hours or more of sub. Fetching more of the
+    day's recordings in the background (prefetch priority, one at a time)
+    would leave most clicks cached.
 
 #### 2A as built (v0.2.0)
 
