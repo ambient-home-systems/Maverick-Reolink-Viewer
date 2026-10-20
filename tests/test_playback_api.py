@@ -202,6 +202,19 @@ async def test_playback_url_and_views(
         },
     )
     assert msg["result"]["cache"]["complete"] is True
+    # A start the cached copy reaches is served from it.
+    msg = await _ws(
+        client,
+        {
+            "type": "reolink_viewer/playback/url",
+            "device_id": camera,
+            "date": DAY,
+            "segment_id": seg_id,
+            "at": day["segments"][0]["start"] + 60_000,
+        },
+    )
+    assert msg["result"]["cache"]["complete"] is True
+    assert msg["result"]["end"] == day["segments"][0]["end"]
 
     msg = await _ws(
         client,

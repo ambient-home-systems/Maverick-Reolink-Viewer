@@ -474,6 +474,9 @@ _SEGMENT_SCHEMA: dict[probatio.Marker | str, Any] = {
         probatio.Required("type"): f"{DOMAIN}/playback/url",
         **_SEGMENT_SCHEMA,
         probatio.Optional("progressive", default=True): bool,
+        # Where playback will start (UTC ms): a shorter copy of a recording
+        # still being written serves it if it reaches that far.
+        probatio.Optional("at"): int,
     }
 )
 @websocket_api.async_response
@@ -490,13 +493,17 @@ async def ws_playback_url(
     data = entry.runtime_data
     try:
         recording, segment_id = await _recording(entry, source, msg)
-        cache_entry = await data.vod_cache.async_open(recording, Priority.PLAYBACK)
+        cache_entry = await data.vod_cache.async_open(
+            recording, Priority.PLAYBACK, at=msg.get("at")
+        )
     except TimelineError as err:
         connection.send_error(msg["id"], ERR_SEARCH_FAILED, str(err))
         return
     except VodCacheError as err:
         connection.send_error(msg["id"], ERR_CACHE_FAILED, str(err))
         return
+    # The copy may be one made when the recording was shorter.
+    recording = cache_entry.recording
     # The URLs keep the file they are issued for, and the recording, until
     # they expire.
     ttl = vod_ttl(recording)
@@ -540,7 +547,7 @@ async def ws_playback_prefetch(
     try:
         recording, segment_id = await _recording(entry, source, msg)
         cache_entry = await entry.runtime_data.vod_cache.async_open(
-            recording, Priority.PREFETCH
+            recording, Priority.PREFETCH, any_copy=True
         )
     except TimelineError as err:
         connection.send_error(msg["id"], ERR_SEARCH_FAILED, str(err))

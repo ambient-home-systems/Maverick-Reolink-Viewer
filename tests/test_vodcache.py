@@ -818,3 +818,34 @@ async def test_concurrent_opens_of_a_file_on_disk(
     assert a is b
     assert a.complete
     assert media.hits == []
+
+
+async def test_a_recording_still_being_written_is_cached_anew(
+    make_cache: Any, media: Server
+) -> None:
+    """A copy made when the recording was shorter serves only what it covers."""
+    vc = await make_cache()
+    name = "growing"
+    short = Recording(SOURCE, "sub", name, 0, 600_000, size=len(BODY))
+    longer = Recording(SOURCE, "sub", name, 0, 900_000, size=len(BODY))
+    assert short.cache_id != longer.cache_id
+    assert short.copy_key == longer.copy_key
+    first = await vc.async_open(short)
+    await vc.async_wait(first, complete=True)
+    assert first.task is not None
+    await first.task
+    # A start the short copy reaches (with a minute to spare): no download.
+    again = await vc.async_open(longer, at=500_000)
+    assert again is first
+    # Warming takes any copy.
+    assert await vc.async_open(longer, Priority.PREFETCH, any_copy=True) is first
+    assert media.hits == [name]
+    # A start past the short copy: the recording is fetched again, as it is now.
+    fresh = await vc.async_open(longer, at=560_000)
+    assert fresh is not first
+    assert fresh.recording.end_ms == 900_000
+    await vc.async_wait(fresh, complete=True)
+    assert media.hits == [name, name]
+    # From then on the longer copy serves both.
+    assert await vc.async_open(longer, at=100_000) is fresh
+    assert await vc.async_open(short) is first  # the exact copy still exists
