@@ -813,7 +813,7 @@ Known limits carried into 2B and Phase 4:
 | 2B step | Status |
 | --- | --- |
 | 0. Fix the recording cache (disk accounting, eviction, leases, deletion timers, open race), DST end and refresh window, shared thumbnail fetches; correct the MSE claim above | Done (v0.2.8), see "Step 0" below |
-| 1. Measure where it hasn't been (gate): desktop Chrome on the LAN, the iPhone Companion app on Wi-Fi, over Tailscale and over Nabu Casa | Check built (v0.2.8), sharpened in v0.2.9 and v0.2.10. Three desktop runs through Nabu Casa recorded (three player and cache bugs found and fixed); a LAN desktop run (Mac) and the three iPhone runs to come, see "Step 1 results" |
+| 1. Measure where it hasn't been (gate): desktop Chrome on the LAN, the iPhone Companion app on Wi-Fi, over Tailscale and over Nabu Casa | Check built (v0.2.8), sharpened in v0.2.9 and v0.2.10. Three desktop runs through Nabu Casa (three player and cache bugs found and fixed), a LAN desktop run (Mac) and the iPhone on home Wi-Fi recorded; the iPhone over Tailscale and over Nabu Casa to come, see "Step 1 results" |
 | 2. Build what the evidence calls for (speeds, HD/SD keeping the position, uncached deep seeks, bounded memory and disk) | Not started (after the gate) |
 
 ##### Step 0: the recording cache (v0.2.8)
@@ -914,7 +914,7 @@ e.g. Front Yard Right, gives the deep-start and session parts):
 | --- | --- |
 | Desktop, through Nabu Casa | Runs 1 (v0.2.8), 2 (v0.2.9) and 3 (v0.2.10), 2026-10-20, below: Brave in an HA add-on, loading HA through the Nabu Casa address |
 | Desktop on the LAN | Run 4 (v0.2.10, 2026-10-20) below: Chrome on a Mac |
-| iPhone app, Wi-Fi (local) | To run on v0.2.10 |
+| iPhone app, Wi-Fi (local) | iPhone run 1 (v0.2.10, 2026-10-20, with the session) below |
 | iPhone app, Tailscale | To run on v0.2.10 |
 | iPhone app, Nabu Casa | To run on v0.2.10 |
 
@@ -1085,6 +1085,50 @@ What the desktop runs say for step 2 (the iPhone runs still to come):
     so the 8 GiB cache holds 30 hours or more of sub. Fetching more of the
     day's recordings in the background (prefetch priority, one at a time)
     would leave most clicks cached.
+
+**iPhone run 1: the Companion app on home Wi-Fi** (v0.2.10, Companion app
+2026.10.1, Front Yard Right, plain HTTP to the local address, HTTP/1.1, with
+the one-hour session; 2026-10-20). The header says "iOS 18.7", but the app's
+own part of the user agent says iOS 27.0.0: WebKit's user agent has kept an
+18.x version since iOS 26. Delivery is "whole file first": the server answers
+WebKit's first request once the whole recording is on disk.
+
+| Measure | Result |
+| --- | --- |
+| Timeline | today 149 ms, a past day 106 ms (store), again 326 ms, today again 129 ms: all under 1 s |
+| Events → first frame | 894, 529, 755 ms (7–38 min into recordings the prefetch had cached, plain files), all where asked |
+| Deep start, not cached | **14.2 s**, 52 min into a 60 min recording: download 9.9 s (234 MB at 189 Mbit/s), then WebKit read the whole original in 4.1 s (about 454 Mbit/s) before its metadata. The URL was bound to the original; the plain copy (`moov` 1.3 MB) was ready 2.0 s after the download, while WebKit was still reading |
+| Deep start, cached | 814 ms (plain file): under 2 s |
+| Auto-advance | gap 22 ms (preloaded) |
+| Rates | on pace at every rate (0.50–8.00×), no stalls. Painted 7, 15, 30, 59 and 60 fps (the sub stream runs at 15 fps), longest gaps 234, 100, 59, 49 and 25 ms: every frame shown up to 2×, and WebKit's 60 fps drawing rate at 4× and 8×. Dropped 0 at 0.5–2×, 9 % at 4× (60 fps needed) and 50 % at 8× (120 needed). All judged smooth. WebKit's frame counter lags over a 6 s window: it counted 60 and 69 frames at 1× and 2× where 90 and 180 went by, so the "needed" figures there (10 and 11 fps) are too low |
+| Link | 4.2 MB in 382 ms (88 Mbit/s): too short a read again; the 234 MB read above ran at about 454 Mbit/s |
+| MSE | **no `MediaSource`, but `ManagedMediaSource`** (accepts the sub stream's `avc1.640033`). The append test played all four shapes, the NVR's own (absolute offsets, no `tfdt`) included: WebKit accepts what Chromium rejects |
+| Video | `canPlayType` "probably" for the sub stream; `getVideoPlaybackQuality` and `requestVideoFrameCallback` present; no `performance.memory` |
+| HD | not measured (no main recording cached, so its codec is unknown) |
+| One-hour session | 60 min from 4:00 PM: **0 of 54,164 frames dropped, 0 stalls**, one file change with a 7 ms gap, no reloads mid-way, and the page was never reloaded (no out-of-memory). WebKit read 7–8 min ahead (428–485 s) and kept what it had played: the whole hour (3609 s) buffered at the end, plus 687 s of the next file. JS heap not measurable in WebKit. Cache steady at 8.17 GB (cap 8.59 GB), nothing reserved; leases 3, then 2 from minute 41 (the first event's URL expired: 30 min + its 10.7 min + 1 min) |
+
+What iPhone run 1 adds for step 2:
+
+- **On the iPhone too, cached is within budget**: events 0.5–0.9 s, cached
+  deep start 0.8 s, auto-advance 22 ms, rates smooth at 0.5–8×, an hour of
+  playback without a dropped frame or a reload.
+- **The uncached deep start is again download plus whole-file read** (9.9 +
+  4.1 s). WebKit waits for the whole file anyway, and the plain copy was
+  ready 2 s after the download: binding WebKit's URL to the plain copy (or
+  to a "start here" file) would have started at about 12 s here, and over a
+  remote link spares reading the whole recording (234 MB) through it. The
+  Tailscale and Nabu Casa runs will put a number on that.
+- **MSE is open on the iPhone through `ManagedMediaSource`.** Option (a)
+  would run on `MediaSource` in Chromium and `ManagedMediaSource` in the
+  Companion app; the server's normalized fragments are needed for Chromium
+  only. Option (b) needs nothing new from either browser.
+- **Rates need only the control**: smooth on the iPhone at every rate, and
+  on the desktop by painted frames.
+- **HD is still unmeasured on every setup**: no main recording has been
+  cached, so the check could not name the main stream's codec.
+- **Check fixes for step 2**: take the iOS version from the app's part of
+  the user agent; judge smoothness by painted frames (WebKit's counter lags,
+  macOS Chrome's misreports).
 
 #### 2A as built (v0.2.0)
 
