@@ -18,7 +18,7 @@ put on it:
 | --- | --- | --- | --- | --- |
 | 0 | Foundations, CI, adapter layer, hardware discovery | High | 1–2 wk | Done (2026-10-17) |
 | 1 | Device details and every setting, with explanations | Standard (catalog) / High (panel shell) | 2–3 wk | Done (2026-10-17) |
-| 2 | Event timeline, thumbnails, smooth playback | High (backend) / Very high (player) | 3–5 wk | In progress: 2A built; timeline and auto-advance targets met on hardware; video start (1.1–1.6 s, v0.2.6) and auto-advance met; a past day missed by the background fetch still costs a 4 s search, reported in v0.2.7. 2B not started |
+| 2 | Event timeline, thumbnails, smooth playback | High (backend) / Very high (player) | 3–5 wk | In progress: 2A done (2026-10-20, v0.2.7: timeline 105–287 ms, first frame 0.6–1.1 s, auto-advance 6–7 ms on hardware). 2B not started |
 | 3 | Live view via go2rtc, grid, fullscreen, PTZ | High | 3–4 wk | Not started |
 | 4 | Performance, mobile, packaging, first release | Standard | 2–3 wk | Not started |
 | 5 | Optional R&D: Baichuan live/playback | Very high | 4–8 wk, time-boxed with gates | Not started |
@@ -424,9 +424,10 @@ gets no Playback tab.
 | 1. Follow-up check (v0.1.2): MP4 layout through the plain GET, server-side seek with `start=`, file-name shape, full-speed parallel downloads | Done: run 4 on 2026-10-17; the open questions are settled below |
 | 2. Backend: scheduler limits + stream budget, event list from the bridge, timeline commands and cache, UTC conversion with DST, thumbnails, VOD and clip views | Done (v0.2.0): see "2A as built" below |
 | 2. Frontend: Playback tab, canvas timeline, calendar, event list, simple player, debug panel | Done (v0.2.0): checked in Chromium with synthetic recordings (desktop and iPhone-sized layout) |
-| Exit on LAN: timeline < 1 s cached, < 3 s cold | **Met** (v0.2.2, three cameras): today 49–198 ms, recent past days 56–126 ms from the background fetch, cached 54–276 ms. A day older than a week still costs the NVR's 4–6 s search on first open. v0.2.6 check: a day 3 days back was searched fresh (4.2 s) on two cameras; v0.2.7 reports what the background fetch did |
-| Exit on LAN: clicking an event starts video in < 2 s on the sub stream | Short recordings: 521–605 ms (pass). Deep inside long recordings, v0.2.4: 1631–2842 ms in a 130 MB file and 1841–1944 ms in a 56 MB file (fail), still growing with file size. v0.2.5: 1231–3034 ms; Chrome reads the whole fragmented file first. **Met** (v0.2.6, two cameras): cached recordings served as plain MP4, 1106–1611 ms 9–56 min into hour-long recordings |
+| Exit on LAN: timeline < 1 s cached, < 3 s cold | **Met** (v0.2.2, three cameras): today 49–198 ms, recent past days 56–126 ms from the background fetch, cached 54–276 ms. A day older than a week still costs the NVR's 4–6 s search on first open. v0.2.6 check: a day 3 days back was searched fresh (4.2 s) on two cameras. v0.2.7 check: 105–287 ms on two cameras, the past day from the store |
+| Exit on LAN: clicking an event starts video in < 2 s on the sub stream | Short recordings: 521–605 ms (pass). Deep inside long recordings, v0.2.4: 1631–2842 ms in a 130 MB file and 1841–1944 ms in a 56 MB file (fail), still growing with file size. v0.2.5: 1231–3034 ms; Chrome reads the whole fragmented file first. **Met** (v0.2.6, two cameras): cached recordings served as plain MP4, 1106–1611 ms 9–56 min into hour-long recordings; v0.2.7: 590–1116 ms |
 | Exit on LAN: auto-advance to the next file | **Met** (v0.2.3, three cameras): through the preloaded file, with gaps of 3, 5 and 80 ms |
+| 2A complete | **Done** (2026-10-20, v0.2.7): all three exit criteria met together on the eighth hardware check, see below |
 
 What the playback check measures (`probe_playback.py`, opt-in, read-only, every
 request a prefetch-priority scheduler job, reads bounded in bytes and time, no URL
@@ -767,6 +768,32 @@ Changes (v0.2.7):
    tried once more at the end.
 4. A camera that failed today's search is skipped (its past days would
    only wait for the same timeouts).
+
+#### Eighth hardware check (2026-10-20, v0.2.7, Chrome on the LAN): 2A done
+
+Run about 2 minutes after the panel opened, as the plan intends.
+
+| Camera | Today / again | 2026-10-17 first / again | Events → first frame | Recordings | Auto-advance |
+| --- | --- | --- | --- | --- | --- |
+| Front Yard Right | 105 / 236 ms | 158 ms (store) / 271 ms | 1056, 1014, 1116 ms (55.6, 53.1 and 9.2 min in) | 199.9 MB, plain MP4, from disk | gap 7 ms |
+| Front Yard Left | 211 / 222 ms | 181 ms (store) / 287 ms | 590, 772, 998 ms (35.8–55.7 min in) | 29.0 and 64.6 MB, plain MP4, from disk | gap 6 ms |
+
+- **Every 2A exit criterion is met** on two cameras: timeline 105–287 ms
+  (the past day came from the background fetch's store), first frame
+  590–1116 ms deep inside hour-long recordings, auto-advance gaps 6–7 ms.
+- The past day was stored this time, so the report had no
+  "background fetch" line. Whether v0.2.7's retries or the wait made the
+  difference is not known; a later miss now shows its reason.
+
+Known limits carried into 2B and Phase 4:
+
+- An event 3 s or more into a recording that is not cached waits for the
+  whole download (about 3 s for 64 MB, 10 s for 200 MB). The background
+  prefetch of the day's longest recording usually has it cached first.
+- A day older than the background fetch's 7 days costs the NVR's 4–6 s
+  search the first time it is opened.
+- A cached recording takes disk space twice for up to 35 minutes while it
+  is rewritten as plain MP4.
 
 #### 2A as built (v0.2.0)
 
