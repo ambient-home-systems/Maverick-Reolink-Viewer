@@ -44,6 +44,8 @@
     ]) {
       if (typeof t[key] === "number") parts.push(`${label} ${ms(t[key])}`);
     }
+    // Past days: what the background fetch (when the panel opened) did for it.
+    if (t.warm) parts.push(`background fetch: ${t.warm}`);
     return parts.join(", ");
   };
   const mins = (v) => (v < 60000 ? `${Math.round(v / 1000)} s` : `${(v / 60000).toFixed(1)} min`);

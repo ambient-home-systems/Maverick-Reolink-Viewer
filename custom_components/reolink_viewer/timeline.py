@@ -235,6 +235,41 @@ def merge_window(
     day.events = sorted([*old_events, *new_events], key=lambda e: (e.start, e.end))
 
 
+@dataclass(slots=True)
+class WarmStatus:
+    """Progress of one camera's background fetch of past days."""
+
+    started: float = field(default_factory=time.monotonic)
+    planned: list[str] = field(default_factory=list)
+    done: list[str] = field(default_factory=list)
+    failed: dict[str, str] = field(default_factory=dict)
+    searching: str | None = None
+    note: str | None = None
+    finished: bool = False
+
+    def describe(self, iso: str) -> str:
+        """Describe what the fetch did for one day (playback check report)."""
+        if iso in self.done:
+            state = "fetched"
+        elif iso == self.searching:
+            state = "being fetched"
+        elif iso in self.failed:
+            state = f"failed ({self.failed[iso]})"
+        elif iso in self.planned:
+            state = "not reached yet"
+        else:
+            state = "not planned"
+        parts = [
+            f"{state}; started {round(time.monotonic() - self.started)} s ago",
+            f"{len(self.done)} of {len(self.planned)} days fetched",
+        ]
+        if self.note:
+            parts.append(self.note)
+        if self.finished:
+            parts.append("finished")
+        return ", ".join(parts)
+
+
 class TimelineService:
     """Searches and caches recording timelines."""
 
@@ -248,6 +283,7 @@ class TimelineService:
         self._inflight: dict[tuple[Any, ...], asyncio.Future[Any]] = {}
         self._months: dict[tuple[str, int, int], tuple[float, list[int], bool]] = {}
         self._warming_past = False
+        self._warm_status: dict[str, WarmStatus] = {}
 
     # ---- Storage ----
 
@@ -372,6 +408,8 @@ class TimelineService:
 
         result, timing = await self._dedupe(("day", *mkey), fetch)
         timing["total_ms"] = _ms(began)
+        if not is_today and (warm := self._warm_status.get(source.key)) is not None:
+            timing["warm"] = warm.describe(iso)
         return result, timing
 
     async def _fetch_day(
@@ -520,48 +558,96 @@ class TimelineService:
         each is searched once.
         """
 
-        async def today(source: PlaybackSource) -> None:
+        async def today(source: PlaybackSource) -> str | None:
             try:
                 host = bridge.async_get_host(self._hass, source.entry_id)
                 now = local_now(host.timezone()).date()
                 await self.async_day(source, now, "sub", Priority.PREFETCH)
             except Exception as err:  # noqa: BLE001 - warming is best effort
                 _LOGGER.debug("Warming %s failed: %s", source.name, err)
+                return _error_text(err)
+            return None
 
-        await asyncio.gather(*(today(s) for s in sources))
+        today_errors = await asyncio.gather(*(today(s) for s in sources))
         if self._warming_past:
             return
         self._warming_past = True
         try:
-            todo = [(s, await self._past_days_to_warm(s)) for s in sources]
+            statuses = {s.key: WarmStatus() for s in sources}
+            self._warm_status.update(statuses)
+            todo: list[tuple[PlaybackSource, list[date]]] = []
+            for source, error in zip(sources, today_errors, strict=True):
+                status = statuses[source.key]
+                if error is not None:
+                    # The camera did not answer for today: past days would
+                    # only wait for the same timeouts.
+                    status.note = f"not started: today failed ({error})"
+                    todo.append((source, []))
+                else:
+                    todo.append((source, await self._past_days_to_warm(source, status)))
             for n in range(WARM_PAST_DAYS):
                 for source, days in todo:
                     if n < len(days):
-                        await self._warm_day(source, days[n])
+                        await self._warm_day(source, days[n], statuses[source.key])
+            # Failed days are tried once more: the NVR's searches fail now and
+            # then and work when asked again.
+            for source, _days in todo:
+                status = statuses[source.key]
+                for iso in list(status.failed):
+                    await self._warm_day(source, date.fromisoformat(iso), status)
+            for status in statuses.values():
+                status.finished = True
         finally:
             self._warming_past = False
 
-    async def _past_days_to_warm(self, source: PlaybackSource) -> list[date]:
-        """Recent past days with recordings that are not stored, newest first."""
+    async def _past_days_to_warm(
+        self, source: PlaybackSource, status: WarmStatus
+    ) -> list[date]:
+        """Recent past days with recordings that are not stored, newest first.
+
+        If the month search fails, every recent day is tried.
+        """
         try:
             host = bridge.async_get_host(self._hass, source.entry_id)
             now = local_now(host.timezone()).date()
-            wanted = [now - timedelta(days=n) for n in range(1, WARM_PAST_DAYS + 1)]
-            recorded: set[date] = set()
-            for year, month in sorted({(d.year, d.month) for d in wanted}):
-                days, _ = await self.async_days(source, year, month, Priority.PREFETCH)
-                recorded.update(date(year, month, d) for d in days)
             stored = (await self._data(source.key))["sub"]
         except Exception as err:  # noqa: BLE001 - warming is best effort
             _LOGGER.debug("Warming %s failed: %s", source.name, err)
+            status.note = f"not started: {type(err).__name__}"
             return []
-        return [d for d in wanted if d in recorded and d.isoformat() not in stored]
-
-    async def _warm_day(self, source: PlaybackSource, day: date) -> None:
+        wanted = [now - timedelta(days=n) for n in range(1, WARM_PAST_DAYS + 1)]
+        days = [d for d in wanted if d.isoformat() not in stored]
         try:
-            await self.async_day(source, day, "sub", Priority.PREFETCH)
+            recorded: set[date] = set()
+            for year, month in sorted({(d.year, d.month) for d in wanted}):
+                found, _ = await self.async_days(source, year, month, Priority.PREFETCH)
+                recorded.update(date(year, month, d) for d in found)
+        except Exception as err:  # noqa: BLE001 - warming is best effort
+            _LOGGER.debug("Month search for %s failed: %s", source.name, err)
+            status.note = f"{_error_text(err)}, every day tried"
+        else:
+            days = [d for d in days if d in recorded]
+        status.planned = [d.isoformat() for d in days]
+        return days
+
+    async def _warm_day(
+        self, source: PlaybackSource, day: date, status: WarmStatus
+    ) -> None:
+        iso = day.isoformat()
+        status.searching = iso
+        try:
+            result, _ = await self.async_day(source, day, "sub", Priority.PREFETCH)
         except Exception as err:  # noqa: BLE001 - warming is best effort
             _LOGGER.debug("Warming %s %s failed: %s", source.name, day, err)
+            status.failed[iso] = _error_text(err)
+        else:
+            if result.events_error is not None:
+                status.failed[iso] = f"event search: {result.events_error}"
+            else:
+                status.failed.pop(iso, None)
+                status.done.append(iso)
+        finally:
+            status.searching = None
 
     async def async_segment(
         self, source: PlaybackSource, day: date, stream: str, segment_id: str
@@ -615,6 +701,13 @@ def match_segment(candidates: list[Segment], target: Segment) -> Segment | None:
         if best is None or score > best_score:
             best, best_score = seg, score
     return best
+
+
+def _error_text(err: BaseException) -> str:
+    text = str(err)
+    if isinstance(err, TimelineError):
+        return text
+    return f"{type(err).__name__}: {text}" if text else type(err).__name__
 
 
 def _ms(start: float) -> float:
