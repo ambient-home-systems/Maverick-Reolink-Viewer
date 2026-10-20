@@ -32,10 +32,10 @@ from .views import (
     THUMB_PATH,
     THUMB_TTL,
     VOD_PATH,
-    VOD_TTL,
     ThumbGrant,
     VodGrant,
     sign,
+    vod_ttl,
 )
 from .vodcache import Recording, VodCacheError
 
@@ -499,24 +499,26 @@ async def ws_playback_url(
         return
     # The URLs keep the file they are issued for, and the recording, until
     # they expire.
-    flat = data.vod_cache.lease(cache_entry, VOD_TTL.total_seconds())
+    ttl = vod_ttl(recording)
+    flat = data.vod_cache.lease(cache_entry, ttl.total_seconds())
     grant = VodGrant(
         recording, msg["progressive"], _download_name(source, recording), flat
     )
-    token = data.grants.issue(grant, VOD_TTL)
-    clip_token = data.grants.issue(grant, VOD_TTL)
+    token = data.grants.issue(grant, ttl)
+    clip_token = data.grants.issue(grant, ttl)
     connection.send_result(
         msg["id"],
         {
-            "url": sign(hass, VOD_PATH, token, VOD_TTL),
-            "clip_url": sign(hass, CLIP_PATH, clip_token, VOD_TTL),
+            "url": sign(hass, VOD_PATH, token, ttl),
+            "clip_url": sign(hass, CLIP_PATH, clip_token, ttl),
             "stream": recording.stream,
             "segment_id": segment_id,
             "start": recording.start_ms,
             "end": recording.end_ms,
             "media": data.vod_cache.media_info(source, recording.stream),
             "cache": cache_entry.public(),
-            "expires_in": int(VOD_TTL.total_seconds()),
+            "file": "plain" if flat else "original",
+            "expires_in": int(ttl.total_seconds()),
             "timing": {"total_ms": round((time.monotonic() - began) * 1000, 1)},
         },
     )

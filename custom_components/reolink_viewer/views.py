@@ -45,7 +45,11 @@ _LOGGER = logging.getLogger(__name__)
 VOD_PATH = "/api/reolink_viewer/vod"
 CLIP_PATH = "/api/reolink_viewer/clip"
 THUMB_PATH = "/api/reolink_viewer/thumb"
+# A recording's URLs live this long plus the recording's length, so one
+# played through (and the next one, asked for near its end) does not expire
+# mid-way; the player asks again after a longer pause.
 VOD_TTL = timedelta(minutes=30)
+VOD_TTL_MAX = timedelta(hours=6)
 THUMB_TTL = timedelta(minutes=10)
 COMPLETE_TIMEOUT = 600.0
 MAX_GRANTS = 5000
@@ -97,6 +101,12 @@ class Grants:
             del self._items[token]
             return None
         return grant if isinstance(grant, kind) else None
+
+
+def vod_ttl(recording: Recording) -> timedelta:
+    """Return how long URLs of a recording live."""
+    length = timedelta(milliseconds=max(recording.end_ms - recording.start_ms, 0))
+    return min(VOD_TTL_MAX, VOD_TTL + length)
 
 
 def sign(hass: HomeAssistant, base: str, token: str, ttl: timedelta) -> str:

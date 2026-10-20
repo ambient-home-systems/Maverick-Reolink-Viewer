@@ -23,7 +23,7 @@ import { canPlayMain, playsProgressive, type StreamDecision } from "../playback/
 import "../playback/calendar";
 import "../playback/event-list";
 import "../playback/player";
-import type { AdvanceDetail, FirstFrameDetail, PlayItem, RvPlayer } from "../playback/player";
+import type { AdvanceDetail, FirstFrameDetail, PlayItem, PlayerErrorDetail, RvPlayer } from "../playback/player";
 import { ThumbLoader } from "../playback/thumb-loader";
 import { dateIn, firstDayOfWeek, formatClock, formatDay } from "../playback/time";
 import "../playback/timeline";
@@ -70,6 +70,14 @@ const LONG_RECORDING_MS = 10 * MINUTE;
 const EVENT_THUMB_BUCKET = 10;
 /** Thumbnail loads wait at most this long for a recording to start. */
 export const THUMB_PAUSE_MAX_MS = 8_000;
+/**
+ * The next recording's URL is asked for this close to the current one's end
+ * (in media time): a URL asked for at the start of an hour-long recording
+ * expired before it was needed. Its cache fill is started at once instead.
+ */
+export const PRELOAD_LEAD_MS = 3 * MINUTE;
+/** A recording that fails mid-way is reloaded where it was, once a minute at most. */
+export const RECOVER_EVERY_MS = 60_000;
 /** Minutes of the playback check's optional session (memory and disk). */
 export const CHECK_SESSION_MIN = 60;
 const CHECK_SETUP_KEY = "reolink-viewer-check-setup";
@@ -88,6 +96,9 @@ export interface Metrics {
   hd?: string;
   delivery?: string;
   note?: string;
+  /** Mid-play read failures recovered by reloading (URL expired, network). */
+  recoveries?: number;
+  lastRecovery?: string;
 }
 
 /**
@@ -166,6 +177,11 @@ export class RvPlayback extends LitElement {
   private _lastCursorPaint = 0;
   private readonly _progressive = playsProgressive();
   private _check: PlaybackCheck | undefined;
+  /** The play request whose recording is being fetched, if any. */
+  private _starting: number | undefined;
+  /** A recording whose successor's URL is asked for near its end. */
+  private _preloadPending: { segment: Segment; seq: number } | undefined;
+  private _recoveredAt = -Infinity;
 
   constructor() {
     super();
@@ -352,7 +368,11 @@ export class RvPlayback extends LitElement {
     const seq = ++this._playSeq;
     this._playFailure = undefined;
     this._pauseThumbs();
-    this._cursor = target.segment.start + target.offset;
+    // The video still on screen keeps reporting its time until the new one
+    // starts: the start point is this, not whatever the cursor shows then.
+    const wanted = target.segment.start + target.offset;
+    this._cursor = wanted;
+    this._starting = seq;
     const began = performance.now();
     try {
       const progressive = this._progressive && target.offset < PROGRESSIVE_SEEK_LIMIT_MS;
@@ -370,19 +390,40 @@ export class RvPlayback extends LitElement {
         delivery: deliveryOf(progressive, this._progressive, playback.cache.complete),
       };
       // Main and sub recordings start a few seconds apart: keep the wall time.
-      const offset = Math.max(0, this._cursor - playback.start);
+      const offset = Math.max(0, wanted - playback.start);
       await this._player?.play(toItem(playback), offset, requestedAt);
-      void this._preloadAfter(target.segment, seq);
+      this._schedulePreload(target.segment, seq, wanted);
     } catch (err) {
       if (seq === this._playSeq) this._playError(toError(err).message);
+    } finally {
+      if (this._starting === seq) this._starting = undefined;
     }
+  }
+
+  /** Preload the next recording now, or near this one's end if that is far. */
+  private _schedulePreload(segment: Segment, seq: number, from: number): void {
+    this._preloadPending = undefined;
+    const hass = this.hass;
+    const next = this._nextSegment(segment);
+    if (!hass || !next || segment.end - from <= PRELOAD_LEAD_MS) {
+      void this._preloadAfter(segment, seq);
+      return;
+    }
+    // Drop any older preload: it is not what comes after this recording.
+    void this._player?.preload(undefined);
+    prefetchSegment(hass, this._ref(next)).catch(() => undefined);
+    this._preloadPending = { segment, seq };
+  }
+
+  private _nextSegment(segment: Segment): Segment | undefined {
+    const segments = this._day?.segments ?? [];
+    const index = segments.findIndex((s) => s.id === segment.id);
+    return index >= 0 ? segments.at(index + 1) : undefined;
   }
 
   private async _preloadAfter(segment: Segment, seq: number): Promise<void> {
     const hass = this.hass;
-    const segments = this._day?.segments ?? [];
-    const index = segments.findIndex((s) => s.id === segment.id);
-    const next = index >= 0 ? segments.at(index + 1) : undefined;
+    const next = this._nextSegment(segment);
     if (!hass || !next) {
       await this._player?.preload(undefined);
       return;
@@ -401,7 +442,7 @@ export class RvPlayback extends LitElement {
     this._metrics = { ...this._metrics, gapMs: detail.gapMs };
     if (segment) {
       this._cursor = segment.start;
-      void this._preloadAfter(segment, this._playSeq);
+      this._schedulePreload(segment, this._playSeq, segment.start);
     }
   }
 
@@ -426,6 +467,24 @@ export class RvPlayback extends LitElement {
     this.thumbLoader.resume();
   }
 
+  /** The player failed: a read mid-way is retried where it was, else as below. */
+  private _onPlayerError(detail: PlayerErrorDetail): void {
+    const at = this._player?.time;
+    const now = performance.now();
+    if (detail.played && at !== undefined && now - this._recoveredAt > RECOVER_EVERY_MS) {
+      // E.g. its URL expired during a long pause, or the network dropped.
+      this._recoveredAt = now;
+      this._metrics = {
+        ...this._metrics,
+        recoveries: (this._metrics.recoveries ?? 0) + 1,
+        lastRecovery: detail.message,
+      };
+      void this.playAt(at);
+      return;
+    }
+    this._playError(detail.message);
+  }
+
   private _playError(message: string): void {
     this._resumeThumbs();
     if (this._stream === "main") {
@@ -439,10 +498,17 @@ export class RvPlayback extends LitElement {
   }
 
   private _onTime(time: number): void {
+    // While a new start is on its way, the old video's time is stale.
+    if (this._starting !== undefined) return;
     // Repaint the cursor a few times a second, not on every timeupdate.
     const now = performance.now();
     if (now - this._lastCursorPaint < 250) return;
     this._lastCursorPaint = now;
+    const pending = this._preloadPending;
+    if (pending && pending.seq === this._playSeq && pending.segment.end - time <= PRELOAD_LEAD_MS) {
+      this._preloadPending = undefined;
+      void this._preloadAfter(pending.segment, pending.seq);
+    }
     this._cursor = time;
     if (time > this._view.start + this._view.span || time < this._view.start) {
       this._view = centreOn(this._view, time, this._day ?? { start: time, end: time + this._view.span });
@@ -480,6 +546,7 @@ export class RvPlayback extends LitElement {
     this._date = date;
     this._player?.stop();
     this._playing = undefined;
+    this._preloadPending = undefined;
     this.thumbLoader.clear();
     this._thumbs = new Map();
     this._thumbsRequested.clear();
@@ -813,6 +880,8 @@ export class RvPlayback extends LitElement {
         <dd>${ms(m.firstFrameMs)} <span class="muted">(URL ${ms(m.urlMs)})</span></dd>
         <dt>Gap at last file change</dt>
         <dd>${ms(m.gapMs)}</dd>
+        <dt>Reloaded mid-way</dt>
+        <dd>${m.recoveries ? `${m.recoveries}× (last: ${m.lastRecovery ?? "?"})` : "never"}</dd>
         <dt>Stream</dt>
         <dd>${m.stream ?? this._stream}${m.codec ? ` · ${m.codec}` : ""}</dd>
         <dt>Cache</dt>
@@ -820,7 +889,11 @@ export class RvPlayback extends LitElement {
         <dt>HD</dt>
         <dd>${this._hd.reason}</dd>
         <dt>Delivery</dt>
-        <dd>${m.delivery ?? (this._progressive ? "progressive" : "whole file first (WebKit)")}</dd>
+        <dd>
+          ${m.delivery ?? (this._progressive ? "progressive" : "whole file first (WebKit)")}${this._playing?.file
+            ? ` · ${this._playing.file} file`
+            : ""}
+        </dd>
         <dt>Day</dt>
         <dd>
           ${this._day
@@ -852,8 +925,8 @@ export class RvPlayback extends LitElement {
             @rv-time=${(e: CustomEvent<TimeDetail>) => {
               this._onTime(e.detail.time);
             }}
-            @rv-player-error=${(e: CustomEvent<{ message: string }>) => {
-              this._playError(e.detail.message);
+            @rv-player-error=${(e: CustomEvent<PlayerErrorDetail>) => {
+              this._onPlayerError(e.detail);
             }}
           ></rv-player>
           <div class="dayline">

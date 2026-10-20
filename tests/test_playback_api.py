@@ -19,6 +19,7 @@ from custom_components.reolink_viewer import bridge, timeline, views
 from custom_components.reolink_viewer.devices import PlaybackSource
 from custom_components.reolink_viewer.thumbnails import ThumbKey
 from custom_components.reolink_viewer.views import VodGrant
+from custom_components.reolink_viewer.vodcache import Recording
 from homeassistant.core import HomeAssistant
 
 from .mp4_fixtures import mp4_file
@@ -164,6 +165,9 @@ async def test_playback_url_and_views(
     assert "authSig=" in result["url"]
     assert result["segment_id"] == seg_id
     assert result["stream"] == "sub"
+    # URLs outlive the recording played through (5 min here) by 30 min.
+    assert result["expires_in"] == 35 * 60
+    assert result["file"] == "original"  # the plain copy is not made yet
     assert "127.0.0.1" not in str(result)
 
     http = await hass_client_no_auth()
@@ -503,6 +507,16 @@ async def test_progressive_stream_cut_and_timeout(
 
 def _signed(hass: HomeAssistant, token: str) -> str:
     return views.sign(hass, views.VOD_PATH, token, views.VOD_TTL)
+
+
+def test_vod_ttl() -> None:
+    """URLs live 30 min plus the recording's length, at most 6 h."""
+    source = PlaybackSource("c", "n", "e", 1)
+    hour = Recording(source, "sub", "x", 0, 3_600_000)
+    assert views.vod_ttl(hour) == timedelta(minutes=90)
+    assert views.vod_ttl(Recording(source, "sub", "x", 5, 0)) == views.VOD_TTL
+    day = Recording(source, "sub", "x", 0, 86_400_000)
+    assert views.vod_ttl(day) == views.VOD_TTL_MAX
 
 
 def test_grants_expire_and_are_capped() -> None:

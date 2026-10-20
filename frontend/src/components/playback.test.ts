@@ -304,6 +304,99 @@ describe("rv-playback", () => {
     expect(el._loading).toBe(false);
   });
 
+  it("starts where asked even if the playing video moves the cursor meanwhile", async () => {
+    const hass = playbackHass();
+    const base = hass.callWS.bind(hass);
+    let release: () => void = () => undefined;
+    hass.callWS = <T,>(message: Record<string, unknown>) =>
+      message.type === "reolink_viewer/playback/url" && message.segment_id === "s2"
+        ? new Promise<T>((resolve) => {
+            release = () => {
+              resolve(base<T>(message));
+            };
+          })
+        : base<T>(message);
+    const el = await mount(hass);
+    const player = el.renderRoot.querySelector("rv-player");
+    if (!player) throw new Error("no player");
+    await el.playAt(T0 + 60 * MIN + 30_000);
+    const play = vi.spyOn(player, "play");
+    const wanted = T0 + 63 * MIN;
+    const playing = el.playAt(wanted);
+    await flush();
+    // The video still on screen reports its time while the URL is on its way.
+    player.dispatchEvent(new CustomEvent("rv-time", { detail: { time: T0 + 60 * MIN + 31_000 }, bubbles: true, composed: true }));
+    release();
+    await playing;
+    expect(play).toHaveBeenCalledTimes(1);
+    expect(play.mock.calls[0]?.[1]).toBe(wanted - (T0 + 62 * MIN));
+    expect(el._cursor).toBe(wanted);
+  });
+
+  it("asks for the next hour's URL near the end, warming its cache at once", async () => {
+    const long = (id: string, start: number) => ({ id, start, end: start + 60 * MIN, triggers: [], ambiguous: false });
+    const day = makeDay({ segments: [long("h1", T0 + 60 * MIN), long("h2", T0 + 120 * MIN)], events: [] });
+    const hass = playbackHass(day);
+    const el = await mount(hass);
+    await el.playAt(T0 + 70 * MIN);
+    await flush();
+    const urls = () => sentOf(hass, "reolink_viewer/playback/url").map((m) => m.segment_id);
+    expect(urls()).toEqual(["h1"]);
+    expect(sentOf(hass, "reolink_viewer/playback/prefetch").map((m) => m.segment_id)).toContain("h2");
+    const player = el.renderRoot.querySelector("rv-player");
+    expect(player?.preloaded).toBeUndefined();
+    const time = (t: number) => {
+      vi.setSystemTime(Date.now() + 1000); // past the cursor's repaint throttle
+      vi.spyOn(performance, "now").mockReturnValue(Date.now());
+      player?.dispatchEvent(new CustomEvent("rv-time", { detail: { time: t }, bubbles: true, composed: true }));
+    };
+    time(T0 + 100 * MIN);
+    await flush();
+    expect(urls()).toEqual(["h1"]);
+    time(T0 + 118 * MIN);
+    await flush();
+    expect(urls()).toEqual(["h1", "h2"]);
+    await flush();
+    expect(player?.preloaded?.segmentId).toBe("h2");
+  });
+
+  it("reloads a recording that fails mid-way where it was, once a minute", async () => {
+    const hass = playbackHass();
+    const el = await mount(hass);
+    await el.playAt(T0 + 60 * MIN + 30_000);
+    await flush();
+    const player = el.renderRoot.querySelector("rv-player");
+    if (!player) throw new Error("no player");
+    const video = player.renderRoot.querySelector<HTMLVideoElement>("video.active");
+    if (!video) throw new Error("no video");
+    Object.defineProperty(video, "currentTime", { value: 50, configurable: true });
+    const fail = () => {
+      player.dispatchEvent(
+        new CustomEvent("rv-player-error", {
+          detail: { message: "PIPELINE_ERROR_READ", segmentId: "s1", played: true },
+          bubbles: true,
+          composed: true,
+        }),
+      );
+    };
+    const before = sentOf(hass, "reolink_viewer/playback/url").length;
+    fail();
+    await flush();
+    await flush();
+    const after = sentOf(hass, "reolink_viewer/playback/url");
+    expect(after).toHaveLength(before + 2); // the recording again, and its successor
+    expect(after[before]).toMatchObject({ segment_id: "s1", progressive: false });
+    expect(el._cursor).toBe(T0 + 60 * MIN + 50_000);
+    expect(el._metrics.recoveries).toBe(1);
+    expect(el._playFailure).toBeUndefined();
+    // A second failure right after is shown, not retried.
+    fail();
+    await flush();
+    expect(el._playFailure).toBe("PIPELINE_ERROR_READ");
+    await el.updateComplete;
+    expect(el.renderRoot.textContent).toContain("1× (last: PIPELINE_ERROR_READ)");
+  });
+
   it("asks for the whole file to start deep inside a recording", async () => {
     const hass = playbackHass();
     const el = await mount(hass);

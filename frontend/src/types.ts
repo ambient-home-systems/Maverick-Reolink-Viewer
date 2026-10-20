@@ -359,6 +359,8 @@ export interface PlaybackUrl {
   end: number;
   media: MediaInfo | null;
   cache: CacheStatus;
+  /** The file the URL is bound to (VodCache.lease). */
+  file?: "plain" | "original";
   expires_in: number;
   timing: Timing;
 }
