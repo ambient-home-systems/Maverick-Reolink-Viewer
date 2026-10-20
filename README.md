@@ -24,7 +24,7 @@ get a **Playback** tab: a zoomable timeline of the day with colored markers for 
 detection type, hover thumbnails, a calendar, an event list, and a player that moves
 on to the next recording by itself. Live view comes in a later phase.
 
-**Phase 2B (in progress, v0.2.9):** the recording cache keeps to its disk
+**Phase 2B (in progress, v0.2.10):** the recording cache keeps to its disk
 budget and never removes a file that is playing; long recordings play through
 (URLs no longer expire mid-way); a built-in **playback check** (Playback tab →
 Debug) measures playback on the device it runs on, including the iOS

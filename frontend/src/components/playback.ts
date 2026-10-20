@@ -376,7 +376,7 @@ export class RvPlayback extends LitElement {
     const began = performance.now();
     try {
       const progressive = this._progressive && target.offset < PROGRESSIVE_SEEK_LIMIT_MS;
-      const playback = await fetchPlaybackUrl(hass, this._ref(target.segment), progressive);
+      const playback = await fetchPlaybackUrl(hass, this._ref(target.segment), progressive, wanted);
       if (seq !== this._playSeq) return;
       this._playing = playback;
       this._metrics = {
@@ -429,7 +429,7 @@ export class RvPlayback extends LitElement {
       return;
     }
     try {
-      const playback = await fetchPlaybackUrl(hass, this._ref(next), this._progressive);
+      const playback = await fetchPlaybackUrl(hass, this._ref(next), this._progressive, next.start);
       if (seq !== this._playSeq) return;
       await this._player?.preload(toItem(playback));
     } catch {

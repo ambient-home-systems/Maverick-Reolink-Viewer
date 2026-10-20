@@ -18,7 +18,7 @@ put on it:
 | --- | --- | --- | --- | --- |
 | 0 | Foundations, CI, adapter layer, hardware discovery | High | 1–2 wk | Done (2026-10-17) |
 | 1 | Device details and every setting, with explanations | Standard (catalog) / High (panel shell) | 2–3 wk | Done (2026-10-17) |
-| 2 | Event timeline, thumbnails, smooth playback | High (backend) / Very high (player) | 3–5 wk | In progress: 2A done (2026-10-20, v0.2.7: timeline 105–287 ms, first frame 0.6–1.1 s, auto-advance 6–7 ms on hardware). 2B: cache fixed (v0.2.8), measuring (gate): desktop run 1 done, two player bugs fixed (v0.2.9) |
+| 2 | Event timeline, thumbnails, smooth playback | High (backend) / Very high (player) | 3–5 wk | In progress: 2A done (2026-10-20, v0.2.7: timeline 105–287 ms, first frame 0.6–1.1 s, auto-advance 6–7 ms on hardware). 2B: cache fixed (v0.2.8), measuring (gate): two desktop runs done, three bugs fixed (v0.2.9, v0.2.10) |
 | 3 | Live view via go2rtc, grid, fullscreen, PTZ | High | 3–4 wk | Not started |
 | 4 | Performance, mobile, packaging, first release | Standard | 2–3 wk | Not started |
 | 5 | Optional R&D: Baichuan live/playback | Very high | 4–8 wk, time-boxed with gates | Not started |
@@ -813,7 +813,7 @@ Known limits carried into 2B and Phase 4:
 | 2B step | Status |
 | --- | --- |
 | 0. Fix the recording cache (disk accounting, eviction, leases, deletion timers, open race), DST end and refresh window, shared thumbnail fetches; correct the MSE claim above | Done (v0.2.8), see "Step 0" below |
-| 1. Measure where it hasn't been (gate): desktop Chrome on the LAN, the iPhone Companion app on Wi-Fi, over Tailscale and over Nabu Casa | Check built (v0.2.8), sharpened in v0.2.9. Desktop run 1 recorded (two player bugs found and fixed in v0.2.9); the three iPhone runs to come, see "Step 1 results" |
+| 1. Measure where it hasn't been (gate): desktop Chrome on the LAN, the iPhone Companion app on Wi-Fi, over Tailscale and over Nabu Casa | Check built (v0.2.8), sharpened in v0.2.9 and v0.2.10. Two desktop runs recorded (three player and cache bugs found and fixed); a LAN desktop run (Mac) and the three iPhone runs to come, see "Step 1 results" |
 | 2. Build what the evidence calls for (speeds, HD/SD keeping the position, uncached deep seeks, bounded memory and disk) | Not started (after the gate) |
 
 ##### Step 0: the recording cache (v0.2.8)
@@ -912,15 +912,21 @@ e.g. Front Yard Right, gives the deep-start and session parts):
 
 | Setup | Status |
 | --- | --- |
-| Desktop Chrome | Run 1 (v0.2.8, 2026-10-20) below. Run 2 on v0.2.9 to confirm the fixes (auto-advance, start positions) |
-| iPhone app, Wi-Fi (local) | To run on v0.2.9 |
-| iPhone app, Tailscale | To run on v0.2.9 |
-| iPhone app, Nabu Casa | To run on v0.2.9 |
+| Desktop, through Nabu Casa | Runs 1 (v0.2.8) and 2 (v0.2.9), 2026-10-20, below: Brave in an HA add-on, loading HA through the Nabu Casa address |
+| Desktop on the LAN | To run on v0.2.10, from a Mac |
+| iPhone app, Wi-Fi (local) | To run on v0.2.10 |
+| iPhone app, Tailscale | To run on v0.2.10 |
+| iPhone app, Nabu Casa | To run on v0.2.10 |
 
-**Desktop run 1** (v0.2.8, Chrome 155 on Linux, Front Yard Right, with the
-one-hour session). The check reported the page as "remote over https": HA
-is reached through its own domain name, and a 4 MiB read ran at 62 Mbit/s.
-The earlier hardware checks used plain HTTP on the LAN.
+**Desktop run 1** (v0.2.8, Front Yard Right, with the one-hour session).
+The browser was **Brave (Chromium 155) running in a Home Assistant add-on**,
+viewed remotely, and it loaded HA through the **Nabu Casa** address (the
+check said "remote over https"). So every byte went from HA out to Nabu
+Casa's relay and back into the same machine (a 4 MiB read ran at 62 Mbit/s),
+and the browser decoded and drew on the HA host's CPU, shared with HA, the
+NVR downloads and the ffmpeg rewrites. The earlier hardware checks used
+Chrome on a desktop with plain HTTP on the LAN. Read this run's link-bound
+times (the uncached deep start) and its dropped frames with that in mind.
 
 | Measure | Result |
 | --- | --- |
@@ -929,7 +935,7 @@ The earlier hardware checks used plain HTTP on the LAN.
 | Deep start, not cached | **36.6 s**, 53 min into a 60 min recording. The server waited for the whole download (10.4 s: 204 MB at 159 Mbit/s). Then Chrome read the whole original (fragmented) file before its metadata: 25.8 s at 62 Mbit/s, with the preloaded next file loading alongside. The URL was bound to the original because the plain copy did not exist when it was issued; it was ready 2.9 s after the download |
 | Deep start, cached | 1273 ms (plain file, `moov` 1.3 MB): under 2 s |
 | Auto-advance | **failed**: player bug 1 below |
-| Rates | on pace at every rate (0.50, 0.99, 1.98, 3.98, 7.98×). Painted 7, 14, 27, 48, 51 fps of 8, 15, 30, 60, 120 needed. Dropped 9, 6, 6, 8 % at 0.5–4× and 50 % at 8× (above the display's rate, expected). One 1 ms stall at 8×. All but 4× judged not smooth |
+| Rates | on pace at every rate (0.50, 0.99, 1.98, 3.98, 7.98×). Painted 7, 14, 27, 48, 51 fps of 8, 15, 30, 60, 120 needed. Dropped 9, 6, 6, 8 % at 0.5–4× and 50 % at 8× (above the display's rate, expected). One 1 ms stall at 8×. All but 4× judged not smooth. The window was in front (owner); the browser draws in software on the HA host, so the drops likely reflect that host's load, not the player: the session at 1× dropped no frames for 18 minutes once nothing else ran |
 | MSE | `MediaSource` plays the MSE-ready fragment; the NVR's shapes (absolute offsets, no `tfdt`, both) fail with append errors. No `ManagedMediaSource` (Chrome) |
 | HD | not tried yet (no main recording cached, so its codec is unknown) |
 | One-hour session | JS heap 83–119 MB, end 96 MB (+7.7 MB/h, within garbage-collection swings: no growth). No stalls. Cache 6.51–6.71 GB of 8.59 GB. 1738 frames dropped in minutes 2–5, then none for 18 minutes. **Stopped at the file change after 60 min** with `PIPELINE_ERROR_READ: FFmpegDemuxer: data source error`: player bug 2 below |
@@ -974,9 +980,53 @@ Findings and fixes (v0.2.9):
      the whole original. Both candidates, (a) MSE with normalized fragments
      and (b) a "start here" plain MP4, remove the second cost and cut the
      first to the bytes up to the target.
-   - `playbackRate` on the plain file keeps pace up to 8× in Chrome; above
-     the display's refresh rate frames are skipped by design.
+   - `playbackRate` on the plain file keeps pace up to 8× in Chromium; above
+     the display's refresh rate frames are skipped by design. Whether 0.5–4×
+     drop frames on a real device is for the iPhone runs (and a desktop at
+     home later) to show: this run's browser shared the HA host's CPU.
    - Chrome's heap stayed bounded over an hour.
+
+**Desktop run 2** (v0.2.9, same browser and path as run 1, without the
+session; 2026-10-20, Front Yard Right):
+
+| Measure | Result |
+| --- | --- |
+| Timeline | today 518 ms (stale copy, server 0 ms: the rest is the round trip through Nabu Casa), a past day 162 ms, again 314 ms, today again 188 ms: all under 1 s |
+| Events → first frame | 575, 371, 372 ms. **The first started 52 s before the time asked**: cache bug below |
+| Deep start, not cached | 27.0 s, 55 min into a 60 min recording: download 9.9 s (180 MB at 146 Mbit/s), then the browser read the whole original (16.8 s, about 86 Mbit/s through Nabu Casa). The URL was bound to the original ("original file") |
+| Deep start, cached | 526 ms (plain file): under 2 s |
+| Auto-advance | **works**: gap 1 ms (fixed in v0.2.9) |
+| Rates | on pace at every rate (0.50, 1.00, 2.00, 4.00, 8.01×). Dropped 2 of 46, 3 of 91, 1 of 180, 24 of 361 and 363 of 720 frames. 0.5× and 1× judged not smooth on 2 and 3 frames: too few to judge (v0.2.10 allows one), from a browser drawing in software on the HA host |
+| Link | 55.9 Mbit/s (Nabu Casa) |
+| MSE, HD | as in run 1 |
+
+Finding and fix (v0.2.10):
+
+1. **Cache bug: a recording still being written was frozen at its first
+   copy.** The cache knew a recording by its name only. The tab warms the
+   latest recording when it opens, and that one is still being written: it
+   was cached when it ended at about 10:29:19. The event at 10:30:11, in the
+   same recording (by then 33 min long), was served from that copy, so the
+   video started at the copy's end, 52 s early. On a continuous camera, any
+   click on an event newer than the warm-up showed the wrong moment.
+   - The recording's end (from the latest search) is now part of its cache
+     id (layout 4: files cached before are retired and fetched again when
+     asked for).
+   - A copy made when the recording was shorter still serves a start that
+     is at least a minute before the copy's end (the panel sends where it
+     will start), so earlier events stay fast. A later start fetches the
+     recording again, as it is now.
+   - Warming takes any copy, so it does not fetch a recording still being
+     written again every minute.
+2. **Check:** the page's HTTP version came out as "?" (the app serves the
+   page from its cache); each request line now gives the protocol the
+   video requests used. A rate's dropped frames are judged against 2 % or
+   one frame, whichever is more.
+3. **Evidence so far** (both runs through Nabu Casa from the HA host):
+   cached deep starts 0.5–1.3 s; the uncached deep start is the download
+   (about 10 s for 180–204 MB) plus the browser reading the whole original
+   at the link's speed (17–26 s here). The LAN and iPhone runs will show how
+   much of the second part a fast link removes, and how WebKit behaves.
 
 #### 2A as built (v0.2.0)
 

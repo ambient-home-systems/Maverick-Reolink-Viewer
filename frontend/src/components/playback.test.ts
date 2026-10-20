@@ -155,8 +155,10 @@ describe("rv-playback", () => {
       progressive: playsProgressive(),
       date: "2026-10-17",
     });
-    // The next recording is preloaded.
-    expect(urls[1]).toMatchObject({ segment_id: "s2" });
+    // Where it starts goes along (a copy of a growing recording may not reach it).
+    expect(urls[0]?.at).toBe(event.start);
+    // The next recording is preloaded, from its start.
+    expect(urls[1]).toMatchObject({ segment_id: "s2", at: T0 + 62 * MIN });
     const player = el.renderRoot.querySelector("rv-player");
     expect(player?.current?.segmentId).toBe("s1");
     expect(player?.preloaded?.segmentId).toBe("s2");

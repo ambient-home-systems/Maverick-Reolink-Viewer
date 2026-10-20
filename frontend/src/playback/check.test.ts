@@ -84,7 +84,7 @@ describe("PlaybackCheck", () => {
       changes.push(1),
     );
     const report = await check.run();
-    expect(report).toContain("Reolink Viewer playback check v0.2.9 · Desktop Chrome, LAN · Garage");
+    expect(report).toContain("Reolink Viewer playback check v0.2.10 · Desktop Chrome, LAN · Garage");
     expect(report).toContain("A1 Time to timeline, today (as the tab opened): 120 ms (server: memory, total 4 ms)");
     expect(report).toContain("A2/A3 skipped: no earlier recording day this month");
     expect(report).toContain("B  skipped: no events today");

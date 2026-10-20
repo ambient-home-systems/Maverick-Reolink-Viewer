@@ -168,10 +168,15 @@ export interface SegmentRef {
   stream: Stream;
 }
 
+/**
+ * `at` (UTC ms): where playback will start. A recording still being written
+ * grows; the server uses a copy made earlier only if it reaches that far.
+ */
 export const fetchPlaybackUrl = (
   hass: HomeAssistant,
   ref: SegmentRef,
   progressive: boolean,
+  at?: number,
 ): Promise<PlaybackUrl> =>
   hass.callWS<PlaybackUrl>({
     type: "reolink_viewer/playback/url",
@@ -180,6 +185,7 @@ export const fetchPlaybackUrl = (
     segment_id: ref.segmentId,
     stream: ref.stream,
     progressive,
+    ...(at === undefined ? {} : { at: Math.round(at) }),
   });
 
 export const prefetchSegment = (hass: HomeAssistant, ref: SegmentRef): Promise<unknown> =>

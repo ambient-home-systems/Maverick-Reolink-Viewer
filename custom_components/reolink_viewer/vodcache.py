@@ -9,7 +9,9 @@ served from the cache, with Range, by ``views.py``:
   as long as it downloads; prefetch fills have their own, smaller cap;
 - readers can start as soon as the first bytes are on disk and follow the
   fill as it grows;
-- one fill per recording, however many viewers;
+- one fill per recording, however many viewers; a recording still being
+  written is fetched again once it has grown past the copy a start needs
+  (each length is its own copy);
 - disk use is accounted before bytes are written: the size cap and the
   free-space rule cover complete files, ``.part`` files, the rest each running
   fill expects (reserved once it holds its stream slot, checked then rather
@@ -98,7 +100,12 @@ DROP_MARGIN_S = 60.0
 # Part of each file's cache id: bumping it retires files of an older layout
 # (they become unknown files, evicted first). 2: segment index added.
 # 3: also indexed when fragments use absolute offsets (the NVR's do).
-LAYOUT = 3
+# 4: the recording's end is part of the id, so a recording still being
+# written is cached anew once it has grown past its copy.
+LAYOUT = 4
+# A copy of a recording that has since grown still serves a start at least
+# this long before the copy's end.
+COVER_MARGIN_MS = 60_000
 
 
 class VodCacheError(Exception):
@@ -119,8 +126,13 @@ class Recording:
     @property
     def cache_id(self) -> str:
         """Return the file name stem (reveals no identifier)."""
-        raw = f"{LAYOUT}|{self.source.key}|{self.stream}|{self.name}"
+        raw = f"{LAYOUT}|{self.source.key}|{self.stream}|{self.name}|{self.end_ms}"
         return hashlib.sha256(raw.encode()).hexdigest()[:32]
+
+    @property
+    def copy_key(self) -> str:
+        """Return what copies of one recording, at any length, share."""
+        return f"{self.source.key}|{self.stream}|{self.name}"
 
 
 @dataclass(slots=True)
@@ -266,13 +278,30 @@ class VodCache:
         return self._entries.get(recording.cache_id)
 
     async def async_open(
-        self, recording: Recording, priority: Priority = Priority.PLAYBACK
+        self,
+        recording: Recording,
+        priority: Priority = Priority.PLAYBACK,
+        *,
+        at: int | None = None,
+        any_copy: bool = False,
     ) -> Entry:
-        """Return the recording's entry, starting or speeding up its fill."""
+        """Return the recording's entry, starting or speeding up its fill.
+
+        A recording still being written grows between searches, and each
+        length is its own copy. A copy made when it was shorter still serves
+        a start at ``at`` (UTC ms) if it reaches far enough past it; with
+        ``any_copy`` (prefetch) any copy will do, so warming does not fetch a
+        growing recording again every minute.
+        """
         if self._closed:
             raise VodCacheError("cache closed")
         cache_id = recording.cache_id
         entry = self._entries.get(cache_id)
+        if (entry is None or entry.error is not None) and (
+            copy := self._copy_for(recording, at, any_copy)
+        ) is not None:
+            entry = copy
+            cache_id = copy.recording.cache_id
         if entry is None or entry.error is not None:
             path = self._dir / f"{cache_id}{SUFFIX}"
             found = await self._hass.async_add_executor_job(_on_disk, path)
@@ -296,6 +325,25 @@ class VodCache:
             if entry.ticket is not None:
                 entry.ticket.raise_priority(priority)
         return entry
+
+    def _copy_for(
+        self, recording: Recording, at: int | None, any_copy: bool
+    ) -> Entry | None:
+        """Return the longest usable copy of the recording at another length."""
+        if at is None and not any_copy:
+            return None
+        key = recording.copy_key
+        copies = [
+            e
+            for e in self._entries.values()
+            if e.error is None
+            and e.recording.copy_key == key
+            and (
+                any_copy
+                or (at is not None and e.recording.end_ms - COVER_MARGIN_MS >= at)
+            )
+        ]
+        return max(copies, key=lambda e: e.recording.end_ms, default=None)
 
     def _new_entry(
         self,

@@ -569,13 +569,14 @@ var Be = (e, t, n, r) => e.callWS({
 	device_id: t,
 	date: n,
 	...r > 0 ? { max_age: r } : {}
-}), He = (e) => e.callWS({ type: "reolink_viewer/timeline/warm" }), Ue = (e, t, n) => e.callWS({
+}), He = (e) => e.callWS({ type: "reolink_viewer/timeline/warm" }), Ue = (e, t, n, r) => e.callWS({
 	type: "reolink_viewer/playback/url",
 	device_id: t.deviceId,
 	date: t.date,
 	segment_id: t.segmentId,
 	stream: t.stream,
-	progressive: n
+	progressive: n,
+	...r === void 0 ? {} : { at: Math.round(r) }
 }), We = (e, t) => e.callWS({
 	type: "reolink_viewer/playback/prefetch",
 	device_id: t.deviceId,
@@ -1840,7 +1841,7 @@ function Pt(e) {
 	}
 	return t.push(`${e.stalls} stalls${e.stalls ? ` (${Math.round(e.stalledMs)} ms)` : ""}`), e.ended && t.push("the file ended"), e.focused || t.push("PAGE NOT IN FRONT"), `${String(e.rate).padStart(3)}×: ${t.join(", ")}`;
 }
-var Ft = "on pace (±10 %), stalls under 100 ms, no frame gap over 2.5 frames (250 ms at least); below 50 fps to show, ≤ 2 % dropped";
+var Ft = "on pace (±10 %), stalls under 100 ms, no frame gap over 2.5 frames (250 ms at least); below 50 fps to show, ≤ 2 % (or 1 frame) dropped";
 function It(e) {
 	let t = e.wallMs > 0 ? e.mediaS * 1e3 / e.wallMs : 0;
 	if (Math.abs(t - e.rate) > e.rate * .1 || e.stalledMs >= 100) return !1;
@@ -1849,7 +1850,7 @@ function It(e) {
 		let t = Math.max(250, 2500 / Math.min(r, 60));
 		if (e.maxGapMs > t) return !1;
 	}
-	return r !== void 0 && r <= 50 && e.decoded ? (e.dropped ?? 0) / e.decoded <= .02 : !0;
+	return r !== void 0 && r <= 50 && e.decoded ? (e.dropped ?? 0) <= Math.max(1, e.decoded * .02) : !0;
 }
 function Lt(e) {
 	if (e.length < 2) return;
@@ -1984,7 +1985,7 @@ function qt(e, t) {
 }
 //#endregion
 //#region src/playback/check.ts
-var Jt = "0.2.9", Yt = [
+var Jt = "0.2.10", Yt = [
 	"Desktop Chrome, LAN",
 	"iPhone app, Wi-Fi (local)",
 	"iPhone app, Tailscale",
@@ -2060,7 +2061,7 @@ var Jt = "0.2.9", Yt = [
 		let e = this._t, t = navigator.connection;
 		this._log(`Reolink Viewer playback check v${Jt} · ${this.options.setup} · ${e.cameraName} · ${(/* @__PURE__ */ new Date()).toLocaleString()}`), this._log(`Browser: ${kt(navigator.userAgent)} · page ${Ot(location.hostname)} over ${location.protocol.replace(":", "")} · screen ${screen.width}×${screen.height} @${window.devicePixelRatio}x` + (t?.effectiveType ? ` · network ${t.effectiveType}, ${t.downlink ?? "?"} Mbit/s (browser estimate)` : ""));
 		let n = performance.getEntriesByType("navigation")[0];
-		this._log(`User agent: ${navigator.userAgent}`), this._log(`Connection: page loaded over ${n?.nextHopProtocol || "?"} (h2/h3 share one connection; http/1.1 allows 6 at once)`), this._log(`Delivery: ${e.progressive ? "progressive" : "whole file first (WebKit)"}`), await this._wait(() => !!e.day && !e.loading, 3e4);
+		this._log(`User agent: ${navigator.userAgent}`), this._log(`Connection: page loaded over ${n?.nextHopProtocol || "? (from the app's cache)"}; each video request line gives its own (h2/h3 share one connection; http/1.1 allows 6 at once)`), this._log(`Delivery: ${e.progressive ? "progressive" : "whole file first (WebKit)"}`), await this._wait(() => !!e.day && !e.loading, 3e4);
 	}
 	async _loadDay(e) {
 		let t = this._t, n = t.metrics.timelineMs;
@@ -2432,8 +2433,8 @@ function hn(e, t) {
 	let i = r.filter((e) => e.requestStart > 0), a = i.slice(0, 10).map((t, r) => {
 		let i = n && new URL(t.name).pathname === n ? "" : " (other file)", a = t.encodedBodySize ? ` · ${R(t.encodedBodySize)}` : "";
 		return `#${r + 1}${i} +${Math.round(t.startTime - e)} ms: wait ${Math.round(t.requestStart - t.startTime)} · answer ${Math.round(t.responseStart - t.requestStart)} · ran ${Math.round(t.responseEnd - t.responseStart)} ms${a}`;
-	}), o = i.length > 10 ? ` | … ${i.length - 10} more` : "", s = r.length - i.length;
-	return `requests: ${i.length} sent${s ? `, ${s} cancelled before sending` : ""}: ${a.join(" | ")}${o}`;
+	}), o = i.length > 10 ? ` | … ${i.length - 10} more` : "", s = r.length - i.length, c = [...new Set(i.map((e) => e.nextHopProtocol).filter(Boolean))].join("/");
+	return `requests${c ? ` (${c})` : ""}: ${i.length} sent${s ? `, ${s} cancelled before sending` : ""}: ${a.join(" | ")}${o}`;
 }
 async function gn(e, t, n) {
 	let r = navigator.mediaCapabilities;
@@ -3771,7 +3772,7 @@ var gr = 6e4, _r = 1e4, vr = 10 * q, yr = 10, br = 8e3, xr = 3 * q, Sr = "reolin
 		this._cursor = o, this._starting = a;
 		let s = performance.now();
 		try {
-			let e = this._progressive && i.offset < 3e3, r = await Ue(n, this._ref(i.segment), e);
+			let e = this._progressive && i.offset < 3e3, r = await Ue(n, this._ref(i.segment), e, o);
 			if (a !== this._playSeq) return;
 			this._playing = r, this._metrics = {
 				...this._metrics,
@@ -3807,7 +3808,7 @@ var gr = 6e4, _r = 1e4, vr = 10 * q, yr = 10, br = 8e3, xr = 3 * q, Sr = "reolin
 		let n = this.hass, r = this._nextSegment(e);
 		if (!n || !r) await this._player?.preload(void 0);
 		else try {
-			let e = await Ue(n, this._ref(r), this._progressive);
+			let e = await Ue(n, this._ref(r), this._progressive, r.start);
 			if (t !== this._playSeq) return;
 			await this._player?.preload(Tr(e));
 		} catch {}
