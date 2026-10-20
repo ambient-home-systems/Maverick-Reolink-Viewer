@@ -23,6 +23,7 @@ custom_components/reolink_viewer/
   mp4index.py        # writes a sidx index into cached recordings (fast browser seeks)
   remux.py           # rewrites cached recordings as plain MP4 with ffmpeg (no re-encoding)
   thumbnails.py      # recording thumbnails: time buckets, de-duplication, disk LRU
+  checks.py          # saved playback check reports (a phone's run, read on a desktop)
   views.py           # signed, short-lived /vod, /clip, /thumb URLs (no camera URLs)
   websocket_api.py   # status, devices, catalog, probe, timeline/*, playback/*, thumbnail/*
   models.py          # runtime data of the config entry
@@ -30,9 +31,11 @@ custom_components/reolink_viewer/
   frontend_dist/     # built panel bundle (committed; CI checks it matches the source)
 frontend/            # Lit + TypeScript panel, built with Vite
   src/components/    # device list, device page, overview, settings, playback tab
-  src/playback/      # timeline canvas + math, calendar, event list, player, codec checks
+  src/playback/      # timeline canvas + math, calendar, event list, player, codec checks,
+                     # the playback check (check.ts) and its MSE probe (mse-probe.ts, mse-sample.ts)
 tests/               # pytest-homeassistant-custom-component
-scripts/             # setup_dev.sh, probe_to_matrix.py; playback_check.js and inspect_recording.js (paste into the browser console)
+scripts/             # setup_dev.sh, probe_to_matrix.py, make_mse_sample.py (writes mse-sample.ts);
+                     # playback_check.js and inspect_recording.js (paste into the browser console)
 ```
 
 ## Environment

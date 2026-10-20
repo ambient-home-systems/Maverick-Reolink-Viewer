@@ -813,7 +813,7 @@ Known limits carried into 2B and Phase 4:
 | 2B step | Status |
 | --- | --- |
 | 0. Fix the recording cache (disk accounting, eviction, leases, deletion timers, open race), DST end and refresh window, shared thumbnail fetches; correct the MSE claim above | Done (v0.2.8), see "Step 0" below |
-| 1. Measure where it hasn't been (gate): desktop Chrome on the LAN, the iPhone Companion app on Wi-Fi, over Tailscale and over Nabu Casa | In progress |
+| 1. Measure where it hasn't been (gate): desktop Chrome on the LAN, the iPhone Companion app on Wi-Fi, over Tailscale and over Nabu Casa | Check built (v0.2.8): **Run playback check** under Debug in the Playback tab, see "Step 1" below. Waiting for the four reports |
 | 2. Build what the evidence calls for (speeds, HD/SD keeping the position, uncached deep seeks, bounded memory and disk) | Not started (after the gate) |
 
 ##### Step 0: the recording cache (v0.2.8)
@@ -859,6 +859,54 @@ holds about two of them with their plain copies. HD playback of an hour-long
 main recording, its preloaded next file and the plain-MP4 rewrite no longer
 fit at once: the rewrite or the preload is refused (and reported) instead of
 overrunning the cap. The step-1 check reports the cache's disk use.
+
+##### Step 1: the playback check (v0.2.8)
+
+The check is built into the panel (Playback tab → **Debug** → **Run playback
+check**), so it runs where there is no developer console, as in the iOS
+Companion app. `scripts/playback_check.js` now only calls it from the desktop
+console. It drives the tab like a user (read-only: timelines and playback) and
+reports, on the device it runs on:
+
+| Part | What it measures |
+| --- | --- |
+| Header | browser (e.g. "iOS 18.1, Companion app 2025.10.1"), how HA is reached (local, Tailscale, Nabu Casa or remote, from the host name, which is not reported), screen, delivery mode |
+| A1–A4 | time to timeline: today, a past day first and again (2A criterion) |
+| B | the latest three events of today: first frame, video element events, each video request (wait, answer, duration, size), and the server's download record (2A criterion) |
+| D1 / D2 | first frame deep in a long recording (≥ 20 min, sub stream): **D1 not cached** (a recording `playback/peek` shows is not on disk; the latest event 50–95 % in, else 75 %), then **D2 cached** (10–45 % in, else 40 %), with the download and plain-MP4 rewrite times and the plain file's `moov` size (what a browser reads before the first frame) |
+| C | auto-advance between two touching recordings, preferring the cached long recording (2A criterion) |
+| R | `playbackRate` 0.5×, 1×, 2×, 4×, 8× for 6 s each on a cached long recording: effective rate, frames painted (`requestVideoFrameCallback`) against frames needed, the longest gap between painted frames, dropped frames (`getVideoPlaybackQuality`), stalls. Smooth = on pace (±10 %), no stalls, no gap over 2.5 frames (250 ms at least), and ≤ 2 % dropped below 50 frames a second (above the display's refresh rate a browser must skip frames) |
+| L | the link to HA: a 4 MiB Range read of the cached recording |
+| MSE | whether `MediaSource` and `ManagedMediaSource` exist and accept the sub and main codecs; an **append test** of a 1 s H.264 clip (VP9 where H.264 is missing) in four shapes: MSE-ready (`default-base-is-moof` + `tfdt`), absolute offsets, no `tfdt`, and both (the NVR's shape) |
+| HD | the panel's HD decision and `decodingInfo` for the main stream, as a file and through MSE |
+| M (optional) | a one-hour session from the start of the long recording, a sample a minute: JS heap (Chrome only), seconds buffered ahead and held by both videos, dropped frames, stalls, file changes and gaps, the server cache's disk use, reservations and leases |
+
+Reports are saved on the server as the check runs (`playback/check_report`,
+last 20 kept) and listed under **Saved reports** on any device. If the page is
+reloaded or closed during a run (on iOS, usually the app running out of
+memory), the next load of the tab says so and marks the saved report.
+
+Checked in Chromium 141 (headless, Playwright) against a fake HA serving
+VP9 recordings: every part ran (40 s, plus the session), and the MSE probe
+confirmed the correction above: the MSE-ready fragment plays, while absolute
+offsets, a missing `tfdt` and the NVR's shape each fail with an append error.
+
+How to run it, on each setup (one camera at a time; a continuous camera,
+e.g. Front Yard Right, gives the deep-start and session parts):
+
+1. Update to v0.2.8 and restart HA. Open the camera's **Playback** tab, wait
+   about 2 minutes (the background fetch), open **Debug** at the bottom.
+2. Pick the **Setup**: *Desktop Chrome, LAN*; *iPhone app, Wi-Fi (local)*
+   (Companion app with the internal URL, on home Wi-Fi); *iPhone app,
+   Tailscale* (Wi-Fi off, Tailscale on, the app pointed at the Tailscale
+   address); *iPhone app, Nabu Casa* (Wi-Fi off, Tailscale off, external
+   URL).
+3. Tick **then play for 60 min** for the memory and disk session. On the
+   iPhone set Auto-Lock to Never first and keep the app in front (iOS pauses
+   video when the screen locks).
+4. **Run playback check**; leave the tab alone until "Done". About 2 minutes
+   without the session.
+5. **Copy report**, or later on the desktop: **Saved reports** → Copy.
 
 #### 2A as built (v0.2.0)
 

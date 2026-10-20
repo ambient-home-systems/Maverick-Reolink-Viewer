@@ -64,7 +64,7 @@ from .mp4index import (
     index_room,
     plan_reserve,
 )
-from .remux import RemuxError, async_flatten, is_plain
+from .remux import RemuxError, async_flatten, is_plain, moov_size
 from .scheduler import Priority, Scheduler, StreamTicket
 from .timeconv import from_ms
 
@@ -325,6 +325,23 @@ class VodCache:
             self._start_flatten(entry)
         return entry
 
+    async def async_peek(self, recording: Recording) -> dict[str, Any] | None:
+        """Return what the cache holds of a recording, without fetching it."""
+        if (entry := self._entries.get(recording.cache_id)) is not None:
+            return entry.public()
+        path = self._dir / f"{recording.cache_id}{SUFFIX}"
+        found = await self._hass.async_add_executor_job(_on_disk, path)
+        if found is None:
+            return None
+        kind, size, _indexed = found
+        return {
+            "complete": True,
+            "bytes": size,
+            "error": None,
+            "cache": "disk",
+            "flat": "yes" if kind == "flat" else "not yet",
+        }
+
     def lease(self, entry: Entry, seconds: float) -> bool:
         """Keep a recording readable by a URL valid for ``seconds``.
 
@@ -427,6 +444,10 @@ class VodCache:
                 entry.flat_at = time.monotonic()
                 entry.timing["flat"] = "yes"
                 entry.timing["flat_ms"] = _ms(began)
+                # What a browser reads before the first frame of a plain MP4.
+                entry.timing[
+                    "flat_moov_bytes"
+                ] = await self._hass.async_add_executor_job(moov_size, target)
         except (RemuxError, OSError) as err:
             entry.timing["flat"] = f"no: {err}"
             _LOGGER.debug("Plain MP4 of %s failed: %s", entry.path.stem[:8], err)
@@ -695,18 +716,11 @@ class VodCache:
         reservation has still to write. A recording's original and plain copy
         go together; busy or leased recordings stay.
         """
-        files = await self._hass.async_add_executor_job(self._disk_usage)
-        disk = await self._hass.async_add_executor_job(shutil.disk_usage, self._dir)
-        sizes = {path: size for path, size, _mtime in files}
-        pending = sum(
-            max(size - sizes.get(path, 0), 0) for path, size in self._reserved.items()
-        )
-        on_disk = sum(sizes.values())
-        self._usage = {"disk": on_disk, "reserved": pending, "free": disk.free}
+        files, on_disk, pending, free = await self._measure()
         # Deleting a file lowers the total and raises free space alike.
         need = max(
             on_disk + pending - self._max_bytes,
-            MIN_FREE_BYTES - (disk.free - pending),
+            MIN_FREE_BYTES - (free - pending),
             0,
         )
         if not need:
@@ -745,6 +759,27 @@ class VodCache:
         self._usage["disk"] -= freed
         self._usage["free"] += freed
         return freed >= need
+
+    async def _measure(self) -> tuple[list[tuple[Path, int, float]], int, int, int]:
+        """Return the files, bytes on disk, bytes still to come and free space."""
+        files = await self._hass.async_add_executor_job(self._disk_usage)
+        disk = await self._hass.async_add_executor_job(shutil.disk_usage, self._dir)
+        sizes = {path: size for path, size, _mtime in files}
+        pending = sum(
+            max(size - sizes.get(path, 0), 0) for path, size in self._reserved.items()
+        )
+        on_disk = sum(sizes.values())
+        self._usage = {"disk": on_disk, "reserved": pending, "free": disk.free}
+        return files, on_disk, pending, disk.free
+
+    async def async_stats(self) -> dict[str, Any]:
+        """Return cache statistics with the disk use measured now."""
+        await self._measure()
+        return {
+            **self.stats(),
+            "min_free_bytes": MIN_FREE_BYTES,
+            "rewriting": sum(1 for e in self._entries.values() if e.flattening),
+        }
 
     def _disk_usage(self) -> list[tuple[Path, int, float]]:
         result = []

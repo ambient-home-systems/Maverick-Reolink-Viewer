@@ -518,3 +518,95 @@ def test_grants_expire_and_are_capped() -> None:
         tokens = [grants.issue(thumb, timedelta(minutes=1)) for _ in range(5)]
         assert len(grants._items) <= 3
         assert grants.get(tokens[-1], views.ThumbGrant) is thumb
+
+
+async def test_peek_stats_and_check_reports(
+    hass: HomeAssistant,
+    hass_ws_client: WebSocketGenerator,
+    reolink_host: MagicMock,
+    wired: MockConfigEntry,
+) -> None:
+    """Peek fetches nothing; stats measure the disk; reports are kept."""
+    client = await hass_ws_client(hass)
+    camera = await _camera_id(client)
+    day = (
+        await _ws(
+            client,
+            {"type": "reolink_viewer/timeline/day", "device_id": camera, "date": DAY},
+        )
+    )["result"]
+    ref = {"device_id": camera, "date": DAY, "segment_id": day["segments"][0]["id"]}
+    msg = await _ws(client, {"type": "reolink_viewer/playback/peek", **ref})
+    assert msg["result"] == {"segment_id": ref["segment_id"], "cache": None}
+    assert reolink_host.get_vod_source.await_count == 0
+    msg = await _ws(client, {"type": "reolink_viewer/playback/prefetch", **ref})
+    cache = wired.runtime_data.vod_cache
+    (entry,) = cache._entries.values()
+    assert entry.task is not None
+    await entry.task
+    for task in list(cache._flat_tasks):
+        await task
+    msg = await _ws(client, {"type": "reolink_viewer/playback/peek", **ref})
+    assert msg["result"]["cache"]["complete"] is True
+    # Known only from disk (as after a restart).
+    cache._entries.clear()
+    msg = await _ws(client, {"type": "reolink_viewer/playback/peek", **ref})
+    assert msg["result"]["cache"]["cache"] == "disk"
+    msg = await _ws(
+        client, {"type": "reolink_viewer/playback/peek", **ref, "segment_id": "1"}
+    )
+    assert msg["error"]["code"] == "search_failed"
+
+    msg = await _ws(client, {"type": "reolink_viewer/playback/stats"})
+    vod = msg["result"]["vod"]
+    assert vod["disk_bytes"] >= len(BODY)
+    assert vod["reserved_bytes"] == 0
+    assert vod["max_bytes"] == cache._max_bytes
+    assert "files" in msg["result"]["thumbnails"]
+
+    for text, done in (("first part", False), ("all of it", True)):
+        msg = await _ws(
+            client,
+            {
+                "type": "reolink_viewer/playback/check_report",
+                "report_id": "run1",
+                "setup": "iPhone app, Wi-Fi",
+                "text": text,
+                "done": done,
+            },
+        )
+        assert msg["success"]
+    msg = await _ws(client, {"type": "reolink_viewer/playback/check_reports"})
+    (report,) = msg["result"]["reports"]
+    assert (report["id"], report["text"], report["done"]) == ("run1", "all of it", True)
+    msg = await _ws(
+        client,
+        {
+            "type": "reolink_viewer/playback/check_report",
+            "report_id": "",
+            "setup": "",
+            "text": "",
+        },
+    )
+    assert msg["success"] is False
+
+
+async def test_check_reports_are_stored(hass: HomeAssistant, hass_storage: Any) -> None:
+    """Reports survive a restart; only the most recent are kept."""
+    from custom_components.reolink_viewer import checks
+
+    store = checks.CheckReports(hass)
+    await store.async_load()
+    with patch.object(checks, "MAX_REPORTS", 3):
+        for n in range(5):
+            store.save(f"r{n}", "desktop", "x" * 10, n % 2 == 0)
+        assert [r["id"] for r in store.reports()] == ["r4", "r3", "r2"]
+        await hass.async_block_till_done()
+        await store._store.async_save(store._data())
+        again = checks.CheckReports(hass)
+        await again.async_load()
+    assert [r["id"] for r in again.reports()] == ["r4", "r3", "r2"]
+    hass_storage[checks.STORE_KEY] = {"version": 1, "data": {"reports": [{"x": 1}]}}
+    broken = checks.CheckReports(hass)
+    await broken.async_load()
+    assert broken.reports() == []

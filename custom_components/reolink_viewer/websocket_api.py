@@ -18,6 +18,7 @@ from homeassistant.util.ssl import SSLCipherList
 
 from . import bridge, devices
 from .catalog import async_get_catalog
+from .checks import MAX_TEXT
 from .const import DOMAIN, PROBE_HARD_MAX_STREAMS, PROBE_PLAYBACK_HARD_MAX_STREAMS
 from .models import ReolinkViewerConfigEntry
 from .probe import ProbeOptions, Prober
@@ -65,6 +66,10 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_playback_prefetch)
     websocket_api.async_register_command(hass, ws_thumbnail_urls)
     websocket_api.async_register_command(hass, ws_media_info)
+    websocket_api.async_register_command(hass, ws_playback_peek)
+    websocket_api.async_register_command(hass, ws_playback_stats)
+    websocket_api.async_register_command(hass, ws_check_report)
+    websocket_api.async_register_command(hass, ws_check_reports)
 
 
 def _loaded_entry(hass: HomeAssistant) -> ReolinkViewerConfigEntry | None:
@@ -602,4 +607,97 @@ def ws_media_info(
     connection.send_result(
         msg["id"],
         {stream: cache.media_info(source, stream) for stream in ("main", "sub")},
+    )
+
+
+# ---- Playback check (debug) ----
+
+
+@websocket_api.websocket_command(
+    {probatio.Required("type"): f"{DOMAIN}/playback/peek", **_SEGMENT_SCHEMA}
+)
+@websocket_api.async_response
+async def ws_playback_peek(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Return what the cache holds of a recording, without fetching it."""
+    if (resolved := _playback_source(hass, connection, msg)) is None:
+        return
+    entry, source = resolved
+    try:
+        recording, segment_id = await _recording(entry, source, msg)
+    except TimelineError as err:
+        connection.send_error(msg["id"], ERR_SEARCH_FAILED, str(err))
+        return
+    cache = await entry.runtime_data.vod_cache.async_peek(recording)
+    connection.send_result(msg["id"], {"segment_id": segment_id, "cache": cache})
+
+
+@websocket_api.websocket_command(
+    {probatio.Required("type"): f"{DOMAIN}/playback/stats"}
+)
+@websocket_api.async_response
+async def ws_playback_stats(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Return the recording and thumbnail caches' statistics (disk use now)."""
+    if (entry := _loaded_entry(hass)) is None:
+        connection.send_error(msg["id"], ERR_NOT_LOADED, "Reolink Viewer is not loaded")
+        return
+    data = entry.runtime_data
+    connection.send_result(
+        msg["id"],
+        {
+            "vod": await data.vod_cache.async_stats(),
+            "thumbnails": data.thumbnails.stats(),
+        },
+    )
+
+
+@callback
+@websocket_api.websocket_command(
+    {
+        probatio.Required("type"): f"{DOMAIN}/playback/check_report",
+        probatio.Required("report_id"): probatio.All(
+            str, probatio.Length(min=1, max=64)
+        ),
+        probatio.Required("setup"): probatio.All(str, probatio.Length(max=200)),
+        probatio.Required("text"): probatio.All(str, probatio.Length(max=MAX_TEXT)),
+        probatio.Optional("done", default=False): bool,
+    }
+)
+def ws_check_report(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Save (or update) a playback check report."""
+    if (entry := _loaded_entry(hass)) is None:
+        connection.send_error(msg["id"], ERR_NOT_LOADED, "Reolink Viewer is not loaded")
+        return
+    entry.runtime_data.check_reports.save(
+        msg["report_id"], msg["setup"], msg["text"], msg["done"]
+    )
+    connection.send_result(msg["id"])
+
+
+@callback
+@websocket_api.websocket_command(
+    {probatio.Required("type"): f"{DOMAIN}/playback/check_reports"}
+)
+def ws_check_reports(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Return the saved playback check reports, newest first."""
+    if (entry := _loaded_entry(hass)) is None:
+        connection.send_error(msg["id"], ERR_NOT_LOADED, "Reolink Viewer is not loaded")
+        return
+    connection.send_result(
+        msg["id"], {"reports": entry.runtime_data.check_reports.reports()}
     )

@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 
 from homeassistant.config_entries import ConfigEntry
 
+from .checks import CheckReports
 from .scheduler import Scheduler
 from .thumbnails import ThumbnailService
 from .timeline import TimelineService
@@ -20,6 +21,7 @@ class ReolinkViewerData:
     timeline: TimelineService
     vod_cache: VodCache
     thumbnails: ThumbnailService
+    check_reports: CheckReports
     grants: Grants = field(default_factory=Grants)
     probe_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
