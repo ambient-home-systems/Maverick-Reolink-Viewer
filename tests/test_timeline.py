@@ -237,6 +237,33 @@ async def test_today_ttl_and_incremental_refresh(
     assert host.searches[-1][:2] == (wall(2026, 10, 17), wall(2026, 10, 17, 23, 59, 59))
 
 
+async def test_today_refresh_in_the_repeated_hour(
+    host: FakeHost, service: TimelineService, clock: Clock
+) -> None:
+    """When clocks fall back, today's refresh window does not turn inside out."""
+    clock.now = wall(2026, 11, 1, 1, 55)  # first pass through 01:00-02:00
+    host.files["sub"] = [vf(wall(2026, 11, 1, 1, 40), 5)]
+    await service.async_day(SOURCE, date(2026, 11, 1))
+    # An hour later the wall clock reads 01:05 again (second pass).
+    clock.now = wall(2026, 11, 1, 1, 5)
+    clock.epoch += 3600
+    host.files["sub"].append(vf(wall(2026, 11, 1, 1, 1), 2))
+    day, timing = await service.async_day(SOURCE, date(2026, 11, 1))
+    assert timing["cache"] == "incremental"
+    start, end, _stream = host.searches[-1]
+    assert start <= end
+    # From before both 01:05 and 01:55, up to the later of the two.
+    assert start == wall(2026, 11, 1, 0, 55)
+    assert end == wall(2026, 11, 1, 1, 55)
+    assert len(day.segments) == 2
+    # Past 02:00 the window is the usual one again.
+    clock.now = wall(2026, 11, 1, 2, 30)
+    clock.epoch += 3600
+    await service.async_day(SOURCE, date(2026, 11, 1))
+    start, end, _stream = host.searches[-1]
+    assert (start, end) == (wall(2026, 11, 1, 1, 45), wall(2026, 11, 1, 2, 30))
+
+
 async def test_future_day_and_errors(host: FakeHost, service: TimelineService) -> None:
     """Days after today are empty; failed searches raise TimelineError."""
     day, timing = await service.async_day(SOURCE, date(2026, 10, 20))

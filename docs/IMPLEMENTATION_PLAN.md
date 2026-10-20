@@ -18,7 +18,7 @@ put on it:
 | --- | --- | --- | --- | --- |
 | 0 | Foundations, CI, adapter layer, hardware discovery | High | 1–2 wk | Done (2026-10-17) |
 | 1 | Device details and every setting, with explanations | Standard (catalog) / High (panel shell) | 2–3 wk | Done (2026-10-17) |
-| 2 | Event timeline, thumbnails, smooth playback | High (backend) / Very high (player) | 3–5 wk | In progress: 2A done (2026-10-20, v0.2.7: timeline 105–287 ms, first frame 0.6–1.1 s, auto-advance 6–7 ms on hardware). 2B not started |
+| 2 | Event timeline, thumbnails, smooth playback | High (backend) / Very high (player) | 3–5 wk | In progress: 2A done (2026-10-20, v0.2.7: timeline 105–287 ms, first frame 0.6–1.1 s, auto-advance 6–7 ms on hardware). 2B: cache fixed, measuring (gate) |
 | 3 | Live view via go2rtc, grid, fullscreen, PTZ | High | 3–4 wk | Not started |
 | 4 | Performance, mobile, packaging, first release | Standard | 2–3 wk | Not started |
 | 5 | Optional R&D: Baichuan live/playback | Very high | 4–8 wk, time-boxed with gates | Not started |
@@ -503,9 +503,21 @@ Settled by run 4 (v0.1.2):
 
 1. **MP4 layout: fragmented, `moov` first.** Each DOWNLOAD is `ftyp`, a 1.1 KB
    `moov`, then 2 s `moof`+`mdat` fragments. So a browser can play a recording as
-   soon as its first fragment is cached, whatever its length. Phase 2B's MSE player
-   can append the fragments as they are, with no remux. The `mvhd` duration is a
-   placeholder, so durations come from the search.
+   soon as its first fragment is cached, whatever its length. The `mvhd` duration
+   is a placeholder, so durations come from the search.
+   - **Correction (2026-10-20, Phase 2B): the fragments are not MSE-ready as
+     stored.** This item first said an MSE player could append them with no
+     remux. It cannot. The W3C *ISO BMFF Byte Stream Format* (§ Media Segments)
+     requires the user agent to run the append error algorithm when "the Movie
+     Fragment Box does not use movie-fragment relative addressing" or "at
+     least one Track Fragment Box does not contain a Track Fragment Decode
+     Time Box (`tfdt`)". Relative addressing means every `traf` sets
+     `default-base-is-moof` (so no `base-data-offset`), or a single `traf`
+     without `base-data-offset`. The NVR's `moof`s hold two `traf`s (video and
+     audio) whose `tfhd` gives an absolute `base_data_offset`, and no `traf`
+     has a `tfdt` (third and fourth hardware checks). An MSE player therefore
+     needs the fragments rewritten first (relative offsets, a `tfdt` built from
+     the sample durations), or ffmpeg's `frag_keyframe+empty_moov+default_base_moof`.
 2. **No server-side seek.** `start=` is ignored. Reaching the middle of a long
    recording means downloading what comes before it first, at 265–1000× real time
    on sub. A click on a 2–3 min event clip stays far inside the 2 s budget. On the
@@ -793,7 +805,108 @@ Known limits carried into 2B and Phase 4:
 - A day older than the background fetch's 7 days costs the NVR's 4–6 s
   search the first time it is opened.
 - A cached recording takes disk space twice for up to 35 minutes while it
-  is rewritten as plain MP4.
+  is rewritten as plain MP4. (Phase 2B step 0: now only while a URL bound to
+  the original is alive, and counted against the cap; see below.)
+
+#### Phase 2B status
+
+| 2B step | Status |
+| --- | --- |
+| 0. Fix the recording cache (disk accounting, eviction, leases, deletion timers, open race), DST end and refresh window, shared thumbnail fetches; correct the MSE claim above | Done (v0.2.8), see "Step 0" below |
+| 1. Measure where it hasn't been (gate): desktop Chrome on the LAN, the iPhone Companion app on Wi-Fi, over Tailscale and over Nabu Casa | Check built (v0.2.8): **Run playback check** under Debug in the Playback tab, see "Step 1" below. Waiting for the four reports |
+| 2. Build what the evidence calls for (speeds, HD/SD keeping the position, uncached deep seeks, bounded memory and disk) | Not started (after the gate) |
+
+##### Step 0: the recording cache (v0.2.8)
+
+Bugs found by review, each reproduced by a test that failed before the fix:
+
+1. **Disk accounting.** The 8 GiB cap counted only complete files, and the
+   2 GiB free-space rule was checked once, before a fill waited for its
+   stream slot, against `max(2 GiB, size)`. Now everything on disk counts
+   (`.part` files too), plus what each running fill and rewrite still
+   expects to write:
+   - a fill reserves its expected size (the search's size + 1 % + the index
+     room; without a size, its length at 10 Mbit/s main or 1 Mbit/s sub)
+     once it holds its stream slot, after the wait, and asks for more if the
+     recording turns out larger;
+   - the plain-MP4 rewrite reserves room for its second copy before ffmpeg
+     starts; without room it is skipped ("plain MP4 no: not enough free disk
+     space") and the original is served;
+   - free space must stay at 2 GiB once every reserved byte is written.
+2. **Low free space evicted nothing.** Eviction now frees whichever is
+   larger: the excess over the cap, or the free-space shortfall.
+3. **Eviction could delete or swap a playing file.** Range requests
+   (`FileResponse`) were not counted as readers. Issuing a URL now *leases*
+   the recording until the URL expires (plus 1 minute): it is not evicted,
+   and the URL stays bound to the file it was issued for. A recording's
+   original and plain copy are evicted together, as one unit.
+4. **Deletion timers.** The original is deleted 1 minute after the last URL
+   bound to it expires (at once if none was issued), instead of after a
+   fixed 35 minutes. Eviction and a new rewrite cancel a pending deletion,
+   and a deletion never touches a newer entry of the same recording.
+5. **Two opens of a recording on disk** could start a second download (the
+   second request saw an entry that was not marked complete yet).
+6. **DST.** A recording through the fall-back (e.g. 01:50 first pass to
+   01:05 second pass) became empty; its end now takes the later meaning.
+   Today's refresh window turned inside out in the repeated hour (from
+   01:45 to 01:05); it now runs from before both times to the later one.
+7. **Thumbnails.** A browser closing one thumbnail request cancelled the
+   shared fetch for every other request of the same image. The fetch now
+   runs on until the last request goes away.
+
+Consequence to measure: main recordings are 2.4–3.8 GB, so an 8 GiB cache
+holds about two of them with their plain copies. HD playback of an hour-long
+main recording, its preloaded next file and the plain-MP4 rewrite no longer
+fit at once: the rewrite or the preload is refused (and reported) instead of
+overrunning the cap. The step-1 check reports the cache's disk use.
+
+##### Step 1: the playback check (v0.2.8)
+
+The check is built into the panel (Playback tab → **Debug** → **Run playback
+check**), so it runs where there is no developer console, as in the iOS
+Companion app. `scripts/playback_check.js` now only calls it from the desktop
+console. It drives the tab like a user (read-only: timelines and playback) and
+reports, on the device it runs on:
+
+| Part | What it measures |
+| --- | --- |
+| Header | browser (e.g. "iOS 18.1, Companion app 2025.10.1"), how HA is reached (local, Tailscale, Nabu Casa or remote, from the host name, which is not reported), screen, delivery mode |
+| A1–A4 | time to timeline: today, a past day first and again (2A criterion) |
+| B | the latest three events of today: first frame, video element events, each video request (wait, answer, duration, size), and the server's download record (2A criterion) |
+| D1 / D2 | first frame deep in a long recording (≥ 20 min, sub stream): **D1 not cached** (a recording `playback/peek` shows is not on disk; the latest event 50–95 % in, else 75 %), then **D2 cached** (10–45 % in, else 40 %), with the download and plain-MP4 rewrite times and the plain file's `moov` size (what a browser reads before the first frame) |
+| C | auto-advance between two touching recordings, preferring the cached long recording (2A criterion) |
+| R | `playbackRate` 0.5×, 1×, 2×, 4×, 8× for 6 s each on a cached long recording: effective rate, frames painted (`requestVideoFrameCallback`) against frames needed, the longest gap between painted frames, dropped frames (`getVideoPlaybackQuality`), stalls. Smooth = on pace (±10 %), no stalls, no gap over 2.5 frames (250 ms at least), and ≤ 2 % dropped below 50 frames a second (above the display's refresh rate a browser must skip frames) |
+| L | the link to HA: a 4 MiB Range read of the cached recording |
+| MSE | whether `MediaSource` and `ManagedMediaSource` exist and accept the sub and main codecs; an **append test** of a 1 s H.264 clip (VP9 where H.264 is missing) in four shapes: MSE-ready (`default-base-is-moof` + `tfdt`), absolute offsets, no `tfdt`, and both (the NVR's shape) |
+| HD | the panel's HD decision and `decodingInfo` for the main stream, as a file and through MSE |
+| M (optional) | a one-hour session from the start of the long recording, a sample a minute: JS heap (Chrome only), seconds buffered ahead and held by both videos, dropped frames, stalls, file changes and gaps, the server cache's disk use, reservations and leases |
+
+Reports are saved on the server as the check runs (`playback/check_report`,
+last 20 kept) and listed under **Saved reports** on any device. If the page is
+reloaded or closed during a run (on iOS, usually the app running out of
+memory), the next load of the tab says so and marks the saved report.
+
+Checked in Chromium 141 (headless, Playwright) against a fake HA serving
+VP9 recordings: every part ran (40 s, plus the session), and the MSE probe
+confirmed the correction above: the MSE-ready fragment plays, while absolute
+offsets, a missing `tfdt` and the NVR's shape each fail with an append error.
+
+How to run it, on each setup (one camera at a time; a continuous camera,
+e.g. Front Yard Right, gives the deep-start and session parts):
+
+1. Update to v0.2.8 and restart HA. Open the camera's **Playback** tab, wait
+   about 2 minutes (the background fetch), open **Debug** at the bottom.
+2. Pick the **Setup**: *Desktop Chrome, LAN*; *iPhone app, Wi-Fi (local)*
+   (Companion app with the internal URL, on home Wi-Fi); *iPhone app,
+   Tailscale* (Wi-Fi off, Tailscale on, the app pointed at the Tailscale
+   address); *iPhone app, Nabu Casa* (Wi-Fi off, Tailscale off, external
+   URL).
+3. Tick **then play for 60 min** for the memory and disk session. On the
+   iPhone set Auto-Lock to Never first and keep the app in front (iOS pauses
+   video when the screen locks).
+4. **Run playback check**; leave the tab alone until "Done". About 2 minutes
+   without the session.
+5. **Copy report**, or later on the desktop: **Saved reports** → Copy.
 
 #### 2A as built (v0.2.0)
 

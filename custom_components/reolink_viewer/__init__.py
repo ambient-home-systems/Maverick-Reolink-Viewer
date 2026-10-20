@@ -15,6 +15,7 @@ from homeassistant.util.hass_dict import HassKey
 from homeassistant.util.ssl import SSLCipherList
 
 from . import bridge
+from .checks import CheckReports
 from .const import (
     CAMERA_HOST_CONCURRENCY,
     DEFAULT_HOST_CONCURRENCY,
@@ -134,13 +135,16 @@ async def async_setup_entry(
         THUMB_CACHE_MAX_BYTES,
         get_ffmpeg_manager(hass).binary,
     )
+    check_reports = CheckReports(hass)
     await vod_cache.async_setup()
     await thumbnails.async_setup()
+    await check_reports.async_load()
     entry.runtime_data = ReolinkViewerData(
         scheduler=scheduler,
         timeline=TimelineService(hass, scheduler),
         vod_cache=vod_cache,
         thumbnails=thumbnails,
+        check_reports=check_reports,
     )
 
     if not hass.data.get(DATA_STATIC_REGISTERED):

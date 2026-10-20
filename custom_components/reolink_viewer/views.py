@@ -10,13 +10,15 @@ the grant expire.
   the start gets the file progressively (200, chunked, for browsers that play
   while downloading); any other request waits for the file to complete.
 - A URL issued after the cache rewrote the recording as a plain MP4 gets that
-  file; one issued before keeps the original (``VodCache.served_path``).
+  file; one issued before keeps the original. Issuing a URL *leases* the
+  recording (``VodCache.lease``): it is not evicted, and the URL's file is
+  neither swapped nor deleted, until the URL expires.
 - ``/api/reolink_viewer/clip/{token}`` serves the same file as a download.
 - ``/api/reolink_viewer/thumb/{token}`` serves a timeline thumbnail (JPEG).
 """
 
 import asyncio
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import timedelta
 from http import HTTPStatus
 import logging
@@ -56,7 +58,8 @@ class VodGrant:
     recording: Recording
     progressive: bool
     download_name: str
-    issued: float = field(default_factory=time.monotonic)
+    # Bound to the plain copy (True) or the original (VodCache.lease).
+    flat: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -143,7 +146,7 @@ class _Base(HomeAssistantView):
             if not entry.complete:
                 async with asyncio.timeout(COMPLETE_TIMEOUT):
                     await cache.async_wait(entry, complete=True)
-            path = cache.served_path(entry, grant.issued)
+            path = cache.served_path(entry, grant.flat)
             return web.FileResponse(path, headers=headers)
         except VodCacheError as err:
             return web.Response(status=HTTPStatus.BAD_GATEWAY, text=str(err))

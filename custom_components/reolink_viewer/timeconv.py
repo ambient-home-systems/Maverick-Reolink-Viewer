@@ -156,16 +156,7 @@ class DayConverter:
         # The end belongs to the same stretch of clock as the start.
         offset = local_start - start.utc.replace(tzinfo=None)
         self._offsets[rec.key] = offset
-        end_candidates = utc_candidates(rec.end, self.tz)
-        if len(end_candidates) == 1:
-            end = Converted(end_candidates[0])
-        else:
-            guess = (rec.end.replace(tzinfo=None) - offset).replace(tzinfo=UTC)
-            end = to_utc(rec.end, self.tz, guess)
-            end = Converted(end.utc, start.ambiguous)
-        if end.utc < start.utc:
-            end = Converted(start.utc, end.ambiguous)
-        return start, end
+        return start, _end(start, rec.end, self.tz, offset, start.ambiguous)
 
     def event(
         self, start: datetime, end: datetime, recording_key: str | None
@@ -173,19 +164,46 @@ class DayConverter:
         """Convert an event, using its recording's offset in the repeated hour."""
         offset = self._offsets.get(recording_key or "")
 
-        def one(local: datetime) -> Converted:
-            candidates = utc_candidates(local, self.tz)
-            if len(candidates) == 1:
-                return Converted(candidates[0])
-            if offset is None:
-                return Converted(candidates[0], ambiguous=True)
-            guess = (local.replace(tzinfo=None) - offset).replace(tzinfo=UTC)
-            return to_utc(local, self.tz, guess)
+        candidates = utc_candidates(start, self.tz)
+        if len(candidates) == 1:
+            first = Converted(candidates[0])
+        elif offset is None:
+            first = Converted(candidates[0], ambiguous=True)
+        else:
+            guess = (start.replace(tzinfo=None) - offset).replace(tzinfo=UTC)
+            first = to_utc(start, self.tz, guess)
+        # Without its recording, an end in the repeated hour is a guess.
+        guessed = offset is None
+        if offset is None:
+            offset = start.replace(tzinfo=None) - first.utc.replace(tzinfo=None)
+        return first, _end(first, end, self.tz, offset, guessed)
 
-        first, last = one(start), one(end)
-        if last.utc < first.utc:
-            last = Converted(first.utc, last.ambiguous)
-        return first, last
+
+def _end(
+    start: Converted,
+    local: datetime,
+    tz: tzinfo | None,
+    offset: timedelta,
+    ambiguous: bool,
+) -> Converted:
+    """Convert the end (wall clock) of something that began at ``start``.
+
+    In the repeated hour the end takes the start's offset (``ambiguous`` says
+    whether that is a guess), unless that puts it at or before the start: the
+    clock fell back in between, so the later meaning is the end, and a
+    recording running through the change keeps its length.
+    """
+    candidates = utc_candidates(local, tz)
+    if len(candidates) == 1:
+        end = Converted(candidates[0])
+    else:
+        guess = (local.replace(tzinfo=None) - offset).replace(tzinfo=UTC)
+        end = Converted(to_utc(local, tz, guess).utc, ambiguous)
+        if end.utc <= start.utc < candidates[-1]:
+            end = Converted(candidates[-1], ambiguous)
+    if end.utc < start.utc:
+        end = Converted(start.utc, end.ambiguous)
+    return end
 
 
 def _as_utc(value: datetime | None) -> datetime | None:

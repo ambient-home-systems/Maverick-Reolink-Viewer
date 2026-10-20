@@ -10,6 +10,15 @@ import {
   toError,
   type SegmentRef,
 } from "../api";
+import {
+  PlaybackCheck,
+  SETUPS,
+  fetchCheckReports,
+  noteInterruptedCheck,
+  type CheckOptions,
+  type CheckTarget,
+  type SavedReport,
+} from "../playback/check";
 import { canPlayMain, playsProgressive, type StreamDecision } from "../playback/codec";
 import "../playback/calendar";
 import "../playback/event-list";
@@ -61,6 +70,11 @@ const LONG_RECORDING_MS = 10 * MINUTE;
 const EVENT_THUMB_BUCKET = 10;
 /** Thumbnail loads wait at most this long for a recording to start. */
 export const THUMB_PAUSE_MAX_MS = 8_000;
+/** Minutes of the playback check's optional session (memory and disk). */
+export const CHECK_SESSION_MIN = 60;
+const CHECK_SETUP_KEY = "reolink-viewer-check-setup";
+/** A check cut short is looked for once per page load. */
+let interruptedLookedFor = false;
 
 export interface Metrics {
   timelineMs?: number;
@@ -102,6 +116,12 @@ export class RvPlayback extends LitElement {
     _hover: { state: true },
     _thumbs: { state: true },
     _metrics: { state: true },
+    _checkText: { state: true },
+    _checkRunning: { state: true },
+    _checkSetup: { state: true },
+    _checkSession: { state: true },
+    _checkNote: { state: true },
+    _reports: { state: true },
   };
 
   declare hass: HomeAssistant | undefined;
@@ -125,6 +145,12 @@ export class RvPlayback extends LitElement {
   declare _hover: { x: number; time: number; url?: string; gap?: boolean } | undefined;
   declare _thumbs: ReadonlyMap<number, string>;
   declare _metrics: Metrics;
+  declare _checkText: string;
+  declare _checkRunning: boolean;
+  declare _checkSetup: string;
+  declare _checkSession: boolean;
+  declare _checkNote: string | undefined;
+  declare _reports: SavedReport[] | undefined;
 
   private _daySeq = 0;
   private _playSeq = 0;
@@ -139,6 +165,7 @@ export class RvPlayback extends LitElement {
   private _refreshTimer: ReturnType<typeof setInterval> | undefined;
   private _lastCursorPaint = 0;
   private readonly _progressive = playsProgressive();
+  private _check: PlaybackCheck | undefined;
 
   constructor() {
     super();
@@ -156,6 +183,10 @@ export class RvPlayback extends LitElement {
     this._hd = { main: false, reason: "checking…" };
     this._thumbs = new Map();
     this._metrics = {};
+    this._checkText = "";
+    this._checkRunning = false;
+    this._checkSetup = rememberedSetup();
+    this._checkSession = false;
   }
 
   private get _zone(): string | undefined {
@@ -194,6 +225,7 @@ export class RvPlayback extends LitElement {
     this.thumbLoader.clear();
     clearTimeout(this._thumbPause);
     clearTimeout(this._eventsRetry);
+    this._check?.stop();
   }
 
   protected override willUpdate(changed: PropertyValues<this>): void {
@@ -204,6 +236,12 @@ export class RvPlayback extends LitElement {
       void this._loadDay(this._date);
       void this._loadMonth(this._month.year, this._month.month);
       void this._checkHd();
+      if (!interruptedLookedFor) {
+        interruptedLookedFor = true;
+        void noteInterruptedCheck(this.hass).then((note) => {
+          this._checkNote = note;
+        });
+      }
     }
   }
 
@@ -496,6 +534,175 @@ export class RvPlayback extends LitElement {
     }
   }
 
+  // ---- Playback check ----
+
+  /** Run the playback check (also called by scripts/playback_check.js). */
+  async runCheck(options: CheckOptions): Promise<string> {
+    if (this._check?.running) return this._check.text;
+    const check = new PlaybackCheck(this._checkTarget(), options, () => {
+      this._checkText = check.text;
+    });
+    this._check = check;
+    this._checkRunning = true;
+    this._checkText = "";
+    try {
+      return await check.run();
+    } finally {
+      this._checkRunning = false;
+      this._checkText = check.text;
+      this._reports = undefined;
+    }
+  }
+
+  private _checkTarget(): CheckTarget {
+    // eslint-disable-next-line @typescript-eslint/no-this-alias -- the getters read live state
+    const el = this;
+    return {
+      get hass() {
+        if (!el.hass) throw new Error("not connected");
+        return el.hass;
+      },
+      get deviceId() {
+        return el.deviceId;
+      },
+      get cameraName() {
+        return el.cameraName;
+      },
+      get date() {
+        return el._date;
+      },
+      get today() {
+        return el._today;
+      },
+      get day() {
+        return el._day;
+      },
+      get loading() {
+        return el._loading;
+      },
+      get metrics() {
+        return el._metrics;
+      },
+      get playFailure() {
+        return el._playFailure;
+      },
+      get hd() {
+        return el._hd;
+      },
+      get progressive() {
+        return el._progressive;
+      },
+      get monthDays() {
+        return el._monthDays;
+      },
+      get player() {
+        return el._player;
+      },
+      get playing() {
+        return el._playing;
+      },
+      selectDate: (date: string) => {
+        el._selectDate(date);
+      },
+      playAt: (time: number, requestedAt?: number) => el.playAt(time, requestedAt),
+    };
+  }
+
+  private async _loadReports(): Promise<void> {
+    if (!this.hass) return;
+    try {
+      this._reports = (await fetchCheckReports(this.hass)).reports;
+    } catch (err) {
+      toast(this, `Could not load the reports: ${toError(err).message}`, "error");
+    }
+  }
+
+  private async _copy(text: string): Promise<void> {
+    if (await copyText(text)) toast(this, "Report copied");
+    else toast(this, "Copying is blocked here: select the report text and copy it", "error");
+  }
+
+  private _renderCheck(): TemplateResult {
+    const running = this._checkRunning;
+    return html`<div class="check">
+      <strong>Playback check</strong>
+      <p class="small muted">
+        Measures this device: timeline, first frames (events, deep in long recordings, cached and not), auto-advance,
+        playback rates, the link, MSE support and HD. The report is saved on the server, so a run on a phone can be
+        copied on a desktop.
+      </p>
+      ${this._checkNote ? html`<div class="banner error" role="alert">${this._checkNote}</div>` : nothing}
+      <div class="row">
+        <label
+          >Setup
+          <select
+            ?disabled=${running}
+            @change=${(e: Event) => {
+              this._checkSetup = (e.target as HTMLSelectElement).value;
+              rememberSetup(this._checkSetup);
+            }}
+          >
+            ${SETUPS.map((setup) => html`<option .value=${setup} ?selected=${setup === this._checkSetup}>${setup}</option>`)}
+          </select>
+        </label>
+        <label
+          ><input
+            type="checkbox"
+            .checked=${this._checkSession}
+            ?disabled=${running}
+            @change=${(e: Event) => {
+              this._checkSession = (e.target as HTMLInputElement).checked;
+            }}
+          />
+          then play for ${CHECK_SESSION_MIN} min (memory and disk)</label
+        >
+      </div>
+      <div class="row">
+        ${running
+          ? html`<button
+              @click=${() => {
+                this._check?.stop();
+              }}
+            >
+              Stop
+            </button>`
+          : html`<button
+              class="primary"
+              @click=${() =>
+                void this.runCheck({
+                  setup: this._checkSetup,
+                  soakMinutes: this._checkSession ? CHECK_SESSION_MIN : 0,
+                })}
+            >
+              Run playback check
+            </button>`}
+        <button ?disabled=${!this._checkText} @click=${() => void this._copy(this._checkText)}>Copy report</button>
+        <button @click=${() => void this._loadReports()}>Saved reports</button>
+      </div>
+      ${this._checkText ? html`<pre class="report">${this._checkText}</pre>` : nothing}
+      ${this._reports
+        ? html`<ul class="reports">
+            ${this._reports.length
+              ? this._reports.map(
+                  (r) => html`<li>
+                    <span>${new Date(r.updated).toLocaleString()} · ${r.setup}${r.done ? "" : " · running or cut short"}</span>
+                    <button class="text" @click=${() => void this._copy(r.text)}>Copy</button>
+                    <button
+                      class="text"
+                      @click=${() => {
+                        this._checkText = r.text;
+                      }}
+                    >
+                      Show
+                    </button>
+                  </li>`,
+                )
+              : html`<li class="muted">No saved reports</li>`}
+          </ul>`
+        : nothing}
+    </div>`;
+  }
+
   // ---- Rendering ----
 
   private _renderToolbar(): TemplateResult {
@@ -621,6 +828,7 @@ export class RvPlayback extends LitElement {
             : "–"}
         </dd>
       </dl>
+      ${this._renderCheck()}
     </details>`;
   }
 
@@ -833,6 +1041,39 @@ export class RvPlayback extends LitElement {
       .debug dl {
         font-size: 13px;
       }
+      .check {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        border-top: 1px solid var(--divider-color, #ccc);
+        padding-top: 8px;
+      }
+      .check .row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+      }
+      .check p {
+        margin: 0;
+      }
+      .report {
+        max-height: 50vh;
+        overflow: auto;
+        white-space: pre-wrap;
+        word-break: break-word;
+        font-size: 12px;
+        background: var(--secondary-background-color, #f5f5f5);
+        padding: 8px;
+        border-radius: 4px;
+        user-select: text;
+        -webkit-user-select: text;
+      }
+      .reports {
+        margin: 0;
+        padding-left: 18px;
+        font-size: 13px;
+      }
     `,
   ];
 }
@@ -853,6 +1094,53 @@ export function describeCache(cache: CacheStatus): string {
   const mb = `${(cache.bytes / 1_000_000).toFixed(1)} MB`;
   if (cache.error) return `failed: ${cache.error}`;
   return cache.complete ? `cached (${mb})` : `filling (${mb} so far)`;
+}
+
+function rememberedSetup(): string {
+  try {
+    const saved = window.localStorage.getItem(CHECK_SETUP_KEY);
+    if (saved && (SETUPS as readonly string[]).includes(saved)) return saved;
+  } catch {
+    // No storage: guess from the browser.
+  }
+  return /iPhone|iPad/.test(navigator.userAgent) ? "iPhone app, Wi-Fi (local)" : "Desktop Chrome, LAN";
+}
+
+function rememberSetup(setup: string): void {
+  try {
+    window.localStorage.setItem(CHECK_SETUP_KEY, setup);
+  } catch {
+    // Not remembered.
+  }
+}
+
+/** Copy text: the Clipboard API (secure pages), else a selected textarea. */
+export async function copyText(text: string): Promise<boolean> {
+  // Undefined on plain-HTTP pages (as Home Assistant is on the LAN).
+  const clipboard = (navigator as { clipboard?: Clipboard }).clipboard;
+  try {
+    if (window.isSecureContext && clipboard) {
+      await clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    // Fall back below.
+  }
+  const area = document.createElement("textarea");
+  area.value = text;
+  area.setAttribute("readonly", "");
+  area.style.cssText = "position:fixed;top:0;left:0;opacity:0";
+  document.body.append(area);
+  area.select();
+  area.setSelectionRange(0, text.length);
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- the only way on plain-HTTP pages
+    return document.execCommand("copy");
+  } catch {
+    return false;
+  } finally {
+    area.remove();
+  }
 }
 
 function zoomLabel(span: number): string {

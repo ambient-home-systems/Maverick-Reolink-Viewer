@@ -5,9 +5,14 @@ import shutil
 
 import pytest
 
-from custom_components.reolink_viewer.remux import RemuxError, async_flatten, is_plain
+from custom_components.reolink_viewer.remux import (
+    RemuxError,
+    async_flatten,
+    is_plain,
+    moov_size,
+)
 
-from .mp4_fixtures import fragmented_av, mp4_file, real_fragmented
+from .mp4_fixtures import FTYP, box, fragmented_av, moov, mp4_file, real_fragmented
 
 FFMPEG = shutil.which("ffmpeg")
 needs_ffmpeg = pytest.mark.skipif(FFMPEG is None, reason="ffmpeg is not installed")
@@ -64,3 +69,14 @@ def test_is_plain(tmp_path: Path) -> None:
     assert not is_plain(path)
     path.write_bytes(b"\x00" * 10)
     assert not is_plain(path)
+
+
+def test_moov_size(tmp_path: Path) -> None:
+    """The moov's size is read from the top-level boxes."""
+    path = tmp_path / "plain.mp4"
+    path.write_bytes(FTYP + moov(60) + box("mdat", bytes(100)))
+    assert moov_size(path) == len(moov(60))
+    path.write_bytes(FTYP + box("mdat", bytes(100)))
+    assert moov_size(path) is None
+    path.write_bytes(b"\0\0")
+    assert moov_size(path) is None

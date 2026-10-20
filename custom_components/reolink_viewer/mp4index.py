@@ -218,6 +218,11 @@ def _reserve(tracks: int, duration_s: float) -> int:
     return max(MIN_RESERVE, min(size, MAX_RESERVE))
 
 
+def index_room(duration_s: float, tracks: int = 2) -> int:
+    """Return how many bytes the index room adds to a recording of that length."""
+    return _reserve(tracks, duration_s)
+
+
 def build_index(path: str, free_at: int, free_size: int) -> bytes | None:
     """Return the sidx boxes plus a free box, exactly ``free_size`` bytes.
 

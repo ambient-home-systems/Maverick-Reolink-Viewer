@@ -6,7 +6,15 @@ import { playsProgressive } from "../playback/codec";
 import { ThumbLoader } from "../playback/thumb-loader";
 import "./playback";
 import { TOAST_EVENT } from "./navigation";
-import { EVENTS_RETRIES, EVENTS_RETRY_MS, STALE_TODAY_S, deliveryOf, describeCache, type RvPlayback } from "./playback";
+import {
+  EVENTS_RETRIES,
+  EVENTS_RETRY_MS,
+  STALE_TODAY_S,
+  copyText,
+  deliveryOf,
+  describeCache,
+  type RvPlayback,
+} from "./playback";
 
 const T0 = Date.UTC(2026, 9, 17, 4, 0); // midnight EDT, 17 Oct 2026
 const MIN = 60_000;
@@ -356,6 +364,37 @@ describe("rv-playback", () => {
     expect(describeCache({ complete: true, bytes: 12_345_678, error: null })).toBe("cached (12.3 MB)");
     expect(describeCache({ complete: false, bytes: 500_000, error: null })).toBe("filling (0.5 MB so far)");
     expect(describeCache({ complete: false, bytes: 0, error: "HTTP 500" })).toBe("failed: HTTP 500");
+  });
+
+  it("offers the playback check and its saved reports in the Debug section", async () => {
+    const hass = playbackHass();
+    hass.responses["reolink_viewer/playback/check_reports"] = {
+      reports: [{ id: "r1", setup: "iPhone app, Nabu Casa", text: "report text", done: false, updated: "2026-10-17T12:00:00Z" }],
+    };
+    const el = await mount(hass);
+    const buttons = () => [...el.renderRoot.querySelectorAll<HTMLButtonElement>(".check button")];
+    const named = (name: string) => buttons().find((b) => b.textContent.trim() === name);
+    expect(named("Run playback check")).toBeDefined();
+    expect(named("Copy report")?.disabled).toBe(true);
+    expect([...el.renderRoot.querySelectorAll(".check option")].map((o) => o.textContent)).toContain(
+      "iPhone app, Tailscale",
+    );
+    named("Saved reports")?.click();
+    await flush();
+    await el.updateComplete;
+    expect(el.renderRoot.querySelector(".reports")?.textContent).toContain("iPhone app, Nabu Casa · running or cut short");
+    [...el.renderRoot.querySelectorAll<HTMLButtonElement>(".reports button")].find((b) => b.textContent.trim() === "Show")?.click();
+    await el.updateComplete;
+    expect(el.renderRoot.querySelector(".report")?.textContent).toBe("report text");
+    expect(named("Copy report")?.disabled).toBe(false);
+  });
+
+  it("copies text without the Clipboard API (plain-HTTP pages)", async () => {
+    const exec = vi.fn(() => true);
+    Object.defineProperty(document, "execCommand", { value: exec, configurable: true });
+    expect(await copyText("hello")).toBe(true);
+    expect(exec).toHaveBeenCalledWith("copy");
+    expect(document.querySelector("textarea")).toBeNull();
   });
 
   it("shows load errors", async () => {

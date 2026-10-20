@@ -81,3 +81,21 @@ def is_plain(path: Path) -> bool:
                 return False
             offset = box.end
     return False
+
+
+def moov_size(path: Path) -> int | None:
+    """Return the size of a file's top-level moov box, if found early.
+
+    Blocking: run it in an executor.
+    """
+    with path.open("rb") as file:
+        offset = 0
+        for _ in range(8):
+            file.seek(offset)
+            box = parse_box_header(file.read(16), offset)
+            if box is None or box.end is None:
+                return None
+            if box.type == "moov":
+                return box.size
+            offset = box.end
+    return None
