@@ -108,6 +108,9 @@ describe("rates and sums", () => {
     );
     expect(smooth(sample({}))).toBe(true);
     expect(smooth(sample({ dropped: 10 }))).toBe(false);
+    // One frame of a short sample is not a trend.
+    expect(smooth(sample({ rate: 0.5, mediaS: 3, decoded: 46, dropped: 1, painted: 45, maxGapMs: 200 }))).toBe(true);
+    expect(smooth(sample({ rate: 0.5, mediaS: 3, decoded: 46, dropped: 2, painted: 44, maxGapMs: 200 }))).toBe(false);
     expect(smooth(sample({ mediaS: 8 }))).toBe(false);
     expect(smooth(sample({ stalls: 1, stalledMs: 300 }))).toBe(false);
     expect(smooth(sample({ stalls: 1, stalledMs: 1 }))).toBe(true);

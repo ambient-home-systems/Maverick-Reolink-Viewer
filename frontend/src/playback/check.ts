@@ -30,7 +30,7 @@ import type { StreamDecision } from "./codec";
 import { SHAPES, mseApi, mseSupports, pickSample, probeShape, type MseApi } from "./mse-probe";
 import type { RvPlayer } from "./player";
 
-export const CHECK_VERSION = "0.2.9";
+export const CHECK_VERSION = "0.2.10";
 export const SETUPS = [
   "Desktop Chrome, LAN",
   "iPhone app, Wi-Fi (local)",
@@ -223,7 +223,8 @@ export class PlaybackCheck {
     const page = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
     this._log(`User agent: ${navigator.userAgent}`);
     this._log(
-      `Connection: page loaded over ${page?.nextHopProtocol || "?"} (h2/h3 share one connection; http/1.1 allows 6 at once)`,
+      `Connection: page loaded over ${page?.nextHopProtocol || "? (from the app's cache)"};` +
+        " each video request line gives its own (h2/h3 share one connection; http/1.1 allows 6 at once)",
     );
     this._log(`Delivery: ${t.progressive ? "progressive" : "whole file first (WebKit)"}`);
     await this._wait(() => Boolean(t.day) && !t.loading, 30_000);
@@ -893,7 +894,11 @@ function requestReport(began: number, playedUrl: string | undefined): string {
   });
   const more = sent.length > 10 ? ` | … ${sent.length - 10} more` : "";
   const unsent = entries.length - sent.length;
-  return `requests: ${sent.length} sent${unsent ? `, ${unsent} cancelled before sending` : ""}: ${parts.join(" | ")}${more}`;
+  const protocols = [...new Set(sent.map((e) => e.nextHopProtocol).filter(Boolean))].join("/");
+  return (
+    `requests${protocols ? ` (${protocols})` : ""}: ${sent.length} sent${unsent ? `, ${unsent} cancelled before sending` : ""}:` +
+    ` ${parts.join(" | ")}${more}`
+  );
 }
 
 async function decoding(codec: string, width: number, height: number): Promise<string> {

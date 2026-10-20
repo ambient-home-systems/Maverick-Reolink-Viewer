@@ -154,7 +154,7 @@ export function describeRate(sample: RateSample): string {
 
 /** How "smooth" is judged, for the report. */
 export const SMOOTH_RULE =
-  "on pace (±10 %), stalls under 100 ms, no frame gap over 2.5 frames (250 ms at least); below 50 fps to show, ≤ 2 % dropped";
+  "on pace (±10 %), stalls under 100 ms, no frame gap over 2.5 frames (250 ms at least); below 50 fps to show, ≤ 2 % (or 1 frame) dropped";
 /** Stalls shorter than this in total are not counted against smoothness. */
 export const STALL_ALLOWANCE_MS = 100;
 
@@ -172,7 +172,7 @@ export function smooth(sample: RateSample): boolean {
     if (sample.maxGapMs > allowed) return false;
   }
   if (needed !== undefined && needed <= 50 && sample.decoded) {
-    return (sample.dropped ?? 0) / sample.decoded <= 0.02;
+    return (sample.dropped ?? 0) <= Math.max(1, sample.decoded * 0.02);
   }
   return true;
 }
