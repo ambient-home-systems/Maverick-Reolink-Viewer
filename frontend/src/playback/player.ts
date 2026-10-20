@@ -21,6 +21,13 @@ export interface AdvanceDetail {
   gapMs: number;
 }
 
+export interface PlayerErrorDetail {
+  message: string;
+  segmentId: string | undefined;
+  /** The recording had been playing (a read failed mid-way, not at the start). */
+  played: boolean;
+}
+
 /**
  * A simple two-buffer player. The active <video> plays the current recording;
  * the hidden one holds the next recording, already loading, so moving on at
@@ -162,18 +169,17 @@ export class RvPlayer extends LitElement {
         return;
       }
       if (err instanceof DOMException && err.name === "AbortError") return;
-      this._fail(String(err));
+      this._fail(String(err), video);
     });
   }
 
-  private _fail(message: string): void {
-    this.dispatchEvent(
-      new CustomEvent("rv-player-error", {
-        detail: { message, segmentId: this.current?.segmentId },
-        bubbles: true,
-        composed: true,
-      }),
-    );
+  private _fail(message: string, video: HTMLVideoElement): void {
+    const detail: PlayerErrorDetail = {
+      message,
+      segmentId: this.current?.segmentId,
+      played: video.currentTime > 0,
+    };
+    this.dispatchEvent(new CustomEvent("rv-player-error", { detail, bubbles: true, composed: true }));
   }
 
   private _emit(name: string, detail: object): void {
@@ -235,7 +241,7 @@ export class RvPlayer extends LitElement {
       this._items[slot] = undefined;
       return;
     }
-    this._fail(video.error?.message || `media error ${video.error?.code ?? "?"}`);
+    this._fail(video.error?.message || `media error ${video.error?.code ?? "?"}`, video);
   }
 
   private _renderVideo(slot: 0 | 1): TemplateResult {

@@ -37,7 +37,7 @@ describe("classifyHost", () => {
     expect(classifyHost("100.101.102.103")).toBe("Tailscale");
     expect(classifyHost("ha.tail1234.ts.net")).toBe("Tailscale");
     expect(classifyHost("abcdef123.ui.nabu.casa")).toBe("Nabu Casa");
-    expect(classifyHost("ha.example.com")).toBe("remote");
+    expect(classifyHost("ha.example.com")).toBe("own domain");
     expect(classifyHost("8.8.8.8")).toBe("remote");
   });
 });
@@ -98,6 +98,7 @@ describe("rates and sums", () => {
     stalls: 0,
     stalledMs: 0,
     ended: false,
+    focused: true,
     ...over,
   });
 
@@ -109,6 +110,8 @@ describe("rates and sums", () => {
     expect(smooth(sample({ dropped: 10 }))).toBe(false);
     expect(smooth(sample({ mediaS: 8 }))).toBe(false);
     expect(smooth(sample({ stalls: 1, stalledMs: 300 }))).toBe(false);
+    expect(smooth(sample({ stalls: 1, stalledMs: 1 }))).toBe(true);
+    expect(describeRate(sample({ focused: false }))).toContain("PAGE NOT IN FRONT");
     expect(smooth(sample({ maxGapMs: 400 }))).toBe(false);
     // 8× of 25 fps is 200 fps: a 60 Hz display drops most, and that is fine.
     const fast = sample({ rate: 8, mediaS: 48, decoded: 1200, dropped: 700, painted: 360, maxGapMs: 34 });
