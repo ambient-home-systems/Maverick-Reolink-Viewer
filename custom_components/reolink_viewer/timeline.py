@@ -429,10 +429,11 @@ class TimelineService:
         window_end = min(now_local, day_end_wall)
         window_start = midnight
         if previous is not None and previous.searched_until is not None:
-            window_start = max(
-                midnight,
-                datetime.fromisoformat(previous.searched_until) - REFRESH_OVERLAP,
-            )
+            until = datetime.fromisoformat(previous.searched_until)
+            # When clocks fall back, the wall clock goes back past the last
+            # search: search from before both, up to the later of the two.
+            window_start = max(midnight, min(until, window_end) - REFRESH_OVERLAP)
+            window_end = max(window_end, until)
         else:
             previous = None
         incremental = previous is not None

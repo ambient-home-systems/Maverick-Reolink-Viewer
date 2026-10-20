@@ -6,7 +6,8 @@ hover previews and event-list thumbnails are fetched on demand:
 - times are rounded down to a bucket (5 s to 5 min, chosen by the zoom level),
   so nearby hovers share one image;
 - each image is a scheduler job at ``THUMBNAILS`` priority, de-duplicated
-  while in flight;
+  while in flight: requests for the same bucket share one fetch, which runs
+  on until the last of them goes away;
 - images are cached on disk, least recently used first out above a size cap;
 - a failure (e.g. no recording at that time) is remembered for a minute so
   hovering over a gap does not hammer the device.
@@ -14,7 +15,7 @@ hover previews and event-list thumbnails are fetched on demand:
 
 import asyncio
 from collections import OrderedDict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 import logging
 from pathlib import Path
@@ -53,6 +54,14 @@ class ThumbKey:
         return f"{self.source.key}-{self.stream}-{self.bucket_ms}.jpg"
 
 
+@dataclass(slots=True)
+class _Fetch:
+    """One shared fetch and how many requests wait on it."""
+
+    task: asyncio.Task[bytes]
+    waiters: int = field(default=0)
+
+
 def bucket_of(when_ms: int, bucket_s: int) -> int:
     """Round a time down to its bucket; unknown sizes snap to the nearest allowed."""
     size = min(BUCKETS_S, key=lambda b: abs(b - bucket_s)) * 1000
@@ -78,7 +87,7 @@ class ThumbnailService:
         self._ffmpeg = ffmpeg_binary
         self._index: OrderedDict[str, int] = OrderedDict()  # name -> size, LRU order
         self._total = 0
-        self._inflight: dict[str, asyncio.Future[bytes]] = {}
+        self._inflight: dict[str, _Fetch] = {}
         self._failed: dict[str, float] = {}
 
     async def async_setup(self) -> None:
@@ -117,27 +126,43 @@ class ThumbnailService:
             if _clock() - failed_at < NEGATIVE_TTL:
                 raise ThumbnailError("no recording at that time")
             del self._failed[name]
-        if (pending := self._inflight.get(name)) is not None:
-            return await asyncio.shield(pending)
-        future: asyncio.Future[bytes] = asyncio.get_running_loop().create_future()
-        self._inflight[name] = future
+        fetch = self._inflight.get(name)
+        if fetch is None:
+            fetch = _Fetch(
+                self._hass.async_create_background_task(
+                    self._fetch_and_store(key, priority),
+                    f"reolink_viewer thumbnail {key.bucket_ms}",
+                )
+            )
+            self._inflight[name] = fetch
+            fetch.task.add_done_callback(lambda _t: self._done(name, fetch))
+        fetch.waiters += 1
+        try:
+            # A request that goes away (the browser closed it) leaves the
+            # fetch running for the others.
+            return await asyncio.shield(fetch.task)
+        finally:
+            fetch.waiters -= 1
+            if not fetch.waiters and not fetch.task.done():
+                fetch.task.cancel()
+
+    def _done(self, name: str, fetch: _Fetch) -> None:
+        if self._inflight.get(name) is fetch:
+            del self._inflight[name]
+        if not fetch.task.cancelled():
+            fetch.task.exception()  # retrieved: every waiter may have gone
+
+    async def _fetch_and_store(self, key: ThumbKey, priority: Priority) -> bytes:
+        name = key.file_name
         try:
             image = await self._fetch(key, priority)
-        except BaseException as err:
-            if isinstance(err, asyncio.CancelledError):
-                future.cancel()
-                raise
+        except asyncio.CancelledError:
+            raise
+        except Exception as err:
             self._failed[name] = _clock()
-            error = ThumbnailError(f"snapshot failed: {type(err).__name__}")
-            future.set_exception(error)
-            future.exception()
-            raise error from err
-        else:
-            future.set_result(image)
-            await self._store(name, image)
-            return image
-        finally:
-            self._inflight.pop(name, None)
+            raise ThumbnailError(f"snapshot failed: {type(err).__name__}") from err
+        await self._store(name, image)
+        return image
 
     async def _fetch(self, key: ThumbKey, priority: Priority) -> bytes:
         host = bridge.async_get_host(self._hass, key.source.entry_id)

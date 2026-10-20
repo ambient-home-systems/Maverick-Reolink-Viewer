@@ -161,3 +161,41 @@ async def test_priority_and_cancel(
     task.cancel()
     with pytest.raises(asyncio.CancelledError):
         await task
+
+
+async def test_a_requester_leaving_does_not_cancel_the_others(
+    service: tuple[ThumbnailService, FakeHost, Scheduler],
+) -> None:
+    """Requests share one fetch; one going away leaves it running for the rest."""
+    svc, host, _ = service
+    key = svc.key(SOURCE, 9_000_000, 10, "sub")
+    host.gate = asyncio.Event()
+    first = asyncio.create_task(svc.async_get(key))
+    second = asyncio.create_task(svc.async_get(key))
+    await asyncio.sleep(0.01)
+    first.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await first
+    host.gate.set()
+    assert await second == JPEG
+    assert len(host.calls) == 1
+    # Stored: the next request reads the disk.
+    assert await svc.async_get(key) == JPEG
+    assert len(host.calls) == 1
+
+
+async def test_a_shared_failure_reaches_every_requester(
+    service: tuple[ThumbnailService, FakeHost, Scheduler],
+) -> None:
+    """A failed fetch fails all its requests, once."""
+    svc, host, _ = service
+    key = svc.key(SOURCE, 11_000_000, 10, "sub")
+    host.gate = asyncio.Event()
+    host.result = RuntimeError("gone")
+    tasks = [asyncio.create_task(svc.async_get(key)) for _ in range(2)]
+    await asyncio.sleep(0.01)
+    host.gate.set()
+    for task in tasks:
+        with pytest.raises(ThumbnailError, match="snapshot failed: RuntimeError"):
+            await task
+    assert len(host.calls) == 1

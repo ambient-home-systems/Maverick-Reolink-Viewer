@@ -215,6 +215,50 @@ async def test_playback_url_and_views(
     assert await resp.read() == b"\xff\xd8jpegdata"
 
 
+async def test_a_live_url_keeps_its_recording(
+    hass: HomeAssistant,
+    hass_ws_client: WebSocketGenerator,
+    hass_client_no_auth: ClientSessionGenerator,
+    reolink_host: MagicMock,
+    wired: MockConfigEntry,
+) -> None:
+    """Range requests are not readers, yet a live URL's file is never evicted."""
+    client = await hass_ws_client(hass)
+    camera = await _camera_id(client)
+    day = (
+        await _ws(
+            client,
+            {"type": "reolink_viewer/timeline/day", "device_id": camera, "date": DAY},
+        )
+    )["result"]
+    msg = await _ws(
+        client,
+        {
+            "type": "reolink_viewer/playback/url",
+            "device_id": camera,
+            "date": DAY,
+            "segment_id": day["segments"][0]["id"],
+        },
+    )
+    url = msg["result"]["url"]
+    http = await hass_client_no_auth()
+    resp = await http.get(url)
+    assert await resp.read() == BODY
+    cache = wired.runtime_data.vod_cache
+    for task in list(cache._flat_tasks):
+        await task
+    (entry,) = cache._entries.values()
+    assert entry.readers == 0
+    # Any eviction pressure: the leased recording stays.
+    cache._max_bytes = 1
+    await cache._evict()
+    assert entry.path.exists()
+    resp = await http.get(url, headers={"Range": "bytes=100-199"})
+    assert resp.status == 206
+    assert await resp.read() == BODY[100:200]
+    assert reolink_host.get_vod_source.await_count == 1
+
+
 async def test_playback_errors(
     hass: HomeAssistant,
     hass_ws_client: WebSocketGenerator,

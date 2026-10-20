@@ -492,7 +492,12 @@ async def ws_playback_url(
     except VodCacheError as err:
         connection.send_error(msg["id"], ERR_CACHE_FAILED, str(err))
         return
-    grant = VodGrant(recording, msg["progressive"], _download_name(source, recording))
+    # The URLs keep the file they are issued for, and the recording, until
+    # they expire.
+    flat = data.vod_cache.lease(cache_entry, VOD_TTL.total_seconds())
+    grant = VodGrant(
+        recording, msg["progressive"], _download_name(source, recording), flat
+    )
     token = data.grants.issue(grant, VOD_TTL)
     clip_token = data.grants.issue(grant, VOD_TTL)
     connection.send_result(

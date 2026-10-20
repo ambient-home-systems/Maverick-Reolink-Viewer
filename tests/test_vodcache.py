@@ -2,6 +2,7 @@
 
 import asyncio
 from collections.abc import AsyncGenerator
+import contextlib
 from datetime import timedelta
 from pathlib import Path
 import shutil
@@ -18,7 +19,7 @@ from custom_components.reolink_viewer import bridge, vodcache
 from custom_components.reolink_viewer.bridge import CameraUrl, VodFile, VodMethod
 from custom_components.reolink_viewer.devices import PlaybackSource
 from custom_components.reolink_viewer.mp4index import OffsetShifter, OffsetShiftError
-from custom_components.reolink_viewer.remux import is_plain
+from custom_components.reolink_viewer.remux import RemuxError, is_plain
 from custom_components.reolink_viewer.scheduler import Priority, Scheduler
 from custom_components.reolink_viewer.vodcache import Recording, VodCache, VodCacheError
 from homeassistant.core import HomeAssistant
@@ -34,6 +35,8 @@ FRAG_ABSOLUTE = fragmented_av(20, absolute=True)
 # Bodies added by a test (name -> bytes).
 EXTRA: dict[str, bytes] = {}
 FFMPEG = shutil.which("ffmpeg")
+# Seconds after which a 30-minute lease has ended.
+EXPIRED = 1800 + vodcache.LEASE_MARGIN_S + 1
 
 
 def rec(name: str = "0-16-1-20261017120000-00000", stream: str = "sub") -> Recording:
@@ -425,21 +428,28 @@ async def test_cached_recordings_become_plain_mp4(
     assert real_fragmented(source)
     EXTRA["real"] = source.read_bytes()
     try:
-        before = time.monotonic()
         entry = await flat_cache.async_open(rec("real"))
+        # A URL issued before the plain file exists is bound to the original.
+        assert flat_cache.lease(entry, 1800) is False
         await flat_cache.async_wait(entry, complete=True)
+        assert entry.task is not None
+        await entry.task
         for task in list(flat_cache._flat_tasks):
             await task
         assert entry.timing["flat"] == "yes"
         assert is_plain(entry.flat_path)
-        # A URL issued before the plain file existed keeps the original.
-        assert flat_cache.served_path(entry, before) == entry.path
-        assert flat_cache.served_path(entry, time.monotonic()) == entry.flat_path
+        assert flat_cache.served_path(entry, False) == entry.path
+        assert flat_cache.lease(entry, 1800) is True
+        assert flat_cache.served_path(entry, True) == entry.flat_path
         # The original goes once such URLs have expired.
-        async_fire_time_changed(hass, dt_util.utcnow() + timedelta(minutes=36))
+        async_fire_time_changed(hass, dt_util.utcnow() + timedelta(minutes=29))
         await hass.async_block_till_done()
+        assert entry.path.exists()
+        with patch.object(vodcache, "_clock", return_value=time.monotonic() + EXPIRED):
+            async_fire_time_changed(hass, dt_util.utcnow() + timedelta(minutes=33))
+            await hass.async_block_till_done(wait_background_tasks=True)
         assert not entry.path.exists()
-        assert flat_cache.served_path(entry, before) == entry.flat_path
+        assert flat_cache.served_path(entry, False) == entry.flat_path
     finally:
         EXTRA.pop("real", None)
 
@@ -461,7 +471,8 @@ async def test_plain_files_found_at_startup(
     entry = await cache.async_open(rec())
     assert entry.complete
     assert entry.timing == {"cache": "disk", "flat": "yes"}
-    assert cache.served_path(entry, time.monotonic()) == entry.flat_path
+    assert cache.lease(entry, 60) is True
+    assert cache.served_path(entry, False) == entry.flat_path
     await cache.async_shutdown()
     await scheduler.async_shutdown()
 
@@ -485,10 +496,325 @@ async def test_failed_rewrite_keeps_the_original(
             await cache.async_setup()
             entry = await cache.async_open(rec("frag"))
             await cache.async_wait(entry, complete=True)
+            assert entry.task is not None
+            await entry.task
             for task in list(cache._flat_tasks):
                 await task
             assert entry.timing["flat"].startswith("no: ")
             assert entry.flat_at is None
-            assert cache.served_path(entry, time.monotonic()) == entry.path
+            assert cache.lease(entry, 60) is False
+            assert cache.served_path(entry, False) == entry.path
             await cache.async_shutdown()
     await scheduler.async_shutdown()
+
+
+# ---- Disk accounting, eviction and leases (Phase 2B step 0) ----
+
+
+class Usage(NamedTuple):
+    total: int
+    used: int
+    free: int
+
+
+def fake_disk(directory: Path, capacity: int) -> Any:
+    """A disk of ``capacity`` bytes holding only the cache directory's files."""
+
+    def usage(_path: Any) -> Usage:
+        used = 0
+        for path in directory.iterdir():
+            with contextlib.suppress(FileNotFoundError):  # a part file just removed
+                used += path.stat().st_size
+        return Usage(capacity, used, capacity - used)
+
+    return patch.object(shutil, "disk_usage", usage)
+
+
+async def fake_flatten(binary: str, source: Path, target: Path) -> None:
+    """Write a 'plain copy' that differs from the original (to spot swaps)."""
+
+    def copy() -> None:
+        target.write_bytes(b"PLAIN" + source.read_bytes())
+
+    await asyncio.to_thread(copy)
+
+
+@pytest.fixture
+def no_ffmpeg(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Rewrites copy the file instead of running ffmpeg."""
+    monkeypatch.setattr(vodcache, "async_flatten", fake_flatten)
+    monkeypatch.setattr(vodcache, "is_plain", lambda path: True)
+
+
+@pytest.fixture
+async def make_cache(
+    hass: HomeAssistant, tmp_path: Path, media: Server
+) -> AsyncGenerator[Any]:
+    """Build caches with a given stream limit, cap and (fake) ffmpeg."""
+    made: list[tuple[VodCache, Scheduler]] = []
+    host = FakeHost(media.server)
+    async with ClientSession() as session:
+        with patch.object(bridge, "async_get_host", return_value=host):
+
+            async def make(
+                streams: int = 1, cap: int = 10**9, ffmpeg: str | None = None
+            ) -> VodCache:
+                scheduler = Scheduler(default_limit=2, default_stream_limit=streams)
+                cache = VodCache(
+                    hass,
+                    scheduler,
+                    tmp_path / "vod",
+                    cap,
+                    lambda: session,
+                    ffmpeg_binary=ffmpeg,
+                )
+                await cache.async_setup()
+                made.append((cache, scheduler))
+                return cache
+
+            yield make
+            for cache, scheduler in made:
+                await cache.async_shutdown()
+                await scheduler.async_shutdown()
+
+
+async def _complete(vc: VodCache, name: str) -> Any:
+    entry = await vc.async_open(rec(name))
+    await vc.async_wait(entry, complete=True)
+    if entry.task is not None:
+        await entry.task
+    for task in list(vc._flat_tasks):
+        await task
+    return entry
+
+
+async def test_cap_counts_fills_in_progress(make_cache: Any, media: Server) -> None:
+    """A fill still downloading counts whole (its .part file and the rest)."""
+    vc = await make_cache(streams=2, cap=int(len(BODY) * 2.5))
+    one = await _complete(vc, "one")
+    slow = await vc.async_open(rec("slow"))
+    await vc.async_wait(slow, offset=0)
+    assert slow.part_path.exists()
+    two = await _complete(vc, "two")
+    # one + slow (all of it) + two is over the cap: one went before two came.
+    assert not slow.complete
+    assert not one.path.exists()
+    assert two.path.exists()
+    media.gate.set()
+    await vc.async_wait(slow, complete=True)
+    assert vc.stats()["disk_bytes"] <= vc._max_bytes
+
+
+async def test_space_is_checked_after_the_stream_wait(
+    make_cache: Any, media: Server, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A fill that queued for a stream slot checks the disk when it starts."""
+    monkeypatch.setattr(vodcache, "MIN_FREE_BYTES", 1_000_000)
+    vc = await make_cache(streams=1)
+    with fake_disk(tmp_path / "vod", 1_000_000 + int(len(BODY) * 1.5)):
+        slow = await vc.async_open(rec("slow"))
+        await vc.async_wait(slow, offset=0)
+        two = await vc.async_open(rec("two"))
+        await asyncio.sleep(0.05)
+        assert two.ticket is not None
+        assert not two.ticket.granted
+        media.gate.set()
+        await vc.async_wait(two, complete=True)
+        # The disk kept its 1 MB: slow (done, not in use) made room for two.
+        assert shutil.disk_usage(tmp_path).free >= 1_000_000
+        assert not slow.path.exists()
+        assert two.path.exists()
+
+
+async def test_low_free_space_evicts_enough(
+    make_cache: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Short of free space, as much is evicted as the new fill needs."""
+    monkeypatch.setattr(vodcache, "MIN_FREE_BYTES", 500_000)
+    vc = await make_cache()
+    one = await _complete(vc, "one")
+    with fake_disk(tmp_path / "vod", len(BODY) + 550_000):
+        two = await _complete(vc, "two")
+        assert two.error is None
+        assert not one.path.exists()
+        assert shutil.disk_usage(tmp_path).free >= 500_000
+
+
+async def test_no_room_fails_the_fill(
+    make_cache: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Without enough to evict, a fill fails and reserves nothing."""
+    monkeypatch.setattr(vodcache, "MIN_FREE_BYTES", 500_000)
+    vc = await make_cache()
+    one = await _complete(vc, "one")
+    vc.lease(one, 1800)
+    with fake_disk(tmp_path / "vod", len(BODY) + 550_000):
+        two = await vc.async_open(rec("two"))
+        with pytest.raises(VodCacheError, match="free disk space"):
+            await vc.async_wait(two, complete=True)
+    assert one.path.exists()
+    assert vc._reserved == {}
+
+
+async def test_a_fill_that_outgrows_its_size(
+    make_cache: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A recording larger than the search said reserves more as it grows."""
+    monkeypatch.setattr(vodcache, "GROW_STEP", 1000)
+    vc = await make_cache(cap=len(BODY) + 300_000)
+    small = Recording(SOURCE, "sub", "big", 1_000, 61_000, size=100_000)
+    entry = await vc.async_open(small)
+    await vc.async_wait(entry, complete=True)
+    assert entry.written == len(BODY)
+    # Too large for the cap once it grows past it: the fill fails.
+    vc._max_bytes = 300_000
+    big = Recording(SOURCE, "sub", "bigger", 1_000, 61_000, size=100_000)
+    entry = await vc.async_open(big)
+    with pytest.raises(VodCacheError, match="free disk space"):
+        await vc.async_wait(entry, complete=True)
+    assert entry.task is not None
+    await entry.task
+    assert not entry.part_path.exists()
+
+
+def test_expected_size() -> None:
+    """The search's size plus a margin; else the length at a stream's bitrate."""
+    hour = Recording(SOURCE, "main", "x", 0, 3_600_000, size=2_400_000_000)
+    assert 2_424_000_000 < vodcache.expected_size(hour) < 2_425_000_000
+    unknown = Recording(SOURCE, "sub", "x", 0, 3_600_000)
+    assert vodcache.expected_size(unknown) > 450_000_000
+
+
+async def test_rewrite_needs_room_for_its_copy(
+    make_cache: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, no_ffmpeg: None
+) -> None:
+    """The plain copy is a second file: no room, no rewrite (the original stays)."""
+    monkeypatch.setattr(vodcache, "MIN_FREE_BYTES", 1_000_000)
+    vc = await make_cache(ffmpeg="ffmpeg")
+    with fake_disk(tmp_path / "vod", 1_000_000 + int(len(BODY) * 1.6)):
+        entry = await _complete(vc, "one")
+        assert entry.timing["flat"] == "no: not enough free disk space"
+        assert not entry.flat_path.exists()
+        assert shutil.disk_usage(tmp_path).free >= 1_000_000
+    with fake_disk(tmp_path / "vod", 1_000_000 + len(BODY) * 3):
+        other = await _complete(vc, "two")
+        assert other.timing["flat"] == "yes"
+    assert vc._reserved == {}
+
+
+async def test_live_urls_keep_their_recording(make_cache: Any, no_ffmpeg: None) -> None:
+    """A leased recording is not evicted; original and plain copy go together."""
+    vc = await make_cache(ffmpeg="ffmpeg")
+    first = await vc.async_open(rec("one"))
+    assert vc.lease(first, 1800) is False  # bound to the original
+    await vc.async_wait(first, complete=True)
+    assert first.task is not None
+    await first.task
+    second = await _complete(vc, "two")
+    for task in list(vc._flat_tasks):
+        await task
+    for entry in (first, second):
+        assert entry.path.exists()
+        assert entry.flat_path.exists()
+    first.last_access = second.last_access = 0  # both least recently used
+    # Room for one more recording: one unit has to go.
+    on_disk = sum(p.stat().st_size for p in first.path.parent.iterdir())
+    vc._max_bytes = on_disk + vodcache.expected_size(rec("three")) - 1
+    third = await _complete(vc, "three")
+    assert third.error is None
+    assert first.path.exists()
+    assert first.flat_path.exists()
+    assert not second.path.exists()
+    assert not second.flat_path.exists()
+    assert vc.entry(rec("two")) is None
+    # The URL bound to the original still reads the original.
+    assert vc.served_path(first, False).read_bytes() == BODY
+    with patch.object(vodcache, "_clock", return_value=time.monotonic() + EXPIRED):
+        assert not first.busy(vodcache._clock())
+
+
+async def test_old_drop_timer_spares_a_newer_entry(
+    hass: HomeAssistant, make_cache: Any, no_ffmpeg: None
+) -> None:
+    """Evicting a recording cancels its pending deletion; a newer copy is kept."""
+    vc = await make_cache(ffmpeg="ffmpeg")
+    first = await _complete(vc, "one")
+    assert first.flat_at is not None
+    cache_id = rec("one").cache_id
+    assert cache_id in vc._drop_timers
+    vc._max_bytes = 1
+    await vc._evict()
+    vc._max_bytes = 10**9
+    assert not first.path.exists()
+    assert cache_id not in vc._drop_timers
+    # Asked for again: a new fill; a URL is bound to its original.
+    second = await vc.async_open(rec("one"))
+    assert second is not first
+    assert vc.lease(second, 1800) is False
+    await vc.async_wait(second, complete=True)
+    assert second.task is not None
+    await second.task
+    for task in list(vc._flat_tasks):
+        await task
+    assert second.flat_at is not None
+    # The old entry's timer (if it were still there) has long fired.
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(minutes=29))
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert second.path.exists()
+    assert vc.served_path(second, False).read_bytes() == BODY
+    # Once the URL has expired, the original goes; the plain copy stays.
+    with patch.object(vodcache, "_clock", return_value=time.monotonic() + EXPIRED):
+        async_fire_time_changed(hass, dt_util.utcnow() + timedelta(minutes=33))
+        await hass.async_block_till_done(wait_background_tasks=True)
+    assert not second.path.exists()
+    assert second.flat_path.exists()
+    assert vc.served_path(second, False) == second.flat_path
+
+
+async def test_a_new_rewrite_cancels_a_pending_deletion(
+    hass: HomeAssistant,
+    make_cache: Any,
+    no_ffmpeg: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A deletion left by an older entry never hits a newer entry's original."""
+    vc = await make_cache(ffmpeg="ffmpeg")
+    first = await _complete(vc, "one")
+    cache_id = rec("one").cache_id
+    assert cache_id in vc._drop_timers
+    # The entry is replaced behind the timer's back, its plain copy gone,
+    # and the new entry's rewrite fails (so it schedules no deletion).
+    vc._entries.pop(cache_id)
+    first.flat_path.unlink()
+
+    async def broken(binary: str, source: Path, target: Path) -> None:
+        raise RemuxError("broken")
+
+    monkeypatch.setattr(vodcache, "async_flatten", broken)
+    second = await vc.async_open(rec("one"))
+    assert second is not first
+    for task in list(vc._flat_tasks):
+        await task
+    assert second.timing["flat"] == "no: broken"
+    # Starting the rewrite cancelled the old deletion.
+    assert cache_id not in vc._drop_timers
+    # Even if the old deletion ran, it leaves the newer entry's files alone.
+    vc._drop_original(first)(dt_util.utcnow())
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert second.path.exists()
+    assert vc.served_path(second, False) == second.path
+
+
+async def test_concurrent_opens_of_a_file_on_disk(
+    hass: HomeAssistant, tmp_path: Path, media: Server, make_cache: Any
+) -> None:
+    """Two requests at once for a recording already on disk download nothing."""
+    directory = tmp_path / "vod"
+    directory.mkdir()
+    (directory / f"{rec().cache_id}.mp4").write_bytes(BODY)
+    vc = await make_cache()
+    a, b = await asyncio.gather(vc.async_open(rec()), vc.async_open(rec()))
+    await asyncio.sleep(0.05)
+    assert a is b
+    assert a.complete
+    assert media.hits == []

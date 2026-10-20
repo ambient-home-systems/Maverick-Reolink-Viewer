@@ -237,3 +237,55 @@ def test_local_now(tz: tzinfo) -> None:
         2026, 7, 4, 16
     )
     assert local_now(tz).year >= 2026
+
+
+@ZONES
+def test_recording_through_the_fall_back_keeps_its_length(tz: tzinfo) -> None:
+    """A recording that runs through the fall-back is not made empty."""
+    _spring, fall = _transitions(tz)
+    # 01:50 on the first pass to 01:05 on the second: 15 minutes.
+    start_local = fall - timedelta(minutes=10)
+    end_local = fall - timedelta(minutes=55)
+    rec = Recording("x", start_local, end_local, {})
+    conv = DayConverter(tz, [rec])
+    start, end = conv.recording(rec)
+    assert start.utc == utc_candidates(start_local, tz)[0]
+    assert end.utc - start.utc == timedelta(minutes=15)
+    assert end.ambiguous
+    # An hour-long file from 01:00 to 01:00: the second 01:00 ends it.
+    hour = Recording("h", fall - timedelta(hours=1), fall - timedelta(hours=1), {})
+    s, e = DayConverter(tz, [hour]).recording(hour)
+    assert e.utc - s.utc == timedelta(hours=1)
+    # A start proven to be on the second pass keeps the start's offset.
+    _first, second = utc_candidates(start_local, tz)
+    clear = fall - timedelta(hours=3)
+    proven = [
+        _rec("a", clear, 5, playback=utc_candidates(clear, tz)[0]),
+        Recording(
+            "b", start_local, start_local + timedelta(minutes=5), {"playback": second}
+        ),
+    ]
+    conv = DayConverter(tz, proven)
+    s, e = conv.recording(proven[1])
+    assert s.utc == second
+    assert e.utc - s.utc == timedelta(minutes=5)
+
+
+@ZONES
+def test_event_through_the_fall_back_keeps_its_length(tz: tzinfo) -> None:
+    """Events too, with or without their recording."""
+    _spring, fall = _transitions(tz)
+    start_local = fall - timedelta(minutes=10)
+    end_local = fall - timedelta(minutes=55)
+    rec = Recording("x", start_local, end_local, {})
+    conv = DayConverter(tz, [rec])
+    conv.recording(rec)
+    for key in ("x", None):
+        first, last = conv.event(start_local, end_local, key)
+        assert last.utc - first.utc == timedelta(minutes=15)
+    # Inside the repeated hour without a recording, an end is a guess.
+    inside = fall - timedelta(minutes=40)
+    first, last = conv.event(inside, inside + timedelta(minutes=1), None)
+    assert first.ambiguous
+    assert last.ambiguous
+    assert last.utc - first.utc == timedelta(minutes=1)
