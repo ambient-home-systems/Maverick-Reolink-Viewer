@@ -912,15 +912,20 @@ e.g. Front Yard Right, gives the deep-start and session parts):
 
 | Setup | Status |
 | --- | --- |
-| Desktop Chrome | Run 1 (v0.2.8, 2026-10-20) below. Run 2 on v0.2.9 to confirm the fixes (auto-advance, start positions) |
+| Desktop | Run 1 (v0.2.8, 2026-10-20) below, from a browser on the HA host through Nabu Casa. Run 2 on v0.2.9, same browser through the LAN IP, to confirm the fixes (auto-advance, start positions) |
 | iPhone app, Wi-Fi (local) | To run on v0.2.9 |
 | iPhone app, Tailscale | To run on v0.2.9 |
 | iPhone app, Nabu Casa | To run on v0.2.9 |
 
-**Desktop run 1** (v0.2.8, Chrome 155 on Linux, Front Yard Right, with the
-one-hour session). The check reported the page as "remote over https": HA
-is reached through its own domain name, and a 4 MiB read ran at 62 Mbit/s.
-The earlier hardware checks used plain HTTP on the LAN.
+**Desktop run 1** (v0.2.8, Front Yard Right, with the one-hour session).
+The browser was **Brave (Chromium 155) running in a Home Assistant add-on**,
+viewed remotely, and it loaded HA through the **Nabu Casa** address (the
+check said "remote over https"). So every byte went from HA out to Nabu
+Casa's relay and back into the same machine (a 4 MiB read ran at 62 Mbit/s),
+and the browser decoded and drew on the HA host's CPU, shared with HA, the
+NVR downloads and the ffmpeg rewrites. The earlier hardware checks used
+Chrome on a desktop with plain HTTP on the LAN. Read this run's link-bound
+times (the uncached deep start) and its dropped frames with that in mind.
 
 | Measure | Result |
 | --- | --- |
@@ -929,7 +934,7 @@ The earlier hardware checks used plain HTTP on the LAN.
 | Deep start, not cached | **36.6 s**, 53 min into a 60 min recording. The server waited for the whole download (10.4 s: 204 MB at 159 Mbit/s). Then Chrome read the whole original (fragmented) file before its metadata: 25.8 s at 62 Mbit/s, with the preloaded next file loading alongside. The URL was bound to the original because the plain copy did not exist when it was issued; it was ready 2.9 s after the download |
 | Deep start, cached | 1273 ms (plain file, `moov` 1.3 MB): under 2 s |
 | Auto-advance | **failed**: player bug 1 below |
-| Rates | on pace at every rate (0.50, 0.99, 1.98, 3.98, 7.98×). Painted 7, 14, 27, 48, 51 fps of 8, 15, 30, 60, 120 needed. Dropped 9, 6, 6, 8 % at 0.5–4× and 50 % at 8× (above the display's rate, expected). One 1 ms stall at 8×. All but 4× judged not smooth |
+| Rates | on pace at every rate (0.50, 0.99, 1.98, 3.98, 7.98×). Painted 7, 14, 27, 48, 51 fps of 8, 15, 30, 60, 120 needed. Dropped 9, 6, 6, 8 % at 0.5–4× and 50 % at 8× (above the display's rate, expected). One 1 ms stall at 8×. All but 4× judged not smooth. The window was in front (owner); the browser draws in software on the HA host, so the drops likely reflect that host's load, not the player: the session at 1× dropped no frames for 18 minutes once nothing else ran |
 | MSE | `MediaSource` plays the MSE-ready fragment; the NVR's shapes (absolute offsets, no `tfdt`, both) fail with append errors. No `ManagedMediaSource` (Chrome) |
 | HD | not tried yet (no main recording cached, so its codec is unknown) |
 | One-hour session | JS heap 83–119 MB, end 96 MB (+7.7 MB/h, within garbage-collection swings: no growth). No stalls. Cache 6.51–6.71 GB of 8.59 GB. 1738 frames dropped in minutes 2–5, then none for 18 minutes. **Stopped at the file change after 60 min** with `PIPELINE_ERROR_READ: FFmpegDemuxer: data source error`: player bug 2 below |
@@ -974,8 +979,10 @@ Findings and fixes (v0.2.9):
      the whole original. Both candidates, (a) MSE with normalized fragments
      and (b) a "start here" plain MP4, remove the second cost and cut the
      first to the bytes up to the target.
-   - `playbackRate` on the plain file keeps pace up to 8× in Chrome; above
-     the display's refresh rate frames are skipped by design.
+   - `playbackRate` on the plain file keeps pace up to 8× in Chromium; above
+     the display's refresh rate frames are skipped by design. Whether 0.5–4×
+     drop frames on a real device is for the iPhone runs (and a desktop at
+     home later) to show: this run's browser shared the HA host's CPU.
    - Chrome's heap stayed bounded over an hour.
 
 #### 2A as built (v0.2.0)
