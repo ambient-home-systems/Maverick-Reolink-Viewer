@@ -18,7 +18,7 @@ put on it:
 | --- | --- | --- | --- | --- |
 | 0 | Foundations, CI, adapter layer, hardware discovery | High | 1–2 wk | Done (2026-10-17) |
 | 1 | Device details and every setting, with explanations | Standard (catalog) / High (panel shell) | 2–3 wk | Done (2026-10-17) |
-| 2 | Event timeline, thumbnails, smooth playback | High (backend) / Very high (player) | 3–5 wk | In progress: 2A done (2026-10-20, v0.2.7: timeline 105–287 ms, first frame 0.6–1.1 s, auto-advance 6–7 ms on hardware). 2B: cache fixed, measuring (gate) |
+| 2 | Event timeline, thumbnails, smooth playback | High (backend) / Very high (player) | 3–5 wk | In progress: 2A done (2026-10-20, v0.2.7: timeline 105–287 ms, first frame 0.6–1.1 s, auto-advance 6–7 ms on hardware). 2B: cache fixed (v0.2.8), measuring (gate): desktop run 1 done, two player bugs fixed (v0.2.9) |
 | 3 | Live view via go2rtc, grid, fullscreen, PTZ | High | 3–4 wk | Not started |
 | 4 | Performance, mobile, packaging, first release | Standard | 2–3 wk | Not started |
 | 5 | Optional R&D: Baichuan live/playback | Very high | 4–8 wk, time-boxed with gates | Not started |
@@ -813,7 +813,7 @@ Known limits carried into 2B and Phase 4:
 | 2B step | Status |
 | --- | --- |
 | 0. Fix the recording cache (disk accounting, eviction, leases, deletion timers, open race), DST end and refresh window, shared thumbnail fetches; correct the MSE claim above | Done (v0.2.8), see "Step 0" below |
-| 1. Measure where it hasn't been (gate): desktop Chrome on the LAN, the iPhone Companion app on Wi-Fi, over Tailscale and over Nabu Casa | Check built (v0.2.8): **Run playback check** under Debug in the Playback tab, see "Step 1" below. Waiting for the four reports |
+| 1. Measure where it hasn't been (gate): desktop Chrome on the LAN, the iPhone Companion app on Wi-Fi, over Tailscale and over Nabu Casa | Check built (v0.2.8), sharpened in v0.2.9. Desktop run 1 recorded (two player bugs found and fixed in v0.2.9); the three iPhone runs to come, see "Step 1 results" |
 | 2. Build what the evidence calls for (speeds, HD/SD keeping the position, uncached deep seeks, bounded memory and disk) | Not started (after the gate) |
 
 ##### Step 0: the recording cache (v0.2.8)
@@ -875,7 +875,7 @@ reports, on the device it runs on:
 | B | the latest three events of today: first frame, video element events, each video request (wait, answer, duration, size), and the server's download record (2A criterion) |
 | D1 / D2 | first frame deep in a long recording (≥ 20 min, sub stream): **D1 not cached** (a recording `playback/peek` shows is not on disk; the latest event 50–95 % in, else 75 %), then **D2 cached** (10–45 % in, else 40 %), with the download and plain-MP4 rewrite times and the plain file's `moov` size (what a browser reads before the first frame) |
 | C | auto-advance between two touching recordings, preferring the cached long recording (2A criterion) |
-| R | `playbackRate` 0.5×, 1×, 2×, 4×, 8× for 6 s each on a cached long recording: effective rate, frames painted (`requestVideoFrameCallback`) against frames needed, the longest gap between painted frames, dropped frames (`getVideoPlaybackQuality`), stalls. Smooth = on pace (±10 %), no stalls, no gap over 2.5 frames (250 ms at least), and ≤ 2 % dropped below 50 frames a second (above the display's refresh rate a browser must skip frames) |
+| R | `playbackRate` 0.5×, 1×, 2×, 4×, 8× for 6 s each (from 1 s after the change, v0.2.9) on a cached long recording: effective rate, frames painted (`requestVideoFrameCallback`) against frames needed, the longest gap between painted frames, dropped frames (`getVideoPlaybackQuality`), stalls, and whether the page was in front. Smooth = on pace (±10 %), stalls under 100 ms in total, no gap over 2.5 frames (250 ms at least), and ≤ 2 % dropped below 50 frames a second (above the display's refresh rate a browser must skip frames) |
 | L | the link to HA: a 4 MiB Range read of the cached recording |
 | MSE | whether `MediaSource` and `ManagedMediaSource` exist and accept the sub and main codecs; an **append test** of a 1 s H.264 clip (VP9 where H.264 is missing) in four shapes: MSE-ready (`default-base-is-moof` + `tfdt`), absolute offsets, no `tfdt`, and both (the NVR's shape) |
 | HD | the panel's HD decision and `decodingInfo` for the main stream, as a file and through MSE |
@@ -907,6 +907,76 @@ e.g. Front Yard Right, gives the deep-start and session parts):
 4. **Run playback check**; leave the tab alone until "Done". About 2 minutes
    without the session.
 5. **Copy report**, or later on the desktop: **Saved reports** → Copy.
+
+##### Step 1 results
+
+| Setup | Status |
+| --- | --- |
+| Desktop Chrome | Run 1 (v0.2.8, 2026-10-20) below. Run 2 on v0.2.9 to confirm the fixes (auto-advance, start positions) |
+| iPhone app, Wi-Fi (local) | To run on v0.2.9 |
+| iPhone app, Tailscale | To run on v0.2.9 |
+| iPhone app, Nabu Casa | To run on v0.2.9 |
+
+**Desktop run 1** (v0.2.8, Chrome 155 on Linux, Front Yard Right, with the
+one-hour session). The check reported the page as "remote over https": HA
+is reached through its own domain name, and a 4 MiB read ran at 62 Mbit/s.
+The earlier hardware checks used plain HTTP on the LAN.
+
+| Measure | Result |
+| --- | --- |
+| Timeline | today 271 ms, a past day 142 ms (store), again 273 ms, today again 347 ms (stale copy): all under 1 s |
+| Events → first frame | 569, 338, 451 ms, 12–28 min into a 29 min recording the prefetch had cached: all under 2 s |
+| Deep start, not cached | **36.6 s**, 53 min into a 60 min recording. The server waited for the whole download (10.4 s: 204 MB at 159 Mbit/s). Then Chrome read the whole original (fragmented) file before its metadata: 25.8 s at 62 Mbit/s, with the preloaded next file loading alongside. The URL was bound to the original because the plain copy did not exist when it was issued; it was ready 2.9 s after the download |
+| Deep start, cached | 1273 ms (plain file, `moov` 1.3 MB): under 2 s |
+| Auto-advance | **failed**: player bug 1 below |
+| Rates | on pace at every rate (0.50, 0.99, 1.98, 3.98, 7.98×). Painted 7, 14, 27, 48, 51 fps of 8, 15, 30, 60, 120 needed. Dropped 9, 6, 6, 8 % at 0.5–4× and 50 % at 8× (above the display's rate, expected). One 1 ms stall at 8×. All but 4× judged not smooth |
+| MSE | `MediaSource` plays the MSE-ready fragment; the NVR's shapes (absolute offsets, no `tfdt`, both) fail with append errors. No `ManagedMediaSource` (Chrome) |
+| HD | not tried yet (no main recording cached, so its codec is unknown) |
+| One-hour session | JS heap 83–119 MB, end 96 MB (+7.7 MB/h, within garbage-collection swings: no growth). No stalls. Cache 6.51–6.71 GB of 8.59 GB. 1738 frames dropped in minutes 2–5, then none for 18 minutes. **Stopped at the file change after 60 min** with `PIPELINE_ERROR_READ: FFmpegDemuxer: data source error`: player bug 2 below |
+
+Findings and fixes (v0.2.9):
+
+1. **Player bug: a click during playback could start at the old position.**
+   `playAt` took its start point from the cursor after asking for the URL,
+   and the video still playing moved the cursor meanwhile. Auto-advance
+   asked for 6:59:52 and got 6:15:40, where the previous test was playing
+   (6:16:25 after 45 s). Any click while a video plays could hit this. The
+   start point is now fixed when the click happens, and the old video's time
+   is ignored until the new one starts (test reproduces it).
+2. **Player bug: URLs expired during long playback.** A URL lived 30 min.
+   The next file's URL was asked for when the current one started, an hour
+   before it was needed, so the file change failed. On WebKit, which reads in
+   ranges, an hour-long recording would also fail after 30 min. Now:
+   - a recording's URLs live 30 min plus its length (at most 6 h), and so
+     does its lease;
+   - the next file's URL is asked for in the last 3 min (media time) of the
+     current one, and its cache fill is started at once instead;
+   - a read that fails mid-way (an expired URL after a long pause, a network
+     drop) reloads the recording where it was, at most once a minute. The
+     Debug section counts these ("Reloaded mid-way").
+   Reproduced in Chromium with URLs that expire and connections that close:
+   Chrome raised the same `PIPELINE_ERROR_READ` error, and the player went
+   on from the same place.
+3. **Check fixes.**
+   - The session's summary said "0 frames dropped": the counters restart
+     when an element loads another file. They are now added up.
+   - Each start is checked against the time asked for ("STARTED AT …").
+   - Rates are measured 1 s after the change and flagged when the page was
+     not in front. Stalls under 100 ms in total no longer count.
+   - The session flags minutes with the page not in front, and gives
+     dropped frames per minute.
+   - The report gives the connection's HTTP version and the file each URL is
+     bound to (plain or original). A domain name is reported as "own domain".
+4. **Evidence for step 2 so far** (one setup; the iPhone runs decide):
+   - The uncached deep start has two costs. The NVR download up to the
+     target point (about 9 s of the 10.4 s here; no design avoids it without
+     server-side seek). Then the browser reading the file: here 25.8 s for
+     the whole original. Both candidates, (a) MSE with normalized fragments
+     and (b) a "start here" plain MP4, remove the second cost and cut the
+     first to the bytes up to the target.
+   - `playbackRate` on the plain file keeps pace up to 8× in Chrome; above
+     the display's refresh rate frames are skipped by design.
+   - Chrome's heap stayed bounded over an hour.
 
 #### 2A as built (v0.2.0)
 

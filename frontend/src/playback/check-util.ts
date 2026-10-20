@@ -18,7 +18,8 @@ export function classifyHost(hostname: string): string {
   if (host === "localhost" || host.endsWith(".local") || host.endsWith(".lan") || !host.includes(".")) {
     return "local";
   }
-  return "remote";
+  // A name of your own: through a proxy, a tunnel or local DNS, it cannot tell.
+  return "own domain";
 }
 
 /** A short name for the browser, e.g. "Chrome 141 (macOS)" or "iOS 18.1 app". */
@@ -121,6 +122,8 @@ export interface RateSample {
   stalls: number;
   stalledMs: number;
   ended: boolean;
+  /** Whether the page had focus and was visible the whole time. */
+  focused: boolean;
 }
 
 /** Frames per second of the recording, from the frames that went by. */
@@ -145,12 +148,15 @@ export function describeRate(sample: RateSample): string {
   }
   parts.push(`${sample.stalls} stalls${sample.stalls ? ` (${Math.round(sample.stalledMs)} ms)` : ""}`);
   if (sample.ended) parts.push("the file ended");
+  if (!sample.focused) parts.push("PAGE NOT IN FRONT");
   return `${String(sample.rate).padStart(3)}×: ${parts.join(", ")}`;
 }
 
 /** How "smooth" is judged, for the report. */
 export const SMOOTH_RULE =
-  "on pace (±10 %), no stalls, no frame gap over 2.5 frames (250 ms at least); below 50 fps to show, ≤ 2 % dropped";
+  "on pace (±10 %), stalls under 100 ms, no frame gap over 2.5 frames (250 ms at least); below 50 fps to show, ≤ 2 % dropped";
+/** Stalls shorter than this in total are not counted against smoothness. */
+export const STALL_ALLOWANCE_MS = 100;
 
 /**
  * Whether a rate played smoothly. Above the display's refresh rate a browser
@@ -158,7 +164,7 @@ export const SMOOTH_RULE =
  */
 export function smooth(sample: RateSample): boolean {
   const effective = sample.wallMs > 0 ? (sample.mediaS * 1000) / sample.wallMs : 0;
-  if (Math.abs(effective - sample.rate) > sample.rate * 0.1 || sample.stalls > 0) return false;
+  if (Math.abs(effective - sample.rate) > sample.rate * 0.1 || sample.stalledMs >= STALL_ALLOWANCE_MS) return false;
   const fps = sourceFps(sample);
   const needed = fps === undefined ? undefined : fps * sample.rate;
   if (needed !== undefined && sample.maxGapMs !== undefined) {

@@ -30,7 +30,7 @@ import type { StreamDecision } from "./codec";
 import { SHAPES, mseApi, mseSupports, pickSample, probeShape, type MseApi } from "./mse-probe";
 import type { RvPlayer } from "./player";
 
-export const CHECK_VERSION = "0.2.8";
+export const CHECK_VERSION = "0.2.9";
 export const SETUPS = [
   "Desktop Chrome, LAN",
   "iPhone app, Wi-Fi (local)",
@@ -40,6 +40,8 @@ export const SETUPS = [
 ] as const;
 export const RATES = [0.5, 1, 2, 4, 8] as const;
 const RATE_MS = 6_000;
+/** After a rate change, measuring starts this much later. */
+const RATE_SETTLE_MS = 1_000;
 const SAMPLE_MS = 60_000;
 const LINK_BYTES = 4 * 1024 * 1024;
 const SAVE_EVERY_MS = 10_000;
@@ -58,6 +60,7 @@ export interface CheckMetrics {
   codec?: string | null;
   delivery?: string;
   cache?: CacheStatus | undefined;
+  recoveries?: number;
 }
 
 /** What the check drives: the Playback tab. */
@@ -217,7 +220,11 @@ export class PlaybackCheck {
         ` · screen ${screen.width}×${screen.height} @${window.devicePixelRatio}x` +
         (net?.effectiveType ? ` · network ${net.effectiveType}, ${net.downlink ?? "?"} Mbit/s (browser estimate)` : ""),
     );
+    const page = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
     this._log(`User agent: ${navigator.userAgent}`);
+    this._log(
+      `Connection: page loaded over ${page?.nextHopProtocol || "?"} (h2/h3 share one connection; http/1.1 allows 6 at once)`,
+    );
     this._log(`Delivery: ${t.progressive ? "progressive" : "whole file first (WebKit)"}`);
     await this._wait(() => Boolean(t.day) && !t.loading, 30_000);
   }
@@ -270,11 +277,21 @@ export class PlaybackCheck {
     const ok = await this._wait(() => t.metrics.firstFrameMs !== undefined || Boolean(t.playFailure), 120_000);
     watch.stop();
     const m = t.metrics;
+    // Where it really started (a start at the wrong place looks fast too).
+    const shown = t.player?.time;
+    const off = shown === undefined ? undefined : shown - time;
+    const where =
+      off === undefined
+        ? ""
+        : Math.abs(off) <= 2000
+          ? ""
+          : ` · STARTED AT ${clock(shown ?? 0)}, ${span(Math.abs(off))} ${off < 0 ? "before" : "after"} the time asked`;
+    const file = t.playing?.file ? ` · ${t.playing.file} file` : "";
     const line =
       `first frame ${ok && !t.playFailure ? ms(m.firstFrameMs) : "none"}` +
       ` [URL ${ms(m.urlMs)} · metadata ${ms(watch.seen.loadedmetadata)} · seeked ${ms(watch.seen.seeked)} · playing ${ms(watch.seen.playing)}]` +
-      ` ${m.delivery ?? "?"} · ${m.stream ?? "?"} ${m.codec ?? ""}${t.playFailure ? ` FAILED: ${t.playFailure}` : ""}`;
-    return { ok: ok && !t.playFailure, line, began };
+      ` ${m.delivery ?? "?"}${file} · ${m.stream ?? "?"} ${m.codec ?? ""}${where}${t.playFailure ? ` FAILED: ${t.playFailure}` : ""}`;
+    return { ok: ok && !t.playFailure && !where, line, began };
   }
 
   private async _events(): Promise<void> {
@@ -508,6 +525,11 @@ export class PlaybackCheck {
   private async _measureRate(video: HTMLVideoElement, rate: number): Promise<RateSample> {
     video.playbackRate = rate;
     const applied = video.playbackRate;
+    await this._pause(RATE_SETTLE_MS);
+    let focused = inFront();
+    const watchFocus = setInterval(() => {
+      focused &&= inFront();
+    }, 250);
     const quality0 = playbackQuality(video);
     const media0 = video.currentTime;
     const began = performance.now();
@@ -533,6 +555,7 @@ export class PlaybackCheck {
     try {
       await this._pause(RATE_MS);
     } finally {
+      clearInterval(watchFocus);
       frames.stop();
       video.removeEventListener("waiting", onWaiting);
       video.removeEventListener("playing", onPlaying);
@@ -552,6 +575,7 @@ export class PlaybackCheck {
       stalls,
       stalledMs,
       ended,
+      focused: focused && inFront(),
     };
   }
 
@@ -659,7 +683,12 @@ export class PlaybackCheck {
     const heaps: [number, number][] = [];
     const disks: number[] = [];
     let maxBuffered = 0;
-    const dropped = new Map<HTMLVideoElement, { decoded: number; dropped: number }>();
+    const frames = new FrameTotals();
+    // Whether the page stayed in front through the minute.
+    const front = { minute: true };
+    const watchFocus = setInterval(() => {
+      front.minute &&= inFront();
+    }, 1000);
     const began = performance.now();
     try {
       await this._play(first.start);
@@ -678,31 +707,29 @@ export class PlaybackCheck {
           if (restart) await t.playAt(restart.start, performance.now());
         }
         const active = activeVideo(t.player);
-        for (const v of videos) {
-          const q = playbackQuality(v);
-          if (q) dropped.set(v, { decoded: q.totalVideoFrames, dropped: q.droppedVideoFrames });
-        }
+        const minuteDrops = frames.update(videos);
+        const wasInFront = front.minute && inFront();
+        front.minute = true;
         const buffered = active ? Math.max(0, bufferedEnd(active) - active.currentTime) : 0;
         maxBuffered = Math.max(maxBuffered, buffered);
         const memory = heap();
         if (memory !== undefined) heaps.push([(performance.now() - began) / 3_600_000, memory]);
         const stats = await this._stats();
         if (stats?.vod.disk_bytes !== undefined) disks.push(stats.vod.disk_bytes);
-        const totals = [...dropped.values()].reduce(
-          (sum, q) => ({ decoded: sum.decoded + q.decoded, dropped: sum.dropped + q.dropped }),
-          { decoded: 0, dropped: 0 },
-        );
         const held = videos.reduce((sum, v) => sum + bufferedSeconds(v.buffered), 0);
         this._log(
           `M  ${minute} min: ${t.player?.time !== undefined ? clock(t.player.time) : "?"} ${t.player?.paused ? "paused" : "playing"}` +
             (document.visibilityState === "visible" ? "" : " (page hidden: the system pauses video)") +
-            ` · heap ${memory === undefined ? "n/a" : mb(memory)} · ${buffered.toFixed(0)} s ahead, ${held.toFixed(0)} s held in both videos` +
-            ` · dropped ${totals.dropped} of ${totals.decoded} · ${stalls} stalls · ${advances} file changes` +
+            (wasInFront ? "" : " · PAGE NOT IN FRONT this minute") +
+            ` · heap ${memory === undefined ? "n/a" : mb(memory)} · ${buffered.toFixed(0)} s ahead, ${held.toFixed(0)} s buffered in both videos` +
+            ` · dropped ${minuteDrops} this minute, ${frames.dropped} of ${frames.decoded} in all · ${stalls} stalls · ${advances} file changes` +
+            (t.metrics.recoveries ? ` · ${t.metrics.recoveries} reloads mid-way` : "") +
             (stats ? ` · cache ${mb(stats.vod.disk_bytes)} on disk + ${mb(stats.vod.reserved_bytes)} reserved, ${stats.vod.leased ?? "?"} leased` : ""),
         );
         markRunning(this.id, this.options.setup, minute);
       }
     } finally {
+      clearInterval(watchFocus);
       videos.forEach((v) => {
         v.removeEventListener("waiting", onWaiting);
       });
@@ -712,12 +739,12 @@ export class PlaybackCheck {
     const heapLine = heaps.length
       ? `heap ${mb(heaps[0]?.[1])} → ${mb(heaps.at(-1)?.[1])} (max ${mb(Math.max(...heaps.map(([, v]) => v)))}${growth === undefined ? "" : `, ${growth >= 0 ? "+" : ""}${mb(growth)}/h`})`
       : "heap not measurable in this browser (the page was not reloaded)";
-    const totals = [...dropped.values()].reduce((sum, q) => sum + q.dropped, 0);
     const cap = (await this._stats())?.vod.max_bytes;
     const diskLine = disks.length ? `cache ${mb(Math.min(...disks))}–${mb(Math.max(...disks))} on disk (cap ${mb(cap)})` : "cache use unknown";
     const line =
-      `${minutes} min: ${heapLine}, at most ${maxBuffered.toFixed(0)} s buffered ahead, ${totals} frames dropped, ${stalls} stalls,` +
-      ` ${advances} file changes${gaps.length ? ` (gaps ${gaps.map((g) => ms(g)).join(", ")})` : ""}, ${diskLine}`;
+      `${minutes} min: ${heapLine}, at most ${maxBuffered.toFixed(0)} s buffered ahead, ${frames.dropped} of ${frames.decoded} frames dropped,` +
+      ` ${stalls} stalls, ${advances} file changes${gaps.length ? ` (gaps ${gaps.map((g) => ms(g)).join(", ")})` : ""},` +
+      ` ${t.metrics.recoveries ?? 0} reloads mid-way, ${diskLine}`;
     this._log(`M  Summary: ${line}`);
     this._summary.push(`Session: ${line}`);
   }
@@ -735,6 +762,9 @@ export class PlaybackCheck {
 
 const yes = (value: boolean | undefined) => (value === undefined ? "n/a" : value ? "yes" : "no");
 
+/** Whether the page is on screen and has focus (else browsers skip frames). */
+const inFront = () => document.visibilityState === "visible" && document.hasFocus();
+
 /** A server value for the report (strings and numbers; anything else "?"). */
 const text = (value: unknown): string =>
   typeof value === "string" || typeof value === "number" ? String(value) : "?";
@@ -742,6 +772,31 @@ const text = (value: unknown): string =>
 function heap(): number | undefined {
   const memory = (performance as { memory?: { usedJSHeapSize?: number } }).memory;
   return memory?.usedJSHeapSize;
+}
+
+/**
+ * Frames decoded and dropped across both video elements over a session. An
+ * element's counters restart whenever it loads another file.
+ */
+class FrameTotals {
+  decoded = 0;
+  dropped = 0;
+  private readonly _last = new Map<HTMLVideoElement, VideoPlaybackQuality>();
+
+  /** Add what went by since the last call; return the frames dropped meanwhile. */
+  update(videos: readonly HTMLVideoElement[]): number {
+    const before = this.dropped;
+    for (const video of videos) {
+      const now = playbackQuality(video);
+      if (!now) continue;
+      const last = this._last.get(video);
+      const restarted = !last || now.totalVideoFrames < last.totalVideoFrames;
+      this.decoded += restarted ? now.totalVideoFrames : now.totalVideoFrames - last.totalVideoFrames;
+      this.dropped += restarted ? now.droppedVideoFrames : now.droppedVideoFrames - last.droppedVideoFrames;
+      this._last.set(video, now);
+    }
+    return this.dropped - before;
+  }
 }
 
 function playbackQuality(video: HTMLVideoElement): VideoPlaybackQuality | undefined {
