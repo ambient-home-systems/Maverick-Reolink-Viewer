@@ -51,7 +51,7 @@
   // The cache's record of how a recording was downloaded, once it is complete.
   const fillReport = async (seg) => {
     let cache = {};
-    for (let i = 0; i < 30; i += 1) {
+    for (let i = 0; i < 60; i += 1) {
       try {
         const answer = await el.hass.callWS({
           type: "reolink_viewer/playback/url",
@@ -65,7 +65,8 @@
       } catch (err) {
         return `server: ${err?.message ?? err}`;
       }
-      if (cache.complete || cache.error) break;
+      // Wait for the plain MP4 rewrite too: it starts once the download is done.
+      if (cache.error || (cache.complete && cache.flat !== undefined)) break;
       await sleep(1000);
     }
     const parts = [cache.cache === "disk" ? "from disk" : `fill (${cache.priority ?? "?"})`];
@@ -78,7 +79,10 @@
       if (typeof cache[key] === "number") parts.push(`${label} ${ms(cache[key])}`);
     }
     if (cache.mbit_s !== undefined) parts.push(`${cache.mbit_s} Mbit/s`);
-    parts.push(`${((cache.bytes ?? 0) / 1e6).toFixed(1)} MB`, `index ${cache.indexed ?? "?"}`);
+    if (cache.bytes !== undefined) parts.push(`${(cache.bytes / 1e6).toFixed(1)} MB`);
+    if (cache.indexed !== undefined) parts.push(`index ${cache.indexed}`);
+    parts.push(`plain MP4 ${cache.flat ?? "not yet"}`);
+    if (typeof cache.flat_ms === "number") parts.push(`rewrite ${ms(cache.flat_ms)}`);
     if (cache.error) parts.push(`error ${cache.error}`);
     return `server: ${parts.join(", ")}`;
   };

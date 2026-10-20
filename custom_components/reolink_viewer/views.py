@@ -9,12 +9,14 @@ the grant expire.
   the disk cache, with Range. While the cache is still filling, a request from
   the start gets the file progressively (200, chunked, for browsers that play
   while downloading); any other request waits for the file to complete.
+- A URL issued after the cache rewrote the recording as a plain MP4 gets that
+  file; one issued before keeps the original (``VodCache.served_path``).
 - ``/api/reolink_viewer/clip/{token}`` serves the same file as a download.
 - ``/api/reolink_viewer/thumb/{token}`` serves a timeline thumbnail (JPEG).
 """
 
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import timedelta
 from http import HTTPStatus
 import logging
@@ -54,6 +56,7 @@ class VodGrant:
     recording: Recording
     progressive: bool
     download_name: str
+    issued: float = field(default_factory=time.monotonic)
 
 
 @dataclass(frozen=True, slots=True)
@@ -140,7 +143,8 @@ class _Base(HomeAssistantView):
             if not entry.complete:
                 async with asyncio.timeout(COMPLETE_TIMEOUT):
                     await cache.async_wait(entry, complete=True)
-            return web.FileResponse(entry.path, headers=headers)
+            path = cache.served_path(entry, grant.issued)
+            return web.FileResponse(path, headers=headers)
         except VodCacheError as err:
             return web.Response(status=HTTPStatus.BAD_GATEWAY, text=str(err))
         except TimeoutError:

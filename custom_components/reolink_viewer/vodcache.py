@@ -16,7 +16,11 @@ served from the cache, with Range, by ``views.py``:
   ``moov``) for the browser's MediaCapabilities check;
 - room is left after the ``moov`` for a segment index (``mp4index.py``),
   written once the file is complete, so browsers seek without reading the
-  whole file first.
+  whole file first;
+- a complete recording is then rewritten as a plain MP4 (``remux.py``), one
+  at a time: Chrome read the indexed fragmented files whole before playing.
+  A URL issued before the plain file was ready keeps getting the original,
+  which is kept until such URLs have expired.
 
 File I/O runs in the executor; device I/O goes through the scheduler.
 """
@@ -36,7 +40,8 @@ from typing import Any
 
 from aiohttp import ClientError, ClientSession, ClientTimeout
 
-from homeassistant.core import HomeAssistant
+from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
+from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.storage import Store
 
 from . import bridge
@@ -51,6 +56,7 @@ from .mp4index import (
     has_index,
     plan_reserve,
 )
+from .remux import RemuxError, async_flatten, is_plain
 from .scheduler import Priority, Scheduler, StreamTicket
 from .timeconv import from_ms
 
@@ -67,6 +73,10 @@ MIN_FREE_BYTES = 2 * 1024**3
 MEDIA_STORE_KEY = "reolink_viewer.media"
 SUFFIX = ".mp4"
 PART_SUFFIX = ".part"
+FLAT_SUFFIX = ".flat.mp4"
+# The original stays this long after the plain file is ready: URLs issued
+# before then still point at it (views.VOD_TTL, plus a margin).
+ORIGINAL_KEEP_S = 35 * 60.0
 # Part of each file's cache id: bumping it retires files of an older layout
 # (they become unknown files, evicted first). 2: segment index added.
 # 3: also indexed when fragments use absolute offsets (the NVR's do).
@@ -111,11 +121,19 @@ class Entry:
     priority: Priority = Priority.PREFETCH
     timing: dict[str, Any] = field(default_factory=dict)
     changed: asyncio.Condition = field(default_factory=asyncio.Condition)
+    # When the plain MP4 became available (monotonic), or None.
+    flat_at: float | None = None
+    flattening: bool = False
 
     @property
     def part_path(self) -> Path:
         """Return the path while filling."""
         return self.path.with_suffix(SUFFIX + PART_SUFFIX)
+
+    @property
+    def flat_path(self) -> Path:
+        """Return the path of the plain MP4."""
+        return self.path.with_name(self.path.stem + FLAT_SUFFIX)
 
     @property
     def filling(self) -> bool:
@@ -142,9 +160,15 @@ class VodCache:
         directory: Path,
         max_bytes: int,
         session: Callable[[], ClientSession],
+        *,
+        ffmpeg_binary: str | None = None,
     ) -> None:
         """Initialize the cache (call async_setup before use)."""
         self._hass = hass
+        self._ffmpeg = ffmpeg_binary
+        self._flatten_lock = asyncio.Lock()
+        self._flat_tasks: set[asyncio.Task[None]] = set()
+        self._drop_timers: dict[Path, CALLBACK_TYPE] = {}
         self._scheduler = scheduler
         self._dir = directory
         self._max_bytes = max_bytes
@@ -168,11 +192,18 @@ class VodCache:
     def _scan(self) -> dict[str, int]:
         self._dir.mkdir(parents=True, exist_ok=True)
         found: dict[str, int] = {}
+        names = {p.name for p in self._dir.iterdir()}
         for path in self._dir.iterdir():
             if path.name.endswith(PART_SUFFIX):
                 path.unlink(missing_ok=True)
+            elif path.name.endswith(FLAT_SUFFIX):
+                found[path.name.removesuffix(FLAT_SUFFIX)] = path.stat().st_size
             elif path.suffix == SUFFIX:
-                found[path.stem] = path.stat().st_size
+                if path.stem + FLAT_SUFFIX in names:
+                    # No URL from a previous run can still need the original.
+                    path.unlink(missing_ok=True)
+                else:
+                    found[path.stem] = path.stat().st_size
         # Files from a previous run cannot be matched to recordings until asked
         # for; keep them on disk, counted by _disk_usage, evictable by age.
         return found
@@ -181,6 +212,10 @@ class VodCache:
         """Cancel fills and wait for them."""
         self._closed = True
         tasks = [e.task for e in self._entries.values() if e.task is not None]
+        tasks += list(self._flat_tasks)
+        for cancel in self._drop_timers.values():
+            cancel()
+        self._drop_timers.clear()
         for task in tasks:
             task.cancel()
         if tasks:
@@ -204,13 +239,21 @@ class VodCache:
             path = self._dir / f"{cache_id}{SUFFIX}"
             entry = Entry(recording, path, priority=priority)
             self._entries[cache_id] = entry
-            if await self._hass.async_add_executor_job(path.exists):
+            if await self._hass.async_add_executor_job(entry.flat_path.exists):
+                entry.written = (
+                    await self._hass.async_add_executor_job(entry.flat_path.stat)
+                ).st_size
+                entry.complete = True
+                entry.flat_at = 0.0  # every URL gets the plain file
+                entry.timing = {"cache": "disk", "flat": "yes"}
+            elif await self._hass.async_add_executor_job(path.exists):
                 entry.written = (
                     await self._hass.async_add_executor_job(path.stat)
                 ).st_size
                 entry.complete = True
                 indexed = await self._hass.async_add_executor_job(has_index, str(path))
                 entry.timing = {"cache": "disk", "indexed": "yes" if indexed else "no"}
+                self._start_flatten(entry)
         entry.last_access = time.monotonic()
         if entry.complete:
             return entry
@@ -252,9 +295,75 @@ class VodCache:
         else:
             entry.timing["fill_ms"] = _ms(began)
             await self._evict()
+            self._start_flatten(entry)
         finally:
             async with entry.changed:
                 entry.changed.notify_all()
+
+    # ---- Plain MP4 ----
+
+    def served_path(self, entry: Entry, issued: float) -> Path:
+        """Return the file for a URL issued at ``issued`` (monotonic).
+
+        URLs issued once the plain MP4 exists get it; older ones keep the
+        original, so a playing video never sees its file change.
+        """
+        if entry.flat_at is not None and issued >= entry.flat_at:
+            return entry.flat_path
+        return entry.path if entry.path.exists() else entry.flat_path
+
+    def _start_flatten(self, entry: Entry) -> None:
+        if self._ffmpeg is None:
+            entry.timing["flat"] = "no: ffmpeg not found"
+            return
+        if self._closed:
+            return
+        if entry.flat_at is not None or entry.flattening:
+            return
+        entry.flattening = True
+        task = self._hass.async_create_background_task(
+            self._flatten(entry), f"reolink_viewer flatten {entry.path.stem[:8]}"
+        )
+        self._flat_tasks.add(task)
+        task.add_done_callback(self._flat_tasks.discard)
+
+    async def _flatten(self, entry: Entry) -> None:
+        """Rewrite a complete recording as a plain MP4 (one at a time)."""
+        assert self._ffmpeg is not None
+        target = entry.flat_path
+        part = target.with_name(target.name + PART_SUFFIX)
+        try:
+            async with self._flatten_lock:
+                began = time.monotonic()
+                await async_flatten(self._ffmpeg, entry.path, part)
+                if not await self._hass.async_add_executor_job(is_plain, part):
+                    raise RemuxError("the result is not a plain MP4")
+                await self._hass.async_add_executor_job(part.replace, target)
+                entry.flat_at = time.monotonic()
+                entry.timing["flat"] = "yes"
+                entry.timing["flat_ms"] = _ms(began)
+        except (RemuxError, OSError) as err:
+            entry.timing["flat"] = f"no: {err}"
+            _LOGGER.debug("Plain MP4 of %s failed: %s", entry.path.stem[:8], err)
+            await self._hass.async_add_executor_job(_unlink, part)
+            return
+        except BaseException:
+            await self._hass.async_add_executor_job(_unlink, part)
+            raise
+        finally:
+            entry.flattening = False
+        self._drop_timers[entry.path] = async_call_later(
+            self._hass, ORIGINAL_KEEP_S, self._drop_original(entry)
+        )
+
+    def _drop_original(self, entry: Entry) -> Callable[[datetime], None]:
+        @callback
+        def drop(_now: datetime) -> None:
+            self._drop_timers.pop(entry.path, None)
+            if entry.flat_at is not None:
+                self._hass.async_add_executor_job(_unlink, entry.path)
+
+        return drop
 
     async def _check_space(self, rec: Recording) -> None:
         usage = await self._hass.async_add_executor_job(shutil.disk_usage, self._dir)
@@ -453,10 +562,14 @@ class VodCache:
         limit = self._max_bytes - extra
         if total <= limit:
             return
-        protected = {
-            e.path for e in self._entries.values() if e.readers or e.filling
-        } | {e.part_path for e in self._entries.values()}
-        access = {e.path: e.last_access for e in self._entries.values()}
+        busy = [
+            e for e in self._entries.values() if e.readers or e.filling or e.flattening
+        ]
+        protected = {p for e in busy for p in (e.path, e.flat_path)}
+        protected |= {e.part_path for e in self._entries.values()}
+        access: dict[Path, float] = {}
+        for e in self._entries.values():
+            access[e.path] = access[e.flat_path] = e.last_access
         # Unknown files (previous runs) go first, oldest first; then by access.
         ordered = sorted(files, key=lambda f: (f[0] in access, access.get(f[0], f[2])))
         for path, size, _mtime in ordered:
@@ -466,7 +579,8 @@ class VodCache:
                 continue
             await self._hass.async_add_executor_job(_unlink, path)
             total -= size
-            self._entries.pop(path.stem, None)
+            # Either file of a recording gone: forget it (it is fetched again).
+            self._entries.pop(_cache_id_of(path), None)
 
     def _disk_usage(self) -> list[tuple[Path, int, float]]:
         result = []
@@ -509,6 +623,10 @@ class VodCache:
             "filling": sum(1 for e in self._entries.values() if e.filling),
             "max_bytes": self._max_bytes,
         }
+
+
+def _cache_id_of(path: Path) -> str:
+    return path.name.removesuffix(FLAT_SUFFIX).removesuffix(SUFFIX)
 
 
 def _open_write(path: Path) -> int:
