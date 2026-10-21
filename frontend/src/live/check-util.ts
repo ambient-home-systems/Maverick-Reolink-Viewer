@@ -1,7 +1,7 @@
 // Pure helpers of the live check (live/check.ts): codecs to ask go2rtc for,
 // ICE servers and candidate pairs described without addresses, and the
 // report's arithmetic.
-import type { CapacityReport, IceServer, StreamEncoding } from "../types";
+import type { CapacityReport, IceServer, LiveCacheState, StreamEncoding } from "../types";
 
 /** The codecs go2rtc may send over MSE, if the browser takes them. */
 export const MSE_CODECS = [
@@ -107,6 +107,16 @@ export function median(values: readonly number[]): number | undefined {
   const sorted = [...values].sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
   return sorted.length % 2 ? sorted[mid] : ((sorted[mid - 1] ?? 0) + (sorted[mid] ?? 0)) / 2;
+}
+
+/** "; key frames every 4.00 s; parameter sets: same" (what is known). */
+export function cacheLabel(cache: LiveCacheState | null | undefined): string {
+  if (!cache) return "";
+  const parts = [
+    cache.key_interval_ms !== null ? `key frames every ${seconds(cache.key_interval_ms)}` : undefined,
+    cache.parameter_sets !== null ? `parameter sets: ${cache.parameter_sets}` : undefined,
+  ].filter(Boolean);
+  return parts.length ? `; ${parts.join("; ")}` : "";
 }
 
 /** "sub (h264, 15 fps, 512 kbps)". */

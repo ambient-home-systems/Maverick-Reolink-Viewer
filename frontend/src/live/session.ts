@@ -17,6 +17,8 @@ import { mseCodecs, pairInfo, wsUrl, type PairInfo } from "./check-util";
 /** Live media kept behind the play position (s), and how far it may lag the edge. */
 const KEEP_BEHIND_S = 10;
 const MAX_LAG_S = 2;
+/** A start lands this far before the newest buffered frame (s). */
+const LIVE_EDGE_S = 0.5;
 
 export interface SessionResult {
   ok: boolean;
@@ -452,7 +454,9 @@ export class OurMse extends BaseSession {
       if (!this._started && end > start) {
         this._started = true;
         this.step("appended");
-        video.currentTime = start;
+        // The key-frame cache sends every frame since the last key frame at
+        // once: start near the newest (the browser decodes from the key frame).
+        video.currentTime = Math.max(start, end - LIVE_EDGE_S);
         this.play();
       } else if (end - video.currentTime > MAX_LAG_S) {
         video.currentTime = end - 0.3;

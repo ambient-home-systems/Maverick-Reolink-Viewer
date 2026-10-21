@@ -26,7 +26,7 @@ _LOGGER = logging.getLogger(__name__)
 
 GO2RTC_VERSION = "1.9.14"
 # Older releases lack what the integration relies on (API path allow-list,
-# local auth, the preload API).
+# local auth).
 MIN_VERSION = (1, 9, 13)
 RELEASE_URL = (
     "https://github.com/AlexxIT/go2rtc/releases/download/v{version}/go2rtc_linux_{arch}"

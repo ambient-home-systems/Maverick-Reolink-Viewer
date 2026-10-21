@@ -5,8 +5,10 @@ scripts/fetch_go2rtc.py), else from the PATH. Without one the tests that need
 it are skipped, unless RV_GO2RTC_TESTS=1 (CI), where they fail instead.
 
 The fake camera is a second go2rtc serving RTSP from ffmpeg's test sources:
-``cam`` is H.264 640x360 at 15 fps with AAC audio, ``opus`` is audio only
-(Opus), which Playwright's Chromium can receive over WebRTC.
+``cam`` is H.264 640x360 at 15 fps with AAC audio and a key frame every
+second, ``slow`` the same with a key frame every 4 s (as Reolink sub streams
+send them), ``opus`` is audio only (Opus), which Playwright's Chromium can
+receive over WebRTC.
 """
 
 from collections.abc import Generator
@@ -27,7 +29,7 @@ _FFMPEG = (
     "exec:ffmpeg -hide_banner -loglevel error -re"
     " -f lavfi -i testsrc2=size=640x360:rate={fps}"
     " -f lavfi -i sine=frequency=440:sample_rate=16000"
-    " -c:v libx264 -preset ultrafast -tune zerolatency -g {fps} -pix_fmt yuv420p"
+    " -c:v libx264 -preset ultrafast -tune zerolatency -g {gop} -pix_fmt yuv420p"
     " -c:a aac -f rtsp {{output}}"
 )
 _OPUS = (
@@ -73,7 +75,11 @@ def fake_camera(
         "api": {"listen": ""},
         "rtsp": {"listen": f"127.0.0.1:{port}"},
         "webrtc": {"listen": ""},
-        "streams": {"cam": _FFMPEG.format(fps=FPS), "opus": _OPUS},
+        "streams": {
+            "cam": _FFMPEG.format(fps=FPS, gop=FPS),
+            "slow": _FFMPEG.format(fps=FPS, gop=4 * FPS),
+            "opus": _OPUS,
+        },
     }
     path = tmp_path / "camera.json"
     path.write_text(json.dumps(config))

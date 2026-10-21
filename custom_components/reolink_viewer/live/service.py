@@ -1,4 +1,4 @@
-"""The live view service: go2rtc, its streams, and the WebRTC sessions.
+"""The live view service: go2rtc, its streams, the MSE feeds, the WebRTC sessions.
 
 go2rtc starts on first use (the panel's first live request), not with the
 entry, so an installation that never watches live never runs it.
@@ -18,6 +18,7 @@ from custom_components.reolink_viewer.scheduler import Scheduler
 from homeassistant.core import HomeAssistant
 
 from .go2rtc import Go2rtcServer
+from .relay import MseRelay
 from .streams import StreamRegistry
 
 _LOGGER = logging.getLogger(__name__)
@@ -53,6 +54,8 @@ class LiveService:
         """Initialize (nothing runs until first used)."""
         self.server = server or Go2rtcServer(hass, directory, session, ffmpeg=ffmpeg)
         self.registry = StreamRegistry(hass, scheduler, self.server)
+        # MSE goes through the key-frame cache; it also keeps streams warm.
+        self.relay = MseRelay(hass, self.registry, self.async_server)
         self.sessions: dict[str, WebRtcSession] = {}
         # One capacity test at a time (it holds a host for itself).
         self.capacity_lock = asyncio.Lock()
@@ -74,7 +77,7 @@ class LiveService:
         return {
             "go2rtc": self.server.status(log=admin),
             "running": self.registry.running(),
-            "preloaded": self.registry.preloaded(),
+            "preloaded": self.relay.warm_streams(),
             "sessions": len(self.sessions),
         }
 
@@ -84,5 +87,6 @@ class LiveService:
             if session.ws is not None:
                 await session.ws.close()
         self.sessions.clear()
+        await self.relay.async_shutdown()
         await self.registry.async_shutdown()
         await self.server.async_stop()

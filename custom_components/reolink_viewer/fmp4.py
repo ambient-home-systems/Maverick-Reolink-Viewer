@@ -355,6 +355,26 @@ def _traf(
     return data_end
 
 
+def init_tracks(init: bytes) -> dict[int, Track]:
+    """Return the tracks of an init segment (``ftyp`` + ``moov``), by id."""
+    for box_type, payload in _children(init):
+        if box_type == "moov":
+            return _parse_moov(payload)[0]
+    raise FragmentError("no moov in the init segment")
+
+
+def fragment_runs(
+    moof: bytes, tracks: Mapping[int, Track]
+) -> dict[int, tuple[int | None, int, bool]]:
+    """Per track of a ``moof``: (tfdt or None, duration, starts with a sync sample)."""
+    return _fragment_runs(moof, tracks)
+
+
+def child_boxes(data: bytes) -> list[tuple[str, bytes]]:
+    """Return the boxes in ``data``, in order: (type, payload)."""
+    return _children(data)
+
+
 def _run_size(flags: int, count: int, table: bytes, default_size: int) -> int:
     """Total bytes of a trun's samples."""
     at = 4 if flags & _TRUN_FIRST_FLAGS else 0

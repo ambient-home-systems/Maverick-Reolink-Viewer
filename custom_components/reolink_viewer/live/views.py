@@ -1,11 +1,13 @@
-"""Live views behind signed URLs: MSE through go2rtc's websocket, and frames.
+"""Live views behind signed URLs: MSE from the key-frame cache, and frames.
 
 - ``/api/reolink_viewer/live/mse/{token}`` is a websocket the browser opens
-  with a signed URL (a browser's WebSocket cannot send HA's token). It pipes
-  go2rtc's ``/api/ws`` for the one stream the grant names: the browser may
-  only ask for MSE (``{"type": "mse", ...}``); everything go2rtc sends comes
-  back, the media as binary messages. While it is open the stream is held
-  (one slot of the host's stream budget).
+  with a signed URL (a browser's WebSocket cannot send HA's token), for the one
+  stream the grant names. It speaks go2rtc's MSE protocol: the browser sends
+  ``{"type": "mse", "value": <codecs it plays>}``, and gets
+  ``{"type": "mse", "value": <MIME type>}``, then the media as binary messages
+  (the init segment and the cached key frame onwards at once, then the rest
+  as it comes), or ``{"type": "error", ...}``. It joins the stream's shared
+  feed (``relay.py``), which holds the stream while it runs.
 - ``/api/reolink_viewer/live/frame/{token}`` returns a JPEG of a stream from
   go2rtc (from the running stream at once; a stream that is not running
   starts and waits for a key frame).
@@ -19,13 +21,14 @@ from http import HTTPStatus
 import json
 import logging
 
-from aiohttp import ClientWebSocketResponse, WSMsgType, web
+from aiohttp import WSMsgType, web
 
 from custom_components.reolink_viewer.views import LiveGrant, loaded_data
 from homeassistant.components.http import HomeAssistantView
 from homeassistant.core import HomeAssistant
 
 from .go2rtc import Go2rtcError, redact
+from .relay import Viewer
 from .streams import LiveError
 
 _LOGGER = logging.getLogger(__name__)
@@ -35,17 +38,18 @@ LIVE_FRAME_PATH = "/api/reolink_viewer/live/frame"
 FRAME_TIMEOUT = 20.0
 # The browser's MSE request: {"type": "mse", "value": "<codecs>"}.
 MAX_REQUEST = 2048
+REQUEST_TIMEOUT = 10.0
 
 
 class LiveMseView(HomeAssistantView):
-    """Pipe go2rtc's MSE for one stream to the browser."""
+    """MSE for one stream, from its shared feed."""
 
     url = LIVE_MSE_PATH + "/{token}"
     name = "api:reolink_viewer:live_mse"
     requires_auth = True
 
     async def get(self, request: web.Request, token: str) -> web.StreamResponse:
-        """Open the websocket and pipe it."""
+        """Open the websocket and feed it."""
         hass: HomeAssistant = request.app["hass"]
         data = loaded_data(hass)
         grant = data.grants.get(token, LiveGrant) if data is not None else None
@@ -56,69 +60,62 @@ class LiveMseView(HomeAssistantView):
         live = data.live
         browser = web.WebSocketResponse(heartbeat=30.0, max_msg_size=MAX_REQUEST)
         await browser.prepare(request)
-        hold = None
+        viewer: Viewer | None = None
         try:
-            server = await live.async_server()
-            hold = await live.registry.async_hold(grant.stream)
-            async with server.ws(grant.stream.name) as upstream:
-                await _pipe(browser, upstream)
+            codecs = await _mse_request(browser)
+            if codecs is not None:
+                viewer = await live.relay.async_attach(grant.stream, codecs)
+                await browser.send_json({"type": "mse", "value": viewer.mime})
+                await _feed(browser, viewer)
         except (LiveError, Go2rtcError) as err:
             if not browser.closed:
                 await browser.send_json({"type": "error", "value": redact(str(err))})
         finally:
-            if hold is not None:
-                hold.release()
+            if viewer is not None:
+                viewer.detach()
             await browser.close()
         return browser
 
 
-async def _pipe(
-    browser: web.WebSocketResponse, upstream: ClientWebSocketResponse
-) -> None:
-    """Relay until either side closes: MSE requests up, everything down."""
+async def _mse_request(browser: web.WebSocketResponse) -> str | None:
+    """Return the codecs of the browser's MSE request; None if it left."""
+    try:
+        async with asyncio.timeout(REQUEST_TIMEOUT):
+            async for msg in browser:
+                if msg.type is not WSMsgType.TEXT:
+                    continue
+                try:
+                    request = json.loads(msg.data)
+                except ValueError:
+                    continue
+                if isinstance(request, dict) and request.get("type") == "mse":
+                    value = request.get("value")
+                    return value if isinstance(value, str) else ""
+    except TimeoutError:
+        raise LiveError("no MSE request") from None
+    return None
 
-    async def up() -> None:
-        async for msg in browser:
-            if msg.type is not WSMsgType.TEXT:
-                continue
-            try:
-                request = json.loads(msg.data)
-            except ValueError:
-                continue
-            if isinstance(request, dict) and request.get("type") == "mse":
-                value = request.get("value")
-                await upstream.send_json(
-                    {"type": "mse", "value": value if isinstance(value, str) else ""}
-                )
+
+async def _feed(browser: web.WebSocketResponse, viewer: Viewer) -> None:
+    """Send the viewer's media until either side stops."""
 
     async def down() -> None:
-        async for msg in upstream:
-            if msg.type is WSMsgType.BINARY:
-                await browser.send_bytes(msg.data)
-            elif msg.type is WSMsgType.TEXT:
-                await browser.send_str(_safe_text(msg.data))
-            else:
-                break
+        while (data := await viewer.next()) is not None:
+            await browser.send_bytes(data)
+        if viewer.error is not None and not browser.closed:
+            await browser.send_json({"type": "error", "value": viewer.error})
 
-    tasks = [asyncio.create_task(up()), asyncio.create_task(down())]
+    async def up() -> None:
+        async for _msg in browser:
+            pass  # nothing more is asked over MSE; this notices the close
+
+    tasks = [asyncio.create_task(down()), asyncio.create_task(up())]
     try:
         await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
     finally:
         for task in tasks:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
-
-
-def _safe_text(text: str) -> str:
-    """go2rtc's error messages may name the camera URL: redact them."""
-    try:
-        message = json.loads(text)
-    except ValueError:
-        return json.dumps({"type": "error", "value": redact(text)})
-    if isinstance(message, dict) and message.get("type") == "error":
-        message["value"] = redact(str(message.get("value", "")))
-        return json.dumps(message)
-    return text
 
 
 class LiveFrameView(HomeAssistantView):

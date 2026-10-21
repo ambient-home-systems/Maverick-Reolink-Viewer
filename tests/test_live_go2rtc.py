@@ -7,7 +7,7 @@ from pathlib import Path
 import subprocess
 import time
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from aiohttp import ClientSession, WSMsgType, web
 from aiohttp.test_utils import TestServer
@@ -18,7 +18,8 @@ from pytest_homeassistant_custom_component.typing import (
     WebSocketGenerator,
 )
 
-from custom_components.reolink_viewer.live import capacity
+from custom_components.reolink_viewer.fmp4 import fragment_runs, init_tracks
+from custom_components.reolink_viewer.live import capacity, views as live_views
 from custom_components.reolink_viewer.live.binary import Binary
 from custom_components.reolink_viewer.live.capacity import Reader
 from custom_components.reolink_viewer.live.go2rtc import Go2rtcServer
@@ -90,14 +91,13 @@ async def test_go2rtc_runs_supervised(
         assert first is not None
         assert first < 2.0
         assert len(reader.frames) >= FPS  # about a second of 15 fps at least
-        await server.async_preload(name, True)
-        assert await server.async_preloads() == {name}
-        state = await server.async_stream_state(name)
-        assert state is not None
-        assert state["active"]
-        assert state["codecs"] == ["aac", "h264"]
-        await server.async_preload(name, False)
-        assert await server.async_preloads() == set()
+        async with server.ws(name) as socket:
+            await socket.send_json({"type": "mse", "value": "avc1.640029,mp4a.40.2"})
+            await socket.receive(timeout=10)  # connected: go2rtc's MIME type
+            state = await server.async_stream_state(name)
+            assert state is not None
+            assert state["active"]
+            assert state["codecs"] == ["aac", "h264"]
         await server.async_delete_stream(name)
         assert await server.async_stream_state(name) is None
 
@@ -292,12 +292,18 @@ async def test_live_commands_and_views(
         )
         assert state["result"]["holds"] == 1
         assert state["result"]["state"]["active"]
+        assert state["result"]["cache"]["viewers"] == 1
         assert SECRET not in json.dumps(state)
     await asyncio.sleep(0.2)
     state = await _ws(
         client, {"type": "reolink_viewer/live/state", **ref, "stream": "sub"}
     )
     assert state["result"]["holds"] == 0
+    assert state["result"]["cache"] is None  # the feed closed with its viewer
+
+    # A browser that leaves before asking.
+    async with http.ws_connect(path):
+        pass
 
     # ext comes over HTTP-FLV.
     msg = await _ws(client, {"type": "reolink_viewer/live/mse", **ref, "stream": "ext"})
@@ -369,6 +375,114 @@ async def test_live_commands_and_views(
         {"type": "reolink_viewer/live/mse", "connection_id": "x", "stream": "sub"},
     )
     assert msg["error"]["code"] == "not_found"
+
+
+async def test_the_key_frame_cache(
+    hass: HomeAssistant,
+    hass_ws_client: WebSocketGenerator,
+    hass_client_no_auth: ClientSessionGenerator,
+    reolink_host: MagicMock,
+    fake_camera: str,
+    live: MockConfigEntry,
+) -> None:
+    """A warm stream's viewer gets its last key frame at once, not the next one."""
+    camera = fake_camera.removeprefix("rtsp://")
+    # The main stream reads the camera stream with a key frame every 4 s.
+    reolink_host.get_rtsp_stream_source = AsyncMock(
+        side_effect=lambda ch, stream=None, check=True: (
+            f"rtsp://admin:{SECRET}@{camera}/{'slow' if stream == 'main' else 'cam'}"
+        )
+    )
+    client = await hass_ws_client(hass)
+    msg = await _ws(client, {"type": "reolink_viewer/live/cameras"})
+    conn = msg["result"]["cameras"][0]["connections"][0]
+    ref = {"connection_id": conn["connection_id"], "stream": "main"}
+    msg = await _ws(
+        client, {"type": "reolink_viewer/live/preload", **ref, "enabled": True}
+    )
+    assert msg["result"]["key_frame"] is True
+    # Well past that key frame, and 2.5 s before the next one.
+    await asyncio.sleep(1.5)
+    msg = await _ws(client, {"type": "reolink_viewer/live/state", **ref})
+    cache = msg["result"]["cache"]
+    assert msg["result"]["preloaded"]
+    assert cache["warm"] is True
+    assert cache["key_frame_age_ms"] >= 1000
+    assert cache["cached_ms"] >= 1000
+    assert cache["parameter_sets"] == "same"
+
+    msg = await _ws(client, {"type": "reolink_viewer/live/mse", **ref})
+    http = await hass_client_no_auth()
+    started = time.monotonic()
+    async with http.ws_connect(msg["result"]["path"]) as socket:
+        await socket.send_json({"type": "mse", "value": "avc1.640029,mp4a.40.2"})
+        mime = await socket.receive(timeout=10)
+        first = await socket.receive(timeout=10)
+        elapsed = time.monotonic() - started
+    assert json.loads(mime.data)["type"] == "mse"
+    assert elapsed < 1.0  # the next key frame was 2.5 s away
+    # The init segment, then the key frame and what followed it (>= 1 s).
+    data = first.data
+    init_end = data.index(b"moof") - 4
+    tracks = init_tracks(data[:init_end])
+    moof_size = int.from_bytes(data[init_end : init_end + 4], "big")
+    runs = fragment_runs(data[init_end : init_end + moof_size], tracks)
+    video = next(t for t in tracks.values() if t.handler == "vide")
+    assert runs[video.track_id][2]  # a sync sample: the key frame
+    assert data.count(b"moof") >= FPS
+
+    msg = await _ws(
+        client, {"type": "reolink_viewer/live/preload", **ref, "enabled": False}
+    )
+    assert msg["result"]["preloaded"] == []
+    await asyncio.sleep(0.2)
+    msg = await _ws(client, {"type": "reolink_viewer/live/state", **ref})
+    assert msg["result"]["cache"] is None
+
+
+# The view sends the error, then closes first; aiohttp 3.14 can then arm its
+# heartbeat timer again after the close (it fires once, harmlessly).
+@pytest.mark.parametrize("expected_lingering_timers", [True])
+async def test_mse_errors(
+    hass: HomeAssistant,
+    hass_ws_client: WebSocketGenerator,
+    hass_client_no_auth: ClientSessionGenerator,
+    reolink_host: MagicMock,
+    fake_camera: str,
+    live: MockConfigEntry,
+) -> None:
+    """No MSE request, or a stream the camera lacks: an error, nothing leaked."""
+    camera = fake_camera.removeprefix("rtsp://")
+    reolink_host.get_rtsp_stream_source = AsyncMock(
+        side_effect=lambda ch, stream=None, check=True: (
+            f"rtsp://admin:{SECRET}@{camera}/missing"
+        )
+    )
+    client = await hass_ws_client(hass)
+    msg = await _ws(client, {"type": "reolink_viewer/live/cameras"})
+    conn = msg["result"]["cameras"][0]["connections"][0]
+    ref = {"connection_id": conn["connection_id"], "stream": "sub"}
+    http = await hass_client_no_auth()
+
+    msg = await _ws(client, {"type": "reolink_viewer/live/mse", **ref})
+    with patch.object(live_views, "REQUEST_TIMEOUT", 0.1):
+        async with http.ws_connect(msg["result"]["path"]) as socket:
+            await socket.send_bytes(b"not a request")
+            answer = json.loads((await socket.receive(timeout=5)).data)
+    assert answer == {"type": "error", "value": "no MSE request"}
+
+    # go2rtc's error, without the camera's address or password.
+    msg = await _ws(client, {"type": "reolink_viewer/live/mse", **ref})
+    async with http.ws_connect(msg["result"]["path"]) as socket:
+        await socket.send_json({"type": "mse", "value": "avc1.640029,mp4a.40.2"})
+        answer = json.loads((await socket.receive(timeout=20)).data)
+    assert answer["type"] == "error"
+    assert SECRET not in answer["value"]
+    assert "127.0.0.1" not in answer["value"]
+    await asyncio.sleep(0.2)
+    msg = await _ws(client, {"type": "reolink_viewer/live/state", **ref})
+    assert msg["result"]["holds"] == 0
+    assert msg["result"]["cache"] is None
 
 
 async def test_webrtc_session_relay(

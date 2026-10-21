@@ -327,24 +327,13 @@ class FakeServer:
 
     def __init__(self) -> None:
         self.streams: dict[str, str] = {}
-        self.preloads: set[str] = set()
-        self.listeners: list[Any] = []
-        self.fail_preload = False
+        self.generation = 1
 
     async def async_ready(self) -> None:
         return None
 
-    def add_listener(self, listener: Any) -> Any:
-        self.listeners.append(listener)
-        return lambda: self.listeners.remove(listener)
-
     async def async_set_stream(self, name: str, source: str) -> None:
         self.streams[name] = source
-
-    async def async_preload(self, name: str, enabled: bool) -> None:
-        if self.fail_preload:
-            raise Go2rtcError("dial tcp: connection refused")
-        (self.preloads.add if enabled else self.preloads.discard)(name)
 
 
 class FakeHost:
@@ -416,38 +405,25 @@ async def test_a_running_stream_holds_one_slot(
     assert budget.stats()["streams"] == 0
 
 
-async def test_keep_warm(
-    hass: HomeAssistant,
+async def test_registered_again_after_a_restart(
     registry: tuple[StreamRegistry, FakeServer, FakeHost, Scheduler],
 ) -> None:
-    """A preload holds its stream; a restarted go2rtc gets it back."""
-    reg, server, _host, scheduler = registry
+    """A restarted go2rtc forgot its streams: the next hold registers again."""
+    reg, server, host, scheduler = registry
     sub = LiveStream(SOURCE, "sub")
-    await reg.async_preload(sub, True)
-    await reg.async_preload(sub, True)  # already warm
-    assert server.preloads == {sub.name}
-    assert reg.preloaded() == [sub.name]
-    assert scheduler.host("entry1").streams.stats()["streams"] == 1
-    # go2rtc restarted: streams and preloads are gone; they come back.
+    first = await reg.async_hold(sub)
+    second = await reg.async_hold(sub)
+    assert len(host.calls) == 1
     server.streams.clear()
-    server.preloads.clear()
-    for listener in server.listeners:
-        listener()
-    await hass.async_block_till_done(wait_background_tasks=True)
-    assert server.preloads == {sub.name}
+    server.generation += 1
+    third = await reg.async_hold(sub)  # still held, but go2rtc is new
+    assert len(host.calls) == 2
     assert sub.name in server.streams
-    await reg.async_preload(sub, False)
-    await reg.async_preload(sub, False)  # not warm: nothing to do
-    assert server.preloads == set()
-    assert scheduler.host("entry1").streams.stats()["streams"] == 0
-    # A camera that cannot be reached is not kept warm.
-    server.fail_preload = True
-    with pytest.raises(LiveError, match="connection refused"):
-        await reg.async_preload(sub, True)
-    assert reg.preloaded() == []
+    assert scheduler.host("entry1").streams.stats()["streams"] == 1
+    for hold in (first, second, third):
+        hold.release()
     assert scheduler.host("entry1").streams.stats()["streams"] == 0
     await reg.async_shutdown()
-    assert server.listeners == []
 
 
 async def test_priority_of_live_slots(

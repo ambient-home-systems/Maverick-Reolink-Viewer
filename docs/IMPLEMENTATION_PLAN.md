@@ -1756,7 +1756,7 @@ gate), **2** builds live view from what step 1 decides.
 | 0. Fix four Phase 2B findings (a failing test for each first) | **Done** (v0.4.0), see "Step 0" below |
 | 1. Our own go2rtc, and a live check in the panel (gate) | **Built** (v0.4.0), see "Step 1 as built". Desktop report in (run 5); waiting for the three iPhone runs ("How to run the live check") |
 | 1. Record the reports here and in the hardware matrix; decide the live stream budget, WebRTC or MSE per setup, which cameras stay warm, the HD stream per camera | **Desktop Chrome on the LAN: recorded and decided** (v0.4.1), see "Step 1 results". The iPhone setups: waiting. The rules are fixed below, before seeing the reports |
-| 2. Stream registry, delivery, Live tab and grid, keep warm, debug panel | Not started |
+| 2. Stream registry, delivery, Live tab and grid, keep warm, debug panel | **In progress.** The key-frame cache is built (v0.5.0), see "Step 2: the key-frame cache"; the rest waits for the iPhone reports |
 
 #### Step 0: four Phase 2B findings (v0.4.0)
 
@@ -2017,7 +2017,8 @@ What the run changes in step 2:
      parameter sets (the MSE picture-size finding).
 
    Proposed: build the cache in step 2, and try shorter key frames on one
-   camera now (the live check can run on one camera).
+   camera now (the live check can run on one camera). **Decided (owner,
+   2026-10-21): build the cache.** Built in v0.5.0 (below).
 2. **Tiles need a cached first image.** Neither HA's snapshot (median
    0.64 s) nor go2rtc's frame (1.69 s) meets 0.5 s. The server keeps each
    camera's last image, refreshed in the background through the scheduler
@@ -2031,6 +2032,56 @@ What the run changes in step 2:
    reolink-aio still built an HTTP-FLV URL for it, with the port "None", so
    its ext failed. FLV and RTMP now need the HTTP API (as the Phase 0 probe
    already assumed), and a connection lists only the streams it can serve.
+
+#### Step 2: the key-frame cache (v0.5.0)
+
+`live/relay.py`. go2rtc gives a new viewer nothing until the camera's next key
+frame, and keeps no frame for one. So the integration keeps it:
+
+- **One feed per stream.** A feed is one go2rtc MSE consumer of a stream,
+  shared by every MSE viewer of it. It keeps the init segment and every
+  fragment since the last video key frame (go2rtc writes one `moof` + `mdat`
+  per frame and marks key frames in the sample flags, so only box headers
+  and flags are read). A viewer who joins gets the init segment and those
+  fragments at once, in one message, then the rest as it comes. The player
+  starts 0.5 s before the newest frame; the browser decodes from the key
+  frame to get there.
+- **The MSE websocket** (`live/mse`) joins the stream's feed instead of
+  opening its own go2rtc consumer. Its protocol is unchanged: the browser
+  sends the codecs it plays, and gets the MIME type, then media. go2rtc picks
+  a feed's tracks from its first viewer's codecs. A viewer shares a feed if
+  it can play every codec the feed carries; otherwise it gets a feed of its
+  own. Either way the stream is one camera connection and one slot.
+- **Keeping a stream warm** (`live/preload`, admin) keeps its feed open
+  without viewers, which keeps the camera connected and its last key frame
+  cached. It replaces go2rtc's preload, which kept the connection but no
+  frame (go2rtc's `/api/preload` is no longer allowed). It answers once the first key frame is cached. A warm feed that ends
+  (go2rtc restarted, the camera dropped it) opens again after 1, 2, 5, 10,
+  30, 60 s. Any other feed closes with its last viewer.
+- **Limits.** A viewer whose data has waited more than 10 s to be sent is
+  dropped (the player reconnects, at the newest key frame). More than 32 MB
+  since a key frame means none is coming, and nothing is kept.
+- **After a go2rtc restart**, a stream is registered again on its next hold
+  even while others hold it (go2rtc forgets its streams).
+- **Diagnostics** (`live/state` → `cache`): the key-frame interval as seen,
+  the media cached, and whether the init segment's parameter sets (from the
+  stream's description) match the key frames' own (`same`, `differ`, `none`
+  in the key frame). That last one tests the MSE picture-size finding on the
+  next hardware run.
+- **The live check (v0.5.0)**: its warm part now uses the cache. It reports
+  how long the first key frame took to be cached, the key-frame interval and
+  the parameter sets. Warm MSE should then start in a few hundred ms; warm
+  WebRTC still waits for the next key frame.
+
+WebRTC cannot use the cache (it cannot be sent past frames). So where a setup
+uses WebRTC, warm cameras use MSE.
+
+Checked: 12 unit tests against a fake go2rtc websocket (sharing, codecs,
+errors, slow viewers, the size cap, audio only, keep warm and its retries).
+Against go2rtc 1.9.14 and a fake camera with 4 s key frames: a viewer of a
+warm stream, 1.5 s after a key frame, got the init segment and the cached
+frames from that key frame in under 1 s; the next key frame was 2.5 s away.
+Chromium plays MSE through the cache (the audio-only stream).
 
 ## Phase 4 — Performance, mobile, packaging, release (difficulty: Standard, 2–3 wk)
 

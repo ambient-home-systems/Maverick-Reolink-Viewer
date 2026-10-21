@@ -10,8 +10,10 @@
   (trickle ICE). Unsubscribing ends the session.
 - ``live/mse`` and ``live/frame``: signed URLs of the MSE websocket and of a
   frame (see live/views).
-- ``live/state``: whether a stream is running in go2rtc (no source URL).
-- ``live/preload`` (admin): keep a stream warm, or stop.
+- ``live/state``: whether a stream is running in go2rtc (no source URL), and
+  its key-frame cache.
+- ``live/preload`` (admin): keep a stream warm (its feed open, a key frame
+  cached), or stop.
 - ``live/capacity`` (admin): the capacity test of a host, as a subscription.
 """
 
@@ -327,7 +329,7 @@ async def ws_live_state(
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    """Return whether a stream runs in go2rtc, and who holds it."""
+    """Return whether a stream runs in go2rtc, who holds it, and its cache."""
     if (resolved := _live(hass, connection, msg["id"])) is None:
         return
     if (stream := _stream(hass, connection, msg)) is None:
@@ -344,7 +346,8 @@ async def ws_live_state(
         {
             "state": state,
             "holds": live.registry.running().get(stream.name, 0),
-            "preloaded": stream.name in live.registry.preloaded(),
+            "preloaded": stream.name in live.relay.warm_streams(),
+            "cache": live.relay.state(stream),
         },
     )
 
@@ -363,7 +366,11 @@ async def ws_live_preload(
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    """Keep a stream warm in go2rtc (its camera connection open), or stop."""
+    """Keep a stream warm (its feed open, a key frame cached), or stop.
+
+    Turning it on returns once the first key frame is cached (or after
+    ``relay.KEY_FRAME_TIMEOUT``); ``key_frame`` says whether one is.
+    """
     if (resolved := _live(hass, connection, msg["id"])) is None:
         return
     if (stream := _stream(hass, connection, msg)) is None:
@@ -371,11 +378,13 @@ async def ws_live_preload(
     live = resolved[1]
     try:
         await live.async_server()
-        await live.registry.async_preload(stream, msg["enabled"])
+        key_frame = await live.relay.async_keep_warm(stream, msg["enabled"])
     except (LiveError, Go2rtcError) as err:
         connection.send_error(msg["id"], ERR_LIVE, redact(str(err)))
         return
-    connection.send_result(msg["id"], {"preloaded": live.registry.preloaded()})
+    connection.send_result(
+        msg["id"], {"preloaded": live.relay.warm_streams(), "key_frame": key_frame}
+    )
 
 
 @websocket_api.websocket_command(
