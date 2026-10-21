@@ -393,8 +393,15 @@ class VodCache:
         return entry
 
     async def async_peek(self, recording: Recording) -> dict[str, Any] | None:
-        """Return what the cache holds of a recording, without fetching it."""
-        if (entry := self._entries.get(recording.cache_id)) is not None:
+        """Return what the cache holds of a recording, without fetching it.
+
+        A copy made while the recording was shorter counts: a start it
+        reaches plays from it (see ``async_open``).
+        """
+        entry = self._entries.get(recording.cache_id) or self._copy_for(
+            recording, None, any_copy=True
+        )
+        if entry is not None:
             return entry.public()
         path = self._dir / f"{recording.cache_id}{SUFFIX}"
         found = await self._hass.async_add_executor_job(_on_disk, path)

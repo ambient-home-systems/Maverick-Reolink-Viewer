@@ -117,7 +117,7 @@ describe("PlaybackCheck", () => {
       changes.push(1),
     );
     const report = await check.run();
-    expect(report).toContain("Reolink Viewer playback check v0.3.1 · Desktop Chrome, LAN · Garage");
+    expect(report).toContain("Reolink Viewer playback check v0.3.2 · Desktop Chrome, LAN · Garage");
     expect(report).toContain("A1 Time to timeline, today (as the tab opened): 120 ms (server: memory, total 4 ms)");
     expect(report).toContain("A2/A3 skipped: no earlier recording day this month");
     expect(report).toContain("B  skipped: no events today");
@@ -127,7 +127,7 @@ describe("PlaybackCheck", () => {
     expect(report).toContain("L  skipped: nothing played");
     expect(report).toContain("S  skipped: nothing playing");
     expect(report).toContain('H  skipped: not asked for (tick "with HD")');
-    expect(report).toContain("HD: this browser cannot decode hvc1 at 7680×2160");
+    expect(report).toContain("HD as the tab opened: this browser cannot decode hvc1 at 7680×2160");
     expect(report).toContain("Summary:");
     expect(report).toContain("- Timeline: today 120 ms ✓");
     expect(changes.length).toBeGreaterThan(5);
@@ -208,6 +208,10 @@ describe("PlaybackCheck: scrubbing and HD", () => {
     expect(report).toMatch(/H {2}HD at .*: first frame 2840 ms, started 0\.00 s from where SD was \(kept the moment\)/);
     expect(report).toMatch(/Back to SD at .*: first frame 210 ms, started 0\.00 s from where HD was/);
     expect(report).toContain("- HD switch: to HD 2840 ms, kept the moment (0.00 s); back to SD 210 ms, kept the moment (0.00 s)");
+    expect(report).toMatch(/H {2}HD at .* · main hvc1\.1\.6\.L153\.B0 · /);
+    // The tab's decision from before HD played is not the summary's word on HD.
+    expect(report).toContain("HD as the tab opened: hvc1.1.6.L153.B0 at 3840×2160 is supported (played in H above)");
+    expect(report).not.toContain("- HD: offered");
     expect(stream).toBe("sub");
   });
 
@@ -239,5 +243,70 @@ describe("PlaybackCheck: scrubbing and HD", () => {
     expect(hdByDefault("iPhone app, Wi-Fi (local)")).toBe(true);
     expect(hdByDefault("iPhone app, Tailscale")).toBe(false);
     expect(hdByDefault("Desktop Chrome, Nabu Casa")).toBe(false);
+  });
+});
+
+describe("PlaybackCheck: starts that waited for the recorder", () => {
+  /** A day with one hour-long recording (T0 + 1 h) and a MOTION event 55 min into it. */
+  function longDay(): TimelineDay {
+    const start = T0 + 3_600_000;
+    return {
+      ...emptyDay(),
+      segments: [{ id: "long", start, end: start + 3_600_000, triggers: ["MOTION"], ambiguous: false }],
+      events: [{ start: start + 3_300_000, end: start + 3_310_000, types: ["MOTION"], segment: "long", ambiguous: false }],
+    };
+  }
+
+  /** Each start opens the recording as the next of `held` says the server had it (then whole). */
+  async function run(held: { complete: boolean; bytes: number }[]): Promise<string> {
+    vi.spyOn(PlaybackCheck.prototype as unknown as { _pause: () => Promise<void> }, "_pause").mockResolvedValue();
+    const hass = reportingHass();
+    const answer = hass.callWS.bind(hass);
+    hass.callWS = <T,>(message: Record<string, unknown>) =>
+      message.type === "reolink_viewer/playback/peek"
+        ? Promise.resolve({ segment_id: String(message.segment_id), cache: null } as T)
+        : answer<T>(message);
+    const metrics: Record<string, unknown> = { timelineMs: 120 };
+    let playing: CheckTarget["playing"];
+    const target: CheckTarget = {
+      ...stubTarget(hass),
+      day: longDay(),
+      metrics,
+      get playing() {
+        return playing;
+      },
+      playAt: () => {
+        const cache = held.shift() ?? { complete: true, bytes: 1 };
+        metrics.firstFrameMs = undefined;
+        playing = { cache: { ...cache, error: null } } as CheckTarget["playing"];
+        setTimeout(() => (metrics.firstFrameMs = cache.complete ? 70 : 2250), 1);
+        return Promise.resolve();
+      },
+    };
+    return new PlaybackCheck(target, { setup: "Desktop Chrome, LAN", soakMinutes: 0 }).run();
+  }
+
+  it("marks an event start that waited, and counts only a deep start that waited", async () => {
+    // B waited; D1's recording was fetched (a prefetch) between choosing and playing it.
+    const report = await run([
+      { complete: false, bytes: 0 },
+      { complete: true, bytes: 178_800_000 },
+      { complete: true, bytes: 178_800_000 },
+    ]);
+    expect(report).toContain("- Events → first frame (sub): 2250 ms ✗ (not cached)");
+    expect(report).toContain("D1 Not cached when chosen, but on disk when played (not counted), 55.0 min into a 60.0 min recording");
+    expect(report).toContain("D2 Cached, ");
+    expect(report).toContain("- Deep start (sub, 60.0 min recording): not cached not measured, cached 70 ms ✓");
+  });
+
+  it("counts a deep start that waited, with what was fetched already", async () => {
+    const report = await run([
+      { complete: true, bytes: 1 },
+      { complete: false, bytes: 12_000_000 },
+      { complete: true, bytes: 178_800_000 },
+    ]);
+    expect(report).toContain("- Events → first frame (sub): 70 ms ✓");
+    expect(report).toContain("D1 Not cached (12.0 MB already fetched when played), 55.0 min into a 60.0 min recording");
+    expect(report).toContain("- Deep start (sub, 60.0 min recording): not cached 2250 ms, cached 70 ms ✓");
   });
 });

@@ -13,6 +13,7 @@ import {
   copyText,
   deliveryOf,
   describeCache,
+  videoCodec,
   type RvPlayback,
 } from "./playback";
 
@@ -648,5 +649,14 @@ describe("rv-playback with MSE", () => {
     await new Promise((resolve) => setTimeout(resolve, 1_100));
     expect(el._note).toBe("Fetching the recording from the recorder: 40 MB of about 260 MB");
     expect(String(sentOf(hass, "reolink_viewer/playback/cache_status")[0]?.token)).toMatch(/^tok-s1-/);
+  });
+});
+
+describe("videoCodec", () => {
+  it("takes the video codec from an MSE type", () => {
+    expect(videoCodec('video/mp4; codecs="avc1.640033,mp4a.40.2"')).toBe("avc1.640033");
+    expect(videoCodec('video/mp4; codecs="hvc1.1.6.L153.B0"')).toBe("hvc1.1.6.L153.B0");
+    expect(videoCodec("")).toBeNull();
+    expect(videoCodec(undefined)).toBeNull();
   });
 });
