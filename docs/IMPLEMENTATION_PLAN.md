@@ -814,7 +814,7 @@ Known limits carried into 2B and Phase 4:
 | --- | --- |
 | 0. Fix the recording cache (disk accounting, eviction, leases, deletion timers, open race), DST end and refresh window, shared thumbnail fetches; correct the MSE claim above | Done (v0.2.8), see "Step 0" below |
 | 1. Measure where it hasn't been (gate): desktop Chrome on the LAN, the iPhone Companion app on Wi-Fi, over Tailscale and over Nabu Casa | **Done** (2026-10-21): check built (v0.2.8), sharpened in v0.2.9 and v0.2.10; four desktop runs (three through Nabu Casa, one on the LAN) and four iPhone runs (Wi-Fi, Tailscale twice, Nabu Casa). Three player and cache bugs found and fixed. HD unmeasured (no main recording cached). See "Step 1 results" and "What step 1 decides" |
-| 2. Build what the evidence calls for (speeds, HD/SD keeping the position, uncached deep seeks, bounded memory and disk) | **Built (v0.3.0)**: MSE with server-normalized fragments, the file player as fallback; checked in Chromium (CI and a harness). v0.3.1: the check also covers scrubbing and HD, and `scripts/desktop-check` runs it without clicking. Hardware check: the desktop met its criteria on the LAN and through Nabu Casa, each with HD and the one-hour session (2026-10-21); an uncached start 57 min into an hour-long recording took 13.0 s, the NVR's download up to there. The iPhone on Wi-Fi met them too, with HD and the one-hour session (no reload); the iPhone through Tailscale and Nabu Casa to come, see "Step 2 hardware results" |
+| 2. Build what the evidence calls for (speeds, HD/SD keeping the position, uncached deep seeks, bounded memory and disk) | **Built (v0.3.0)**: MSE with server-normalized fragments, the file player as fallback; checked in Chromium (CI and a harness). v0.3.1: the check also covers scrubbing and HD, and `scripts/desktop-check` runs it without clicking. Hardware check: the desktop met its criteria on the LAN and through Nabu Casa, each with HD and the one-hour session (2026-10-21); an uncached start 57 min into an hour-long recording took 13.0 s, the NVR's download up to there. The iPhone on Wi-Fi met them too, with HD and the one-hour session (no reload); the iPhone through Tailscale too (an uncached start 55 min into an hour in 9.2 s over a 14 Mbit/s link); the iPhone through Nabu Casa to come, see "Step 2 hardware results" |
 
 ##### Step 0: the recording cache (v0.2.8)
 
@@ -1574,7 +1574,28 @@ deep starts are the NVR's download up to the target (5.1 and 9.5 s, against
 22–84 s in step 1). Speeds work, HD/SD keeps the position, and the hour stays
 within the caps without a reload.
 
-What remains of step 2: the iPhone through Tailscale and through Nabu Casa.
+**iPhone run 6: Tailscale** (check v0.3.2, same phone and app, Wi-Fi off,
+HTTPS to the Tailscale address over HTTP/2, without HD or the session;
+2026-10-21):
+
+| Measure | Result |
+| --- | --- |
+| Player | MSE (`ManagedMediaSource`) |
+| Timeline | today 188 ms, a past day 165 ms, again 260 ms, today again 277 ms: all under 1 s |
+| Events → first frame | 719 ms, 10.2 min into today's recording still being written (prefetched, 50.5 MB). Then 621 and 325 ms, seeks within it |
+| Deep start, not cached | **9.2 s**, 55.2 min into a 60 min recording (185 MB; the download took 9.9 s at 150 Mbit/s, about 9.1 s of it up to the target). The link measured 14 Mbit/s. The file player would also have read the whole 185 MB over it, about 106 s more; in step 1 through Tailscale, that read took 35.5 s for 112 MB at 25 Mbit/s |
+| Deep start, cached | 373 ms |
+| Auto-advance | gap 26 ms (preloaded) |
+| Rates | on pace at every rate (0.50–8.00×), no stalls, no frames counted as dropped. 0.5× marked ✗ as in run 5: 51 frames decoded for 3 s of video, longest gap 200 ms |
+| Scrub | 5 of 5 points shown from the buffer, median 339 ms, each within 0.98 s of its point: WebKit's `fastSeek` lands on the nearest keyframe, as meant for scrubbing |
+| HD switch | not run (off by default on the remote setups) |
+| Link | 14 Mbit/s (5.2 MB in 3.0 s) |
+
+Through Tailscale, the iPhone plays, seeks (325–621 ms within a recording)
+and moves on by itself (26 ms). The uncached deep start is the NVR's
+download up to the target, even over a 14 Mbit/s link.
+
+What remains of step 2: the iPhone through Nabu Casa.
 
 #### 2A as built (v0.2.0)
 
