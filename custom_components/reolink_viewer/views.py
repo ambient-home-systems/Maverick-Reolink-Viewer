@@ -16,8 +16,10 @@ the grant expire.
   downloading, gets the original progressively (200, chunked); every other
   URL gets the plain MP4, rewritten from the complete original on the first
   request (the original if the rewrite fails).
-- Issuing a URL *leases* the recording (``VodCache.lease``): it is not
-  evicted until the URL expires.
+- Issuing a player's URL *leases* the recording (``VodCache.lease``): it is
+  not evicted until the URL expires or the player releases it. Each request
+  marks the lease as used, so a lease nobody has used for a while gives way
+  to a fill behind a click.
 - ``/api/reolink_viewer/clip/{token}`` serves the recording as a download
   (the plain copy if there is one).
 - ``/api/reolink_viewer/thumb/{token}`` serves a timeline thumbnail (JPEG).
@@ -44,6 +46,7 @@ from .thumbnails import ThumbKey, ThumbnailError
 from .vodcache import Entry, Recording, VodCache, VodCacheError, Window
 
 if TYPE_CHECKING:
+    from .live.streams import LiveStream
     from .models import ReolinkViewerData
 
 _LOGGER = logging.getLogger(__name__)
@@ -92,14 +95,24 @@ class ThumbGrant:
     key: ThumbKey
 
 
+@dataclass(frozen=True, slots=True)
+class LiveGrant:
+    """Permission to watch one live stream (MSE, a frame) through live/views."""
+
+    stream: LiveStream
+
+
+type Grant = VodGrant | MseGrant | ThumbGrant | LiveGrant
+
+
 class Grants:
     """Short-lived, unguessable tokens for what a signed URL may fetch."""
 
     def __init__(self) -> None:
         """Initialize the registry."""
-        self._items: dict[str, tuple[float, VodGrant | MseGrant | ThumbGrant]] = {}
+        self._items: dict[str, tuple[float, Grant]] = {}
 
-    def issue(self, grant: VodGrant | MseGrant | ThumbGrant, ttl: timedelta) -> str:
+    def issue(self, grant: Grant, ttl: timedelta) -> str:
         """Store a grant and return its token."""
         now = time.monotonic()
         if len(self._items) >= MAX_GRANTS:
@@ -110,7 +123,7 @@ class Grants:
         self._items[token] = (now + ttl.total_seconds(), grant)
         return token
 
-    def get[T: (VodGrant, MseGrant, ThumbGrant)](
+    def get[T: (VodGrant, MseGrant, ThumbGrant, LiveGrant)](
         self, token: str, kind: type[T]
     ) -> T | None:
         """Return a live grant of the given kind."""
@@ -135,7 +148,8 @@ def sign(hass: HomeAssistant, base: str, token: str, ttl: timedelta) -> str:
     return str(async_sign_path(hass, f"{base}/{token}", ttl))
 
 
-def _data(hass: HomeAssistant) -> ReolinkViewerData | None:
+def loaded_data(hass: HomeAssistant) -> ReolinkViewerData | None:
+    """Return the loaded entry's runtime data (views find it per request)."""
     entries = hass.config_entries.async_loaded_entries(DOMAIN)
     if not entries:
         return None
@@ -154,7 +168,7 @@ class _Base(HomeAssistantView):
         self, request: web.Request, token: str, *, download: bool
     ) -> web.StreamResponse:
         hass: HomeAssistant = request.app["hass"]
-        if (data := _data(hass)) is None:
+        if (data := loaded_data(hass)) is None:
             return _not_found()
         grant = data.grants.get(token, VodGrant)
         if grant is None:
@@ -162,6 +176,7 @@ class _Base(HomeAssistantView):
         cache = data.vod_cache
         try:
             entry = await cache.async_open(grant.recording, Priority.PLAYBACK)
+            cache.touch(token)
             headers: dict[str, str] = {
                 "Content-Type": "video/mp4",
                 "Cache-Control": "private, no-store",
@@ -249,7 +264,7 @@ class MseView(HomeAssistantView):
     ) -> web.StreamResponse:
         """Return the init segment (``init``) or a window (``frags``)."""
         hass: HomeAssistant = request.app["hass"]
-        if (data := _data(hass)) is None or part not in ("init", "frags"):
+        if (data := loaded_data(hass)) is None or part not in ("init", "frags"):
             return _not_found()
         grant = data.grants.get(token, MseGrant)
         if grant is None:
@@ -262,6 +277,7 @@ class MseView(HomeAssistantView):
         headers = {"Cache-Control": "private, no-store"}
         try:
             entry = await cache.async_open(grant.recording, Priority.PLAYBACK)
+            cache.touch(token)
             async with asyncio.timeout(COMPLETE_TIMEOUT):
                 if part == "init":
                     init, mime = await cache.async_init(entry)
@@ -342,7 +358,7 @@ class ThumbView(HomeAssistantView):
     async def get(self, request: web.Request, token: str) -> web.Response:
         """Return the JPEG."""
         hass: HomeAssistant = request.app["hass"]
-        if (data := _data(hass)) is None:
+        if (data := loaded_data(hass)) is None:
             return _not_found()
         grant = data.grants.get(token, ThumbGrant)
         if grant is None:

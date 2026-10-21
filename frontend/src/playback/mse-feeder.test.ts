@@ -106,8 +106,12 @@ class FakeMediaSource extends EventTarget {
   }
 }
 
-/** A recording of `count` 2 s fragments, served as the MSE view does. */
-function fakeServer(count = 30, shortBy = 0, fragment = 2) {
+/**
+ * A recording of `count` 2 s fragments, served as the MSE view does. With
+ * `lateLast`, the window reaching the end is not flagged last (the recording
+ * was still downloading); asking past it then gets an empty last window.
+ */
+function fakeServer(count = 30, shortBy = 0, fragment = 2, lateLast = false) {
   const requests: string[] = [];
   const state = { status: 200, text: "" };
   const fetch = (path: string, init?: RequestInit): Promise<Response> => {
@@ -128,7 +132,7 @@ function fakeServer(count = 30, shortBy = 0, fragment = 2) {
     const headers: Record<string, string> = {
       "X-RV-First": String(first),
       "X-RV-Count": String(n),
-      "X-RV-Last": first + n >= count ? "1" : "0",
+      "X-RV-Last": first + n >= count && (n === 0 || !lateLast) ? "1" : "0",
     };
     if (n) {
       headers["X-RV-Start"] = String(first * fragment * 1000);
@@ -268,6 +272,49 @@ describe("MseFeeder", () => {
     // the same window again by time.
     expect(server.requests[2]).toBe(`frags?first=3&ms=${FIRST_WINDOW_MS}&bytes=16777216`);
     expect(server.requests.filter((r) => r.startsWith("frags?at="))).toHaveLength(1);
+    f.destroy();
+  });
+
+  it("asks by time for a seek back into what was trimmed", async () => {
+    const server = fakeServer(60);
+    const { f, video } = feeder(server, fakeVideo(), 120_000);
+    await f.start(0);
+    await settle();
+    // Play on, one run of windows by index, until the oldest media is trimmed.
+    video.currentTime = 20;
+    video.dispatchEvent(new Event("timeupdate"));
+    await settle();
+    video.currentTime = 41;
+    video.dispatchEvent(new Event("timeupdate"));
+    await settle();
+    expect(FakeMediaSource.last?.buffer.removed[0]).toEqual([0, 11]);
+    // A click on an earlier event: the media there, not the next by index.
+    const before = server.requests.length;
+    video.currentTime = 5;
+    video.dispatchEvent(new Event("seeking"));
+    await settle();
+    expect(server.requests[before]).toBe(`frags?at=5000&ms=${FIRST_WINDOW_MS}&bytes=16777216`);
+    expect(f.around.ahead).toBeGreaterThan(0);
+    f.destroy();
+  });
+
+  it("does not ask again at once after an empty last window", async () => {
+    // The last fragments arrive before the server knows they are the last;
+    // the search says the recording is 1.5 s longer than its media.
+    const server = fakeServer(30, 0, 2, true);
+    const { f, video } = feeder(server, fakeVideo(), 61_500);
+    await f.start(50_000);
+    video.currentTime = 50;
+    await settle(40);
+    const past = server.requests.filter((r) => r.startsWith("frags?first=30"));
+    expect(past).toHaveLength(1);
+    expect(FakeMediaSource.last?.ended).toBeGreaterThan(0);
+    // At the media's end nothing more is asked.
+    const count = server.requests.length;
+    video.currentTime = 60;
+    video.dispatchEvent(new Event("timeupdate"));
+    await settle();
+    expect(server.requests.length).toBe(count);
     f.destroy();
   });
 

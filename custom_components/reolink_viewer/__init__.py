@@ -7,7 +7,8 @@ from pathlib import Path
 from homeassistant.components import frontend, panel_custom
 from homeassistant.components.ffmpeg import get_ffmpeg_manager
 from homeassistant.components.http import StaticPathConfig
-from homeassistant.core import HomeAssistant
+from homeassistant.const import EVENT_HOMEASSISTANT_STOP
+from homeassistant.core import Event, HomeAssistant
 from homeassistant.helpers import config_validation as cv, issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.typing import ConfigType
@@ -22,6 +23,7 @@ from .const import (
     DEFAULT_STREAM_BUDGET,
     DOMAIN,
     FRONTEND_DIST_DIR,
+    GO2RTC_DIR,
     ISSUE_INCOMPATIBLE,
     NVR_HOST_CONCURRENCY,
     NVR_STREAM_BUDGET,
@@ -37,6 +39,9 @@ from .const import (
     VOD_CACHE_DIR,
     VOD_CACHE_MAX_BYTES,
 )
+from .live.service import LiveService
+from .live.views import LiveFrameView, LiveMseView
+from .live.websocket import async_register_live_commands
 from .models import ReolinkViewerConfigEntry, ReolinkViewerData
 from .scheduler import HostLimits, Scheduler
 from .thumbnails import ThumbnailService
@@ -57,11 +62,14 @@ DATA_STATIC_REGISTERED: HassKey[bool] = HassKey(f"{DOMAIN}_static_registered")
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Register the websocket commands and HTTP views once."""
     async_register_commands(hass)
+    async_register_live_commands(hass)
     # Views cannot be unregistered; they find the loaded entry per request.
     hass.http.register_view(VodView())
     hass.http.register_view(ClipView())
     hass.http.register_view(MseView())
     hass.http.register_view(ThumbView())
+    hass.http.register_view(LiveMseView())
+    hass.http.register_view(LiveFrameView())
     return True
 
 
@@ -140,12 +148,29 @@ async def async_setup_entry(
     await vod_cache.async_setup()
     await thumbnails.async_setup()
     await check_reports.async_load()
+    # go2rtc starts on the first live request.
+    live = LiveService(
+        hass,
+        scheduler,
+        cache_dir / GO2RTC_DIR,
+        lambda: async_get_clientsession(hass),
+        ffmpeg=get_ffmpeg_manager(hass).binary,
+    )
     entry.runtime_data = ReolinkViewerData(
         scheduler=scheduler,
         timeline=TimelineService(hass, scheduler),
         vod_cache=vod_cache,
         thumbnails=thumbnails,
         check_reports=check_reports,
+        live=live,
+    )
+
+    async def stop_live(_event: Event) -> None:
+        # Not left running past Home Assistant (it would hold its ports).
+        await live.async_shutdown()
+
+    entry.async_on_unload(
+        hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, stop_live)
     )
 
     if not hass.data.get(DATA_STATIC_REGISTERED):
@@ -173,6 +198,8 @@ async def async_unload_entry(
 ) -> bool:
     """Unload the entry."""
     frontend.async_remove_panel(hass, PANEL_URL_PATH, warn_if_unknown=False)
+    if entry.runtime_data.live is not None:
+        await entry.runtime_data.live.async_shutdown()
     await entry.runtime_data.vod_cache.async_shutdown()
     await entry.runtime_data.scheduler.async_shutdown()
     return True

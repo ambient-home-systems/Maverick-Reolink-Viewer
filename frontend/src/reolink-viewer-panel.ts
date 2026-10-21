@@ -3,6 +3,7 @@ import { LitElement, css, html, nothing, type PropertyValues, type TemplateResul
 import { fetchCatalog, fetchDevices, runProbe, toError, warmTimelines, type ProbeRun } from "./api";
 import "./components/device-list";
 import "./components/device-page";
+import "./components/live-check";
 import {
   NAVIGATE_EVENT,
   TOAST_EVENT,
@@ -171,11 +172,19 @@ export class ReolinkViewerPanel extends LitElement {
               .deviceId=${route.id}
               .tab=${route.tab}
             ></rv-device-page>`
-          : html`${this._renderBanner()}
-              ${this._loadError
-                ? nothing
-                : html`<rv-device-list .devices=${this._devices}></rv-device-list>`}
-              ${this._isAdmin ? this._renderProbe() : nothing}`}
+          : route.view === "live-check"
+            ? html`<div>
+                  <button class="text" @click=${() => {
+                    this.navigate({ view: "list" });
+                  }}>← Devices</button>
+                </div>
+                <rv-live-check .hass=${this.hass}></rv-live-check>`
+            : html`${this._renderBanner()}
+                ${this._loadError
+                  ? nothing
+                  : html`<rv-device-list .devices=${this._devices}></rv-device-list>`}
+                ${this._renderLiveEntry()}
+                ${this._isAdmin ? this._renderProbe() : nothing}`}
       </main>
       ${this._toast
         ? html`<div class="toast ${this._toast.kind}" role="status" aria-live="polite">
@@ -204,6 +213,24 @@ export class ReolinkViewerPanel extends LitElement {
         ${devices.compat.errors.map((e) => html`<li>${e}</li>`)}
       </ul>
     </div>`;
+  }
+
+  private _renderLiveEntry(): TemplateResult | typeof nothing {
+    if (!this._devices || this._devices.degraded) return nothing;
+    return html`<section class="card">
+      <h2>Live view</h2>
+      <p class="muted">
+        Live view is being built. The live check measures how fast each camera starts live on this
+        device, over WebRTC and MSE, and compares it with Home Assistant's own camera view.
+      </p>
+      <div class="actions">
+        <button class="primary" @click=${() => {
+          this.navigate({ view: "live-check" });
+        }}>
+          Open the live check
+        </button>
+      </div>
+    </section>`;
   }
 
   private _renderProbe(): TemplateResult {

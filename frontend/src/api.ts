@@ -1,5 +1,12 @@
 import type {
   CacheStatusResult,
+  CapacityEvent,
+  IceServer,
+  LiveCamera,
+  LiveSignal,
+  LiveStatus,
+  LiveStreamKind,
+  LiveStreamState,
   Catalog,
   MediaInfoResponse,
   PlaybackUrl,
@@ -205,6 +212,13 @@ export function urlToken(path: string): string {
   return path.split("?")[0]?.split("/").at(-1) ?? "";
 }
 
+/**
+ * End the leases of playback URLs (by token): the player no longer holds
+ * their recordings, so the server may evict them for others.
+ */
+export const releasePlayback = (hass: HomeAssistant, tokens: string[]): Promise<unknown> =>
+  hass.callWS({ type: "reolink_viewer/playback/release", tokens });
+
 /** The download of the copy a URL (by its token) serves. */
 export const fetchCacheStatus = (hass: HomeAssistant, token: string): Promise<CacheStatusResult> =>
   hass.callWS<CacheStatusResult>({ type: "reolink_viewer/playback/cache_status", token });
@@ -233,3 +247,66 @@ export const fetchThumbnailUrls = (
 
 export const fetchMediaInfo = (hass: HomeAssistant, deviceId: string): Promise<MediaInfoResponse> =>
   hass.callWS<MediaInfoResponse>({ type: "reolink_viewer/playback/media_info", device_id: deviceId });
+
+// ---- Live view ----
+
+export const fetchLiveStatus = (hass: HomeAssistant): Promise<LiveStatus> =>
+  hass.callWS<LiveStatus>({ type: "reolink_viewer/live/status" });
+
+export const fetchLiveCameras = (hass: HomeAssistant): Promise<{ cameras: LiveCamera[] }> =>
+  hass.callWS<{ cameras: LiveCamera[] }>({ type: "reolink_viewer/live/cameras" });
+
+export interface LiveRef {
+  connectionId: string;
+  stream: LiveStreamKind;
+}
+
+const liveRef = (ref: LiveRef) => ({ connection_id: ref.connectionId, stream: ref.stream });
+
+/** The signed path of a stream's MSE websocket (open it within 2 minutes). */
+export const fetchLiveMsePath = (hass: HomeAssistant, ref: LiveRef): Promise<{ path: string }> =>
+  hass.callWS<{ path: string }>({ type: "reolink_viewer/live/mse", ...liveRef(ref) });
+
+/** The signed path of a JPEG from a stream (from go2rtc). */
+export const fetchLiveFramePath = (hass: HomeAssistant, ref: LiveRef): Promise<{ path: string }> =>
+  hass.callWS<{ path: string }>({ type: "reolink_viewer/live/frame", ...liveRef(ref) });
+
+export const fetchLiveState = (hass: HomeAssistant, ref: LiveRef): Promise<LiveStreamState> =>
+  hass.callWS<LiveStreamState>({ type: "reolink_viewer/live/state", ...liveRef(ref) });
+
+/** Keep a stream warm in go2rtc, or stop (admin). */
+export const setLivePreload = (hass: HomeAssistant, ref: LiveRef, enabled: boolean): Promise<unknown> =>
+  hass.callWS({ type: "reolink_viewer/live/preload", ...liveRef(ref), enabled });
+
+/** Home Assistant's ICE servers (with Nabu Casa's TURN for subscribers). */
+export const fetchIceServers = (hass: HomeAssistant): Promise<IceServer[]> =>
+  hass.callWS<IceServer[]>({ type: "web_rtc/ice_servers" });
+
+/** Start a WebRTC session; events arrive through `onSignal`. Resolves with the unsubscribe. */
+export const subscribeLiveWebRtc = (
+  hass: HomeAssistant,
+  ref: LiveRef,
+  offer: string,
+  onSignal: (signal: LiveSignal) => void,
+): Promise<() => Promise<void>> =>
+  hass.connection.subscribeMessage<LiveSignal>(onSignal, {
+    type: "reolink_viewer/live/webrtc",
+    ...liveRef(ref),
+    offer,
+  });
+
+export const sendLiveCandidate = (hass: HomeAssistant, sessionId: string, candidate: string): Promise<unknown> =>
+  hass.callWS({ type: "reolink_viewer/live/candidate", session_id: sessionId, candidate });
+
+/** Run the capacity test of a host (admin). Resolves with the unsubscribe. */
+export const subscribeCapacity = (
+  hass: HomeAssistant,
+  hostId: string,
+  onEvent: (event: CapacityEvent) => void,
+  options: { include_main?: boolean; include_fill?: boolean } = {},
+): Promise<() => Promise<void>> =>
+  hass.connection.subscribeMessage<CapacityEvent>(onEvent, {
+    type: "reolink_viewer/live/capacity",
+    host_id: hostId,
+    ...options,
+  });

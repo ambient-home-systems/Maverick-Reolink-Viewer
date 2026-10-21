@@ -383,3 +383,107 @@ export interface ThumbnailUrl {
 }
 
 export type MediaInfoResponse = Record<Stream, MediaInfo | null>;
+
+// ---- Live view (reolink_viewer/live/*) ----
+
+export type LiveStreamKind = "sub" | "main" | "ext";
+export const LIVE_STREAMS: readonly LiveStreamKind[] = ["sub", "main", "ext"];
+
+export interface LiveConnection {
+  /** The connection's device id: what the live commands take. */
+  connection_id: string;
+  via: "nvr" | "direct";
+  entry_title: string;
+  is_battery: boolean;
+  /** Per stream: its configured encoding (none for ext) and HA's camera entity showing it. */
+  streams: Record<LiveStreamKind, { encoding: StreamEncoding | null; entity_id: string | null }>;
+}
+
+export interface LiveCamera {
+  id: string;
+  name: string;
+  model: string | null;
+  records: boolean;
+  connections: LiveConnection[];
+}
+
+export interface Go2rtcStatus {
+  state: "stopped" | "starting" | "running" | "restarting" | "failed";
+  version: string | null;
+  /** "system" (Home Assistant's own binary) or "downloaded". */
+  binary: string | null;
+  error: string | null;
+  restarts: number;
+  generation: number;
+  started_at: string | null;
+  webrtc_port: number;
+  /** Its last log lines (admins only), addresses and URLs removed. */
+  log?: string[];
+}
+
+export interface LiveStatus {
+  go2rtc: Go2rtcStatus;
+  /** Running streams (go2rtc name → holds). */
+  running: Record<string, number>;
+  preloaded: string[];
+  sessions: number;
+}
+
+export interface LiveStreamState {
+  /** Null: go2rtc does not know the stream yet. */
+  state: { active: boolean; bytes: number; producers: number; consumers: number; codecs?: string[] } | null;
+  holds: number;
+  preloaded: boolean;
+}
+
+/** HA's RTCIceServer (web_rtc/ice_servers). */
+export interface IceServer {
+  urls: string | string[];
+  username?: string;
+  credential?: string;
+}
+
+export type LiveSignal =
+  | { type: "session"; session_id: string }
+  | { type: "answer"; sdp: string; timing?: Record<string, number> }
+  | { type: "candidate"; candidate: string }
+  | { type: "error"; message: string }
+  | { type: "closed" };
+
+/** HA's own camera WebRTC events (camera/webrtc/offer). */
+export type StockSignal =
+  | { type: "session"; session_id: string }
+  | { type: "answer"; answer: string }
+  | { type: "candidate"; candidate: RTCIceCandidateInit }
+  | { type: "error"; code: string; message: string };
+
+export interface CapacityStream {
+  stream: string;
+  fps: number;
+  expected_fps: number | null;
+  longest_gap_s: number;
+  error?: string;
+}
+
+export interface CapacityLevel {
+  level: number;
+  added: string;
+  first_frame_s?: number | null;
+  streams: CapacityStream[];
+  online_users: number | null;
+  fill?: { mbit_s?: number | null; ttfb_ms?: number | null; error?: string };
+}
+
+export interface CapacityReport {
+  levels: CapacityLevel[];
+  online_users_before: number | string;
+  online_users_after: number | string;
+  fill?: { channel: number; duration_s: number } | string;
+  fill_alone_mbit_s?: number | null;
+  verdict: { first_failing_level: number | null; reasons: string[] };
+}
+
+export type CapacityEvent =
+  | { type: "progress"; message: string }
+  | { type: "result"; report: CapacityReport }
+  | { type: "error"; message: string };

@@ -102,6 +102,31 @@ describe("rv-player", () => {
     expect(el.current).toBeUndefined();
     expect(el.time).toBeUndefined();
   });
+
+  it("releases each recording once it holds it no more", async () => {
+    const el = await mount("rv-player");
+    const released: string[] = [];
+    const held = (id: string) => ({ ...item(id), release: () => released.push(id) });
+    await el.play(held("a"));
+    await el.preload(held("b"));
+    // A second source for the recording already preloaded is not needed.
+    await el.preload(held("b"));
+    expect(released).toEqual(["b"]);
+    // Moving on to the preloaded one keeps both: the old one is still there.
+    await el.play(held("b"));
+    expect(released).toEqual(["b"]);
+    // A new preload replaces the old recording; a new start replaces the current.
+    await el.preload(held("c"));
+    expect(released).toEqual(["b", "a"]);
+    await el.play(held("d"));
+    expect(released).toEqual(["b", "a", "b"]);
+    const [a, b] = videos(el);
+    // At the end the finished recording goes; stop lets go of the rest.
+    (a.classList.contains("active") ? a : b).dispatchEvent(new Event("ended"));
+    expect(released).toEqual(["b", "a", "b", "d"]);
+    el.stop();
+    expect(released).toEqual(["b", "a", "b", "d", "c"]);
+  });
 });
 
 describe("rv-timeline", () => {

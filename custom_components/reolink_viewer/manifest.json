@@ -3,12 +3,20 @@
   "name": "Reolink Viewer",
   "codeowners": ["@ambient-home-systems"],
   "config_flow": true,
-  "dependencies": ["ffmpeg", "frontend", "http", "panel_custom", "reolink", "websocket_api"],
+  "dependencies": [
+    "ffmpeg",
+    "frontend",
+    "http",
+    "panel_custom",
+    "reolink",
+    "web_rtc",
+    "websocket_api"
+  ],
   "documentation": "https://github.com/ambient-home-systems/Maverick-Reolink-Viewer",
   "integration_type": "service",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/ambient-home-systems/Maverick-Reolink-Viewer/issues",
   "requirements": [],
   "single_config_entry": true,
-  "version": "0.3.2"
+  "version": "0.4.0"
 }

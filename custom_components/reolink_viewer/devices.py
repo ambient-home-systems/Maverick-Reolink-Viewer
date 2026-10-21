@@ -43,6 +43,10 @@ SNAPSHOT_PREFERENCE: tuple[str, ...] = (
 
 type Via = Literal["nvr", "direct"]
 
+# The live streams of a camera, and the camera entities that show them in
+# Home Assistant's own view (for the live check's comparison).
+LIVE_STREAMS: tuple[str, ...] = ("sub", "main", "ext")
+
 
 class DeviceNotFoundError(Exception):
     """No Reolink device with that id."""
@@ -66,6 +70,25 @@ class PlaybackSource:
     @property
     def key(self) -> str:
         """Return a stable storage key that reveals no identifier."""
+        return bridge.opaque_key(self.entry_id, self.channel)
+
+
+@dataclass(frozen=True, slots=True)
+class LiveSource:
+    """One way to watch a camera live: an NVR channel or a direct connection."""
+
+    camera_id: str
+    # The connection's device id (what the panel addresses it by).
+    connection_id: str
+    name: str
+    entry_id: str
+    channel: int
+    via: Via
+    is_battery: bool = False
+
+    @property
+    def key(self) -> str:
+        """Return a stable key that reveals no identifier."""
         return bridge.opaque_key(self.entry_id, self.channel)
 
 
@@ -449,6 +472,118 @@ def async_playback_source(hass: HomeAssistant, device_id: str) -> PlaybackSource
                 raise NoPlaybackError(device_id)
             return source
     raise DeviceNotFoundError(device_id)
+
+
+def _live_source(camera: _Camera, conn: _Connection) -> LiveSource | None:
+    if conn.channel is None or conn.handle is None:
+        return None
+    try:
+        battery = bool(conn.handle.channel_details(conn.channel).get("is_battery"))
+    except Exception:  # flags are optional
+        _LOGGER.debug("Cannot read channel details", exc_info=True)
+        battery = False
+    return LiveSource(
+        camera_id=camera.id,
+        connection_id=conn.device.id,
+        name=_device_name(camera.primary.device) or camera.primary.entry_title,
+        entry_id=conn.entry_id,
+        channel=conn.channel,
+        via=conn.via,
+        is_battery=battery,
+    )
+
+
+@callback
+def async_live_source(hass: HomeAssistant, connection_id: str) -> LiveSource:
+    """Return one connection of a camera (by its device id) as a live source."""
+    model = _async_build(hass, degraded=False)
+    for camera in model.cameras:
+        for conn in camera.connections:
+            if conn.device.id == connection_id:
+                if (source := _live_source(camera, conn)) is None:
+                    raise DeviceNotFoundError(connection_id)
+                return source
+    raise DeviceNotFoundError(connection_id)
+
+
+@callback
+def async_host_live_sources(hass: HomeAssistant, host_id: str) -> list[LiveSource]:
+    """Return the cameras of an NVR or Hub (by its device id) as live sources.
+
+    A camera added directly is its own host: its id gives its one connection.
+    """
+    model = _async_build(hass, degraded=False)
+    host = next((h for h in model.hosts if h.device.id == host_id), None)
+    sources: list[LiveSource] = []
+    for camera in model.cameras:
+        for conn in camera.connections:
+            if host is not None:
+                mine = conn.via == "nvr" and conn.entry_id == host.entry_id
+            else:
+                mine = conn.via == "direct" and conn.device.id == host_id
+            if mine and (source := _live_source(camera, conn)) is not None:
+                sources.append(source)
+    return sorted(sources, key=lambda s: s.channel)
+
+
+@callback
+def async_live_cameras(hass: HomeAssistant) -> list[dict[str, Any]]:
+    """Return every camera with its connections, streams and HA camera entities.
+
+    Each connection lists, per live stream, the configured encoding and the
+    enabled camera entity showing it in Home Assistant's own view (if any).
+    """
+    model = _async_build(hass, degraded=False)
+    ent_reg = er.async_get(hass)
+    cameras = []
+    for camera in model.cameras:
+        connections = []
+        for conn in camera.connections:
+            if (source := _live_source(camera, conn)) is None:
+                continue
+            entities = {
+                e.translation_key: e.entity_id
+                for e in _reolink_entities(ent_reg, conn.device_ids)
+                if e.domain == "camera"
+                and e.disabled_by is None
+                and e.translation_key in LIVE_STREAMS
+            }
+            try:
+                encodings = (
+                    conn.handle.channel_details(conn.channel)["encodings"]
+                    if conn.handle is not None and conn.channel is not None
+                    else {}
+                )
+            except Exception:  # encodings are optional
+                _LOGGER.debug("Cannot read encodings", exc_info=True)
+                encodings = {}
+            connections.append(
+                {
+                    "connection_id": source.connection_id,
+                    "via": source.via,
+                    "entry_title": conn.entry_title,
+                    "is_battery": source.is_battery,
+                    "streams": {
+                        stream: {
+                            "encoding": encodings.get(stream),
+                            "entity_id": entities.get(stream),
+                        }
+                        for stream in LIVE_STREAMS
+                    },
+                }
+            )
+        if connections:
+            cameras.append(
+                {
+                    "id": camera.id,
+                    "name": _device_name(camera.primary.device)
+                    or camera.primary.entry_title,
+                    "model": camera.primary.device.model,
+                    "records": any(c.playback_source for c in camera.connections),
+                    "connections": connections,
+                }
+            )
+    return cameras
 
 
 @callback

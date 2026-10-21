@@ -24,9 +24,17 @@ custom_components/reolink_viewer/
   fmp4.py            # indexes a cached recording's fragments as it grows; makes each MSE-ready
   remux.py           # rewrites cached recordings as plain MP4 with ffmpeg (the file player)
   thumbnails.py      # recording thumbnails: time buckets, de-duplication, disk LRU
-  checks.py          # saved playback check reports (a phone's run, read on a desktop)
+  checks.py          # saved check reports, playback and live (a phone's run, read on a desktop)
   views.py           # /mse (HA auth) and signed, short-lived /vod, /clip, /thumb URLs (no camera URLs)
   websocket_api.py   # status, devices, catalog, probe, timeline/*, playback/*, thumbnail/*
+  live/              # live view (Phase 3):
+    binary.py        #   go2rtc: HA's binary, else a pinned download (SHA-256 checked)
+    go2rtc.py        #   our go2rtc: config (no secrets), supervision, its API
+    streams.py       #   camera streams registered at runtime, held against the stream budget
+    service.py       #   the above per entry; WebRTC sessions
+    views.py         #   signed MSE websocket proxy and frames
+    websocket.py     #   live/* commands (WebRTC signaling, preload, capacity test)
+    capacity.py      #   how many streams a host serves at once
   models.py          # runtime data of the config entry
   translations/en.json
   frontend_dist/     # built panel bundle (committed; CI checks it matches the source)
@@ -35,9 +43,13 @@ frontend/            # Lit + TypeScript panel, built with Vite
   src/playback/      # timeline canvas + math, calendar, event list, player (MSE feeder in
                      # mse-feeder.ts, else a file URL), codec checks, the playback check
                      # (check.ts) and its MSE probe (mse-probe.ts, mse-sample.ts)
-tests/               # pytest-homeassistant-custom-component; test_mse_browser.py drives
-                     # Playwright's Chromium (mse_append.cjs) through the MSE view
-scripts/             # setup_dev.sh, probe_to_matrix.py, make_mse_sample.py (writes mse-sample.ts);
+  src/live/          # the live check (check.ts) and its sessions: WebRTC (ours and HA's),
+                     # MSE over the signed websocket (session.ts)
+tests/               # pytest-homeassistant-custom-component; test_mse_browser.py and
+                     # test_live_browser.py drive Playwright's Chromium (mse_append.cjs,
+                     # live_browser.cjs); go2rtc_fixtures.py runs go2rtc and a fake camera
+scripts/             # setup_dev.sh, probe_to_matrix.py, make_mse_sample.py (writes mse-sample.ts),
+                     # fetch_go2rtc.py (the pinned go2rtc for the tests);
                      # playback_check.js and inspect_recording.js (paste into the browser console);
                      # desktop-check/ runs the playback check in Chrome without clicking
 ```
@@ -79,6 +91,15 @@ python -m script.hassfest --action validate \
 ```
 
 ## Tests
+
+The live tests run go2rtc itself and a fake camera (go2rtc serving ffmpeg's test
+sources). They are skipped without a go2rtc binary; CI fetches the pinned one and
+fails instead of skipping (`RV_GO2RTC_TESTS=1`). To run them locally:
+
+```bash
+export RV_GO2RTC=$(python -m scripts.fetch_go2rtc .cache/go2rtc)
+pytest tests/test_live_go2rtc.py tests/test_live_browser.py
+```
 
 Tests set up HA's real Reolink integration on a mocked `reolink_aio.api.Host`.
 `tests/ha_reolink_mock.py` is a verbatim copy of `_init_host_mock` from HA core's

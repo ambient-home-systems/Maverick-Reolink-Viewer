@@ -18,8 +18,10 @@ served from the cache, with Range, by ``views.py``:
   than when it queued) and the second copy a plain-MP4 rewrite writes;
 - least-recently-used recordings are evicted to make that room, a recording's
   original and plain copy together as one unit; recordings being filled,
-  rewritten, read, or still readable through a live URL (a *lease*: Range
-  requests are not counted as readers) are never evicted;
+  rewritten or read are never evicted, nor those still readable through a live
+  URL (a *lease*: Range requests are not counted as readers). The player
+  releases a URL's lease when it moves on, and a fill behind a click may take
+  the room of a lease no request has used for ``LEASE_IDLE_S``;
 - the first fill of a camera's stream records its codec and size (from the
   ``moov``) for the browser's MediaCapabilities check;
 - room is left after the ``moov`` for a segment index (``mp4index.py``),
@@ -96,6 +98,10 @@ PART_SUFFIX = ".part"
 FLAT_SUFFIX = ".flat.mp4"
 # A lease outlasts its URL by this much.
 LEASE_MARGIN_S = 60.0
+# A fill behind a click (playback priority) may evict a recording whose
+# leases no request has used for this long: the player that held it moved on
+# without releasing them (e.g. the page was closed) or has long been paused.
+LEASE_IDLE_S = 300.0
 # Part of each file's cache id: bumping it retires files of an older layout
 # (they become unknown files, evicted first). 2: segment index added.
 # 3: also indexed when fragments use absolute offsets (the NVR's do).
@@ -159,6 +165,20 @@ class Recording:
 
 
 @dataclass(slots=True)
+class Lease:
+    """A URL that can still read a recording (see ``VodCache.lease``)."""
+
+    # Until then (_clock): the URL's expiry plus a margin.
+    until: float
+    # When the URL was issued or last read (_clock).
+    read_at: float
+
+    def live(self, now: float, idle: float | None) -> bool:
+        """Return True while it holds the recording (with ``idle``: and was used)."""
+        return self.until > now and (idle is None or now - self.read_at <= idle)
+
+
+@dataclass(slots=True)
 class Entry:
     """A cached recording: complete on disk, being filled, or failed."""
 
@@ -177,8 +197,8 @@ class Entry:
     # When the plain MP4 became available (monotonic), or None.
     flat_at: float | None = None
     flat_task: asyncio.Task[None] | None = None
-    # Live URLs can read this recording until then (_clock).
-    lease_until: float = 0.0
+    # The live URLs that can read this recording, by token.
+    leases: dict[str, Lease] = field(default_factory=dict)
     # The original's fragments found so far (the MSE player's reads).
     fragments: FragmentIndex | None = None
     index_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
@@ -203,13 +223,18 @@ class Entry:
         """Return True while the plain MP4 is being written."""
         return self.flat_task is not None and not self.flat_task.done()
 
-    def leased(self, now: float) -> bool:
-        """Return True while a live URL can read this recording."""
-        return self.lease_until > now
+    def leased(self, now: float, idle: float | None = None) -> bool:
+        """Return True while a live URL can read this recording.
 
-    def busy(self, now: float) -> bool:
+        With ``idle``, only URLs issued or read within that many seconds count.
+        """
+        return any(lease.live(now, idle) for lease in self.leases.values())
+
+    def busy(self, now: float, idle: float | None = None) -> bool:
         """Return True while the recording's files must stay on disk."""
-        return bool(self.readers or self.filling or self.flattening or self.leased(now))
+        return bool(
+            self.readers or self.filling or self.flattening or self.leased(now, idle)
+        )
 
     def public(self) -> dict[str, Any]:
         """Return debug information for the browser."""
@@ -249,6 +274,8 @@ class VodCache:
         self._max_bytes = max_bytes
         self._session = session
         self._entries: dict[str, Entry] = {}
+        # Each leased URL (by token): the recording it reads, and its lease.
+        self._leases: dict[str, tuple[str, Lease]] = {}
         self._media: dict[str, dict[str, Any]] = {}
         # Recordings whose offsets could not be shifted: cached without index.
         self._no_index: set[str] = set()
@@ -379,7 +406,7 @@ class VodCache:
         entry = Entry(recording, path, priority=priority)
         if failed is not None:
             # URLs issued for the failed fill still read this recording.
-            entry.lease_until = failed.lease_until
+            entry.leases = failed.leases
         self._entries[recording.cache_id] = entry
         if found is None:
             return entry
@@ -416,15 +443,48 @@ class VodCache:
             "flat": "yes" if flat else "not yet",
         }
 
-    def lease(self, entry: Entry, seconds: float) -> None:
-        """Keep a recording readable by a URL valid for ``seconds``.
+    def lease(self, entry: Entry, seconds: float, token: str) -> None:
+        """Keep a recording readable by the URL ``token``, valid for ``seconds``.
 
-        Neither its original nor its plain copy is evicted while it lasts
-        (plus a margin for a request sent just before it expires), and
-        neither file is ever swapped.
+        Neither its original nor its plain copy is evicted while the lease
+        lasts (plus a margin for a request sent just before it expires), and
+        neither file is ever swapped. It ends early when released (the player
+        moved on); a fill behind a click may evict it once it has not been
+        used for ``LEASE_IDLE_S`` (see ``touch``).
         """
-        until = _clock() + seconds + LEASE_MARGIN_S
-        entry.lease_until = max(entry.lease_until, until)
+        now = _clock()
+        self._prune_leases(now)
+        lease = Lease(now + seconds + LEASE_MARGIN_S, now)
+        entry.leases[token] = lease
+        self._leases[token] = (entry.recording.cache_id, lease)
+
+    def touch(self, token: str) -> None:
+        """Note that the URL ``token`` was just used (a request read it).
+
+        Call it after opening the recording: if an idle lease let it be
+        evicted and it was fetched again, the new copy is leased again.
+        """
+        if (item := self._leases.get(token)) is None:
+            return
+        cache_id, lease = item
+        lease.read_at = _clock()
+        if (entry := self._entries.get(cache_id)) is not None:
+            entry.leases.setdefault(token, lease)
+
+    def release(self, token: str) -> None:
+        """End the lease of the URL ``token`` (it keeps working, unleased)."""
+        if (item := self._leases.pop(token, None)) is None:
+            return
+        if (entry := self._entries.get(item[0])) is not None:
+            entry.leases.pop(token, None)
+
+    def _prune_leases(self, now: float) -> None:
+        """Forget the leases that have ended."""
+        for token, (cache_id, lease) in list(self._leases.items()):
+            if lease.until <= now:
+                del self._leases[token]
+                if (entry := self._entries.get(cache_id)) is not None:
+                    entry.leases.pop(token, None)
 
     async def _fill(self, entry: Entry) -> None:
         rec = entry.recording
@@ -439,7 +499,9 @@ class VodCache:
                 entry.timing["wait_ms"] = _ms(began)
                 # Checked now rather than when it queued: other fills may
                 # have used the space meanwhile.
-                await self._make_room(entry.part_path, expected_size(rec))
+                await self._make_room(
+                    entry.part_path, expected_size(rec), playback=_clicked(entry)
+                )
                 await self._download(entry)
             finally:
                 ticket.release()
@@ -501,8 +563,11 @@ class VodCache:
         try:
             async with self._flatten_lock:
                 try:
-                    # The copy is a second file as large as the first.
-                    await self._make_room(part, entry.written + _flat_extra(entry))
+                    # The copy is a second file as large as the first; only
+                    # the file player asks for it.
+                    await self._make_room(
+                        part, entry.written + _flat_extra(entry), playback=True
+                    )
                 except VodCacheError as err:
                     entry.timing["flat"] = f"no: {err}"
                     return
@@ -533,7 +598,7 @@ class VodCache:
 
     async def async_init(self, entry: Entry) -> tuple[bytes, str | None]:
         """Return the init segment (ftyp + moov) and its MIME type with codecs."""
-        index = await self._await_index(entry, lambda i: i.init is not None)
+        index, _complete = await self._await_index(entry, lambda i: i.init is not None)
         assert index.init is not None
         return index.init, index.mime
 
@@ -558,7 +623,7 @@ class VodCache:
                 return first if first < len(index.fragments) else None
             return index.find(at_ms or 0.0)
 
-        index = await self._await_index(entry, lambda i: start(i) is not None)
+        index, complete = await self._await_index(entry, lambda i: start(i) is not None)
         begin = start(index)
         if begin is None:
             # The recording ends before that point.
@@ -575,7 +640,9 @@ class VodCache:
             chosen.append(fragment)
             media += fragment.duration_ms
             size += fragment.size
-        last = entry.complete and begin + len(chosen) == len(index.fragments)
+        # Last only if the scan saw the whole file: the fill may have
+        # completed since, with fragments past those scanned.
+        last = complete and begin + len(chosen) == len(index.fragments)
         return Window(begin, tuple(chosen), last=last)
 
     async def async_read_window(
@@ -602,14 +669,21 @@ class VodCache:
                     batch, size = [], 0
         except FragmentError as err:
             raise VodCacheError(f"not playable as fragments: {err}") from err
+        except FileNotFoundError as err:
+            # The fill failed and removed its file after the window was chosen.
+            raise VodCacheError(entry.error or "recording file gone") from err
         finally:
             entry.readers -= 1
             entry.last_access = time.monotonic()
 
     async def _await_index(
         self, entry: Entry, ready: Callable[[FragmentIndex], bool]
-    ) -> FragmentIndex:
-        """Index the original as it fills until ``ready`` (or it is complete)."""
+    ) -> tuple[FragmentIndex, bool]:
+        """Index the original as it fills until ``ready`` (or it is complete).
+
+        Returns the index and whether the file was complete when the scan
+        began (then the index holds every fragment).
+        """
         if entry.fragments is None:
             entry.fragments = FragmentIndex()
         index = entry.fragments
@@ -629,11 +703,11 @@ class VodCache:
                 if index.error is not None:
                     raise VodCacheError(f"not playable as fragments: {index.error}")
                 if ready(index):
-                    return index
+                    return index, complete
             if complete:
                 if index.init is None:
                     raise VodCacheError("not playable as fragments: no moov")
-                return index
+                return index, complete
             await self.async_wait(entry, offset=written)
 
     def _candidates(self, entry: Entry) -> tuple[Path, Path]:
@@ -644,18 +718,19 @@ class VodCache:
 
     # ---- Disk space ----
 
-    async def _make_room(self, path: Path, size: int) -> None:
+    async def _make_room(self, path: Path, size: int, *, playback: bool) -> None:
         """Reserve ``size`` bytes for the file at ``path``, evicting if needed.
 
-        Raises VodCacheError (and reserves nothing) when the cap or the
-        free-space rule cannot be kept.
+        ``playback``: the room is for a click (not a prefetch), which may
+        evict leases not used lately. Raises VodCacheError (and reserves
+        nothing) when the cap or the free-space rule cannot be kept.
         """
         async with self._space_lock:
             previous = self._reserved.get(path)
             self._reserved[path] = size
             made = False
             try:
-                made = await self._evict_locked()
+                made = await self._evict_locked(playback=playback)
             finally:
                 if not made:
                     if previous is None:
@@ -669,7 +744,11 @@ class VodCache:
         """Reserve more for a fill that outgrew its reservation."""
         if needed <= self._reserved.get(entry.part_path, 0):
             return
-        await self._make_room(entry.part_path, needed + max(needed // 20, GROW_STEP))
+        await self._make_room(
+            entry.part_path,
+            needed + max(needed // 20, GROW_STEP),
+            playback=_clicked(entry),
+        )
 
     async def _download(self, entry: Entry) -> None:
         rec = entry.recording
@@ -855,14 +934,15 @@ class VodCache:
     async def _evict(self) -> bool:
         """Evict until the cap and the free-space rule hold; return if they do."""
         async with self._space_lock:
-            return await self._evict_locked()
+            return await self._evict_locked(playback=False)
 
-    async def _evict_locked(self) -> bool:
+    async def _evict_locked(self, *, playback: bool) -> bool:
         """Delete least-recently-used recordings to make the reserved room.
 
         Everything on disk counts (``.part`` files too), plus what each
         reservation has still to write. A recording's original and plain copy
-        go together; busy or leased recordings stay.
+        go together; busy or leased recordings stay (for ``playback``, only
+        leases used within ``LEASE_IDLE_S``).
         """
         files, on_disk, pending, free = await self._measure()
         # Deleting a file lowers the total and raises free space alike.
@@ -882,7 +962,8 @@ class VodCache:
             units.setdefault(cache_id, []).append((path, size))
             newest[cache_id] = max(newest.get(cache_id, 0.0), mtime)
         now = _clock()
-        protected = {cid for cid, e in self._entries.items() if e.busy(now)}
+        idle = LEASE_IDLE_S if playback else None
+        protected = {cid for cid, e in self._entries.items() if e.busy(now, idle)}
         protected |= {_cache_id_of(path) for path in self._reserved}
 
         def order(cache_id: str) -> tuple[bool, float]:
@@ -988,6 +1069,11 @@ def expected_size(rec: Recording) -> int:
             seconds * ESTIMATE_BITS_S.get(rec.stream, ESTIMATE_BITS_S["main"]) / 8
         )
     return size + int(size * SIZE_MARGIN) + index_room(seconds)
+
+
+def _clicked(entry: Entry) -> bool:
+    """Return True for a fill someone waits for (not a prefetch)."""
+    return entry.priority <= Priority.PLAYBACK
 
 
 def _flat_extra(entry: Entry) -> int:

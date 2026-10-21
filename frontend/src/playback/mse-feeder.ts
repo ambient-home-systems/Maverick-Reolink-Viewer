@@ -33,7 +33,7 @@ export const AHEAD_MAX_BYTES = 48 * 1024 * 1024;
 export const BEHIND_S = 30;
 /** Trimmed once this much more than BEHIND_S has gathered behind. */
 const TRIM_SLACK_S = 10;
-/** After an empty window that is not the last, the next request waits this long. */
+/** After an empty window, the next request waits this long. */
 const EMPTY_RETRY_MS = 1_000;
 /** Buffered ranges this close count as one (fragment edges, audio vs video). */
 export const JOIN_S = 0.5;
@@ -103,7 +103,11 @@ export class MseFeeder {
   private _pending: { controller: AbortController; fromS: number; toS: number } | undefined;
   /** Where the media appended last continues: fragment index and time. */
   private _next: { index: number; atS: number } | undefined;
-  /** Where the run of windows appended one after another began (s). */
+  /**
+   * Where the run of windows appended one after another, ending at `_next`,
+   * begins (s): moved on as trimming removes its start, unset once its end
+   * is removed.
+   */
   private _runStartS: number | undefined;
   /** The recording's end (s), once its last window is appended. */
   private _endS: number | undefined;
@@ -235,11 +239,12 @@ export class MseFeeder {
     }
     if (buffer.updating) return;
     if (!range) {
-      // Inside what was just appended but not covered yet (a window can end a
-      // hair before the play position): extend it, do not ask again.
+      // At the end of what was just appended (a window can end a hair before
+      // the play position): extend it by index, do not ask again. Anywhere
+      // else (e.g. a seek back into media trimmed away), ask by time.
       const next = this._next;
       const run = this._runStartS;
-      if (next && run !== undefined && t >= run - JOIN_S && t < next.atS + JOIN_S) {
+      if (next && run !== undefined && t >= next.atS - JOIN_S && t < next.atS + JOIN_S) {
         void this._fetch({ first: next.index }, FIRST_WINDOW_MS, false);
       } else {
         void this._fetch({ at: t * 1000 }, FIRST_WINDOW_MS, false);
@@ -285,11 +290,15 @@ export class MseFeeder {
         if (end > start) this._bytesPerSecond = (data.length * 1000) / (end - start);
       }
       if (response.headers.get("X-RV-Last") === "1") {
-        this._endS = count > 0 ? end / 1000 : this._video.duration;
+        // An empty last window: the media ends where the run before it did
+        // (the search's length can be a little longer).
+        const after = query.first !== undefined ? this._next?.atS : undefined;
+        this._endS = count > 0 ? end / 1000 : (after ?? this._video.duration);
         this._endOfStream();
-      } else if (count === 0) {
+      }
+      if (count === 0) {
         // The server sends at least one fragment unless the recording ended;
-        // should it not, ask again later rather than at once.
+        // either way, ask again later rather than at once.
         this._settle(controller);
         setTimeout(this._pump, EMPTY_RETRY_MS);
         return;
@@ -344,16 +353,16 @@ export class MseFeeder {
       const keepFrom = Math.max(range.start, t - seconds);
       const keepTo = Math.min(range.end, t + seconds);
       if (keepTo <= keepFrom) {
-        buffer.remove(range.start, range.end);
+        this._remove(buffer, range.start, range.end);
         await this._idle(buffer);
         continue;
       }
       if (keepFrom > range.start) {
-        buffer.remove(range.start, keepFrom);
+        this._remove(buffer, range.start, keepFrom);
         await this._idle(buffer);
       }
       if (range.end > keepTo) {
-        buffer.remove(keepTo, range.end);
+        this._remove(buffer, keepTo, range.end);
         await this._idle(buffer);
       }
     }
@@ -367,17 +376,27 @@ export class MseFeeder {
     for (const range of joinedRanges(buffer.buffered)) {
       if (range.start === current.start) continue;
       if (range.end < t - BEHIND_S || range.start > t + AHEAD_MAX_S) {
-        buffer.remove(range.start, range.end);
+        this._remove(buffer, range.start, range.end);
         this.stats.trims += 1;
         return true;
       }
     }
     if (t - current.start > BEHIND_S + TRIM_SLACK_S) {
-      buffer.remove(current.start, t - BEHIND_S);
+      this._remove(buffer, current.start, t - BEHIND_S);
       this.stats.trims += 1;
       return true;
     }
     return false;
+  }
+
+  /** Remove buffered media, keeping the run of windows in step with it. */
+  private _remove(buffer: SourceBuffer, start: number, end: number): void {
+    buffer.remove(start, end);
+    const run = this._runStartS;
+    const next = this._next;
+    if (run === undefined || !next || end <= run || start >= next.atS) return;
+    // Its end gone, the next fragment by index would follow nothing.
+    this._runStartS = end >= next.atS - JOIN_S ? undefined : end;
   }
 
   private _endOfStream(): void {

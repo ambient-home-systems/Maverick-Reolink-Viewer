@@ -60,10 +60,15 @@ jobs:
       - name: Upgrade to the newest Home Assistant
         if: matrix.ha == 'latest'
         run: pip install --upgrade pytest-homeassistant-custom-component
+      - name: Fetch the pinned go2rtc (checksum verified) for the live tests
+        run: echo "RV_GO2RTC=$(python -m scripts.fetch_go2rtc "$RUNNER_TEMP/go2rtc")" >> "$GITHUB_ENV"
       - run: python -m pytest --cov --cov-report=term-missing --cov-fail-under=90
+        env:
+          # Fail, not skip, if the live tests cannot run go2rtc.
+          RV_GO2RTC_TESTS: "1"
 
   browser:
-    name: MSE in Chromium (Playwright)
+    name: MSE and live in Chromium (Playwright)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -80,11 +85,14 @@ jobs:
       - run: pip install -r requirements_test.txt
       - name: Install Playwright's Chromium
         run: npm install -g playwright@1.56.1 && playwright install --with-deps chromium
-      - name: Chromium plays the MSE view's fragments
-        run: python -m pytest tests/test_mse_browser.py
+      - name: Fetch the pinned go2rtc (checksum verified)
+        run: echo "RV_GO2RTC=$(python -m scripts.fetch_go2rtc "$RUNNER_TEMP/go2rtc")" >> "$GITHUB_ENV"
+      - name: Chromium plays the MSE view's fragments, and watches live through HA
+        run: python -m pytest tests/test_mse_browser.py tests/test_live_browser.py
         env:
-          # Fail, not skip, if anything the test needs is missing.
+          # Fail, not skip, if anything the tests need is missing.
           RV_BROWSER_TESTS: "1"
+          RV_GO2RTC_TESTS: "1"
 
   hassfest:
     name: Hassfest

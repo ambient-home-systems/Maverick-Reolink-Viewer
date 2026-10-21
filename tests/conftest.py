@@ -35,6 +35,7 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import format_mac
 
+from .go2rtc_fixtures import fake_camera, go2rtc_binary  # noqa: F401 - fixtures
 from .ha_reolink_mock import (
     TEST_BC_CON,
     TEST_BC_PORT,

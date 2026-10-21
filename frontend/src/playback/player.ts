@@ -14,6 +14,8 @@ export interface PlayItem {
   /** UTC ms of the recording's first frame (per the search). */
   start: number;
   end: number;
+  /** Called once the player no longer holds the recording (ends its lease). */
+  release?: () => void;
 }
 
 export interface FirstFrameDetail {
@@ -154,7 +156,7 @@ export class RvPlayer extends LitElement {
       this._seekTo(video, offsetMs);
     } else {
       // A new source, even of the same recording (e.g. after its URL expired).
-      this._items[slot] = item;
+      this._setItem(slot, item);
       this._load(slot, video, item, offsetMs);
     }
     this._start(video);
@@ -166,8 +168,12 @@ export class RvPlayer extends LitElement {
     await this.updateComplete;
     const slot = this._other;
     const video = this._video(slot);
-    if (!video || this._items[slot]?.recording === item?.recording) return;
-    this._items[slot] = item;
+    if (!video || this._items[slot]?.recording === item?.recording) {
+      // Already there: the new source is not needed.
+      if (item && item !== this._items[slot]) item.release?.();
+      return;
+    }
+    this._setItem(slot, item);
     this._pendingOffset[slot] = 0;
     video.pause();
     if (item) {
@@ -231,10 +237,17 @@ export class RvPlayer extends LitElement {
       const video = this._video(slot);
       video?.pause();
       if (video) this._unload(slot, video);
-      this._items[slot] = undefined;
+      this._setItem(slot, undefined);
     }
     this._paused = true;
     this._waiting = false;
+  }
+
+  /** Put a recording in a slot; the one it replaces is released. */
+  private _setItem(slot: 0 | 1, item: PlayItem | undefined): void {
+    const old = this._items[slot];
+    this._items[slot] = item;
+    if (old && old !== item && !this._items.includes(old)) old.release?.();
   }
 
   private _load(slot: 0 | 1, video: HTMLVideoElement, item: PlayItem, offsetMs: number): void {
@@ -278,7 +291,7 @@ export class RvPlayer extends LitElement {
     if (this._items[slot] !== item) return;
     if (slot !== this._active) {
       // The preloaded recording failed: forget it; it is fetched again when needed.
-      this._items[slot] = undefined;
+      this._setItem(slot, undefined);
       const video = this._video(slot);
       if (video) this._unload(slot, video);
       return;
@@ -362,7 +375,7 @@ export class RvPlayer extends LitElement {
     this._endedAt = performance.now();
     const next = this.preloaded;
     if (next) {
-      this._items[slot] = undefined;
+      this._setItem(slot, undefined);
       // Free the finished recording's buffer (MSE) for the next preload.
       const done = this._video(slot);
       if (done) this._unload(slot, done);
@@ -387,7 +400,7 @@ export class RvPlayer extends LitElement {
     if (!video.getAttribute("src")) return;
     if (slot !== this._active) {
       // The preloaded file failed: forget it; it is fetched again when needed.
-      this._items[slot] = undefined;
+      this._setItem(slot, undefined);
       return;
     }
     // Through MSE, a media error is the fragments' (the file may still play).

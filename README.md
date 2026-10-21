@@ -9,10 +9,13 @@ built-in [Reolink integration](https://www.home-assistant.io/integrations/reolin
   (person, vehicle, animal, face, package, visitor, ...) and recording thumbnails
 - smooth recorded-video playback and low-latency live view
 
-**Status: Phase 2 done** (event timeline and recorded-video playback; v0.3.2,
-verified on the owner's hardware in Chrome and in the iPhone Companion app, at home
-and remotely, see the [plan](docs/IMPLEMENTATION_PLAN.md#phase-2-status)). Live view
-comes next.
+**Status: Phase 3 (live view) in progress.** Phase 2 is done (event timeline and
+recorded-video playback; v0.3.2, verified on the owner's hardware in Chrome and in the
+iPhone Companion app, at home and remotely, see the
+[plan](docs/IMPLEMENTATION_PLAN.md#phase-2-status)). v0.4.0 runs the integration's own
+go2rtc and adds a **live check** (Reolink → Open the live check) that measures live
+view on each device before the live tab and grid are built, see the
+[plan](docs/IMPLEMENTATION_PLAN.md#phase-3-status).
 
 **Phase 1 (v0.1.0, done):** the **Reolink** sidebar panel lists your NVRs, Home Hubs
 and cameras (a camera that is in Home Assistant both via an NVR and directly is shown
@@ -42,6 +45,16 @@ in Chrome without clicking. On the owner's NVR, a start 41–57 min into an
 hour-long recording that is not cached yet takes 7–13 s (the recorder's download up
 to there) on a computer and an iPhone, at home, through Tailscale and through Nabu
 Casa; a start in a cached recording takes under half a second.
+
+**Phase 3 (in progress):** v0.4.0 runs its own [go2rtc](https://github.com/AlexxIT/go2rtc)
+(Home Assistant's binary where the container ships it, else a pinned, checksum-verified
+download), separate from Home Assistant's: its own ports (WebRTC on 18556), its API on
+localhost only with generated credentials, no web UI, and camera credentials never
+written to disk. The live check measures, for every camera and stream, the time to the
+first image and the first live frame over WebRTC and MSE, cold and kept warm, against
+Home Assistant's own camera view, and (for admins) how many streams the NVR serves at
+once. It also fixes four playback findings: a seek back into trimmed video stalled, HD
+recordings stayed held after the player moved on, and two cache edge cases.
 
 Requires Home Assistant 2026.10 or newer with the Reolink integration set up.
 

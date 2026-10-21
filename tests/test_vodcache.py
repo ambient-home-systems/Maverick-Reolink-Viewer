@@ -6,6 +6,7 @@ import contextlib
 from datetime import timedelta
 from pathlib import Path
 import shutil
+import threading
 import time
 from typing import Any, NamedTuple
 from unittest.mock import patch
@@ -52,7 +53,10 @@ class Server(NamedTuple):
 
 @pytest.fixture
 async def media(socket_enabled: None) -> AsyncGenerator[Server]:
-    """Serve recordings; /slow* pause after the first 100 KB until the gate opens."""
+    """Serve recordings; /slow* pause after the first 100 KB until the gate opens.
+
+    /cut* pause there too, then drop the connection.
+    """
     hits: list[str] = []
     gate = asyncio.Event()
 
@@ -76,8 +80,13 @@ async def media(socket_enabled: None) -> AsyncGenerator[Server]:
                 await asyncio.sleep(0.01)
             body = body[3000:]
         await resp.write(body[:100_000])
-        if name.startswith("slow"):
+        if name.startswith(("slow", "cut")):
             await gate.wait()
+        if name.startswith("cut"):
+            # The connection drops mid-recording: the fill fails.
+            assert request.transport is not None
+            request.transport.abort()
+            return resp
         await resp.write(body[100_000:])
         await resp.write_eof()
         return resp
@@ -650,7 +659,7 @@ async def test_no_room_fails_the_fill(
     monkeypatch.setattr(vodcache, "MIN_FREE_BYTES", 500_000)
     vc = await make_cache()
     one = await _complete(vc, "one")
-    vc.lease(one, 1800)
+    vc.lease(one, 1800, "tok")
     with fake_disk(tmp_path / "vod", len(BODY) + 550_000):
         two = await vc.async_open(rec("two"))
         with pytest.raises(VodCacheError, match="free disk space"):
@@ -710,7 +719,7 @@ async def test_live_urls_keep_their_recording(make_cache: Any, no_ffmpeg: None) 
     """A leased recording is not evicted; original and plain copy go together."""
     vc = await make_cache(ffmpeg="ffmpeg")
     first = await vc.async_open(rec("one"))
-    vc.lease(first, 1800)
+    vc.lease(first, 1800, "tok")
     await vc.async_wait(first, complete=True)
     assert first.task is not None
     await first.task
@@ -735,6 +744,61 @@ async def test_live_urls_keep_their_recording(make_cache: Any, no_ffmpeg: None) 
     assert vc.served_path(first, True).read_bytes() == b"PLAIN" + BODY
     with patch.object(vodcache, "_clock", return_value=time.monotonic() + EXPIRED):
         assert not first.busy(vodcache._clock())
+
+
+async def test_a_released_lease_no_longer_protects(make_cache: Any) -> None:
+    """A player that moves on releases its lease: the recording can go."""
+    vc = await make_cache()
+    one = await _complete(vc, "one")
+    vc.lease(one, 1800, "tok-one")
+    two = await _complete(vc, "two")
+    one.last_access, two.last_access = 0, 1
+    on_disk = sum(p.stat().st_size for p in one.path.parent.iterdir())
+    vc._max_bytes = on_disk + vodcache.expected_size(rec("three")) - 1
+    # Leased: the next recording takes the unleased one, even if used later.
+    three = await _complete(vc, "three")
+    assert three.error is None
+    assert one.path.exists()
+    assert not two.path.exists()
+    vc.release("tok-one")
+    vc.release("tok-unknown")  # an unknown or repeated release is harmless
+    assert not one.busy(vodcache._clock())
+    three.last_access = 2
+    four = await _complete(vc, "four")
+    assert four.error is None
+    assert not one.path.exists()
+    assert three.path.exists()
+
+
+async def test_a_playback_fill_evicts_leases_not_read_recently(
+    make_cache: Any,
+) -> None:
+    """A click may take room from a lease nobody read lately; a prefetch may not."""
+    vc = await make_cache()
+    one = await _complete(vc, "one")
+    vc.lease(one, 1800, "tok-one")
+    two = await _complete(vc, "two")
+    vc.lease(two, 1800, "tok-two")
+    on_disk = sum(p.stat().st_size for p in one.path.parent.iterdir())
+    vc._max_bytes = on_disk + vodcache.expected_size(rec("three")) - 1
+    later = time.monotonic() + vodcache.LEASE_IDLE_S + 1
+    with patch.object(vodcache, "_clock", return_value=later):
+        assert one.busy(later)  # still leased...
+        vc.touch("tok-two")  # ...but only two was read lately
+        prefetch = await vc.async_open(rec("three"), Priority.PREFETCH)
+        with pytest.raises(VodCacheError, match="free disk space"):
+            await vc.async_wait(prefetch, complete=True)
+        assert one.path.exists()
+        click = await vc.async_open(rec("four"), Priority.PLAYBACK)
+        await vc.async_wait(click, complete=True)
+        assert not one.path.exists()
+        assert two.path.exists()
+        assert vc.stats()["leased"] == 1
+        # Its player comes back: the recording is fetched again, and leased.
+        again = await vc.async_open(rec("one"))
+        vc.touch("tok-one")
+        assert again is not one
+        assert again.leased(later, vodcache.LEASE_IDLE_S)
 
 
 async def test_a_rewrite_outlives_its_request(
@@ -880,6 +944,61 @@ async def test_fragment_windows_follow_a_fill(
     sized = await vc.async_window(entry, first=0, max_ms=60_000, max_bytes=12_000)
     assert len(sized.fragments) == 2
     assert media.hits == ["slownvr"]
+
+
+async def test_a_window_is_last_only_by_what_it_scanned(
+    cache: tuple[VodCache, Scheduler, FakeHost],
+    media: Server,
+    nvr_minute: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A fill that completes while a window is scanned does not end that window."""
+    vc, _sched, _host = cache
+    entry = await vc.async_open(rec("slownvr"))
+    await vc.async_init(entry)
+    scanned, resume = threading.Event(), threading.Event()
+    scan = vodcache._scan_fragments
+
+    def scan_then_wait(candidates: Any, index: Any, available: int) -> None:
+        scan(candidates, index, available)
+        scanned.set()
+        resume.wait(5)
+
+    monkeypatch.setattr(vodcache, "_scan_fragments", scan_then_wait)
+    window = asyncio.create_task(
+        vc.async_window(entry, first=10, max_ms=10**6, max_bytes=10**9)
+    )
+    await asyncio.to_thread(scanned.wait, 5)
+    # The rest arrives while the scan of the first part finishes.
+    media.gate.set()
+    await vc.async_wait(entry, complete=True)
+    resume.set()
+    result = await window
+    assert result.first + len(result.fragments) < 30
+    assert not result.last
+
+
+async def test_a_fill_failing_mid_window(
+    cache: tuple[VodCache, Scheduler, FakeHost], media: Server
+) -> None:
+    """A window whose fill fails before it is read raises VodCacheError."""
+    EXTRA["cutnvr"] = NVR_MINUTE
+    try:
+        vc, _sched, _host = cache
+        entry = await vc.async_open(rec("cutnvr"))
+        window = await vc.async_window(entry, first=0, max_ms=10**6, max_bytes=10**9)
+        assert window.fragments
+        media.gate.set()
+        with pytest.raises(VodCacheError, match="connection error"):
+            await vc.async_wait(entry, complete=True)
+        assert entry.task is not None
+        await entry.task
+        assert not entry.part_path.exists()
+        with pytest.raises(VodCacheError, match="connection error"):
+            await _window_bytes(vc, entry, window)
+        assert entry.readers == 0
+    finally:
+        EXTRA.pop("cutnvr", None)
 
 
 async def test_plain_files_are_not_fragments(
