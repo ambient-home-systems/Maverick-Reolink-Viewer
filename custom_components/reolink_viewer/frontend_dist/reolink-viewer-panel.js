@@ -5722,7 +5722,7 @@ var Ui = class {
 	close() {
 		this._ws?.close(), super.close(), this._url && URL.revokeObjectURL(this._url);
 	}
-}, Ji = "0.4.0", Yi = "Live check · ", Xi = [
+}, Ji = "0.4.1", Yi = "Live check · ", Xi = [
 	"Desktop Chrome, LAN",
 	"Desktop Chrome, Tailscale",
 	"Desktop Chrome, Nabu Casa",
@@ -5811,7 +5811,11 @@ var Ui = class {
 			connectionId: t.connection_id,
 			stream: n
 		}, i = t.streams[n], a = t.via === "nvr" ? `via ${t.entry_title}` : "direct";
-		this._log(""), this._log(`${e.name}${e.model ? ` (${e.model})` : ""} · ${a} · ${Li(n, i.encoding)}`);
+		if (this._log(""), !i) {
+			this._log(`${e.name}${e.model ? ` (${e.model})` : ""} · ${a} · ${n}: not served by this connection`);
+			return;
+		}
+		this._log(`${e.name}${e.model ? ` (${e.model})` : ""} · ${a} · ${Li(n, i.encoding)}`);
 		let o = `${e.name} ${a} ${n}`, s = (r, i, a) => {
 			this._measured.push({
 				camera: e.name,

@@ -1754,8 +1754,8 @@ gate), **2** builds live view from what step 1 decides.
 | Step | Status |
 | --- | --- |
 | 0. Fix four Phase 2B findings (a failing test for each first) | **Done** (v0.4.0), see "Step 0" below |
-| 1. Our own go2rtc, and a live check in the panel (gate) | **Built** (v0.4.0), see "Step 1 as built". Waiting for the reports from the four setups ("How to run the live check") |
-| 1. Record the reports here and in the hardware matrix; decide the live stream budget, WebRTC or MSE per setup, which cameras stay warm, the HD stream per camera | Waiting for the reports; the rules are fixed below, before seeing them |
+| 1. Our own go2rtc, and a live check in the panel (gate) | **Built** (v0.4.0), see "Step 1 as built". Desktop report in (run 5); waiting for the three iPhone runs ("How to run the live check") |
+| 1. Record the reports here and in the hardware matrix; decide the live stream budget, WebRTC or MSE per setup, which cameras stay warm, the HD stream per camera | **Desktop Chrome on the LAN: recorded and decided** (v0.4.1), see "Step 1 results". The iPhone setups: waiting. The rules are fixed below, before seeing the reports |
 | 2. Stream registry, delivery, Live tab and grid, keep warm, debug panel | Not started |
 
 #### Step 0: four Phase 2B findings (v0.4.0)
@@ -1967,6 +1967,70 @@ capacity test need it).
 - **The CX410 and CX810 direct entries**: if live through the NVR starts
   within 0.3 s of the direct connection (cold and warm sub) and the NVR keeps
   up at the grid's level, they can go.
+
+#### Step 1 results: desktop Chrome on the LAN (2026-10-21)
+
+The report is in the hardware matrix (run 5, with its findings). The iPhone
+runs (Wi-Fi, Tailscale, Nabu Casa) are still to come. By the rules above, the
+LAN run decides:
+
+- **NVR budget: 7.** The last capacity level held six subs, the Duo 3's main
+  and a full-speed download, all at their frame rates (8, less one).
+  Prefetch downloads stay limited to one. Cameras added directly keep 2: the
+  run has no new numbers for them.
+- **Desktop Chrome on the LAN: WebRTC**, with MSE as the fallback. WebRTC
+  connected in every session that had a stream (host to host, UDP), and its
+  medians beat MSE's: 1.78 against 4.19 s on subs, 1.89 against 2.00 s on
+  mains and ext.
+- **HD on desktop Chrome: the main stream on every camera but the Duo 3, which
+  uses ext.** Desktop Chrome decodes the H.265 mains (RLC-520A "Garage",
+  CX810, E1 Zoom, Doorbell) over both transports. The iPhone runs decide the
+  H.265 cameras there.
+- **The CX410 and CX810 direct entries can go.** Through the NVR they start
+  as fast (cold sub 1.20 against 1.28 s and 3.26 against 3.64 s; warm within
+  0.03 s), and the NVR keeps up with more than the grid needs. Live view uses
+  the NVR connection. Removing the direct entries from Home Assistant is the
+  owner's call.
+- **Kept warm by default: none.** No camera's warm sub start met 1.5 s where
+  its cold one missed. Keeping a stream open does not shorten the wait for the
+  camera's next key frame, and that wait is most of every start.
+
+What the run changes in step 2:
+
+1. **The warm target needs a key-frame cache.** go2rtc gives a new viewer
+   nothing until the camera's next key frame: every ~4 s on most subs, ~2 s on
+   mains. There are two ways around it, and they can be combined:
+   - **Shorter key frames on the sub streams.** The owner sets this in the
+     Reolink app or client, where the model offers it. The CX410's sub, at
+     1 s, starts in 0.84–0.99 s. It helps every viewer, Home Assistant's and
+     the Reolink app's too. The cost is a little more bitrate on the sub
+     stream for the same picture, and the NVR records the sub too. Home
+     Assistant has no entity for it, and settings go through HA only, so the
+     integration does not change it.
+   - **A key-frame cache in the integration**, for streams kept warm. The
+     MSE proxy reads each warm stream once and keeps the init segment plus
+     everything since the last key frame. A new viewer gets all of that at
+     once: the browser decodes from the key frame and jumps to the newest
+     frame. This works whatever the camera's key-frame interval. It is MSE
+     only (WebRTC cannot be fed old frames), so warm cameras would play over
+     MSE. The cache can also rebuild the init segment from the stream's own
+     parameter sets (the MSE picture-size finding).
+
+   Proposed: build the cache in step 2, and try shorter key frames on one
+   camera now (the live check can run on one camera).
+2. **Tiles need a cached first image.** Neither HA's snapshot (median
+   0.64 s) nor go2rtc's frame (1.69 s) meets 0.5 s. The server keeps each
+   camera's last image, refreshed in the background through the scheduler
+   while a live page is open (and from the cache when the camera is warm). A
+   tile shows it at once.
+3. **MSE picture size.** Three NVR streams reported a different size over MSE
+   than over WebRTC: the init segment carries the NVR's stream description,
+   not the stream's own parameters. Step 2 corrects the size from the stream
+   and shows both sizes in the tile's debug entry.
+4. **Fixed in v0.4.1:** the battery Doorbell, added directly, is Baichuan only.
+   reolink-aio still built an HTTP-FLV URL for it, with the port "None", so
+   its ext failed. FLV and RTMP now need the HTTP API (as the Phase 0 probe
+   already assumed), and a connection lists only the streams it can serve.
 
 ## Phase 4 — Performance, mobile, packaging, release (difficulty: Standard, 2–3 wk)
 

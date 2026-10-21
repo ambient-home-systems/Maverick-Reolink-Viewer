@@ -41,7 +41,7 @@ import {
 } from "./check-util";
 import { OurMse, OurWebRtc, StockWebRtc, type LiveSession, type SessionResult } from "./session";
 
-export const LIVE_CHECK_VERSION = "0.4.0";
+export const LIVE_CHECK_VERSION = "0.4.1";
 /** Saved reports share the playback check's store; this marks a live one. */
 export const LIVE_REPORT_PREFIX = "Live check · ";
 export const LIVE_SETUPS = [
@@ -237,6 +237,10 @@ export class LiveCheck {
     const info = connection.streams[stream];
     const via = connection.via === "nvr" ? `via ${connection.entry_title}` : "direct";
     this._log("");
+    if (!info) {
+      this._log(`${camera.name}${camera.model ? ` (${camera.model})` : ""} · ${via} · ${stream}: not served by this connection`);
+      return;
+    }
     this._log(`${camera.name}${camera.model ? ` (${camera.model})` : ""} · ${via} · ${streamLabel(stream, info.encoding)}`);
     const where = `${camera.name} ${via} ${stream}`;
     const record = (phase: Phase, transport: Transport, result: SessionResult) => {

@@ -395,8 +395,11 @@ export interface LiveConnection {
   via: "nvr" | "direct";
   entry_title: string;
   is_battery: boolean;
-  /** Per stream: its configured encoding (none for ext) and HA's camera entity showing it. */
-  streams: Record<LiveStreamKind, { encoding: StreamEncoding | null; entity_id: string | null }>;
+  /**
+   * Per stream the connection can serve (no ext without HTTP-FLV): its
+   * configured encoding (none for ext) and HA's camera entity showing it.
+   */
+  streams: Partial<Record<LiveStreamKind, { encoding: StreamEncoding | null; entity_id: string | null }>>;
 }
 
 export interface LiveCamera {

@@ -593,3 +593,19 @@ async def test_live_sources_of_a_host(
     assert devices.async_host_live_sources(hass, "nope") == []
     with pytest.raises(devices.DeviceNotFoundError):
         devices.async_live_source(hass, "nope")
+
+
+async def test_no_ext_stream_without_flv(
+    hass: HomeAssistant,
+    direct_camera: MagicMock,
+    direct_camera_entry: MockConfigEntry,
+    loaded_with_entities: MockConfigEntry,
+) -> None:
+    """A Baichuan-only connection offers sub and main, not ext (HTTP-FLV)."""
+    direct_camera.baichuan_only = True
+    (merged,) = [
+        c for c in devices.async_live_cameras(hass) if len(c["connections"]) == 2
+    ]
+    nvr, direct = merged["connections"]
+    assert list(nvr["streams"]) == ["sub", "main", "ext"]
+    assert list(direct["streams"]) == ["sub", "main"]

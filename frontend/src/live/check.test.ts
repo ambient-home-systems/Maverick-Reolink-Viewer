@@ -90,10 +90,10 @@ const CAMERAS: LiveCamera[] = [
         via: "nvr",
         entry_title: "RLN36",
         is_battery: true,
+        // Baichuan only: no HTTP-FLV, so no ext.
         streams: {
           sub: { encoding: null, entity_id: null },
           main: { encoding: null, entity_id: null },
-          ext: { encoding: null, entity_id: null },
         },
       },
     ],
@@ -243,6 +243,18 @@ describe("LiveCheck", () => {
     const stopped = new LiveCheck(hass, { setup: "Other", streams: ["sub"], warm: false, stock: false, capacity: false }, document.createElement("div"));
     stopped.stop();
     expect(await stopped.run()).toContain("Stopped.");
+  });
+
+  it("skips a stream the connection does not serve", async () => {
+    const { hass, calls } = fakeHass(true);
+    const check = new LiveCheck(
+      hass,
+      { setup: "Other", streams: ["ext"], warm: true, stock: true, capacity: false, cameraIds: ["cam2"] },
+      document.createElement("div"),
+    );
+    const text = await check.run();
+    expect(text).toContain("Doorbell (Video Doorbell) · via RLN36 · ext: not served by this connection");
+    expect(calls.some((c) => c.type === "reolink_viewer/live/webrtc" || c.type === "reolink_viewer/live/mse")).toBe(false);
   });
 
   it("describes a session result", () => {

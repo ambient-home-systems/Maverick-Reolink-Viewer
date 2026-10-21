@@ -10,7 +10,9 @@ Status: **filled from four probe runs on 2026-10-17** (HA 2026.10.2, reolink-aio
 0.21.18, ffmpeg 6.0). The live and VOD-method tables show run 2 (integration v0.0.2,
 concurrency test up to 6 streams); the findings use runs 1 and 2. Run 1 (v0.0.1, up
 to 4 streams) agreed on every pass/fail result. Runs 3 (v0.1.1) and 4 (v0.1.2) are
-the Phase 2 recording playback checks, in their own tables.
+the Phase 2 recording playback checks, in their own tables. Run 5 (2026-10-21,
+v0.4.0) is the Phase 3 live check on desktop Chrome on the LAN; the iPhone runs
+follow.
 
 ## Setup probed
 
@@ -20,6 +22,7 @@ the Phase 2 recording playback checks, in their own tables.
 | host2 | CX410, direct | v3.1.0.3429_2404181313 | Same camera as NVR channel "Front Yard Right". Added directly only to improve streaming; may be removed once live view through the NVR is good enough |
 | host3 | CX810, direct | v3.1.0.5129_2510222154 | Same camera as NVR channel "Front Yard Left"; same reason as host2 |
 | host4 | E1 Zoom, direct | v3.2.0.6932_2608111908 | Not on the NVR and does not record, by design: used only for snapshots of the washer/dryer panels |
+| host5 | Reolink Video Doorbell (battery), direct | | Added by run 5. Baichuan only (no HTTP API): RTSP works; there is no HTTP-FLV or RTMP, so no ext stream. The live check lists it only as a direct connection |
 
 No Home Hubs. Until run 4 there were no battery cameras or doorbells; see host1.
 
@@ -177,13 +180,77 @@ All four hosts report the same zone.
 
 ### Live view through go2rtc (Phase 3)
 
-Waiting for the live check reports (Phase 3 step 1, v0.4.0): per camera
-connection and stream, the time to the first image and to the first live frame
-over WebRTC and MSE, cold and kept warm, on desktop Chrome on the LAN and in the
-iPhone app on Wi-Fi, through Tailscale and through Nabu Casa; Home Assistant's own
-view on the same camera; and the NVR's capacity (all sub streams, a main, a
-recording download). See
-[IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md#phase-3-status).
+Run 5, 2026-10-21: the live check (v0.4.0, go2rtc 1.9.14) in desktop Chrome 155
+on macOS, on the LAN; Home Assistant's 4 STUN and 6 TURN servers. Times are to
+the first painted frame. *Cold*: go2rtc not connected to the camera. *Warm*:
+the stream kept open by go2rtc's preload, each session started right after it
+connected. *HA's view*: the stream's own camera entity, through Home
+Assistant's go2rtc (its snapshot, then its WebRTC). *Frame*: a JPEG from go2rtc
+on the warm stream. Every WebRTC session that had a stream connected host to
+host over UDP.
+
+| Camera | Via | Stream | Cold WebRTC | Cold MSE | HA snapshot | HA WebRTC | Warm WebRTC | Warm MSE | Frame |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Front Yard Right (CX410) | NVR | sub h264 640×360 15 fps | 0.84 s | 1.56 s | 511 ms | 2.35 s | 0.91 s | 1.70 s | 415 ms |
+| | NVR | main h264 2560×1440 30 fps | 0.73 s | 1.75 s | 359 ms | 3.15 s | 1.72 s | 1.93 s | 1749 ms |
+| | NVR | ext h264 896×512 | 2.57 s | 1.57 s | - | - | 1.87 s | 2.50 s | 2112 ms |
+| | direct | sub | 0.99 s | 1.58 s | 342 ms | 1.13 s | 0.90 s | 1.69 s | 900 ms |
+| | direct | main | 2.71 s | 2.65 s | 469 ms | 3.00 s | 1.75 s | 1.97 s | 1780 ms |
+| | direct | ext | 1.72 s | 2.36 s | - | - | 1.88 s | 2.44 s | 811 ms |
+| Garage (RLC-520A) | NVR | sub h264 640×480 15 fps | 1.93 s | 4.06 s | 676 ms | 3.11 s | 3.89 s | 4.06 s | 1099 ms |
+| | NVR | main h265 2560×1920 30 fps | 1.48 s | 1.72 s | 1020 ms | 0.84 s | 1.63 s | 1.78 s | 1637 ms |
+| | NVR | ext h264 896×672 | 1.26 s | 2.38 s | - | - | 1.89 s | 2.05 s | 2025 ms |
+| Hallway (E1 Pro) | NVR | sub h264 640×360 7 fps | 1.59 s | 7.66 s ¹ | 655 ms | 3.62 s | 3.92 s | 7.72 s ¹ | 994 ms |
+| | NVR | main h264 2560×1440 25 fps | 1.74 s | 2.12 s | 388 ms | 1.15 s | 1.79 s | 2.12 s | 1468 ms |
+| | NVR | ext h264 896×512 | 2.04 s | 1.74 s | - | - | 1.92 s | 2.75 s | 2037 ms |
+| Front Yard Left (CX810) | NVR | sub h264 640×360 15 fps | 1.64 s | 4.87 s | 447 ms | 2.72 s | 4.04 s | 4.89 s | 1235 ms |
+| | NVR | main h265 3840×2160 25 fps | 2.95 s | 1.68 s | 797 ms | 2.87 s | 1.53 s | 1.87 s | 2167 ms |
+| | NVR | ext h264 896×512 | 2.60 s | 2.00 s | - | - | 1.95 s | 2.62 s | 2073 ms |
+| | direct | sub | 2.43 s | 4.85 s | 576 ms | 3.24 s | 4.05 s | 4.86 s | 638 ms |
+| | direct | main | 2.87 s | 2.06 s | 886 ms | 6.75 s | 1.52 s | 1.90 s | 2256 ms |
+| | direct | ext | 2.32 s | 3.19 s | - | - | 1.93 s | 2.61 s | 2193 ms |
+| Back Yard (Duo 3 PoE) | NVR | sub h264 1536×432 20 fps | 3.00 s | 4.16 s ¹ | 427 ms | 3.77 s | 3.62 s | 5.66 s ¹ | 623 ms |
+| | NVR | main h265 7680×2160 20 fps | ✗ no frame in 20 s | 9.93 s ¹ | 1317 ms | 6.13 s | 4.36 s | 11.90 s ¹ | ✗ timed out |
+| | NVR | ext h264 2560×720 | 1.25 s | 2.68 s | - | - | 1.79 s | 2.20 s | 2196 ms |
+| Dogs (RLC-520A) | NVR | sub h264 640×480 10 fps | 3.21 s | 4.23 s | 637 ms | 2.84 s | 3.95 s | 4.28 s | 1210 ms |
+| | NVR | main h264 2560×1920 30 fps | 2.19 s | 1.71 s | - ² | - ² | 1.64 s | 1.87 s | 1885 ms |
+| | NVR | ext h264 896×672 | 1.75 s | 1.15 s | - | - | 1.87 s | 2.06 s | 2042 ms |
+| Laundry Room (E1 Zoom) | direct | sub h264 640×360 10 fps | 3.82 s | 5.25 s | 1831 ms | 4.42 s | 3.94 s | 5.29 s | 1450 ms |
+| | direct | main h265 3840×2160 20 fps | 2.14 s | 1.71 s | 633 ms | 1.80 s | 1.79 s | 1.67 s | 1055 ms |
+| | direct | ext h264 896×512 | 1.72 s | 2.15 s | - | - | 1.90 s | 2.48 s | 2043 ms |
+| Doorbell (battery) | direct | sub h264 720×720 15 fps | 0.50 s | 1.67 s | 914 ms | 1.87 s | - ³ | - ³ | - ³ |
+| | direct | main h265 2048×2048 15 fps | 0.57 s | 0.81 s | ✗ failed | 1.06 s | - ³ | - ³ | - ³ |
+| | direct | ext | ✗ ⁴ | ✗ ⁴ | - | - | - ³ | - ³ | - ³ |
+
+¹ MSE reported a different picture size from WebRTC's: Hallway sub 640×480,
+Back Yard sub 1536×1152, Back Yard main 7680×4320 (see the findings). ² The
+stream's camera entity is disabled in Home Assistant. ³ Battery camera: never
+kept warm. ⁴ No URL: reolink-aio built an FLV URL with the port "None" (fixed in
+v0.4.1, which no longer offers ext without HTTP-FLV).
+
+Summary medians (first frame): cold WebRTC sub 1.78 s (0.50–3.82 s), main/ext
+1.89 s; cold MSE sub 4.19 s, main/ext 2.00 s; warm WebRTC sub 3.92 s, main/ext
+1.83 s; warm MSE sub 4.86 s, main/ext 2.09 s; Home Assistant's view 2.87 s
+(ours, the better of cold and warm, faster on 16 of 19 streams). First image:
+HA's snapshot 0.64 s (0.34–1.83 s), go2rtc's frame 1.69 s.
+
+NVR capacity (the same run; sub streams added one by one and kept open, then
+the heaviest main, then a recording download at full speed):
+
+| Level | Added | First frame | Frames per second (measured / set) | Download |
+| --- | --- | --- | --- | --- |
+| alone | download (ch23, 60 min main) | | | 356 Mbit/s |
+| 1 | Back Yard sub | 1.95 s | 20/20 | |
+| 2 | Garage sub | 1.08 s | all at their rate | |
+| 3 | Hallway sub | 3.60 s | all at their rate | |
+| 4 | Front Yard Right sub | 0.58 s | all at their rate | |
+| 5 | Dogs sub | 0.80 s | all at their rate | |
+| 6 | Front Yard Left sub | 3.96 s | Front Yard Left 14.3/15, the rest at their rate | |
+| 7 | Back Yard main | 3.55 s | Back Yard main 19.5/20, the rest at their rate | |
+| 8 | download | | every stream ≥ 9.9/10, 14.7/15, 19.6/20 | 377 Mbit/s |
+
+Verdict: every level kept up. `GetOnline` listed 2 logged-in clients before and
+after: the NVR does not count stream sessions as logins.
 
 ## Findings
 
@@ -211,6 +278,58 @@ Concurrent streams (FLV sub streams, held 5 s, opened simultaneously):
 - **Cameras added directly: 6 of 6, but they slow down.** The CX810 took 3.6 s to
   open up to 3 streams and 7.7 s from 4. The CX410 went from 3.3 s to 4.3 s at 4.
   The E1 Zoom took 7.2 s for one stream and 8.5 s from 2.
+
+Live view through go2rtc (run 5, desktop Chrome on the LAN; Phase 3 step 1):
+
+- **The first frame waits for the camera's next key frame.** The NVR and the
+  cameras (the Doorbell may be the exception) do not start a new stream session
+  with a key frame, and go2rtc
+  1.9.14 keeps none for a new viewer: its WebRTC and MSE viewers both wait for
+  the next one (its frame cache is for JPEGs only). Read from the warm starts,
+  which began just after a key frame: the sub streams' key frames come every
+  ~4 s on every camera but the CX410 (~1 s); the main and ext streams' every
+  ~2 s.
+- **So keeping a stream open does not make it start faster.** Warm WebRTC sub
+  median 3.92 s against 1.78 s cold. Each warm session started right after a
+  key frame, the worst case; a viewer arriving at a random moment waits half an
+  interval on average, cold or warm. Warm saves only the connection: 0.1–0.3 s
+  over RTSP, about 1 s over FLV (ext).
+- **The CX410's sub (1 s key frames) starts in 0.84–0.99 s**, cold or warm,
+  through the NVR or directly. The other subs took 1.6–3.8 s cold.
+- **WebRTC connected in every session that had a stream** (56 of 57; the 57th is
+  the Doorbell's ext, which had no URL), always host to host over UDP. It was
+  faster than MSE: cold sub median 1.78 s against 4.19 s, main/ext 1.89 s
+  against 2.00 s. The order of the check favours WebRTC on the subs: each MSE
+  session began just after the WebRTC session's key frame, so it waited about a
+  whole interval.
+- **Faster than Home Assistant's view**: 16 of 19 streams; its median 2.87 s.
+  HA's go2rtc connects to the camera before it answers (0.4–4.4 s); ours
+  answered in 0.1–0.3 s cold.
+- **A first image under 0.5 s needs a cache.** HA's snapshot took 0.34–1.83 s
+  (median 0.64 s); go2rtc's frame 0.4–2.3 s (median 1.69 s: it waits for a key
+  frame, then converts it with ffmpeg).
+- **MSE picture sizes differ from WebRTC's on three NVR streams**: Hallway sub
+  640×480 (WebRTC 640×360), Back Yard sub 1536×1152 (1536×432), Back Yard main
+  7680×4320 (7680×2160). go2rtc writes the MSE init segment (picture size,
+  SPS and PPS) from the stream description the device sends, not from the
+  stream; WebRTC decodes the stream's own parameter sets. The NVR's
+  description of these streams probably disagrees with the streams, and MSE
+  would then show them at the wrong shape. The Hallway sub's MSE also painted
+  only at the second key frame (7.7 s). Not yet confirmed by looking at the
+  picture.
+- **H.265 mains decode** in desktop Chrome on macOS over WebRTC and MSE (RLC-520A
+  "Garage", CX810, E1 Zoom, Doorbell). The Duo 3's 7680×2160 is the exception:
+  no WebRTC frame in 20 s cold, 4.4 s warm, MSE 9.9–11.9 s, no go2rtc frame.
+  Its ext (2560×720 H.264) started in 1.25 s.
+- **Through the NVR is as fast as direct** for the CX410 and CX810: cold sub
+  1.20 against 1.28 s and 3.26 against 3.64 s (mean of WebRTC and MSE); warm
+  sub within 0.03 s.
+- **The NVR kept up with everything the test could add**: six subs, the Duo 3's
+  main and a recording download at 377 Mbit/s, every stream at 95 % or more of
+  its frame rate. Its real limit is higher.
+- **The battery Doorbell, added directly, is Baichuan only**: RTSP sub and main
+  started in 0.50 and 0.57 s, the fastest of all, but there is no ext (HTTP-FLV
+  needs the HTTP API). HA's snapshot of its main stream failed.
 
 Recorded video (NVR RLN36; the cameras record only to the NVR):
 

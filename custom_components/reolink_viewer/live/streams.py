@@ -20,7 +20,7 @@ import logging
 
 from custom_components.reolink_viewer import bridge
 from custom_components.reolink_viewer.bridge import LiveProtocol
-from custom_components.reolink_viewer.devices import LiveSource
+from custom_components.reolink_viewer.devices import LIVE_PROTOCOLS, LiveSource
 from custom_components.reolink_viewer.scheduler import Priority, Scheduler, StreamTicket
 from homeassistant.core import HomeAssistant
 
@@ -52,7 +52,7 @@ class LiveStream:
     @property
     def protocol(self) -> LiveProtocol:
         """Return the protocol the camera is read with."""
-        return LiveProtocol.FLV if self.kind == "ext" else LiveProtocol.RTSP
+        return LIVE_PROTOCOLS.get(self.kind, LiveProtocol.RTSP)
 
 
 @dataclass(slots=True)
