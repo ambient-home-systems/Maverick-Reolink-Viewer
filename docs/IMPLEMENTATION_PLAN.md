@@ -813,8 +813,8 @@ Known limits carried into 2B and Phase 4:
 | 2B step | Status |
 | --- | --- |
 | 0. Fix the recording cache (disk accounting, eviction, leases, deletion timers, open race), DST end and refresh window, shared thumbnail fetches; correct the MSE claim above | Done (v0.2.8), see "Step 0" below |
-| 1. Measure where it hasn't been (gate): desktop Chrome on the LAN, the iPhone Companion app on Wi-Fi, over Tailscale and over Nabu Casa | Check built (v0.2.8), sharpened in v0.2.9 and v0.2.10. Three desktop runs through Nabu Casa (three player and cache bugs found and fixed), a LAN desktop run (Mac), and the iPhone on home Wi-Fi and over Tailscale recorded; the iPhone over Nabu Casa to come, see "Step 1 results" |
-| 2. Build what the evidence calls for (speeds, HD/SD keeping the position, uncached deep seeks, bounded memory and disk) | Not started (after the gate) |
+| 1. Measure where it hasn't been (gate): desktop Chrome on the LAN, the iPhone Companion app on Wi-Fi, over Tailscale and over Nabu Casa | **Done** (2026-10-21): check built (v0.2.8), sharpened in v0.2.9 and v0.2.10; four desktop runs (three through Nabu Casa, one on the LAN) and four iPhone runs (Wi-Fi, Tailscale twice, Nabu Casa). Three player and cache bugs found and fixed. HD unmeasured (no main recording cached). See "Step 1 results" and "What step 1 decides" |
+| 2. Build what the evidence calls for (speeds, HD/SD keeping the position, uncached deep seeks, bounded memory and disk) | **In progress**: MSE with server-normalized fragments, the file player as fallback; see "Step 2: what to build" |
 
 ##### Step 0: the recording cache (v0.2.8)
 
@@ -916,7 +916,7 @@ e.g. Front Yard Right, gives the deep-start and session parts):
 | Desktop on the LAN | Run 4 (v0.2.10, 2026-10-20) below: Chrome on a Mac |
 | iPhone app, Wi-Fi (local) | iPhone run 1 (v0.2.10, 2026-10-20, with the session) below |
 | iPhone app, Tailscale | iPhone runs 2 (stopped after the events) and 3 (set to "Nabu Casa", but loaded through the Tailscale address), v0.2.10, 2026-10-20, without the session, below |
-| iPhone app, Nabu Casa | To run on v0.2.10 (the header must say "page Nabu Casa") |
+| iPhone app, Nabu Casa | iPhone run 4 (v0.2.10, 2026-10-20, without the session) below |
 
 **Desktop run 1** (v0.2.8, Front Yard Right, with the one-hour session).
 The browser was **Brave (Chromium 155) running in a Home Assistant add-on**,
@@ -1169,6 +1169,136 @@ What the Tailscale runs add for step 2:
 - **Timeline**: a camera not opened for 15 min waits for the NVR's search
   (6.2 s here). Showing the older copy at once and refreshing behind it, as
   within 15 min, would remove that wait.
+
+**iPhone run 4: the Companion app through Nabu Casa** (v0.2.10, Front Yard
+Right, HTTPS through the Nabu Casa address, HTTP/1.1, without the session;
+2026-10-20, 8:26 PM):
+
+| Measure | Result |
+| --- | --- |
+| Timeline | today 184 ms, a past day 213 ms, again 338 ms, today again 234 ms (stale copy): all under 1 s |
+| Newest event, not cached | **22.3 s.** The event was 6.4 min old, 20.3 min into the recording still being written (25.4 min so far): the server's download took about 4.5 s (93 MB), then WebKit read the whole original in 17.4 s (about 43 Mbit/s) |
+| Events → first frame, cached | 1369 and 973 ms (the next two events, in the same recording, now cached as a plain file). Answers took 39–84 ms; a request opening a new connection (HTTP/1.1) waited 75–143 ms first |
+| Deep start, not cached | **83.5 s**, 44.3 min into a 60 min recording: download 9.7 s (215 MB at 177 Mbit/s), then WebKit read the whole original in 72.8 s (about 24 Mbit/s). The plain copy was ready 1.9 s after the download |
+| Deep start, cached | 2226 ms (plain file), just over 2 s: five requests in sequence (the probe, the 1.3 MB `moov` in two reads, the target), and WebKit waited 0.7 s after the probe |
+| Auto-advance | gap 24 ms |
+| Rates | on pace at every rate, no stalls. Painted 7, 15, 30, 59 and 60 fps, longest gaps 233, 101, 50, 43 and 39 ms. Dropped 0 at 0.5–2×, 9 % at 4× and 45 % at 8×. All judged smooth |
+| Link | 4.2 MB in 800 ms (42 Mbit/s, first answer 154 ms); the long reads above ran at 24–43 Mbit/s |
+| MSE, HD | as in the other iPhone runs |
+| Check bug | the three event lines say "server: not cached". The check asked about each recording as the day stood when it began; the recording being written had grown since, so the server looked for a newer copy than the one played. Step 2's check takes the server's record of the copy it was served |
+
+##### What step 1 decides (the gate, 2026-10-21)
+
+Every setup has been measured: desktop Chrome on the LAN and through Nabu
+Casa, and the iPhone Companion app on home Wi-Fi, through Tailscale and
+through Nabu Casa. HD is the one thing no run could measure: no main
+recording was cached on any of them, so the check could not name the main
+stream's codec. It moves to step 2's hardware check.
+
+Uncached starts, every run (sub stream; "read" is the browser reading the
+whole original before its first frame):
+
+| Run | Setup | Position | File | NVR download | Browser read | First frame |
+| --- | --- | --- | --- | --- | --- | --- |
+| desktop 1 | Brave on the HA host, Nabu Casa | 53 of 60 min | 204 MB | 10.4 s | 25.8 s (62 Mbit/s) | 36.6 s |
+| desktop 2 | same | 55 of 60 min | 180 MB | 9.9 s | 16.8 s (86 Mbit/s) | 27.0 s |
+| desktop 3 | same | 55 of 60 min | 58 MB | 3.1 s | 5.5 s | 8.8 s |
+| desktop 4 | Mac, LAN | 57 of 60 min | 259 MB | 12.8 s | 3.1 s (665 Mbit/s) | 16.1 s |
+| iPhone 1 | Wi-Fi | 52 of 60 min | 234 MB | 9.9 s | 4.1 s (454 Mbit/s) | 14.2 s |
+| iPhone 2 | Tailscale | newest event, 29 of 29 min | 112 MB | 6.8 s | 35.5 s (25 Mbit/s) | 42.8 s |
+| iPhone 3 | Tailscale | 53 of 60 min | 63 MB | 2.9 s | 3.9 s (129 Mbit/s) | 7.1 s |
+| iPhone 4 | Nabu Casa | newest event, 20 of 25 min | 93 MB | 4.5 s | 17.4 s (43 Mbit/s) | 22.3 s |
+| iPhone 4 | Nabu Casa | 44 of 60 min | 215 MB | 9.7 s | 72.8 s (24 Mbit/s) | 83.5 s |
+
+Everything else is within budget, or close to it, on every setup:
+
+- Timeline 106–518 ms (a camera not opened for 15 min: 6.2 s, the NVR's
+  search).
+- Cached starts: 0.12–0.9 s on the LAN and Wi-Fi, 0.97–2.4 s remotely,
+  where three to five requests in sequence at 40–330 ms each set the time.
+- Auto-advance 0–24 ms, every start where asked.
+- Rates 0.5–8× on pace everywhere, every frame painted up to the display's
+  rate (Chrome on the HA host aside, which draws in software).
+- An hour of playback: Chrome's heap bounded (+7.7 MB/h), the iPhone
+  without a dropped frame or a reload, the cache under its cap.
+- `MediaSource` in Chromium and `ManagedMediaSource` (not `MediaSource`) in
+  the Companion app on iOS 27, both playing the normalized fragment.
+
+##### Step 2: what to build (decided 2026-10-21 from step 1)
+
+**Uncached deep starts: (a) MSE with server-normalized fragments.** Both
+candidates remove the whole-file read, which is most of every remote cold
+start above. Only (a) also meets "start once the bytes up to the target are
+on disk":
+
+- A "start here" MP4 needs a complete `moov`, the size of every sample it
+  covers, so it can only be made from bytes already downloaded. To play on
+  past them the player would have to chain files.
+- Normalized fragments can be served as soon as each one is on disk, while
+  the download runs on. A start costs the download up to the target plus
+  one round trip for a window of fragments: no probe and no `moov` reads
+  (the init segment is the NVR's own 1.1 KB `moov`).
+- Both browsers have it: `MediaSource` in Chromium, `ManagedMediaSource` in
+  the Companion app (which even plays the NVR's own fragments; Chromium
+  needs them normalized).
+- One `SourceBuffer` can hold consecutive recordings at their wall-clock
+  offsets. Auto-advance, rates and scrubbing then act on one element.
+
+From the runs above, starts would be the download up to the target plus
+about half a second. For example, iPhone 4's 44-min start would be about
+8 s instead of 83.5 s, and its newest event about 4 s instead of 22.3 s.
+
+**Fallback: the current file player**, when MSE is missing or rejects the
+codec, an append fails, or the user turns MSE off. Its URL is bound to the
+plain copy, waiting for the rewrite (under 2 s after the download in every
+run), whenever the browser would otherwise read the whole original: WebKit
+always, and any browser for a start past the file's first minute.
+
+Build order, each part with tests, and a real-browser test where the
+browser matters:
+
+1. **Normalizer** (`fmp4.py`): parse an NVR fragment; rewrite each `traf`
+   to `default-base-is-moof` without `base-data-offset`; add a `tfdt` from
+   the track's running decode time; make `trun` data offsets relative to
+   the `moof`. Index a cache file's fragments (time → bytes) incrementally,
+   while it downloads. Tested on `tests/mp4_fixtures.py`'s NVR-shaped files.
+2. **MSE view**: the init segment and windows of normalized fragments by
+   media time, under a signed URL with a lease like the VOD grant. A window
+   past the download waits for it. Cache fills already go through the
+   scheduler.
+3. **Playwright append test**: Chromium appends the normalized NVR-shaped
+   fixtures (H.264 with AAC) and plays across a window boundary and a file
+   boundary; the raw fragments fail to append (the control).
+4. **MSE player**, a state machine:
+   - windows fetched ahead by time and by bytes, trimmed behind;
+   - `ManagedMediaSource`'s `startstreaming` and `endstreaming` respected;
+   - the next recording appended at its offset;
+   - falls back to the file player on any error.
+5. **Controls**: speed 0.5–8×; HD/SD switch at the exact position; scrubbing
+   on the sub stream (frames while dragging, the chosen stream on release).
+6. **Bounded memory and disk**: buffer caps behind and ahead, by seconds and
+   bytes; the disk cap as in step 0. The session check reports both.
+7. **Debug panel**: player mode (MSE, `ManagedMediaSource` or file), windows
+   fetched and their wait, buffered ahead and behind, trims, fallbacks.
+8. **Check fixes**:
+   - report the player mode;
+   - judge smoothness by painted frames where the counters disagree;
+   - take the iOS version from the app's part of the user agent;
+   - take the server's record of the copy served;
+   - use a longer link test.
+9. **Timeline**: show an older copy of today at once at any age, then
+   refresh behind it.
+
+Step 2 exit criteria:
+
+- all of 2A's;
+- an uncached deep start begins once the bytes up to the target are on
+  disk (times recorded);
+- speeds 0.5–8× work;
+- the HD/SD switch keeps the position;
+- a one-hour session stays within the buffer and disk caps;
+- the iPhone app plays, seeks and auto-advances on Wi-Fi, through Tailscale
+  and through Nabu Casa.
 
 #### 2A as built (v0.2.0)
 
