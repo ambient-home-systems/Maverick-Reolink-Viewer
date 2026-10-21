@@ -814,7 +814,7 @@ Known limits carried into 2B and Phase 4:
 | --- | --- |
 | 0. Fix the recording cache (disk accounting, eviction, leases, deletion timers, open race), DST end and refresh window, shared thumbnail fetches; correct the MSE claim above | Done (v0.2.8), see "Step 0" below |
 | 1. Measure where it hasn't been (gate): desktop Chrome on the LAN, the iPhone Companion app on Wi-Fi, over Tailscale and over Nabu Casa | **Done** (2026-10-21): check built (v0.2.8), sharpened in v0.2.9 and v0.2.10; four desktop runs (three through Nabu Casa, one on the LAN) and four iPhone runs (Wi-Fi, Tailscale twice, Nabu Casa). Three player and cache bugs found and fixed. HD unmeasured (no main recording cached). See "Step 1 results" and "What step 1 decides" |
-| 2. Build what the evidence calls for (speeds, HD/SD keeping the position, uncached deep seeks, bounded memory and disk) | **Built (v0.3.0)**: MSE with server-normalized fragments, the file player as fallback; checked in Chromium (CI and a harness). v0.3.1: the check also covers scrubbing and HD, and `scripts/desktop-check` runs it without clicking. Hardware check: the desktop on the LAN with HD and the one-hour session met its criteria (2026-10-21); v0.3.2 fixes the check's choice of an uncached recording. The remote desktop runs and the iPhone runs to come, see "Step 2 hardware results" |
+| 2. Build what the evidence calls for (speeds, HD/SD keeping the position, uncached deep seeks, bounded memory and disk) | **Built (v0.3.0)**: MSE with server-normalized fragments, the file player as fallback; checked in Chromium (CI and a harness). v0.3.1: the check also covers scrubbing and HD, and `scripts/desktop-check` runs it without clicking. Hardware check: the desktop on the LAN with HD and the one-hour session met its criteria (2026-10-21); v0.3.2 fixes the check's choice of an uncached recording. The desktop run through Nabu Casa and the iPhone runs to come, see "Step 2 hardware results" |
 
 ##### Step 0: the recording cache (v0.2.8)
 
@@ -1469,7 +1469,7 @@ Against the step 2 exit criteria, on the desktop:
 - An uncached start began once the bytes up to it were on disk: the first
   event, 90 % into its recording, showed its first frame before the
   download ended. An uncached start deep in an hour-long recording is still
-  to be measured (v0.3.2's D1, on the remote runs).
+  to be measured (v0.3.2's D1, on the runs still to come).
 - Speeds 0.5–8× work; HD/SD keeps the position.
 - The one-hour session stays within the buffer and disk caps.
 
@@ -1493,9 +1493,10 @@ Hardware check for v0.3.2 (what remains of step 2's exit criteria):
 
 1. Update to v0.3.2 and restart HA. Reload the panel; in the Companion app,
    reset the frontend cache (Settings → Companion App → Debugging).
-2. Desktop: `scripts/desktop-check` with `--url` for the Tailscale and the
-   Nabu Casa address, `--camera "Front Yard Right"`, without the session.
-   The LAN run above stands.
+2. Desktop: `scripts/desktop-check` with `--url` for the Nabu Casa address,
+   `--camera "Front Yard Right"`, without the session. The LAN run above
+   stands. There is no desktop run through Tailscale: the laptop has no
+   Tailscale, and the iPhone covers that path.
 3. iPhone app, one tap each (Debug → **Run playback check**, the setup
    picked):
    - on home Wi-Fi with **then play for 60 min** (HD is ticked);
