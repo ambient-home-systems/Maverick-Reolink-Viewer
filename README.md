@@ -31,7 +31,9 @@ up to it, instead of after the whole file. The file player remains as a
 fallback. Speeds 0.5–8×, HD/SD switching at the same moment, frames while
 scrubbing, and a progress note while the recorder sends a recording. The
 recording cache keeps to its disk budget, and a built-in **playback check**
-(Playback tab → Debug) measures playback on the device it runs on.
+(Playback tab → Debug) measures playback on the device it runs on; on a
+computer, [`scripts/desktop-check`](scripts/desktop-check/README.md) runs it
+in Chrome without clicking.
 
 Requires Home Assistant 2026.10 or newer with the Reolink integration set up.
 

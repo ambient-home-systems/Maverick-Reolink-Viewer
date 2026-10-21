@@ -17,6 +17,7 @@ import {
   PlaybackCheck,
   SETUPS,
   fetchCheckReports,
+  hdByDefault,
   noteInterruptedCheck,
   type CheckOptions,
   type CheckTarget,
@@ -124,6 +125,9 @@ export interface Metrics {
   /** Switches from the MSE player to the file player, and why. */
   fallbacks?: number;
   lastFallback?: string;
+  /** HD failures (back to the sub stream), and why. */
+  hdFailures?: number;
+  lastHdFailure?: string;
 }
 
 /**
@@ -156,6 +160,7 @@ export class RvPlayback extends LitElement {
     _checkRunning: { state: true },
     _checkSetup: { state: true },
     _checkSession: { state: true },
+    _checkHdPart: { state: true },
     _checkNote: { state: true },
     _reports: { state: true },
     _rate: { state: true },
@@ -188,6 +193,8 @@ export class RvPlayback extends LitElement {
   declare _checkRunning: boolean;
   declare _checkSetup: string;
   declare _checkSession: boolean;
+  /** The check switches to HD and back (the server fetches a main recording). */
+  declare _checkHdPart: boolean;
   declare _checkNote: string | undefined;
   declare _reports: SavedReport[] | undefined;
   /** Playback speed. */
@@ -239,6 +246,7 @@ export class RvPlayback extends LitElement {
     this._checkRunning = false;
     this._checkSetup = rememberedSetup();
     this._checkSession = false;
+    this._checkHdPart = hdByDefault(this._checkSetup);
     this._rate = 1;
     this._mode = rememberedMode();
   }
@@ -637,6 +645,11 @@ export class RvPlayback extends LitElement {
     this._resumeThumbs();
     if (this._stream === "main") {
       this._stream = "sub";
+      this._metrics = {
+        ...this._metrics,
+        hdFailures: (this._metrics.hdFailures ?? 0) + 1,
+        lastHdFailure: message,
+      };
       toast(this, `HD failed (${message}); back to the sub stream`, "error");
       if (this._cursor !== undefined) void this.playAt(this._cursor);
       return;
@@ -831,6 +844,12 @@ export class RvPlayback extends LitElement {
       get mode() {
         return el._describeMode();
       },
+      get stream() {
+        return el._stream;
+      },
+      setStream: (stream: Stream) => {
+        el._setStream(stream);
+      },
       get monthDays() {
         return el._monthDays;
       },
@@ -867,8 +886,8 @@ export class RvPlayback extends LitElement {
       <strong>Playback check</strong>
       <p class="small muted">
         Measures this device: timeline, first frames (events, deep in long recordings, cached and not), auto-advance,
-        playback rates, the link, MSE support and HD. The report is saved on the server, so a run on a phone can be
-        copied on a desktop.
+        playback rates, scrubbing, switching to HD and back, the link and MSE support. The report is saved on the
+        server, so a run on a phone can be copied on a desktop.
       </p>
       ${this._checkNote ? html`<div class="banner error" role="alert">${this._checkNote}</div>` : nothing}
       <div class="row">
@@ -878,6 +897,7 @@ export class RvPlayback extends LitElement {
             ?disabled=${running}
             @change=${(e: Event) => {
               this._checkSetup = (e.target as HTMLSelectElement).value;
+              this._checkHdPart = hdByDefault(this._checkSetup);
               rememberSetup(this._checkSetup);
             }}
           >
@@ -895,6 +915,18 @@ export class RvPlayback extends LitElement {
           />
           then play for ${CHECK_SESSION_MIN} min (memory and disk)</label
         >
+        <label
+          title="The server fetches the main recording from the NVR (up to 3.8 GB for an hour, over the LAN); this device reads only seconds of it"
+          ><input
+            type="checkbox"
+            .checked=${this._checkHdPart}
+            ?disabled=${running}
+            @change=${(e: Event) => {
+              this._checkHdPart = (e.target as HTMLInputElement).checked;
+            }}
+          />
+          with HD</label
+        >
       </div>
       <div class="row">
         ${running
@@ -911,6 +943,7 @@ export class RvPlayback extends LitElement {
                 void this.runCheck({
                   setup: this._checkSetup,
                   soakMinutes: this._checkSession ? CHECK_SESSION_MIN : 0,
+                  hd: this._checkHdPart,
                 })}
             >
               Run playback check

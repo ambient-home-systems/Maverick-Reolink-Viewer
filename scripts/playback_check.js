@@ -5,10 +5,13 @@
 // clipboard. Read-only: it loads timelines and plays recordings, like clicking
 // through the tab. Run it on one camera at a time: two runs share the NVR.
 //
-// For the one-hour session (memory and disk), set SESSION_MIN to 60.
+// For the one-hour session (memory and disk), set SESSION_MIN to 60. WITH_HD
+// switches to HD and back (the server fetches a main recording from the NVR).
+// To run it without opening DevTools, see scripts/desktop-check/.
 (async () => {
   const SETUP = "Desktop Chrome, LAN";
   const SESSION_MIN = 0;
+  const WITH_HD = true;
   const deep = (root, sel) => {
     const hit = root.querySelector(sel);
     if (hit) return hit;
@@ -24,7 +27,7 @@
     return console.error("This panel has no built-in check: update Reolink Viewer to v0.2.8 or later and reload.");
   }
   console.log("Running the playback check… (the report also appears under Debug in the tab)");
-  const report = await el.runCheck({ setup: SETUP, soakMinutes: SESSION_MIN });
+  const report = await el.runCheck({ setup: SETUP, soakMinutes: SESSION_MIN, hd: WITH_HD });
   console.log(report);
   try {
     // DevTools' copy() works without page focus; the Clipboard API needs it.

@@ -814,7 +814,7 @@ Known limits carried into 2B and Phase 4:
 | --- | --- |
 | 0. Fix the recording cache (disk accounting, eviction, leases, deletion timers, open race), DST end and refresh window, shared thumbnail fetches; correct the MSE claim above | Done (v0.2.8), see "Step 0" below |
 | 1. Measure where it hasn't been (gate): desktop Chrome on the LAN, the iPhone Companion app on Wi-Fi, over Tailscale and over Nabu Casa | **Done** (2026-10-21): check built (v0.2.8), sharpened in v0.2.9 and v0.2.10; four desktop runs (three through Nabu Casa, one on the LAN) and four iPhone runs (Wi-Fi, Tailscale twice, Nabu Casa). Three player and cache bugs found and fixed. HD unmeasured (no main recording cached). See "Step 1 results" and "What step 1 decides" |
-| 2. Build what the evidence calls for (speeds, HD/SD keeping the position, uncached deep seeks, bounded memory and disk) | **Built (v0.3.0)**: MSE with server-normalized fragments, the file player as fallback; checked in Chromium (CI and a harness). Hardware check to come, see "Step 2 as built" |
+| 2. Build what the evidence calls for (speeds, HD/SD keeping the position, uncached deep seeks, bounded memory and disk) | **Built (v0.3.0)**: MSE with server-normalized fragments, the file player as fallback; checked in Chromium (CI and a harness). v0.3.1: the check also covers scrubbing and HD, and `scripts/desktop-check` runs it without clicking. Hardware check to come, see "Step 2 as built" |
 
 ##### Step 0: the recording cache (v0.2.8)
 
@@ -1404,24 +1404,42 @@ Found and fixed in that harness:
 - A seek within the recording dropped the next recording's preload.
 - A seek within a recording whose feeder had failed hung.
 
-Hardware check for v0.3.0 (the step 2 exit criteria):
+Check v0.3.1 automates what the v0.3.0 hardware check asked for by hand:
 
-1. Update to v0.3.0 and restart HA. Reload the panel; in the Companion
-   app, reset the frontend cache (Settings → Companion App → Debugging).
-2. In each setup, **Debug → Player** should read `MediaSource` (desktop
-   Chrome) or `ManagedMediaSource` (iPhone).
-3. Desktop Chrome on the LAN, Front Yard Right: run the check without the
-   session. Then by hand:
-   - every speed;
-   - SD → HD → SD on a playing recording (the position is kept; the first
-     HD start shows the download note);
-   - drag the timeline cursor inside the playing recording.
-4. iPhone app on home Wi-Fi: run the check **with** the 60-min session.
-   Then tap HD on an event once (the HD decision, untested so far).
-5. iPhone app through Tailscale and through Nabu Casa (Wi-Fi off): run the
-   check without the session. The newest event and the uncached deep start
-   should begin after about the NVR download up to them (seconds), not
-   after a whole-file read (22–84 s in step 1).
+- **S, scrubbing**: previews five points around the play position, as
+  dragging the cursor does. Each is shown from the buffer (with its time),
+  and a point ten minutes ahead falls back to the thumbnail.
+- **H, HD**: presses HD and then SD on the recording playing. It records the
+  time to each first frame, and whether each started where the other
+  stream was. This runs only with **with HD** ticked: on by default for the
+  desktop and Wi-Fi setups, off for the remote ones. HD makes the server
+  fetch a main recording from the NVR.
+
+Both ran in Chromium against the harness: 5 of 5 points shown (median 5–6
+ms); HD and back with first frames in 107–131 ms, moved 0.03–0.06 s.
+
+`scripts/desktop-check/run-check.mjs` runs the check in Google Chrome
+without clicking, through each address given (LAN, Tailscale, Nabu Casa). It
+logs in with a long-lived access token and saves each report. It was
+checked against a fake HA in the harness: a wrong token stops at the login,
+and a run finds the camera, shows progress and saves the report.
+
+Hardware check for v0.3.1 (the step 2 exit criteria):
+
+1. Update to v0.3.1 and restart HA. Reload the panel; in the Companion app,
+   reset the frontend cache (Settings → Companion App → Debugging).
+2. Desktop: `scripts/desktop-check` with `--url` for the LAN, the Tailscale
+   and the Nabu Casa address, `--camera "Front Yard Right"`. The LAN run
+   includes HD; add `--session 60` for the one-hour session there.
+3. iPhone app, one tap each (Debug → **Run playback check**, the setup
+   picked):
+   - on home Wi-Fi with **then play for 60 min** (HD is ticked);
+   - through Tailscale, and through Nabu Casa (Wi-Fi off), without the
+     session.
+4. Each report's **Player** line should read `MSE (MediaSource)` on the
+   desktop and `MSE (ManagedMediaSource)` on the iPhone. The uncached starts
+   should take about the NVR's download up to the target, not a whole-file
+   read (22–84 s in step 1).
 
 #### 2A as built (v0.2.0)
 

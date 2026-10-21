@@ -8,7 +8,7 @@
 // phone can be copied on a desktop, and a run cut short by a page reload (iOS
 // under memory pressure) keeps what it measured.
 import { fetchCacheStatus, fetchMediaInfo, fetchTimelineDay, toError, urlToken } from "../api";
-import type { CacheStatus, HomeAssistant, MediaInfo, PlaybackUrl, Segment, TimelineDay, Timing } from "../types";
+import type { CacheStatus, HomeAssistant, MediaInfo, PlaybackUrl, Segment, Stream, TimelineDay, Timing } from "../types";
 import {
   browserLabel,
   bufferedSeconds,
@@ -30,14 +30,25 @@ import type { StreamDecision } from "./codec";
 import { SHAPES, mseApi, mseSupports, pickSample, probeShape, type MseApi } from "./mse-probe";
 import type { RvPlayer } from "./player";
 
-export const CHECK_VERSION = "0.3.0";
+export const CHECK_VERSION = "0.3.1";
 export const SETUPS = [
   "Desktop Chrome, LAN",
+  "Desktop Chrome, Tailscale",
+  "Desktop Chrome, Nabu Casa",
   "iPhone app, Wi-Fi (local)",
   "iPhone app, Tailscale",
   "iPhone app, Nabu Casa",
   "Other",
 ] as const;
+
+/**
+ * Whether a setup runs the HD part by default. HD makes the server fetch a
+ * main recording from the NVR (2.4–3.8 GB for an hour, over the LAN); the
+ * device reads only seconds of it, but remote setups skip it unless asked.
+ */
+export function hdByDefault(setup: string): boolean {
+  return !/Tailscale|Nabu Casa/.test(setup);
+}
 export const RATES = [0.5, 1, 2, 4, 8] as const;
 const RATE_MS = 6_000;
 /** After a rate change, measuring starts this much later. */
@@ -47,6 +58,11 @@ const SAMPLE_MS = 60_000;
 const LINK_BYTES = 32 * 1024 * 1024;
 const LINK_MS = 3_000;
 const SAVE_EVERY_MS = 10_000;
+/** The scrub part previews these points around the play position (s). */
+const SCRUB_POINTS_S = [-10, -5, 3, 8, 15] as const;
+const SCRUB_FAR_MS = 10 * 60_000;
+/** The first HD frame may wait for the NVR's main recording up to the moment. */
+const HD_TIMEOUT_MS = 300_000;
 const PEEK_LIMIT = 15;
 const PAST_DAYS = 7;
 const RUNNING_KEY = "reolink-viewer-check-running";
@@ -63,6 +79,9 @@ export interface CheckMetrics {
   delivery?: string;
   cache?: CacheStatus | undefined;
   recoveries?: number;
+  /** HD failures (the tab went back to the sub stream), and the last reason. */
+  hdFailures?: number;
+  lastHdFailure?: string;
 }
 
 /** What the check drives: the Playback tab. */
@@ -83,14 +102,20 @@ export interface CheckTarget {
   readonly monthDays: ReadonlySet<number>;
   readonly player: RvPlayer | null;
   readonly playing: PlaybackUrl | undefined;
+  /** The stream the tab plays (the SD/HD buttons). */
+  readonly stream: Stream;
   selectDate(date: string): void;
   playAt(time: number, requestedAt?: number): Promise<void>;
+  /** Press SD or HD: plays the other stream from the same moment. */
+  setStream(stream: Stream): void;
 }
 
 export interface CheckOptions {
   setup: string;
   /** Minutes of continuous playback to sample memory and disk (0: none). */
   soakMinutes: number;
+  /** Switch to HD and back (the server fetches a main recording). */
+  hd?: boolean;
 }
 
 interface Peek {
@@ -108,6 +133,24 @@ interface Long {
 class Stopped extends Error {}
 
 const sleep = (time: number) => new Promise<void>((resolve) => setTimeout(resolve, time));
+
+/** The player's time, read afresh (a call: not narrowed across awaits). */
+const timeOf = (player: RvPlayer): number | undefined => player.time;
+
+/** Resolves true when the event fires, false after `timeout` ms. */
+function once(target: EventTarget, name: string, timeout: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      target.removeEventListener(name, done);
+      resolve(false);
+    }, timeout);
+    const done = () => {
+      clearTimeout(timer);
+      resolve(true);
+    };
+    target.addEventListener(name, done, { once: true });
+  });
+}
 const clock = (time: number) => new Date(time).toLocaleTimeString();
 
 export class PlaybackCheck {
@@ -147,6 +190,8 @@ export class PlaybackCheck {
       await this._deep();
       await this._advance();
       await this._rates();
+      await this._scrub();
+      await this._switchHd();
       await this._link();
       await this._capabilities();
       if (this.options.soakMinutes > 0) await this._soak();
@@ -538,6 +583,124 @@ export class PlaybackCheck {
     this._summary.push(
       `Rates: ${results.map((r) => `${r.rate}× ${smooth(r) ? "✓" : "✗"}`).join(" ") || "not measured"} (smooth = ${SMOOTH_RULE})`,
     );
+  }
+
+  /**
+   * S: frames while dragging the timeline cursor. Previews a few points
+   * around the play position, as the tab does while scrubbing: a point in
+   * the buffer shows its frame; one outside it shows the thumbnail instead.
+   */
+  private async _scrub(): Promise<void> {
+    const t = this._t;
+    const player = t.player;
+    const item = player?.current;
+    const video = activeVideo(player);
+    if (!player || !item || !video || player.time === undefined) {
+      this._log("S  skipped: nothing playing");
+      return;
+    }
+    // Let the buffer gather ahead (the rates just moved the position).
+    await this._pause(3000);
+    const from = timeOf(player) ?? item.start;
+    const shown: number[] = [];
+    const notBuffered: number[] = [];
+    let off = 0;
+    for (const seconds of SCRUB_POINTS_S) {
+      const time = from + seconds * 1000;
+      if (time < item.start || time > item.end) continue;
+      const began = performance.now();
+      const seeked = once(video, "seeked", 3000);
+      if (!player.preview(time)) {
+        notBuffered.push(seconds);
+        continue;
+      }
+      if (await seeked) {
+        shown.push(performance.now() - began);
+        off = Math.max(off, Math.abs((timeOf(player) ?? time) - time));
+      }
+    }
+    const far = from + SCRUB_FAR_MS;
+    const farText =
+      far < item.end
+        ? ` · ${span(SCRUB_FAR_MS)} ahead: ${player.preview(far) ? "buffered, shown" : "not buffered (the thumbnail shows instead)"}`
+        : "";
+    const tried = shown.length + notBuffered.length;
+    const median = shown.length ? [...shown].sort((a, b) => a - b)[Math.floor(shown.length / 2)] : undefined;
+    this._log(
+      `S  Scrub preview (frames from the buffer while dragging): ${shown.length} of ${tried} points shown` +
+        (median === undefined ? "" : `, median ${ms(median)}, each within ${(off / 1000).toFixed(2)} s of its point`) +
+        (notBuffered.length ? ` · not buffered: ${notBuffered.map((n) => `${n > 0 ? "+" : ""}${n} s`).join(", ")}` : "") +
+        farText,
+    );
+    this._summary.push(`Scrub: ${shown.length} of ${tried} points in the buffer shown${median === undefined ? "" : ` (median ${ms(median)})`}`);
+    player.resume();
+  }
+
+  /**
+   * H: SD → HD → SD on the recording playing, as pressing the buttons does:
+   * the first HD frame's time and whether each switch kept the moment.
+   */
+  private async _switchHd(): Promise<void> {
+    const t = this._t;
+    if (!this.options.hd) {
+      this._log('H  skipped: not asked for (tick "with HD")');
+      return;
+    }
+    if (!t.hd.main) {
+      this._log(`H  skipped: HD not offered (${t.hd.reason})`);
+      return;
+    }
+    const player = t.player;
+    const item = player?.current;
+    if (!player || !item || t.stream !== "sub") {
+      this._log("H  skipped: nothing playing on the sub stream");
+      return;
+    }
+    const seg = t.day?.segments.find((s) => s.id === item.segmentId);
+    const where = seg ? ` (${span((player.time ?? seg.start) - seg.start)} into a ${span(seg.end - seg.start)} recording)` : "";
+    const hd = await this._switchTo("main");
+    if (!hd.ok) {
+      this._log(`H  HD at ${clock(hd.at)}${where}: ${hd.line}`);
+      this._summary.push(`HD switch: ${hd.line}`);
+      return;
+    }
+    this._log(`H  HD at ${clock(hd.at)}${where}: ${hd.line} · ${t.metrics.codec ?? "?"} · ${t.metrics.delivery ?? "?"}`);
+    this._log(`     ${await this._fillReport()}`);
+    await this._pause(5000);
+    const sd = await this._switchTo("sub");
+    this._log(`     Back to SD at ${clock(sd.at)}: ${sd.line}`);
+    this._summary.push(`HD switch: to HD ${hd.short}; back to SD ${sd.short}`);
+  }
+
+  /** Press SD or HD; wait for the first frame of that stream. */
+  private async _switchTo(
+    stream: Stream,
+  ): Promise<{ ok: boolean; at: number; line: string; short: string }> {
+    const t = this._t;
+    const player = t.player;
+    const at = player?.time ?? 0;
+    const failures = t.metrics.hdFailures ?? 0;
+    const failed = () => (t.metrics.hdFailures ?? 0) > failures;
+    t.setStream(stream);
+    const done = await this._wait(
+      () => (t.metrics.stream === stream && t.metrics.firstFrameMs !== undefined) || failed() || Boolean(t.playFailure),
+      HD_TIMEOUT_MS,
+    );
+    const failure = failed() ? (t.metrics.lastHdFailure ?? "HD failed") : t.playFailure;
+    if (!done || failure) {
+      const line = failure ? `FAILED: ${failure} (back on the sub stream)` : `no first frame within ${span(HD_TIMEOUT_MS)}`;
+      return { ok: false, at, line, short: line };
+    }
+    const first = t.metrics.firstFrameMs ?? 0;
+    // Where it started, against the moment the button was pressed.
+    const moved = ((player?.time ?? at) - at) / 1000;
+    const kept = Math.abs(moved) <= 1.5 ? "kept the moment" : "MOVED";
+    return {
+      ok: true,
+      at,
+      line: `first frame ${ms(first)}, started ${moved.toFixed(2)} s from where ${stream === "main" ? "SD" : "HD"} was (${kept})`,
+      short: `${ms(first)}, ${kept} (${moved.toFixed(2)} s)`,
+    };
   }
 
   private async _measureRate(video: HTMLVideoElement, rate: number): Promise<RateSample> {

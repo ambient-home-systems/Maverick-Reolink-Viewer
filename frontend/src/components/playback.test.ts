@@ -475,6 +475,21 @@ describe("rv-playback", () => {
     expect([...el.renderRoot.querySelectorAll(".check option")].map((o) => o.textContent)).toContain(
       "iPhone app, Tailscale",
     );
+    // HD is on for local setups, off for remote ones (it fetches a main recording).
+    const hdBox = () =>
+      [...el.renderRoot.querySelectorAll<HTMLLabelElement>(".check label")]
+        .find((l) => l.textContent.includes("with HD"))
+        ?.querySelector("input");
+    const setup = el.renderRoot.querySelector<HTMLSelectElement>(".check select");
+    if (!setup) throw new Error("no setup select");
+    setup.value = "iPhone app, Nabu Casa";
+    setup.dispatchEvent(new Event("change"));
+    await el.updateComplete;
+    expect(hdBox()?.checked).toBe(false);
+    setup.value = "Desktop Chrome, LAN";
+    setup.dispatchEvent(new Event("change"));
+    await el.updateComplete;
+    expect(hdBox()?.checked).toBe(true);
     named("Saved reports")?.click();
     await flush();
     await el.updateComplete;

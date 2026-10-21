@@ -1,8 +1,9 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { makeHass, okDevices, type FakeHass } from "../test-fixtures";
 import type { TimelineDay } from "../types";
-import { PlaybackCheck, noteInterruptedCheck, type CheckTarget } from "./check";
+import { PlaybackCheck, hdByDefault, noteInterruptedCheck, type CheckTarget } from "./check";
+import type { RvPlayer } from "./player";
 
 const T0 = Date.UTC(2026, 9, 17, 4, 0);
 
@@ -65,6 +66,8 @@ function stubTarget(hass: FakeHass): CheckTarget {
     hd: { main: false, reason: "this browser cannot decode hvc1 at 7680×2160" },
     progressive: true,
     mode: "file player (this browser has no MSE)",
+    stream: "sub",
+    setStream: () => undefined,
     monthDays: new Set<number>(),
     player: null,
     playing: undefined,
@@ -75,7 +78,36 @@ function stubTarget(hass: FakeHass): CheckTarget {
 
 afterEach(() => {
   window.localStorage.clear();
+  vi.restoreAllMocks();
 });
+
+/**
+ * A player on a recording (T0 + 1 h, an hour long), at T0 + 1 h 5 min; a
+ * preview within 12 s of that is "buffered" and moves it there.
+ */
+function fakePlayer(): RvPlayer {
+  const root = document.createElement("div");
+  const video = document.createElement("video");
+  video.className = "active";
+  root.append(video);
+  const item = { key: "k", recording: "sub:r1:0", segmentId: "r1", start: T0 + 3_600_000, end: T0 + 7_200_000 };
+  let time = T0 + 3_900_000;
+  return {
+    renderRoot: root,
+    current: item,
+    get time() {
+      return time;
+    },
+    preview(at: number) {
+      if (Math.abs(at - T0 - 3_900_000) > 12_000) return false;
+      time = at;
+      setTimeout(() => video.dispatchEvent(new Event("seeked")), 1);
+      return true;
+    },
+    resume: () => undefined,
+    pause: () => undefined,
+  } as unknown as RvPlayer;
+}
 
 describe("PlaybackCheck", () => {
   it("reports what it could measure and saves the report", async () => {
@@ -85,7 +117,7 @@ describe("PlaybackCheck", () => {
       changes.push(1),
     );
     const report = await check.run();
-    expect(report).toContain("Reolink Viewer playback check v0.3.0 · Desktop Chrome, LAN · Garage");
+    expect(report).toContain("Reolink Viewer playback check v0.3.1 · Desktop Chrome, LAN · Garage");
     expect(report).toContain("A1 Time to timeline, today (as the tab opened): 120 ms (server: memory, total 4 ms)");
     expect(report).toContain("A2/A3 skipped: no earlier recording day this month");
     expect(report).toContain("B  skipped: no events today");
@@ -93,6 +125,8 @@ describe("PlaybackCheck", () => {
     expect(report).toContain("C  skipped: no two touching recordings on 2026-10-17");
     expect(report).toContain("R  skipped: no recording on this day");
     expect(report).toContain("L  skipped: nothing played");
+    expect(report).toContain("S  skipped: nothing playing");
+    expect(report).toContain('H  skipped: not asked for (tick "with HD")');
     expect(report).toContain("HD: this browser cannot decode hvc1 at 7680×2160");
     expect(report).toContain("Summary:");
     expect(report).toContain("- Timeline: today 120 ms ✓");
@@ -140,5 +174,70 @@ describe("PlaybackCheck", () => {
     expect(last).toMatchObject({ report_id: "run1", done: true });
     expect(String(last?.text)).toContain("INTERRUPTED:");
     expect(window.localStorage.getItem("reolink-viewer-check-running")).toBeNull();
+  });
+});
+
+describe("PlaybackCheck: scrubbing and HD", () => {
+  it("previews points in the buffer and switches to HD and back at the same moment", async () => {
+    // The check's waits are for real devices; here they pass at once.
+    vi.spyOn(PlaybackCheck.prototype as unknown as { _pause: () => Promise<void> }, "_pause").mockResolvedValue();
+    const hass = reportingHass();
+    const player = fakePlayer();
+    let stream: "sub" | "main" = "sub";
+    const metrics: Record<string, unknown> = { timelineMs: 120 };
+    const target: CheckTarget = {
+      ...stubTarget(hass),
+      hd: { main: true, reason: "hvc1.1.6.L153.B0 at 3840×2160 is supported" },
+      metrics,
+      player,
+      get stream() {
+        return stream;
+      },
+      setStream: (next) => {
+        stream = next;
+        metrics.firstFrameMs = undefined;
+        setTimeout(() => {
+          Object.assign(metrics, { stream: next, firstFrameMs: next === "main" ? 2840 : 210, codec: "hvc1.1.6.L153.B0" });
+        }, 5);
+      },
+    };
+    const report = await new PlaybackCheck(target, { setup: "Desktop Chrome, LAN", soakMinutes: 0, hd: true }).run();
+    expect(report).toMatch(/S {2}Scrub preview \(frames from the buffer while dragging\): 4 of 5 points shown, median \d+ ms/);
+    expect(report).toContain("not buffered: +15 s");
+    expect(report).toContain("10.0 min ahead: not buffered (the thumbnail shows instead)");
+    expect(report).toMatch(/H {2}HD at .*: first frame 2840 ms, started 0\.00 s from where SD was \(kept the moment\)/);
+    expect(report).toMatch(/Back to SD at .*: first frame 210 ms, started 0\.00 s from where HD was/);
+    expect(report).toContain("- HD switch: to HD 2840 ms, kept the moment (0.00 s); back to SD 210 ms, kept the moment (0.00 s)");
+    expect(stream).toBe("sub");
+  });
+
+  it("reports an HD failure, and skips HD where it is not offered", async () => {
+    vi.spyOn(PlaybackCheck.prototype as unknown as { _pause: () => Promise<void> }, "_pause").mockResolvedValue();
+    const hass = reportingHass();
+    const metrics: Record<string, unknown> = { timelineMs: 120 };
+    const target: CheckTarget = {
+      ...stubTarget(hass),
+      hd: { main: true, reason: "not tried yet" },
+      metrics,
+      player: fakePlayer(),
+      setStream: () => {
+        setTimeout(() => Object.assign(metrics, { hdFailures: 1, lastHdFailure: "MEDIA_ERR_DECODE" }), 5);
+      },
+    };
+    const report = await new PlaybackCheck(target, { setup: "iPhone app, Wi-Fi (local)", soakMinutes: 0, hd: true }).run();
+    expect(report).toContain("FAILED: MEDIA_ERR_DECODE (back on the sub stream)");
+    const off = await new PlaybackCheck({ ...stubTarget(reportingHass()), player: fakePlayer() }, {
+      setup: "Other",
+      soakMinutes: 0,
+      hd: true,
+    }).run();
+    expect(off).toContain("H  skipped: HD not offered (this browser cannot decode hvc1 at 7680×2160)");
+  });
+
+  it("runs HD by default except on remote setups", () => {
+    expect(hdByDefault("Desktop Chrome, LAN")).toBe(true);
+    expect(hdByDefault("iPhone app, Wi-Fi (local)")).toBe(true);
+    expect(hdByDefault("iPhone app, Tailscale")).toBe(false);
+    expect(hdByDefault("Desktop Chrome, Nabu Casa")).toBe(false);
   });
 });
