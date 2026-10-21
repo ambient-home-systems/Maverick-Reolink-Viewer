@@ -260,6 +260,8 @@ class FakeBuffer extends EventTarget {
   updating = false;
   mode = "segments";
   end = 0;
+  /** Seconds each append adds (the key-frame cache sends several at once). */
+  step = 1;
   appended = 0;
   removed: [number, number][] = [];
   get buffered(): TimeRanges {
@@ -270,7 +272,7 @@ class FakeBuffer extends EventTarget {
     this.updating = true;
     setTimeout(() => {
       this.appended += 1;
-      this.end += 1;
+      this.end += this.step;
       this.updating = false;
       this.dispatchEvent(new Event("updateend"));
     }, 0);
@@ -354,6 +356,33 @@ describe("OurMse", () => {
     expect(time).toBeGreaterThan(9);
     session.close();
     expect(ws.closed).toBe(true);
+  });
+
+  it("starts near the newest frame the key-frame cache sent", async () => {
+    const { hass } = fakeHass();
+    const video = fakeVideo();
+    let time = -1;
+    Object.defineProperty(video, "currentTime", {
+      get: () => time,
+      set: (v: number) => {
+        time = v;
+      },
+    });
+    const session = new OurMse(hass, video, { connectionId: "c1", stream: "sub" }, 5000, "http://ha/");
+    await flush();
+    const ws = FakeSocket.last;
+    if (!ws) throw new Error("no socket");
+    ws.open();
+    ws.message(JSON.stringify({ type: "mse", value: 'video/mp4; codecs="avc1.640029"' }));
+    await flush();
+    const source = FakeMediaSource.last;
+    if (!source) throw new Error("no media source");
+    // The init segment and 3.5 s since the key frame, in one message.
+    source.buffer.step = 3.5;
+    ws.message(new ArrayBuffer(8));
+    await flush();
+    expect(time).toBe(3);
+    session.close();
   });
 
   it("fails on go2rtc's error, a closed stream or a refused codec", async () => {

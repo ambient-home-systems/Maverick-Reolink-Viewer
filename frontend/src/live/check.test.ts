@@ -90,10 +90,10 @@ const CAMERAS: LiveCamera[] = [
         via: "nvr",
         entry_title: "RLN36",
         is_battery: true,
+        // Baichuan only: no HTTP-FLV, so no ext.
         streams: {
           sub: { encoding: null, entity_id: null },
           main: { encoding: null, entity_id: null },
-          ext: { encoding: null, entity_id: null },
         },
       },
     ],
@@ -123,7 +123,23 @@ function fakeHass(admin: boolean) {
         case "reolink_viewer/live/cameras":
           return Promise.resolve({ cameras: CAMERAS });
         case "reolink_viewer/live/state":
-          return Promise.resolve({ state: { active: false }, holds: 0, preloaded: false });
+          return Promise.resolve({
+            state: { active: false },
+            holds: 0,
+            preloaded: false,
+            cache: {
+              viewers: 0,
+              warm: true,
+              mime: 'video/mp4; codecs="avc1.640029"',
+              key_frame_age_ms: 900,
+              key_interval_ms: 4000,
+              cached_ms: 900,
+              cached_bytes: 51200,
+              parameter_sets: "differ",
+            },
+          });
+        case "reolink_viewer/live/preload":
+          return Promise.resolve({ preloaded: [], key_frame: message.enabled === true });
         case "reolink_viewer/live/frame":
           return Promise.resolve({ path: "/api/reolink_viewer/live/frame/tok?authSig=x" });
         case "reolink_viewer/devices":
@@ -210,7 +226,8 @@ describe("LiveCheck", () => {
     expect(text).toContain("  cold: WebRTC 0.80 s (answer 100 ms, connected 200 ms; host/udp ↔ host/udp; 640×360)");
     expect(text).toContain("WebRTC ✗ codecs not matched: video:H265");
     expect(text).toContain("Home Assistant's view (camera.fyr_fluent): snapshot");
-    expect(text).toContain("warm (camera connected in");
+    expect(text).toContain("warm (key frame cached in");
+    expect(text).toContain("; key frames every 4.00 s; parameter sets: differ):");
     expect(text).toContain("warm: not measured (battery camera: never kept warm)");
     expect(text).toContain("Capacity test: RLN36");
     expect(text).toContain("  verdict: every level kept up");
@@ -243,6 +260,18 @@ describe("LiveCheck", () => {
     const stopped = new LiveCheck(hass, { setup: "Other", streams: ["sub"], warm: false, stock: false, capacity: false }, document.createElement("div"));
     stopped.stop();
     expect(await stopped.run()).toContain("Stopped.");
+  });
+
+  it("skips a stream the connection does not serve", async () => {
+    const { hass, calls } = fakeHass(true);
+    const check = new LiveCheck(
+      hass,
+      { setup: "Other", streams: ["ext"], warm: true, stock: true, capacity: false, cameraIds: ["cam2"] },
+      document.createElement("div"),
+    );
+    const text = await check.run();
+    expect(text).toContain("Doorbell (Video Doorbell) · via RLN36 · ext: not served by this connection");
+    expect(calls.some((c) => c.type === "reolink_viewer/live/webrtc" || c.type === "reolink_viewer/live/mse")).toBe(false);
   });
 
   it("describes a session result", () => {

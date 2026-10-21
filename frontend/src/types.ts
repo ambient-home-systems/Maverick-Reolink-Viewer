@@ -395,8 +395,11 @@ export interface LiveConnection {
   via: "nvr" | "direct";
   entry_title: string;
   is_battery: boolean;
-  /** Per stream: its configured encoding (none for ext) and HA's camera entity showing it. */
-  streams: Record<LiveStreamKind, { encoding: StreamEncoding | null; entity_id: string | null }>;
+  /**
+   * Per stream the connection can serve (no ext without HTTP-FLV): its
+   * configured encoding (none for ext) and HA's camera entity showing it.
+   */
+  streams: Partial<Record<LiveStreamKind, { encoding: StreamEncoding | null; entity_id: string | null }>>;
 }
 
 export interface LiveCamera {
@@ -429,11 +432,32 @@ export interface LiveStatus {
   sessions: number;
 }
 
+/** A stream's key-frame cache (its shared MSE feed). */
+export interface LiveCacheState {
+  viewers: number;
+  warm: boolean;
+  mime: string;
+  key_frame_age_ms: number | null;
+  /** Between the last two key frames: the camera's key-frame interval. */
+  key_interval_ms: number | null;
+  /** Media kept since the last key frame. */
+  cached_ms: number | null;
+  cached_bytes: number;
+  /**
+   * The init segment's parameter sets (go2rtc takes them from the stream's
+   * description) against the first key frame's: "none" if it carries none;
+   * null before a key frame, or without H.264/H.265 video.
+   */
+  parameter_sets: "same" | "differ" | "none" | "unknown" | null;
+}
+
 export interface LiveStreamState {
   /** Null: go2rtc does not know the stream yet. */
   state: { active: boolean; bytes: number; producers: number; consumers: number; codecs?: string[] } | null;
   holds: number;
   preloaded: boolean;
+  /** Null: no feed (nobody watches it over MSE, and it is not kept warm). */
+  cache: LiveCacheState | null;
 }
 
 /** HA's RTCIceServer (web_rtc/ice_servers). */

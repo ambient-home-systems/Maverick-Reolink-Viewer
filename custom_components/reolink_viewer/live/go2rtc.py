@@ -71,7 +71,6 @@ MODULES = (
 API_PATHS = (
     "/api",  # version
     "/api/streams",  # register streams, read their state
-    "/api/preload",  # keep streams warm
     "/api/ws",  # WebRTC signaling and MSE
     "/api/frame.jpeg",  # a frame from a running stream
     "/api/stream.mp4",  # the capacity test reads streams with it
@@ -469,7 +468,7 @@ class Go2rtcServer:
         """Return a stream's state without its sources (they carry credentials).
 
         ``active``: a producer is connected to the camera; ``bytes``: what it
-        received; ``consumers``: who reads it (sessions, preload).
+        received; ``consumers``: who reads it (sessions, feeds).
         """
         async with self.request("GET", "/api/streams", {"src": name}) as response:
             if response.status == 404:
@@ -478,16 +477,6 @@ class Go2rtcServer:
                 raise Go2rtcError(f"stream state: HTTP {response.status}")
             data = await response.json(content_type=None)
         return stream_state(data)
-
-    async def async_preload(self, name: str, enabled: bool) -> None:
-        """Keep a stream's producer running without a viewer (go2rtc preload)."""
-        await self._api_change(
-            "PUT" if enabled else "DELETE", "/api/preload", {"src": name}
-        )
-
-    async def async_preloads(self) -> set[str]:
-        """Return the names of the streams kept warm."""
-        return set(await self._api_json("GET", "/api/preload"))
 
     @contextlib.asynccontextmanager
     async def ws(self, name: str) -> AsyncIterator[ClientWebSocketResponse]:

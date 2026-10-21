@@ -274,8 +274,15 @@ export const fetchLiveFramePath = (hass: HomeAssistant, ref: LiveRef): Promise<{
 export const fetchLiveState = (hass: HomeAssistant, ref: LiveRef): Promise<LiveStreamState> =>
   hass.callWS<LiveStreamState>({ type: "reolink_viewer/live/state", ...liveRef(ref) });
 
-/** Keep a stream warm in go2rtc, or stop (admin). */
-export const setLivePreload = (hass: HomeAssistant, ref: LiveRef, enabled: boolean): Promise<unknown> =>
+/**
+ * Keep a stream warm (its feed open, its last key frame cached), or stop
+ * (admin). Turning it on resolves once a key frame is cached (or after 15 s).
+ */
+export const setLivePreload = (
+  hass: HomeAssistant,
+  ref: LiveRef,
+  enabled: boolean,
+): Promise<{ preloaded: string[]; key_frame: boolean }> =>
   hass.callWS({ type: "reolink_viewer/live/preload", ...liveRef(ref), enabled });
 
 /** Home Assistant's ICE servers (with Nabu Casa's TURN for subscribers). */

@@ -366,3 +366,90 @@ def _nvr_moof(moof: bytes, moof_at: int, shift: int) -> bytes:
                 traf += child
         children += box("traf", traf)
     return box("moof", children)
+
+
+# ---- go2rtc's MSE output: one sample per moof + mdat ----
+
+# H.264 parameter sets (High, level 3.1) and a slice of each kind.
+SPS = bytes([0x67, 0x64, 0x00, 0x1F, 0xAC, 0xD9, 0x40, 0x50, 0x05, 0xBB, 0x01])
+PPS = bytes([0x68, 0xEB, 0xE3, 0xCB, 0x22, 0xC0])
+IDR = bytes([0x65, 0x88, 0x84, 0x00]) + bytes(60)
+P_SLICE = bytes([0x41, 0x9A, 0x02]) + bytes(20)
+# H.265 parameter sets and an IDR slice (types 32, 33, 34; 19).
+VPS = bytes([0x40, 0x01, 0x0C, 0x01])
+HEVC_SPS = bytes([0x42, 0x01, 0x01, 0x01, 0x60])
+HEVC_PPS = bytes([0x44, 0x01, 0xC1, 0x72])
+HEVC_IDR = bytes([0x26, 0x01, 0xAF]) + bytes(30)
+
+
+def nals(*units: bytes) -> bytes:
+    """Join NAL units as an MP4 sample (4-byte lengths)."""
+    return b"".join(struct.pack(">I", len(u)) + u for u in units)
+
+
+def avcc(sps: bytes = SPS, pps: bytes = PPS) -> bytes:
+    """Build an avcC box with one SPS and one PPS."""
+    return box(
+        "avcC",
+        bytes([1, sps[1], sps[2], sps[3], 0xFF, 0xE1])
+        + struct.pack(">H", len(sps))
+        + sps
+        + bytes([1])
+        + struct.pack(">H", len(pps))
+        + pps,
+    )
+
+
+def hvcc(*sets: bytes) -> bytes:
+    """Build an hvcC box with one array per parameter set."""
+    body = bytes([1, 0x01, 0x60, 0, 0, 0, 0xB0] + [0] * 5 + [153])
+    body += bytes([0xF0, 0, 0xFC, 0xFD, 0xF8, 0xF8, 0, 0, 0x0F, len(sets)])
+    for nal in sets:
+        body += bytes([0x80 | ((nal[0] >> 1) & 0x3F)]) + struct.pack(">H", 1)
+        body += struct.pack(">H", len(nal)) + nal
+    return box("hvcC", body)
+
+
+def go2rtc_init(video: bytes | None = None, *, audio: bool = True) -> bytes:
+    """Build an init segment as go2rtc's MSE writes it (video 1, audio 2)."""
+    video = video if video is not None else visual_entry("avc1", 640, 360, avcc())
+    tracks = av_trak(1, VIDEO_TIMESCALE, "vide", video)
+    trex = _trex(1, 0)
+    if audio:
+        tracks += av_trak(2, AUDIO_TIMESCALE, "soun", audio_entry("mp4a", ESDS))
+        trex += _trex(2, 0)
+    return FTYP + box("moov", mvhd(0) + tracks + box("mvex", trex))
+
+
+def go2rtc_audio_init() -> bytes:
+    """Build an audio-only init segment (track 1)."""
+    tracks = av_trak(1, AUDIO_TIMESCALE, "soun", audio_entry("mp4a", ESDS))
+    return FTYP + box("moov", mvhd(0) + tracks + box("mvex", _trex(1, 0)))
+
+
+def go2rtc_fragment(
+    index: int,
+    track_id: int,
+    decode: int,
+    sample: bytes,
+    *,
+    key: bool = True,
+    duration: int = FRAME,
+) -> bytes:
+    """Build one sample as go2rtc writes it: moof (tfhd defaults) + mdat."""
+
+    def moof(offset: int) -> bytes:
+        tfhd = box(
+            "tfhd",
+            struct.pack(">I", 0x020038)
+            + struct.pack(
+                ">IIII", track_id, duration, len(sample), SYNC if key else NON_SYNC
+            ),
+        )
+        tfdt = full_box("tfdt", struct.pack(">Q", decode), version=1)
+        trun = box("trun", struct.pack(">IIi", 0x000001, 1, offset))
+        mfhd = box("mfhd", struct.pack(">II", 0, index))
+        return box("moof", mfhd + box("traf", tfhd + tfdt + trun))
+
+    size = len(moof(0))
+    return moof(size + 8) + box("mdat", sample)

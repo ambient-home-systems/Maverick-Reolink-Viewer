@@ -8,10 +8,11 @@ integration's connection, through the scheduler, and goes straight to go2rtc's
 API: it is never written to disk or sent to a browser.
 
 A running stream is one connection to the camera, whoever watches it. The
-first *hold* on a stream (a browser session, a preload) takes a slot of the
+first *hold* on a stream (a WebRTC session, an MSE feed) takes a slot of the
 host's stream budget at live priority, and the last one gives it back. A
 stream is registered again each time it starts from idle, so a reloaded
-Reolink entry (new address or password) or a restarted go2rtc is picked up.
+Reolink entry (new address or password) is picked up, and when go2rtc has
+restarted since (it forgets its streams).
 """
 
 import asyncio
@@ -20,7 +21,7 @@ import logging
 
 from custom_components.reolink_viewer import bridge
 from custom_components.reolink_viewer.bridge import LiveProtocol
-from custom_components.reolink_viewer.devices import LiveSource
+from custom_components.reolink_viewer.devices import LIVE_PROTOCOLS, LiveSource
 from custom_components.reolink_viewer.scheduler import Priority, Scheduler, StreamTicket
 from homeassistant.core import HomeAssistant
 
@@ -52,13 +53,15 @@ class LiveStream:
     @property
     def protocol(self) -> LiveProtocol:
         """Return the protocol the camera is read with."""
-        return LiveProtocol.FLV if self.kind == "ext" else LiveProtocol.RTSP
+        return LIVE_PROTOCOLS.get(self.kind, LiveProtocol.RTSP)
 
 
 @dataclass(slots=True)
 class _Running:
     holds: int = 0
     ticket: StreamTicket | None = None
+    # go2rtc's generation the stream was registered in.
+    generation: int = -1
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
 
@@ -89,8 +92,6 @@ class StreamRegistry:
         self._scheduler = scheduler
         self._server = server
         self._running: dict[str, _Running] = {}
-        self._preloads: dict[str, Hold] = {}
-        self._remove_listener = server.add_listener(self._restarted)
 
     async def async_hold(
         self, stream: LiveStream, *, slot_timeout: float = SLOT_TIMEOUT
@@ -99,8 +100,10 @@ class StreamRegistry:
         await self._server.async_ready()
         state = self._running.setdefault(stream.name, _Running())
         async with state.lock:
-            if state.holds == 0:
+            if state.holds == 0 or state.generation != self._server.generation:
                 await self._register(stream)
+                state.generation = self._server.generation
+            if state.holds == 0:
                 ticket = self._scheduler.host(stream.source.entry_id).streams.request(
                     Priority.LIVE
                 )
@@ -159,54 +162,8 @@ class StreamRegistry:
         """Return the holds of each running stream (by go2rtc name)."""
         return {name: s.holds for name, s in self._running.items() if s.holds}
 
-    # ---- Keep warm (go2rtc preload) ----
-
-    async def async_preload(self, stream: LiveStream, enabled: bool) -> None:
-        """Keep a stream's camera connection open without a viewer, or stop."""
-        if enabled:
-            if stream.name in self._preloads:
-                return
-            hold = await self.async_hold(stream)
-            try:
-                await self._server.async_preload(stream.name, True)
-            except Go2rtcError as err:
-                hold.release()
-                raise LiveError(str(err)) from err
-            self._preloads[stream.name] = hold
-            return
-        if (held := self._preloads.pop(stream.name, None)) is None:
-            return
-        try:
-            await self._server.async_preload(stream.name, False)
-        except Go2rtcError as err:
-            _LOGGER.debug("Ending a preload failed: %s", err)
-        finally:
-            held.release()
-
-    def preloaded(self) -> list[str]:
-        """Return the go2rtc names of the streams kept warm."""
-        return list(self._preloads)
-
-    def _restarted(self) -> None:
-        """go2rtc started again: its streams and preloads are gone; restore them."""
-        if self._preloads:
-            self._hass.async_create_background_task(
-                self._restore(list(self._preloads.values())),
-                "reolink_viewer restore preloads",
-            )
-
-    async def _restore(self, holds: list[Hold]) -> None:
-        for hold in holds:
-            try:
-                await self._register(hold.stream)
-                await self._server.async_preload(hold.stream.name, True)
-            except (LiveError, Go2rtcError) as err:
-                _LOGGER.warning("Cannot keep a stream warm after a restart: %s", err)
-
     async def async_shutdown(self) -> None:
         """Release every hold (go2rtc is stopping)."""
-        self._remove_listener()
-        self._preloads.clear()
         for state in self._running.values():
             state.holds = 0
             if state.ticket is not None:

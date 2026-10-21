@@ -46,6 +46,12 @@ type Via = Literal["nvr", "direct"]
 # The live streams of a camera, and the camera entities that show them in
 # Home Assistant's own view (for the live check's comparison).
 LIVE_STREAMS: tuple[str, ...] = ("sub", "main", "ext")
+# How each live stream is read: Reolink serves no ext over RTSP (Phase 0).
+LIVE_PROTOCOLS: dict[str, bridge.LiveProtocol] = {
+    "sub": bridge.LiveProtocol.RTSP,
+    "main": bridge.LiveProtocol.RTSP,
+    "ext": bridge.LiveProtocol.FLV,
+}
 
 
 class DeviceNotFoundError(Exception):
@@ -530,8 +536,9 @@ def async_host_live_sources(hass: HomeAssistant, host_id: str) -> list[LiveSourc
 def async_live_cameras(hass: HomeAssistant) -> list[dict[str, Any]]:
     """Return every camera with its connections, streams and HA camera entities.
 
-    Each connection lists, per live stream, the configured encoding and the
-    enabled camera entity showing it in Home Assistant's own view (if any).
+    Each connection lists, per live stream it can serve, the configured
+    encoding and the enabled camera entity showing it in Home Assistant's own
+    view (if any).
     """
     model = _async_build(hass, degraded=False)
     ent_reg = er.async_get(hass)
@@ -557,6 +564,11 @@ def async_live_cameras(hass: HomeAssistant) -> list[dict[str, Any]]:
             except Exception:  # encodings are optional
                 _LOGGER.debug("Cannot read encodings", exc_info=True)
                 encodings = {}
+            protocols = (
+                conn.handle.live_protocols()
+                if conn.handle is not None
+                else frozenset(bridge.LiveProtocol)
+            )
             connections.append(
                 {
                     "connection_id": source.connection_id,
@@ -569,6 +581,7 @@ def async_live_cameras(hass: HomeAssistant) -> list[dict[str, Any]]:
                             "entity_id": entities.get(stream),
                         }
                         for stream in LIVE_STREAMS
+                        if LIVE_PROTOCOLS[stream] in protocols
                     },
                 }
             )

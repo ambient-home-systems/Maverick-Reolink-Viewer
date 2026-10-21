@@ -761,11 +761,24 @@ class ReolinkHostHandle:
             return now
         return await self._api.async_get_time()
 
+    def live_protocols(self) -> frozenset[LiveProtocol]:
+        """Return the protocols live streams can be read with (cached data only).
+
+        A Baichuan-only connection (no HTTP API, as on the battery Doorbell) has
+        no HTTP port for FLV, and no RTMP: RTSP only. reolink-aio still builds
+        FLV and RTMP URLs for it, with the port "None".
+        """
+        if _safe(lambda: self._api.baichuan_only):
+            return frozenset({LiveProtocol.RTSP})
+        return frozenset(LiveProtocol)
+
     async def async_live_url(
         self, channel: int, protocol: LiveProtocol, stream: str
     ) -> CameraUrl | None:
         """Return the live URL for a channel/stream, or None if unavailable."""
         api = self._api
+        if protocol not in self.live_protocols():
+            return None
         if protocol is LiveProtocol.RTSP:
             url = await api.get_rtsp_stream_source(channel, stream)
         elif protocol is LiveProtocol.RTMP:

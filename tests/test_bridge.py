@@ -222,6 +222,22 @@ async def test_live_urls(
     assert await host.async_live_url(0, LiveProtocol.FLV, "sub") is None
 
 
+async def test_no_flv_on_a_baichuan_only_connection(
+    hass: HomeAssistant, reolink_host: MagicMock, loaded_reolink: MockConfigEntry
+) -> None:
+    """Without an HTTP port (Baichuan only) there is no FLV or RTMP URL.
+
+    reolink-aio still builds one, with the port "None" (seen on the Doorbell).
+    """
+    (host,) = bridge.async_get_hosts(hass)
+    assert host.live_protocols() == frozenset(LiveProtocol)
+    reolink_host.baichuan_only = True
+    assert host.live_protocols() == {LiveProtocol.RTSP}
+    assert await host.async_live_url(0, LiveProtocol.FLV, "ext") is None
+    assert await host.async_live_url(0, LiveProtocol.RTMP, "main") is None
+    assert await host.async_live_url(0, LiveProtocol.RTSP, "sub") is not None
+
+
 async def test_online_users(
     hass: HomeAssistant, loaded_reolink: MockConfigEntry, reolink_host: MagicMock
 ) -> None:

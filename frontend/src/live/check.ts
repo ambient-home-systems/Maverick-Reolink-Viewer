@@ -8,7 +8,8 @@
 // - time to the first image: Home Assistant's camera snapshot (its view's
 //   poster) and a frame from our go2rtc (warm);
 // - time to the first live frame over WebRTC and over MSE, cold (go2rtc not
-//   connected to the camera) and warm (go2rtc preload);
+//   connected to the camera) and warm (kept open, its last key frame cached:
+//   MSE starts from that key frame, WebRTC still waits for the next one);
 // - the same in Home Assistant's own camera view (its WebRTC), where the
 //   camera's HA entity is enabled;
 // - how WebRTC connected (host, server-reflexive or relayed candidates).
@@ -31,6 +32,7 @@ import { browserLabel, classifyHost } from "../playback/check-util";
 import { mseApiName } from "../playback/mse-feeder";
 import type { CapacityReport, HomeAssistant, LiveCamera, LiveConnection, LiveStreamKind } from "../types";
 import {
+  cacheLabel,
   capacityLines,
   describeIceServers,
   median,
@@ -41,7 +43,7 @@ import {
 } from "./check-util";
 import { OurMse, OurWebRtc, StockWebRtc, type LiveSession, type SessionResult } from "./session";
 
-export const LIVE_CHECK_VERSION = "0.4.0";
+export const LIVE_CHECK_VERSION = "0.5.0";
 /** Saved reports share the playback check's store; this marks a live one. */
 export const LIVE_REPORT_PREFIX = "Live check · ";
 export const LIVE_SETUPS = [
@@ -58,7 +60,7 @@ const COLD_TIMEOUT_MS = 20_000;
 const WARM_TIMEOUT_MS = 12_000;
 /** How long to wait for go2rtc to let go of a camera before a cold start. */
 const COLD_WAIT_MS = 10_000;
-/** After a preload connects, let the stream settle before measuring. */
+/** After keeping a stream warm starts, let it settle before measuring. */
 const WARM_SETTLE_MS = 2_000;
 const IMAGE_TIMEOUT_MS = 15_000;
 const SAVE_EVERY_MS = 10_000;
@@ -66,7 +68,7 @@ const SAVE_EVERY_MS = 10_000;
 export interface LiveCheckOptions {
   setup: string;
   streams: LiveStreamKind[];
-  /** Keep-warm measurements (admin: they change go2rtc's preloads). */
+  /** Keep-warm measurements (admin: they keep streams warm while measuring). */
   warm: boolean;
   /** Compare with Home Assistant's own camera view. */
   stock: boolean;
@@ -237,6 +239,10 @@ export class LiveCheck {
     const info = connection.streams[stream];
     const via = connection.via === "nvr" ? `via ${connection.entry_title}` : "direct";
     this._log("");
+    if (!info) {
+      this._log(`${camera.name}${camera.model ? ` (${camera.model})` : ""} · ${via} · ${stream}: not served by this connection`);
+      return;
+    }
     this._log(`${camera.name}${camera.model ? ` (${camera.model})` : ""} · ${via} · ${streamLabel(stream, info.encoding)}`);
     const where = `${camera.name} ${via} ${stream}`;
     const record = (phase: Phase, transport: Transport, result: SessionResult) => {
@@ -268,7 +274,7 @@ export class LiveCheck {
       }
     }
 
-    // Warm: go2rtc keeps the camera connection open (preload).
+    // Warm: the stream kept open, its last key frame cached.
     if (this.options.warm && this._hass.user?.is_admin) {
       if (connection.is_battery) {
         this._log("  warm: not measured (battery camera: never kept warm)");
@@ -276,10 +282,11 @@ export class LiveCheck {
       }
       this._status(`${where}: keeping it warm`);
       const began = performance.now();
+      let keyFrame: boolean;
       try {
-        await setLivePreload(this._hass, ref, true);
+        ({ key_frame: keyFrame } = await setLivePreload(this._hass, ref, true));
       } catch (err) {
-        this._log(`  warm: preload failed: ${toError(err).message}`);
+        this._log(`  warm: keeping it warm failed: ${toError(err).message}`);
         return;
       }
       const upMs = performance.now() - began;
@@ -293,7 +300,9 @@ export class LiveCheck {
           record("warm", transport, result);
           warm.push(`${transport} ${describe(result)}`);
         }
-        this._log(`  warm (camera connected in ${seconds(upMs)}): frame ${frame} · ${warm.join(" · ")}`);
+        const cache = (await fetchLiveState(this._hass, ref).catch(() => undefined))?.cache;
+        const cached = keyFrame ? `key frame cached in ${seconds(upMs)}` : `no key frame in ${seconds(upMs)}`;
+        this._log(`  warm (${cached}${cacheLabel(cache)}): frame ${frame} · ${warm.join(" · ")}`);
       } finally {
         await setLivePreload(this._hass, ref, false).catch(() => undefined);
       }
