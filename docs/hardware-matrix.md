@@ -231,6 +231,11 @@ Recording playback (runs 3 and 4; the Phase 2 gate):
   soon as the first fragment arrives. The `mvhd` duration is a 1 s placeholder, so
   durations must come from the search. The search's file sizes are only estimates:
   whole multiples of 512 KiB, larger than what is sent.
+- **The fragments are not MSE-ready** (Phase 2B). Each `tfhd` carries an
+  absolute base data offset and there is no `tfdt`: Chrome's `MediaSource`
+  refuses them, while the iPhone's `ManagedMediaSource` plays them. The
+  integration rewrites each `moof` before sending it (`fmp4.py`), so both play
+  from the first fragment on disk.
 - **Codecs as stored suit browsers.** H.265 is tagged `hvc1` (the tag Safari
   needs), H.264 is `avc1`, and every recording has an AAC (`mp4a`) track. Sizes:
   Duo 3 7680×2160 / 1536×432, RLC-520A 2560×1920 / 640×480, E1 Pro and CX410
