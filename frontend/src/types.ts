@@ -41,6 +41,8 @@ export interface HassLocale {
 
 export interface HomeAssistant {
   callWS<T>(message: Record<string, unknown>): Promise<T>;
+  /** fetch with the user's access token (refreshed as needed). */
+  fetchWithAuth?(path: string, init?: RequestInit): Promise<Response>;
   callService(
     domain: string,
     service: string,
@@ -351,7 +353,10 @@ export interface CacheStatus {
 }
 
 export interface PlaybackUrl {
-  url: string;
+  /** The file player's signed URL (playback/url). */
+  url?: string;
+  /** The MSE player's fragment path (playback/mse), fetched with HA's auth. */
+  base?: string;
   clip_url: string;
   stream: Stream;
   segment_id: string;
@@ -359,10 +364,16 @@ export interface PlaybackUrl {
   end: number;
   media: MediaInfo | null;
   cache: CacheStatus;
-  /** The file the URL is bound to (VodCache.lease). */
+  /** The file the URL serves: the plain copy (made on demand) or the original. */
   file?: "plain" | "original";
   expires_in: number;
   timing: Timing;
+}
+
+export interface CacheStatusResult {
+  /** The download of the copy a URL serves (null once evicted). */
+  cache: CacheStatus | null;
+  expected_bytes: number;
 }
 
 export interface ThumbnailUrl {

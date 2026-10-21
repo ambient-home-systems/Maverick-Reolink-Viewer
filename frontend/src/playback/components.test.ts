@@ -31,7 +31,14 @@ function collect(el: HTMLElement, name: string): unknown[] {
 }
 
 describe("rv-player", () => {
-  const item = (id: string) => ({ url: `/api/vod/${id}`, segmentId: id, start: T0, end: T0 + MINUTE });
+  const item = (id: string) => ({
+    key: `/api/vod/${id}`,
+    recording: `sub:${id}:0`,
+    url: `/api/vod/${id}`,
+    segmentId: id,
+    start: T0,
+    end: T0 + MINUTE,
+  });
   const videos = (el: RvPlayer) =>
     [...el.renderRoot.querySelectorAll("video")] as [HTMLVideoElement, HTMLVideoElement];
 

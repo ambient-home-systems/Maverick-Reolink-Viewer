@@ -7,7 +7,7 @@
 // recordings) and saves its report on the server as it goes, so a run on a
 // phone can be copied on a desktop, and a run cut short by a page reload (iOS
 // under memory pressure) keeps what it measured.
-import { fetchMediaInfo, fetchTimelineDay, toError } from "../api";
+import { fetchCacheStatus, fetchMediaInfo, fetchTimelineDay, toError, urlToken } from "../api";
 import type { CacheStatus, HomeAssistant, MediaInfo, PlaybackUrl, Segment, TimelineDay, Timing } from "../types";
 import {
   browserLabel,
@@ -30,7 +30,7 @@ import type { StreamDecision } from "./codec";
 import { SHAPES, mseApi, mseSupports, pickSample, probeShape, type MseApi } from "./mse-probe";
 import type { RvPlayer } from "./player";
 
-export const CHECK_VERSION = "0.2.10";
+export const CHECK_VERSION = "0.3.0";
 export const SETUPS = [
   "Desktop Chrome, LAN",
   "iPhone app, Wi-Fi (local)",
@@ -43,7 +43,9 @@ const RATE_MS = 6_000;
 /** After a rate change, measuring starts this much later. */
 const RATE_SETTLE_MS = 1_000;
 const SAMPLE_MS = 60_000;
-const LINK_BYTES = 4 * 1024 * 1024;
+/** The link test reads up to this much, for at most LINK_MS. */
+const LINK_BYTES = 32 * 1024 * 1024;
+const LINK_MS = 3_000;
 const SAVE_EVERY_MS = 10_000;
 const PEEK_LIMIT = 15;
 const PAST_DAYS = 7;
@@ -76,6 +78,8 @@ export interface CheckTarget {
   readonly playFailure: string | undefined;
   readonly hd: StreamDecision;
   readonly progressive: boolean;
+  /** Which player plays recordings, e.g. "MSE (ManagedMediaSource), else the file player". */
+  readonly mode: string;
   readonly monthDays: ReadonlySet<number>;
   readonly player: RvPlayer | null;
   readonly playing: PlaybackUrl | undefined;
@@ -226,7 +230,8 @@ export class PlaybackCheck {
       `Connection: page loaded over ${page?.nextHopProtocol || "? (from the app's cache)"};` +
         " each video request line gives its own (h2/h3 share one connection; http/1.1 allows 6 at once)",
     );
-    this._log(`Delivery: ${t.progressive ? "progressive" : "whole file first (WebKit)"}`);
+    this._log(`Player: ${t.mode} · file player delivery: ${t.progressive ? "progressive" : "whole file first (WebKit)"}`);
+    this._summary.push(`Player: ${t.mode}`);
     await this._wait(() => Boolean(t.day) && !t.loading, 30_000);
   }
 
@@ -268,7 +273,7 @@ export class PlaybackCheck {
   }
 
   /** Play from a time and wait for the first frame; returns the report line's middle. */
-  private async _play(time: number): Promise<{ ok: boolean; line: string; began: number }> {
+  private async _play(time: number): Promise<{ ok: boolean; line: string; began: number; source: string | undefined }> {
     const t = this._t;
     performance.clearResourceTimings();
     performance.setResourceTimingBufferSize(1000);
@@ -292,7 +297,7 @@ export class PlaybackCheck {
       `first frame ${ok && !t.playFailure ? ms(m.firstFrameMs) : "none"}` +
       ` [URL ${ms(m.urlMs)} · metadata ${ms(watch.seen.loadedmetadata)} · seeked ${ms(watch.seen.seeked)} · playing ${ms(watch.seen.playing)}]` +
       ` ${m.delivery ?? "?"}${file} · ${m.stream ?? "?"} ${m.codec ?? ""}${where}${t.playFailure ? ` FAILED: ${t.playFailure}` : ""}`;
-    return { ok: ok && !t.playFailure && !where, line, began };
+    return { ok: ok && !t.playFailure && !where, line, began, source: t.playing?.base ?? t.playing?.url };
   }
 
   private async _events(): Promise<void> {
@@ -311,8 +316,8 @@ export class PlaybackCheck {
       if (played.ok && t.metrics.firstFrameMs !== undefined) times.push(t.metrics.firstFrameMs);
       this._log(`B  ${ev.types.join("+")} at ${clock(ev.start)} (${where}): ${played.line}`);
       await sleep(300);
-      this._log(`     ${requestReport(played.began, t.playing?.url)}`);
-      if (seg) this._log(`     ${await this._fillReport(day.date, seg.id)}`);
+      this._log(`     ${requestReport(played.began, played.source)}`);
+      if (seg) this._log(`     ${await this._fillReport()}`);
       await this._pause(1500);
     }
     this._summary.push(`Events → first frame (sub): ${times.map((v) => within(v, 2000)).join(", ") || "none played"}`);
@@ -333,15 +338,27 @@ export class PlaybackCheck {
     }
   }
 
-  /** The server's record of a recording's download, once it and its rewrite are done. */
-  private async _fillReport(date: string, segmentId: string): Promise<string> {
+  /**
+   * The server's record of the download of the copy just played (asked by
+   * its URL: the current search may name a newer copy of a recording still
+   * being written), once it and the plain copy the file player asks for are done.
+   */
+  private async _fillReport(): Promise<string> {
+    const playing = this._t.playing;
+    const token = urlToken(playing?.base ?? playing?.url ?? "");
+    if (!token) return "server: nothing played";
+    const plain = playing?.file === "plain";
     let cache: CacheStatus | null = null;
     for (let i = 0; i < 90; i += 1) {
-      cache = (await this._peek(date, segmentId))?.cache ?? null;
-      if (!cache || cache.error || (cache.complete && cache.flat !== undefined)) break;
+      try {
+        cache = (await fetchCacheStatus(this._t.hass, token)).cache;
+      } catch {
+        cache = null;
+      }
+      if (!cache || cache.error || (cache.complete && (!plain || cache.flat !== undefined))) break;
       await this._pause(1000);
     }
-    if (!cache) return "server: not cached";
+    if (!cache) return "server: not cached (or its URL expired)";
     const parts = [cache.cache === "disk" ? "from disk" : `fill (${text(cache.priority)})`];
     for (const [key, label] of [
       ["wait_ms", "queue"],
@@ -354,7 +371,7 @@ export class PlaybackCheck {
     if (typeof cache.mbit_s === "number") parts.push(`${cache.mbit_s} Mbit/s`);
     parts.push(mb(cache.bytes));
     if (cache.indexed !== undefined) parts.push(`index ${text(cache.indexed)}`);
-    parts.push(`plain MP4 ${cache.flat === undefined ? "not yet" : text(cache.flat)}`);
+    if (plain || cache.flat !== undefined) parts.push(`plain MP4 ${cache.flat === undefined ? "not yet" : text(cache.flat)}`);
     if (typeof cache.flat_ms === "number") parts.push(`rewrite ${ms(cache.flat_ms)}`);
     if (typeof cache.flat_moov_bytes === "number") parts.push(`moov ${mb(cache.flat_moov_bytes)}`);
     if (cache.error) parts.push(`error ${cache.error}`);
@@ -415,8 +432,8 @@ export class PlaybackCheck {
       if (played.ok) uncachedMs = t.metrics.firstFrameMs;
       this._log(`D1 Not cached, ${describe(target)}: ${played.line}`);
       await sleep(300);
-      this._log(`     ${requestReport(played.began, t.playing?.url)}`);
-      this._log(`     ${await this._fillReport(long.date, seg.id)}`);
+      this._log(`     ${requestReport(played.began, played.source)}`);
+      this._log(`     ${await this._fillReport()}`);
     } else {
       this._log("D1 skipped: every long recording looked at is cached already (try again after other recordings were viewed)");
     }
@@ -426,7 +443,7 @@ export class PlaybackCheck {
     const cachedMs = played.ok ? t.metrics.firstFrameMs : undefined;
     this._log(`D2 Cached, ${describe(target)}: ${played.line}`);
     await sleep(300);
-    this._log(`     ${requestReport(played.began, t.playing?.url)}`);
+    this._log(`     ${requestReport(played.began, played.source)}`);
     this._summary.push(
       `Deep start (sub, ${length} recording): not cached ${uncachedMs === undefined ? "not measured" : ms(uncachedMs)}` +
         `, cached ${within(cachedMs, 2000)}`,
@@ -581,25 +598,47 @@ export class PlaybackCheck {
   }
 
   private async _link(): Promise<void> {
-    const url = this._t.playing?.url;
+    // The file player's URL, or the clip URL of the same recording (MSE).
+    const url = this._t.playing?.url ?? this._t.playing?.clip_url;
     if (!url) {
       this._log("L  skipped: nothing played");
       return;
     }
     const began = performance.now();
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      controller.abort();
+    }, LINK_MS);
     try {
-      const response = await fetch(url, { headers: { Range: `bytes=0-${LINK_BYTES - 1}` }, cache: "no-store" });
+      const response = await fetch(url, {
+        headers: { Range: `bytes=0-${LINK_BYTES - 1}` },
+        cache: "no-store",
+        signal: controller.signal,
+      });
       const firstByte = performance.now() - began;
-      const body = await response.arrayBuffer();
+      // Read for at most LINK_MS: long enough to measure a fast link.
+      let bytes = 0;
+      const reader = response.body?.getReader();
+      try {
+        for (;;) {
+          const chunk = await reader?.read();
+          if (!chunk || chunk.done) break;
+          bytes += chunk.value.byteLength;
+        }
+      } catch {
+        // Stopped at LINK_MS.
+      }
       const total = performance.now() - began;
-      const mbit = (body.byteLength * 8) / (total * 1000);
+      const mbit = (bytes * 8) / ((total - firstByte) * 1000);
       this._log(
-        `L  Link to Home Assistant: ${mb(body.byteLength)} of the cached recording in ${ms(total)}` +
+        `L  Link to Home Assistant: ${mb(bytes)} of the cached recording in ${ms(total - firstByte)} after the answer` +
           ` = ${mbit.toFixed(1)} Mbit/s (answer ${ms(firstByte)}, HTTP ${response.status})`,
       );
       this._summary.push(`Link: ${mbit.toFixed(1)} Mbit/s`);
     } catch (err) {
       this._log(`L  Link test failed: ${toError(err).message}`);
+    } finally {
+      clearTimeout(timer);
     }
   }
 
@@ -880,12 +919,15 @@ function watchVideo(player: RvPlayer | null, began: number): { seen: Record<stri
 function requestReport(began: number, playedUrl: string | undefined): string {
   const path = playedUrl ? new URL(playedUrl, location.href).pathname : "";
   const entries = (performance.getEntriesByType("resource") as PerformanceResourceTiming[]).filter(
-    (e) => e.initiatorType === "video" && e.startTime >= began - 5,
+    (e) =>
+      (e.initiatorType === "video" || (e.initiatorType === "fetch" && e.name.includes("/api/reolink_viewer/mse/"))) &&
+      e.startTime >= began - 5,
   );
   if (!entries.length) return "requests: none reported (this browser may not report video requests)";
   const sent = entries.filter((e) => e.requestStart > 0);
   const parts = sent.slice(0, 10).map((e, i) => {
-    const other = path && new URL(e.name).pathname === path ? "" : " (other file)";
+    // MSE: the init segment and windows are under the recording's path.
+    const other = path && new URL(e.name).pathname.startsWith(path) ? "" : " (other file)";
     const size = e.encodedBodySize ? ` · ${mb(e.encodedBodySize)}` : "";
     return (
       `#${i + 1}${other} +${Math.round(e.startTime - began)} ms: wait ${Math.round(e.requestStart - e.startTime)}` +

@@ -26,8 +26,11 @@ export function classifyHost(hostname: string): string {
 export function browserLabel(userAgent: string): string {
   const app = /Home ?Assistant\/([\d.]+)/i.exec(userAgent);
   const ios = /(?:iPhone|iPad|iPod).*? OS (\d+)[_.](\d+)/.exec(userAgent);
+  // WebKit's own version has stayed at 18.x since iOS 26; the app's part of
+  // the user agent has the real one ("...; iOS 27.0.0)").
+  const appIos = /;\s*iOS (\d+)\.(\d+)/.exec(userAgent);
   if (ios) {
-    const version = `${ios[1]}.${ios[2]}`;
+    const version = appIos ? `${appIos[1]}.${appIos[2]}` : `${ios[1]}.${ios[2]}`;
     if (app) return `iOS ${version}, Companion app ${app[1]}`;
     if (/CriOS/.test(userAgent)) return `iOS ${version}, Chrome`;
     if (/Safari\//.test(userAgent)) return `iOS ${version}, Safari`;
@@ -148,19 +151,33 @@ export function describeRate(sample: RateSample): string {
   }
   parts.push(`${sample.stalls} stalls${sample.stalls ? ` (${Math.round(sample.stalledMs)} ms)` : ""}`);
   if (sample.ended) parts.push("the file ended");
+  if (!countersAgree(sample)) parts.push("the dropped-frame counter disagrees with the frames painted: judged by those");
   if (!sample.focused) parts.push("PAGE NOT IN FRONT");
   return `${String(sample.rate).padStart(3)}×: ${parts.join(", ")}`;
 }
 
 /** How "smooth" is judged, for the report. */
 export const SMOOTH_RULE =
-  "on pace (±10 %), stalls under 100 ms, no frame gap over 2.5 frames (250 ms at least); below 50 fps to show, ≤ 2 % (or 1 frame) dropped";
+  "on pace (±10 %), stalls under 100 ms, no frame gap over 2.5 frames (250 ms at least); below 50 fps to show, ≤ 2 % (or 1 frame) dropped, or 90 % painted where the dropped-frame counter disagrees with the frames painted";
 /** Stalls shorter than this in total are not counted against smoothness. */
 export const STALL_ALLOWANCE_MS = 100;
 
 /**
+ * Whether the browser's dropped-frame counter matches the frames painted
+ * (requestVideoFrameCallback). Chrome on macOS counted every frame dropped
+ * while all were painted; WebKit's counters lag over a few seconds.
+ */
+export function countersAgree(sample: RateSample): boolean {
+  if (sample.painted === undefined || sample.decoded === undefined || sample.dropped === undefined) return true;
+  const shown = sample.decoded - sample.dropped;
+  return Math.abs(shown - sample.painted) <= Math.max(3, sample.decoded * 0.1);
+}
+
+/**
  * Whether a rate played smoothly. Above the display's refresh rate a browser
  * must skip frames, so dropped frames count only below 50 frames a second.
+ * Where the dropped-frame counter disagrees with the frames painted, the
+ * frames painted decide.
  */
 export function smooth(sample: RateSample): boolean {
   const effective = sample.wallMs > 0 ? (sample.mediaS * 1000) / sample.wallMs : 0;
@@ -171,9 +188,11 @@ export function smooth(sample: RateSample): boolean {
     const allowed = Math.max(250, (2.5 * 1000) / Math.min(needed, 60));
     if (sample.maxGapMs > allowed) return false;
   }
-  if (needed !== undefined && needed <= 50 && sample.decoded) {
-    return (sample.dropped ?? 0) <= Math.max(1, sample.decoded * 0.02);
+  if (needed === undefined || needed > 50) return true;
+  if (!countersAgree(sample) && sample.painted !== undefined) {
+    return (sample.painted * 1000) / sample.wallMs >= needed * 0.9;
   }
+  if (sample.decoded) return (sample.dropped ?? 0) <= Math.max(1, sample.decoded * 0.02);
   return true;
 }
 
