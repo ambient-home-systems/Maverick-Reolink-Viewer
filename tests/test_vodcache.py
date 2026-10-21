@@ -788,10 +788,15 @@ async def test_a_recording_still_being_written_is_cached_anew(
     longer = Recording(SOURCE, "sub", name, 0, 900_000, size=len(BODY))
     assert short.cache_id != longer.cache_id
     assert short.copy_key == longer.copy_key
+    assert await vc.async_peek(longer) is None
     first = await vc.async_open(short)
     await vc.async_wait(first, complete=True)
     assert first.task is not None
     await first.task
+    # The check's peek sees the short copy: the recording is not uncached.
+    peek = await vc.async_peek(longer)
+    assert peek is not None
+    assert peek["complete"]
     # A start the short copy reaches (with a minute to spare): no download.
     again = await vc.async_open(longer, at=500_000)
     assert again is first

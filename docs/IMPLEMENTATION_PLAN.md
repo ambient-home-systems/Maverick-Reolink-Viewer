@@ -814,7 +814,7 @@ Known limits carried into 2B and Phase 4:
 | --- | --- |
 | 0. Fix the recording cache (disk accounting, eviction, leases, deletion timers, open race), DST end and refresh window, shared thumbnail fetches; correct the MSE claim above | Done (v0.2.8), see "Step 0" below |
 | 1. Measure where it hasn't been (gate): desktop Chrome on the LAN, the iPhone Companion app on Wi-Fi, over Tailscale and over Nabu Casa | **Done** (2026-10-21): check built (v0.2.8), sharpened in v0.2.9 and v0.2.10; four desktop runs (three through Nabu Casa, one on the LAN) and four iPhone runs (Wi-Fi, Tailscale twice, Nabu Casa). Three player and cache bugs found and fixed. HD unmeasured (no main recording cached). See "Step 1 results" and "What step 1 decides" |
-| 2. Build what the evidence calls for (speeds, HD/SD keeping the position, uncached deep seeks, bounded memory and disk) | **Built (v0.3.0)**: MSE with server-normalized fragments, the file player as fallback; checked in Chromium (CI and a harness). v0.3.1: the check also covers scrubbing and HD, and `scripts/desktop-check` runs it without clicking. Hardware check to come, see "Step 2 as built" |
+| 2. Build what the evidence calls for (speeds, HD/SD keeping the position, uncached deep seeks, bounded memory and disk) | **Built (v0.3.0)**: MSE with server-normalized fragments, the file player as fallback; checked in Chromium (CI and a harness). v0.3.1: the check also covers scrubbing and HD, and `scripts/desktop-check` runs it without clicking. Hardware check: the desktop on the LAN with HD and the one-hour session met its criteria (2026-10-21); v0.3.2 fixes the check's choice of an uncached recording. The desktop run through Nabu Casa and the iPhone runs to come, see "Step 2 hardware results" |
 
 ##### Step 0: the recording cache (v0.2.8)
 
@@ -1440,6 +1440,71 @@ Hardware check for v0.3.1 (the step 2 exit criteria):
    desktop and `MSE (ManagedMediaSource)` on the iPhone. The uncached starts
    should take about the NVR's download up to the target, not a whole-file
    read (22–84 s in step 1).
+
+##### Step 2 hardware results
+
+**Desktop run 5: Mac on the LAN, with HD and the one-hour session** (check
+v0.3.1, Chrome 155 on macOS, Front Yard Right, plain HTTP to HA's IP
+address, HTTP/1.1; 2026-10-21, run with `scripts/desktop-check`):
+
+| Measure | Result |
+| --- | --- |
+| Player | MSE (`MediaSource`) |
+| Timeline | today 48 ms, a past day 141 ms (store), again 101 ms, today again 196 ms: all under 1 s |
+| Events → first frame | 2252, 35 and 32 ms. The first was not cached: 7.4 min into an 8.2 min recording that had just finished, so it waited for the NVR's download up to there. That download took 3.2 s in all (34.7 MB at 86 Mbit/s), and the first frame came before it ended. The other two were seeks within the same recording |
+| Deep start, not cached | not measured. The check chose 55.2 min into the 9–10 AM recording (a MOTION event at 9:55). The server had prefetched that recording when the event happened, while it was still being written, and that shorter copy reached the event. The check's peek looked only for the finished recording's copy (fixed in v0.3.2). It played from that copy in 460 ms |
+| Deep start, cached | 70 ms |
+| Auto-advance | gap 1 ms (preloaded) |
+| Rates | on pace at every rate (0.50–8.00×), no stalls. Painted 8, 15, 30, 55 and 54 fps of 8, 15, 30, 60 and 120 needed: smooth at every rate, judged by painted frames. The dropped-frame counter again counted every frame as dropped while the check watched frames; the session's own count below is 0 |
+| Scrub | 5 of 5 points shown from the buffer, median 3 ms, each exactly at its point; 10 min ahead: the thumbnail |
+| HD switch | first HD frame in 11.3 s, cold. The start was 5.1 min in, and the server fetched the 2.39 GB main recording in 51 s (375 Mbit/s). HD started 0.03 s from where SD was; back to SD in 131 ms, 0.03 s from where HD was |
+| Link | 755 Mbit/s (33.6 MB in 356 ms) |
+| MSE probe | `MediaSource` plays the MSE-ready fragment and rejects the NVR's shapes, as before |
+| One-hour session | 60 min from 9:00 AM: **0 of 53,172 frames dropped, 0 stalls**, one file change with a 7 ms gap, no reloads. JS heap 81.6–114.3 MB (the whole HA frontend), 84.7 MB at the start and 99.7 MB at the end, −0.2 MB/h: no growth. At most 51 s buffered ahead (the 30 s target plus a 20 s window), 61–137 s held in both videos. The cache stayed at 7.44 GB (cap 8.59 GB), the HD recording included. The window was behind another from minute 20; playback went on |
+
+Against the step 2 exit criteria, on the desktop:
+
+- 2A's criteria hold: timelines under 1 s, cached starts in 32–70 ms, an
+  auto-advance gap of 1 ms.
+- An uncached start began once the bytes up to it were on disk: the first
+  event, 90 % into its recording, showed its first frame before the
+  download ended. An uncached start deep in an hour-long recording is still
+  to be measured (v0.3.2's D1, on the runs still to come).
+- Speeds 0.5–8× work; HD/SD keeps the position.
+- The one-hour session stays within the buffer and disk caps.
+
+Fixed in v0.3.2 (the check and the Debug panel; playback is unchanged):
+
+1. **D1 chose a recording the server already held.** A start plays from a
+   copy made while the recording was shorter, if that copy reaches it, but
+   the check's peek (`playback/peek`) looked only for the exact copy. The
+   peek now reports such a copy too. D1 and D2 also compare the server's
+   state when each start opens: a start whose recording changed state since
+   it was chosen is labeled so and not counted. B marks a start that waited
+   for the recorder "(not cached)".
+2. **The H line printed "?" for the codec.** A main recording not fetched
+   yet has no media info. The codec now comes from the MSE type once the
+   first frame shows (also in Debug's stream row).
+3. **The "HD:" line came after H but said "not tried yet".** That was the
+   tab's decision from when it opened. The line now says so, and the
+   summary leaves it out when H played HD.
+
+Hardware check for v0.3.2 (what remains of step 2's exit criteria):
+
+1. Update to v0.3.2 and restart HA. Reload the panel; in the Companion app,
+   reset the frontend cache (Settings → Companion App → Debugging).
+2. Desktop: `scripts/desktop-check` with `--url` for the Nabu Casa address,
+   `--camera "Front Yard Right"`, without the session. The LAN run above
+   stands. There is no desktop run through Tailscale: the laptop has no
+   Tailscale, and the iPhone covers that path.
+3. iPhone app, one tap each (Debug → **Run playback check**, the setup
+   picked):
+   - on home Wi-Fi with **then play for 60 min** (HD is ticked);
+   - through Tailscale, and through Nabu Casa (Wi-Fi off), without the
+     session.
+4. Each report's **Player** line should read `MSE (MediaSource)` on the
+   desktop and `MSE (ManagedMediaSource)` on the iPhone. D1 should read
+   "Not cached" and take about the NVR's download up to the target.
 
 #### 2A as built (v0.2.0)
 

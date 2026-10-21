@@ -1146,7 +1146,9 @@ export class RvPlayback extends LitElement {
             .rate=${this._rate}
             .note=${this._note}
             @rv-first-frame=${(e: CustomEvent<FirstFrameDetail>) => {
-              this._metrics = { ...this._metrics, firstFrameMs: e.detail.ms };
+              // A recording not fetched yet has no media info: MSE read it from the first bytes.
+              const codec = this._metrics.codec ?? videoCodec(this._player?.mseStats?.mime);
+              this._metrics = { ...this._metrics, firstFrameMs: e.detail.ms, codec };
               this._resumeThumbs();
             }}
             @rv-advanced=${(e: CustomEvent<AdvanceDetail>) => {
@@ -1395,6 +1397,11 @@ const sleep = (ms: number): Promise<void> =>
   });
 
 const megabytes = (bytes: number): string => `${Math.round(bytes / 1_000_000)} MB`;
+
+/** The video codec of an MSE type ('video/mp4; codecs="avc1.640033,mp4a.40.2"'). */
+export function videoCodec(mime: string | undefined): string | null {
+  return /codecs="?([^",]+)/.exec(mime ?? "")?.[1] ?? null;
+}
 
 /** The debug panel's player line: MSE with its buffer, or the file player. */
 export function describePlayer(player: RvPlayer | null): string {

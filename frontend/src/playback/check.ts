@@ -30,7 +30,7 @@ import type { StreamDecision } from "./codec";
 import { SHAPES, mseApi, mseSupports, pickSample, probeShape, type MseApi } from "./mse-probe";
 import type { RvPlayer } from "./player";
 
-export const CHECK_VERSION = "0.3.1";
+export const CHECK_VERSION = "0.3.2";
 export const SETUPS = [
   "Desktop Chrome, LAN",
   "Desktop Chrome, Tailscale",
@@ -130,6 +130,15 @@ interface Long {
   cached: boolean;
 }
 
+interface Played {
+  ok: boolean;
+  line: string;
+  began: number;
+  source: string | undefined;
+  /** What the server had of the recording when the start opened it (none opened: undefined). */
+  held: CacheStatus | undefined;
+}
+
 class Stopped extends Error {}
 
 const sleep = (time: number) => new Promise<void>((resolve) => setTimeout(resolve, time));
@@ -161,6 +170,7 @@ export class PlaybackCheck {
   private _lastSave = 0;
   private _saving: Promise<void> = Promise.resolve();
   private _long: Long | undefined;
+  private _hdPlayed = false;
   private readonly _summary: string[] = [];
 
   constructor(
@@ -317,14 +327,20 @@ export class PlaybackCheck {
     );
   }
 
-  /** Play from a time and wait for the first frame; returns the report line's middle. */
-  private async _play(time: number): Promise<{ ok: boolean; line: string; began: number; source: string | undefined }> {
+  /**
+   * Play from a time and wait for the first frame; returns the report line's
+   * middle, and what the server had of the recording the start opened.
+   */
+  private async _play(time: number): Promise<Played> {
     const t = this._t;
     performance.clearResourceTimings();
     performance.setResourceTimingBufferSize(1000);
     const began = performance.now();
     const watch = watchVideo(t.player, began);
+    const before = t.playing;
     await t.playAt(time, began);
+    // A seek within the recording on screen (or a failure) opens nothing.
+    const held = t.playing === before ? undefined : t.playing?.cache;
     const ok = await this._wait(() => t.metrics.firstFrameMs !== undefined || Boolean(t.playFailure), 120_000);
     watch.stop();
     const m = t.metrics;
@@ -342,7 +358,13 @@ export class PlaybackCheck {
       `first frame ${ok && !t.playFailure ? ms(m.firstFrameMs) : "none"}` +
       ` [URL ${ms(m.urlMs)} · metadata ${ms(watch.seen.loadedmetadata)} · seeked ${ms(watch.seen.seeked)} · playing ${ms(watch.seen.playing)}]` +
       ` ${m.delivery ?? "?"}${file} · ${m.stream ?? "?"} ${m.codec ?? ""}${where}${t.playFailure ? ` FAILED: ${t.playFailure}` : ""}`;
-    return { ok: ok && !t.playFailure && !where, line, began, source: t.playing?.base ?? t.playing?.url };
+    return {
+      ok: ok && !t.playFailure && !where,
+      line,
+      began,
+      source: t.playing?.base ?? t.playing?.url,
+      held,
+    };
   }
 
   private async _events(): Promise<void> {
@@ -353,19 +375,22 @@ export class PlaybackCheck {
       this._log("B  skipped: no events today");
       return;
     }
-    const times: number[] = [];
+    const times: string[] = [];
     for (const ev of events) {
       const seg = day.segments.find((s) => ev.start >= s.start && ev.start < s.end);
       const where = seg ? `${span(ev.start - seg.start)} into a ${span(seg.end - seg.start)} recording` : "no recording";
       const played = await this._play(ev.start);
-      if (played.ok && t.metrics.firstFrameMs !== undefined) times.push(t.metrics.firstFrameMs);
+      if (played.ok && t.metrics.firstFrameMs !== undefined) {
+        // Not on disk yet: the start waited for the recorder's download.
+        times.push(`${within(t.metrics.firstFrameMs, 2000)}${played.held?.complete === false ? " (not cached)" : ""}`);
+      }
       this._log(`B  ${ev.types.join("+")} at ${clock(ev.start)} (${where}): ${played.line}`);
       await sleep(300);
       this._log(`     ${requestReport(played.began, played.source)}`);
       if (seg) this._log(`     ${await this._fillReport()}`);
       await this._pause(1500);
     }
-    this._summary.push(`Events → first frame (sub): ${times.map((v) => within(v, 2000)).join(", ") || "none played"}`);
+    this._summary.push(`Events → first frame (sub): ${times.join(", ") || "none played"}`);
   }
 
   private async _peek(date: string, segmentId: string): Promise<Peek | undefined> {
@@ -474,8 +499,16 @@ export class PlaybackCheck {
     if (!long.cached) {
       const target = deepTarget(seg, long.day.events, 0.5, 0.95, 0.75);
       const played = await this._play(target.time);
-      if (played.ok) uncachedMs = t.metrics.firstFrameMs;
-      this._log(`D1 Not cached, ${describe(target)}: ${played.line}`);
+      // The server may have fetched it meanwhile (a prefetch): then this
+      // start did not wait for the recorder.
+      const held = played.held;
+      if (played.ok && held?.complete === false) uncachedMs = t.metrics.firstFrameMs;
+      const label = held?.complete
+        ? "Not cached when chosen, but on disk when played (not counted)"
+        : held?.bytes
+          ? `Not cached (${mb(held.bytes)} already fetched when played)`
+          : "Not cached";
+      this._log(`D1 ${label}, ${describe(target)}: ${played.line}`);
       await sleep(300);
       this._log(`     ${requestReport(played.began, played.source)}`);
       this._log(`     ${await this._fillReport()}`);
@@ -485,8 +518,9 @@ export class PlaybackCheck {
     await this._pause(1500);
     const target = deepTarget(seg, long.day.events, 0.1, 0.45, 0.4);
     const played = await this._play(target.time);
-    const cachedMs = played.ok ? t.metrics.firstFrameMs : undefined;
-    this._log(`D2 Cached, ${describe(target)}: ${played.line}`);
+    const fetched = played.held?.complete === false;
+    const cachedMs = played.ok && !fetched ? t.metrics.firstFrameMs : undefined;
+    this._log(`D2 ${fetched ? "Cached when chosen, but not on disk when played (not counted)" : "Cached"}, ${describe(target)}: ${played.line}`);
     await sleep(300);
     this._log(`     ${requestReport(played.began, played.source)}`);
     this._summary.push(
@@ -664,7 +698,8 @@ export class PlaybackCheck {
       this._summary.push(`HD switch: ${hd.line}`);
       return;
     }
-    this._log(`H  HD at ${clock(hd.at)}${where}: ${hd.line} · ${t.metrics.codec ?? "?"} · ${t.metrics.delivery ?? "?"}`);
+    this._hdPlayed = true;
+    this._log(`H  HD at ${clock(hd.at)}${where}: ${hd.line} · ${t.metrics.stream ?? "?"} ${t.metrics.codec ?? "?"} · ${t.metrics.delivery ?? "?"}`);
     this._log(`     ${await this._fillReport()}`);
     await this._pause(5000);
     const sd = await this._switchTo("sub");
@@ -852,11 +887,12 @@ export class PlaybackCheck {
       `Video: canPlayType sub ${can(sub)}, main ${can(main)} · getVideoPlaybackQuality ${yes("getVideoPlaybackQuality" in video)}` +
         ` · requestVideoFrameCallback ${yes("requestVideoFrameCallback" in video)} · performance.memory ${yes(heap() !== undefined)}`,
     );
-    this._log(`HD: ${t.hd.reason}`);
+    // As decided when the tab opened (H, if it ran, played HD since).
+    this._log(`HD as the tab opened: ${t.hd.reason}${this._hdPlayed ? " (played in H above)" : ""}`);
     if (info.main?.width && info.main.height && main) {
       this._log(`HD decodingInfo for ${main} at ${info.main.width}×${info.main.height}: ${await decoding(main, info.main.width, info.main.height)}`);
     }
-    this._summary.push(`HD: ${t.hd.main ? "offered" : "not offered"} (${t.hd.reason})`);
+    if (!this._hdPlayed) this._summary.push(`HD: ${t.hd.main ? "offered" : "not offered"} (${t.hd.reason})`);
   }
 
   private async _soak(): Promise<void> {
