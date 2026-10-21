@@ -19,7 +19,7 @@ put on it:
 | 0 | Foundations, CI, adapter layer, hardware discovery | High | 1–2 wk | Done (2026-10-17) |
 | 1 | Device details and every setting, with explanations | Standard (catalog) / High (panel shell) | 2–3 wk | Done (2026-10-17) |
 | 2 | Event timeline, thumbnails, smooth playback | High (backend) / Very high (player) | 3–5 wk | Done (2026-10-21, v0.3.2). 2A (2026-10-20, v0.2.7): timeline 105–287 ms, first frame 0.6–1.1 s, auto-advance 6–7 ms on hardware. 2B: MSE player; uncached deep starts are the NVR's download up to the target (6.9–13.0 s in hour-long recordings, up to 84 s before), speeds 0.5–8×, HD/SD at the same moment, one-hour sessions within the caps, the iPhone app on Wi-Fi, Tailscale and Nabu Casa |
-| 3 | Live view via go2rtc, grid, fullscreen, PTZ | High | 3–4 wk | Not started |
+| 3 | Live view via go2rtc, grid, fullscreen, PTZ | High | 3–4 wk | In progress. Step 0 done (four Phase 2B fixes). Step 1 built (v0.4.0): our own go2rtc and the live check; waiting for the hardware reports (the gate) |
 | 4 | Performance, mobile, packaging, first release | Standard | 2–3 wk | Not started |
 | 5 | Optional R&D: Baichuan live/playback | Very high | 4–8 wk, time-boxed with gates | Not started |
 
@@ -1700,9 +1700,11 @@ Frontend (`frontend/src/playback/`, `components/playback.ts`):
 
 Goal: live video that is reliably faster than the stock HA UI.
 
-1. **go2rtc lifecycle:** reolink_viewer downloads a pinned go2rtc release on first run,
-   verifies its checksum, and runs it as a supervised subprocess bound to localhost,
-   with its own generated config and API credentials.
+1. **go2rtc lifecycle:** reolink_viewer runs its own go2rtc as a supervised
+   subprocess with its API bound to localhost, its own generated config and API
+   credentials. It uses the binary Home Assistant's container ships
+   (`/bin/go2rtc`), and downloads a pinned release, checksum verified, only
+   where that is missing (e.g. HA Core installs).
    - Do not reuse HA's managed go2rtc: its config, credentials and API allow-list are
      owned by HA.
    - Packaging go2rtc as an HA app for HA OS users is a Phase 4 option.
@@ -1742,6 +1744,229 @@ Risks:
 - Per-model protocol quirks → the hardware matrix and per-camera source override.
 - Remote WebRTC → TURN or MSE fallback.
 - Two-way audio support on Reolink is uncertain → deferred.
+
+### Phase 3 status
+
+Phase 3 runs in three steps: **0** fixes what the Phase 2B review found,
+**1** runs our own go2rtc and measures live view on the owner's hardware (the
+gate), **2** builds live view from what step 1 decides.
+
+| Step | Status |
+| --- | --- |
+| 0. Fix four Phase 2B findings (a failing test for each first) | **Done** (v0.4.0), see "Step 0" below |
+| 1. Our own go2rtc, and a live check in the panel (gate) | **Built** (v0.4.0), see "Step 1 as built". Waiting for the reports from the four setups ("How to run the live check") |
+| 1. Record the reports here and in the hardware matrix; decide the live stream budget, WebRTC or MSE per setup, which cameras stay warm, the HD stream per camera | Waiting for the reports; the rules are fixed below, before seeing them |
+| 2. Stream registry, delivery, Live tab and grid, keep warm, debug panel | Not started |
+
+#### Step 0: four Phase 2B findings (v0.4.0)
+
+Each was reproduced by a test that failed before the fix.
+
+1. **A seek back into trimmed media stalled** (`mse-feeder.ts`). After
+   `_trim` removed media behind the play position, `_runStartS` still marked
+   where the run of windows began. A seek back into the trimmed part (a
+   timeline click, the previous event) asked for the next fragment by index,
+   which lay ahead, so the video waited. Now:
+   - the run of windows follows every removal (its start moves on; it is
+     dropped once its end is removed);
+   - the feeder extends by index only at the end of what it appended last;
+     anywhere else it asks by time;
+   - an empty last window ends the media where the run ended (the search's
+     length can be a little longer), and the next request waits 1 s: before,
+     it asked for the same index again at once, in a loop.
+2. **Leases blocked HD.** Each `playback/mse` or `playback/url` call leased its
+   recording for 30 min + its length + 1 min, and nothing released it when
+   the player moved on. With 2.4–3.8 GB main recordings and the 8 GiB cap, a
+   third HD recording could not be cached. Now:
+   - a lease belongs to its URL (the grant's token);
+   - the player releases it as soon as it no longer holds the recording
+     (`playback/release`): a new start, a new preload, the end of a file, or
+     leaving the tab;
+   - every request through the URL marks the lease as used;
+   - a fill behind a click (playback priority) may evict a recording whose
+     leases nobody used for 5 minutes (a closed page, a long pause); prefetch
+     fills never evict a live lease;
+   - a player that comes back to an evicted recording gets it fetched again,
+     and leased again.
+3. **A window could be flagged last too early** (`vodcache.async_window`).
+   `last` came from `entry.complete` after the scan, not from the state the
+   scan saw; a fill completing during the scan ended the stream with
+   fragments still to come. It now uses the scan's snapshot.
+4. **A fill failing mid-window raised from the view.** `_read_fragments`
+   raised `FileNotFoundError` once the failed fill had removed its file, after
+   the window's headers were sent. It is now a `VodCacheError`, and the view
+   ends the body cleanly (the player sees a short window, then the error on
+   its next request, and reloads).
+
+#### Step 1 as built (v0.4.0)
+
+**Our go2rtc** (`custom_components/reolink_viewer/live/`), not Home
+Assistant's:
+
+- **Binary** (`binary.py`): `shutil.which("go2rtc")`, as HA's go2rtc
+  integration does (HA's container ships 1.9.14 at `/bin/go2rtc`), if it is
+  1.9.13 or newer. Otherwise the pinned 1.9.14 release for this machine
+  (amd64, arm64, arm, armv6, i386), downloaded once into
+  `<config>/.cache/reolink_viewer/go2rtc/`; its SHA-256 is checked before
+  every use, and a file that does not match is deleted.
+- **Ports**: the API on 127.0.0.1 at a free port picked at each start, its
+  RTSP server on 127.0.0.1 likewise (go2rtc's own ffmpeg reads it to
+  transcode audio in step 2), and WebRTC media on **18556** (TCP and UDP). HA's
+  11984, 18554 and 18555 are left alone.
+- **Locked down**: every API and RTSP request needs the generated
+  credentials, local ones included (`local_auth`). Only the API paths used are
+  served (`/api`, `/api/streams`, `/api/preload`, `/api/ws`,
+  `/api/frame.jpeg`, `/api/stream.mp4`); there is no web UI. `exec` may run
+  ffmpeg only, and go2rtc refuses `exec:` sources from the API anyway.
+- **No credentials on disk**: the config file holds no secret (the password
+  comes from the environment). Streams are registered at runtime through the
+  API (`PATCH /api/streams`, kept in memory). The config path go2rtc saves API
+  changes to is `/dev/null`. Verified with go2rtc 1.9.14: `PUT` would try to
+  save the camera URL to the config path, `PATCH` does not.
+- **Supervision** (`go2rtc.py`): it starts on the first live request (an
+  installation that never watches live never runs it). It is restarted with
+  backoff (1, 2, 5, 10, 30, 60 s; back to 1 s after 5 minutes up) when it exits
+  or its API stops answering. A missing binary, or two failed starts in a
+  row, makes requests fail at once with the reason instead of waiting. It
+  stops when the entry unloads and when Home Assistant stops.
+- **Errors**: `live/status` and the live check show the state, version,
+  binary (HA's or downloaded), last error and restarts, and for admins the
+  last 50 log lines. go2rtc's output goes to Home Assistant's log (its INF
+  lines at debug, WRN/ERR at warning) with every URL and address removed:
+  go2rtc 1.9.14 logs stream URLs with their credentials.
+
+**Streams** (`streams.py`): one go2rtc stream per camera connection and
+stream, named `rv_<key>_<sub|main|ext>` (the key reveals no identifier):
+
+- RTSP for main and sub (with `#backchannel=0`: no two-way audio yet),
+  HTTP-FLV for ext (Reolink has no ext over RTSP), per the Phase 0 decision.
+- The camera URL comes from the Reolink integration's connection through the
+  scheduler (live priority) and goes straight to go2rtc's API.
+- A running stream is one connection to the camera, however many watch it:
+  the first *hold* (a browser session, a preload) takes one slot of the
+  host's stream budget at live priority, ahead of recording downloads, and
+  the last gives it back. The budget's size is step 1's decision; until then
+  it is the Phase 2 one (NVR 4, cameras 2).
+- A stream is registered again each time it starts from idle, so a reloaded
+  Reolink entry or a restarted go2rtc is picked up; preloads are restored
+  after a restart.
+
+**Delivery, as far as the check needs it**:
+
+- WebRTC: `reolink_viewer/live/webrtc` (a subscription) sends the browser's
+  offer to go2rtc's websocket with Home Assistant's ICE servers
+  (`web_rtc.async_get_ice_servers`: Nabu Casa's TURN for subscribers, else
+  HA's STUN) and relays go2rtc's answer and candidates back; the browser's
+  candidates go through `live/candidate` (trickle ICE both ways). The browser
+  takes the same ICE servers from `web_rtc/ice_servers`.
+- MSE: `live/mse` returns a signed path (2 minutes) to a websocket view that
+  pipes go2rtc's `/api/ws` for that one stream. The browser may only ask for
+  MSE; go2rtc's fragments come back as binary messages. `ManagedMediaSource`
+  where it exists (the iOS app), else `MediaSource`.
+- A frame: `live/frame` returns a signed path to a JPEG from go2rtc.
+- Keep warm: `live/preload` (admin) turns go2rtc's preload on or off.
+
+**The capacity test** (`capacity.py`, `live/capacity`, admin): per NVR, it
+takes every slot of the host's stream budget and runs as one exclusive
+scheduler job, so nothing else reaches the NVR. It reads streams through our
+go2rtc as a viewer would (`stream.mp4`, counting frames), adding one per
+level and keeping the earlier ones open: the sub stream of each channel, then
+the heaviest main, then a recording download at full speed (after a
+baseline of the download alone). Per level: the new stream's time to its
+first frame, every stream's frames per second against the camera's
+setting, the longest gap, the download's speed, and the clients the NVR
+lists as logged in. reolink-aio 0.21.18 has no session counter; the bridge
+sends the read-only `GetOnline` command through reolink-aio's generic request
+and reports the length of its list, or why it could not. The first level that
+fails (a stream without frames) or slows down (below 85 % of its frame rate,
+a first frame over twice level 1's and 3 s more, or the download below 70 %
+of its speed alone) is the verdict.
+
+**The live check** (Reolink → **Open the live check**; `frontend/src/live/`):
+for every camera connection (the CX410 and CX810 both through the NVR and
+directly) and every stream ticked (sub, main, ext), on the device it runs on:
+
+| Part | What it measures |
+| --- | --- |
+| Header | browser, how HA is reached, MSE API and the codecs it takes, the codecs WebRTC receives, HA's ICE servers (kinds only), go2rtc's state |
+| cold | WebRTC, then MSE, each after go2rtc has let go of the camera: time to the first painted frame (`requestVideoFrameCallback`), and the steps (answer, ICE connected; MIME type, first data, first append), the candidate pair (host, srflx or relay; UDP or TCP), codec and size |
+| Home Assistant's view | where the stream's HA camera entity is enabled: its snapshot (the poster HA's view shows, `camera_proxy`) and HA's own WebRTC (`camera/webrtc/offer` to HA's go2rtc), as its camera view does |
+| warm (admin) | the stream kept warm (go2rtc preload): how long the camera took to connect, a frame from go2rtc (the poster step 2 can show), then WebRTC and MSE. Never on battery cameras |
+| Capacity (admin) | the test above, per NVR; on by default for the LAN setups only (it downloads a recording at full speed) |
+| Summary | WebRTC connected in how many sessions and by which candidates; medians cold and warm per transport for sub and for main/ext; HA's view against ours; first-image medians; NVR against direct per merged camera; each NVR's verdict |
+
+Reports are saved on the server as the check runs (with the playback check's,
+marked "Live check") and listed under **Saved reports** on any device.
+`scripts/desktop-check` runs it in Chrome without clicking (`--check live`).
+
+Checked:
+
+- Python: 517 tests, 94 % coverage, with go2rtc 1.9.14 itself: CI fetches the
+  pinned release with `scripts/fetch_go2rtc.py` (checksum verified) and runs
+  the live tests against it and a fake camera (a second go2rtc serving
+  ffmpeg's test sources over RTSP). They cover the lock-down (no UI, no
+  unauthenticated request, no credential in any file), restart after a kill,
+  stop with Home Assistant, HTTP-FLV for ext, MSE through the proxy, frames,
+  preload, the WebRTC relay, the capacity test, and the error paths.
+- CI job "MSE and live in Chromium": Chromium talks to Home Assistant's
+  websocket API, gets a WebRTC session through `live/webrtc` (trickle ICE both
+  ways) that connects and receives media, then buffers MSE through the signed
+  proxy. Playwright's Chromium has no H.264, so this uses the fake camera's
+  Opus stream: the signaling, ICE and media paths are the ones video uses.
+- Panel: 163 tests, the WebRTC, HA and MSE sessions against fakes, and the
+  check's flow and report.
+- Not checked here: H.264 and H.265 video over WebRTC in a real browser, and
+  Reolink devices. That is what the hardware run is for.
+
+#### How to run the live check (the step 1 gate)
+
+Once, after updating to v0.4.0 and restarting Home Assistant: reload the
+panel; in the Companion app, reset the frontend cache (Settings → Companion
+App → Debugging). Close other live views of the cameras while a check runs
+(they would keep streams warm). Run as an admin (the warm part and the
+capacity test need it).
+
+1. **Desktop Chrome on the LAN** (includes the capacity test):
+   `cd scripts/desktop-check && HA_TOKEN=... node run-check.mjs --check live
+   --url http://<HA's LAN address>:8123`. Or in Chrome: Reolink → **Open the
+   live check** → Setup *Desktop Chrome, LAN* → **Run live check**. About
+   15–20 minutes for every camera and stream; leave the window in front.
+2. **iPhone Companion app on home Wi-Fi**: Reolink → **Open the live check**
+   → Setup *iPhone app, Wi-Fi (local)* → **Run live check**. Set Auto-Lock to
+   Never first and keep the app in front. The capacity test is ticked; it
+   runs on the server, so one run of it (from either the desktop or this one)
+   is enough: untick it if the desktop run had it.
+3. **iPhone app through Tailscale** (Wi-Fi off, Tailscale on, the app pointed
+   at the Tailscale address): Setup *iPhone app, Tailscale*.
+4. **iPhone app through Nabu Casa** (Wi-Fi off, Tailscale off, the external
+   URL): Setup *iPhone app, Nabu Casa*.
+5. Each report: **Copy report**, or later on the desktop: Live check →
+   **Saved reports** → Copy. Send all four.
+
+#### What the reports decide (rules fixed before seeing them)
+
+- **Live stream budget per host** (shared with recording downloads): the
+  number of streams at the last capacity level that kept up, less one for
+  headroom, and at least the current 4 on the NVR. If the NVR keeps up with
+  all six subs, a main and a download, its budget becomes 7 (6 + 1 + 1 − 1).
+  Prefetch downloads stay limited to one. Cameras added directly keep 2 unless
+  their own numbers say otherwise (the Phase 0 probe saw them slow from 4).
+- **WebRTC or MSE per setup**: WebRTC where it connected in every session of
+  that setup and its median first frame is within 0.3 s of MSE's or better;
+  MSE where any session failed to connect, or where it is slower by more.
+  Either way the other is the automatic fallback.
+- **Kept warm by default**: mains-powered cameras whose cold sub start misses
+  the 1.5 s target while their warm start meets it, as many as the budget
+  allows after the grid and one HD stream; never battery cameras. Each
+  camera gets its own setting either way.
+- **HD stream per camera**: the main where it is H.264, or H.265 that the
+  device decodes (MSE accepts `hvc1` and `decodingInfo` says supported and
+  smooth at its size; over WebRTC, where go2rtc and the browser agree on
+  H.265); otherwise ext. The Duo 3 uses ext (7680×2160 is past most
+  decoders).
+- **The CX410 and CX810 direct entries**: if live through the NVR starts
+  within 0.3 s of the direct connection (cold and warm sub) and the NVR keeps
+  up at the grid's level, they can go.
 
 ## Phase 4 — Performance, mobile, packaging, release (difficulty: Standard, 2–3 wk)
 

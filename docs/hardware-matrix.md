@@ -175,6 +175,16 @@ All four hosts report the same zone.
 | --- | --- | --- | --- | --- | --- |
 | host1 | RLN36 | 2026-10-17T03:59:09.127844-04:00 | UTC-04:00 | -4 h | +1 h |
 
+### Live view through go2rtc (Phase 3)
+
+Waiting for the live check reports (Phase 3 step 1, v0.4.0): per camera
+connection and stream, the time to the first image and to the first live frame
+over WebRTC and MSE, cold and kept warm, on desktop Chrome on the LAN and in the
+iPhone app on Wi-Fi, through Tailscale and through Nabu Casa; Home Assistant's own
+view on the same camera; and the NVR's capacity (all sub streams, a main, a
+recording download). See
+[IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md#phase-3-status).
+
 ## Findings
 
 Live view:

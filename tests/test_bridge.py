@@ -222,6 +222,33 @@ async def test_live_urls(
     assert await host.async_live_url(0, LiveProtocol.FLV, "sub") is None
 
 
+async def test_online_users(
+    hass: HomeAssistant, loaded_reolink: MockConfigEntry, reolink_host: MagicMock
+) -> None:
+    """GetOnline's list of logged-in clients, read-only; reasons when it fails."""
+    (host,) = bridge.async_get_hosts(hass)
+    reolink_host.send = AsyncMock(
+        return_value=[{"cmd": "GetOnline", "code": 0, "value": {"User": [{}, {}]}}]
+    )
+    assert await host.async_online_users() == (2, None)
+    (body,) = reolink_host.send.await_args.args
+    assert body == [{"cmd": "GetOnline", "action": 0, "param": {}}]
+    reolink_host.send = AsyncMock(
+        return_value=[
+            {"cmd": "GetOnline", "code": 1, "error": {"detail": "not support"}}
+        ]
+    )
+    assert await host.async_online_users() == (None, "not support")
+    reolink_host.send = AsyncMock(return_value=[{"value": {"User": "x"}}])
+    assert await host.async_online_users() == (None, "no answer")
+    reolink_host.send = AsyncMock(return_value=None)
+    assert await host.async_online_users() == (None, "no answer")
+    reolink_host.send = AsyncMock(side_effect=ReolinkError("busy"))
+    assert await host.async_online_users() == (None, "ReolinkError")
+    del reolink_host.send
+    assert await host.async_online_users() == (None, "reolink-aio cannot send commands")
+
+
 async def test_vod_url_methods(
     hass: HomeAssistant, reolink_host: MagicMock, loaded_reolink: MockConfigEntry
 ) -> None:

@@ -14,6 +14,7 @@ from custom_components.reolink_viewer.const import (
 )
 from homeassistant.components.frontend import DATA_PANELS
 from homeassistant.config_entries import ConfigEntryState
+from homeassistant.const import EVENT_HOMEASSISTANT_STOP
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.setup import async_setup_component
@@ -45,6 +46,18 @@ async def test_unload_and_reload(
     await hass.async_block_till_done()
     assert loaded_viewer.state is ConfigEntryState.LOADED
     assert PANEL_URL_PATH in hass.data[DATA_PANELS]
+
+
+async def test_go2rtc_stops_with_home_assistant(
+    hass: HomeAssistant, loaded_viewer: MockConfigEntry
+) -> None:
+    """Our go2rtc is not left running past Home Assistant (it holds ports)."""
+    live = loaded_viewer.runtime_data.live
+    assert live is not None
+    with patch.object(live, "async_shutdown") as shutdown:
+        hass.bus.async_fire(EVENT_HOMEASSISTANT_STOP)
+        await hass.async_block_till_done()
+    shutdown.assert_awaited_once()
 
 
 async def test_static_bundle_served(

@@ -1,13 +1,15 @@
 #!/usr/bin/env node
-// Runs the Reolink Viewer playback check in Google Chrome on this computer,
-// without clicking: it logs in to Home Assistant with a long-lived access
-// token, opens a camera's Playback tab, runs the check (the same one as
-// Playback tab → Debug → Run playback check) and saves the report. Give it
-// several addresses (LAN, Tailscale, Nabu Casa) to run it through each.
+// Runs the Reolink Viewer playback check, or the live check, in Google Chrome
+// on this computer, without clicking: it logs in to Home Assistant with a
+// long-lived access token, opens a camera's Playback tab (or Reolink → Live
+// check), runs the check (the same one as the panel's button) and saves the
+// report. Give it several addresses (LAN, Tailscale, Nabu Casa) to run it
+// through each.
 //
 //   cd scripts/desktop-check && npm install
 //   HA_TOKEN=... node run-check.mjs --camera "Front Yard Right" \
 //     --url http://homeassistant.local:8123 --url https://xxxx.ui.nabu.casa
+//   HA_TOKEN=... node run-check.mjs --check live --url http://homeassistant.local:8123
 //
 // See README.md here. The token goes only to the addresses given, in this
 // browser's memory (a fresh profile each run, nothing written to disk).
@@ -23,12 +25,25 @@ const HELP = `Usage: HA_TOKEN=<long-lived token> node run-check.mjs --url <HA ad
                        http://homeassistant.local:8123 (LAN),
                        https://<name>.<tailnet>.ts.net (Tailscale),
                        https://<id>.ui.nabu.casa (Nabu Casa). Repeat for each.
-  --camera <name>      the camera to check (default: the first that records)
+  --check <which>      playback (default) or live
+  --camera <name>      the camera to check (playback default: the first that
+                       records; live default: every camera)
+
+Live check:
+  --streams <list>     sub,main,ext (default: all three)
+  --no-warm            skip the kept-warm measurements
+  --no-stock           skip Home Assistant's own camera view
+  --capacity <which>   the NVR capacity test: "local" (default: LAN only),
+                       "all" or "none". It downloads a recording at full speed.
+
+Playback check:
   --session <minutes>  then play for this long (memory and disk), on the
                        first address only (default 0)
   --hd <which>         switch to HD and back: "local" (default: LAN only),
                        "all" or "none". HD makes the server fetch a main
                        recording from the NVR (up to 3.8 GB for an hour).
+
+Both:
   --browser <name>     chrome (default), msedge or chromium (Chromium has no
                        H.264: recordings would not play)
   --headless           no window (the check then cannot tell the page is in
@@ -38,7 +53,12 @@ const HELP = `Usage: HA_TOKEN=<long-lived token> node run-check.mjs --url <HA ad
 const { values } = parseArgs({
   options: {
     url: { type: "string", multiple: true },
+    check: { type: "string", default: "playback" },
     camera: { type: "string" },
+    streams: { type: "string", default: "sub,main,ext" },
+    "no-warm": { type: "boolean", default: false },
+    "no-stock": { type: "boolean", default: false },
+    capacity: { type: "string", default: "local" },
     session: { type: "string", default: "0" },
     hd: { type: "string", default: "local" },
     browser: { type: "string", default: "chrome" },
@@ -133,6 +153,79 @@ function playbackElement() {
   return deep(document);
 }
 
+/** Find the live check's element (inside the panel's shadow roots). */
+function liveElement() {
+  const deep = (root) => {
+    const hit = root.querySelector("rv-live-check");
+    if (hit) return hit;
+    for (const el of root.querySelectorAll("*")) {
+      const found = el.shadowRoot && deep(el.shadowRoot);
+      if (found) return found;
+    }
+    return null;
+  };
+  return deep(document);
+}
+
+async function runLiveAt(browser, base, options) {
+  const setup = setupFor(base);
+  console.log(`\n=== Live check · ${setup} · ${base}`);
+  const context = await browser.newContext({ viewport: { width: 1400, height: 1000 } });
+  const page = await context.newPage();
+  try {
+    await login(page, base);
+    await page.goto(`${base}/reolink-viewer#live-check`, { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(`(${liveElement.toString()})()?._cameras !== undefined`, null, { timeout: 60_000 });
+    await page.bringToFront();
+    let cameraIds = [];
+    if (options.camera) {
+      const cameras = await page.evaluate(`(${liveElement.toString()})()._cameras.map((c) => ({ id: c.id, name: c.name }))`);
+      const camera = cameras.find((c) => c.name.toLowerCase() === options.camera.toLowerCase());
+      if (!camera) throw new Error(`no camera named "${options.camera}" (${cameras.map((c) => c.name).join(", ")})`);
+      cameraIds = [camera.id];
+    }
+    const capacity = options.capacity === "all" || (options.capacity === "local" && setup.endsWith("LAN"));
+    const run = {
+      setup,
+      streams: options.streams.split(",").map((s) => s.trim()).filter(Boolean),
+      warm: !options.noWarm,
+      stock: !options.noStock,
+      capacity,
+      cameraIds,
+    };
+    console.log(`Running the live check (${run.streams.join(", ")}${run.warm ? ", kept warm" : ""}${run.stock ? ", HA's view" : ""}${capacity ? ", capacity test" : ""})…`);
+    let shown = 0;
+    const progress = setInterval(() => {
+      page
+        .evaluate(`(${liveElement.toString()})()?._checkText ?? ""`)
+        .then((text) => {
+          const lines = text.split("\n");
+          for (const line of lines.slice(shown)) if (line.trim()) console.log(`  ${line.slice(0, 200)}`);
+          shown = lines.length;
+        })
+        .catch(() => undefined);
+    }, 5_000);
+    let report;
+    try {
+      report = await page.evaluate(`(${liveElement.toString()})().runCheck(${JSON.stringify(run)})`);
+    } finally {
+      clearInterval(progress);
+    }
+    await mkdir(options.out, { recursive: true });
+    const stamp = new Date().toISOString().slice(0, 16).replace(/-/g, "").replace("T", "-").replace(":", "");
+    const file = path.join(options.out, `live-${slug(setup)}-${stamp}.txt`);
+    await writeFile(file, `${report}\n`);
+    const summary = report.split("\n").filter((line) => line.startsWith("- "));
+    console.log(`Summary:\n${summary.join("\n")}\nSaved ${file} (also under Live check → Saved reports).`);
+    return true;
+  } catch (err) {
+    console.error(`Failed at ${base}: ${err instanceof Error ? err.message : String(err)}`);
+    return false;
+  } finally {
+    await context.close();
+  }
+}
+
 async function runAt(browser, base, options) {
   const setup = setupFor(base);
   console.log(`\n=== ${setup} · ${base}`);
@@ -199,6 +292,18 @@ let ok = true;
 try {
   for (const [i, url] of values.url.entries()) {
     const base = url.replace(/\/+$/, "");
+    if (values.check === "live") {
+      const options = {
+        camera: values.camera,
+        streams: values.streams,
+        noWarm: values["no-warm"],
+        noStock: values["no-stock"],
+        capacity: values.capacity,
+        out: values.out,
+      };
+      ok = (await runLiveAt(browser, base, options)) && ok;
+      continue;
+    }
     const session = i === 0 ? Number(values.session) || 0 : 0;
     ok = (await runAt(browser, base, { camera: values.camera, session, hd: values.hd, out: values.out })) && ok;
   }

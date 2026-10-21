@@ -10,3 +10,4 @@ htmlcov/
 node_modules/
 frontend/coverage/
 scripts/desktop-check/reports/
+.cache/

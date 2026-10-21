@@ -42,6 +42,8 @@ PROBE_PLAYBACK_HARD_MAX_STREAMS: Final = 6
 
 # Playback caches (under HA's cache directory) and their size caps.
 VOD_CACHE_DIR: Final = "vod"
+# Our go2rtc's config file (no secret in it) and a downloaded binary, if any.
+GO2RTC_DIR: Final = "go2rtc"
 THUMB_CACHE_DIR: Final = "thumbs"
 VOD_CACHE_MAX_BYTES: Final = 8 * 1024**3
 THUMB_CACHE_MAX_BYTES: Final = 256 * 1024**2

@@ -774,6 +774,34 @@ class ReolinkHostHandle:
             url = api.get_flv_stream_source(channel, stream)
         return CameraUrl(url) if url else None
 
+    async def async_online_users(self) -> tuple[int | None, str | None]:
+        """Return how many clients the device lists as logged in, or why not.
+
+        The read-only ``GetOnline`` command, through reolink-aio's generic
+        request (it has no parser for it). Each logged-in client (Home
+        Assistant, the Reolink app, a browser) is one; how stream sessions
+        count is the device's business. Returns (count, None) or (None, why).
+        """
+        send = getattr(self._api, "send", None)
+        if send is None:
+            return None, "reolink-aio cannot send commands"
+        try:
+            response = await send(
+                [{"cmd": "GetOnline", "action": 0, "param": {}}],
+                expected_response_type="json",
+            )
+        except Exception as err:  # noqa: BLE001 - reported, never raised
+            return None, _search_error(err)
+        item = response[0] if isinstance(response, list) and response else {}
+        item = item if isinstance(item, dict) else {}
+        value = item.get("value")
+        users = value.get("User") if isinstance(value, dict) else None
+        if isinstance(users, list):
+            return len(users), None
+        error = item.get("error")
+        detail = error.get("detail") if isinstance(error, dict) else None
+        return None, str(detail or "no answer")
+
     async def async_vod_url(
         self,
         channel: int,
