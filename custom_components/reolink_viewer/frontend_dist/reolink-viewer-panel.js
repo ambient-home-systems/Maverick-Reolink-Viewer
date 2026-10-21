@@ -5387,7 +5387,11 @@ function Ii(e) {
 }
 function Li(e) {
 	if (!e) return "";
-	let t = [e.key_interval_ms === null ? void 0 : `key frames every ${$(e.key_interval_ms)}`, e.parameter_sets === null ? void 0 : `parameter sets: ${e.parameter_sets}`].filter(Boolean);
+	let t = [
+		e.key_interval_ms === null ? void 0 : `key frames every ${$(e.key_interval_ms)}`,
+		e.parameter_sets === null ? void 0 : `parameter sets: ${e.parameter_sets}`,
+		e.ends ? `feed ended ${String(e.ends)}× (${e.last_end ?? "?"})` : void 0
+	].filter(Boolean);
 	return t.length ? `; ${t.join("; ")}` : "";
 }
 function Ri(e, t) {
@@ -5727,7 +5731,7 @@ var Gi = class {
 	close() {
 		this._ws?.close(), super.close(), this._url && URL.revokeObjectURL(this._url);
 	}
-}, Xi = "0.5.0", Zi = "Live check · ", Qi = [
+}, Xi = "0.5.1", Zi = "Live check · ", Qi = [
 	"Desktop Chrome, LAN",
 	"Desktop Chrome, Tailscale",
 	"Desktop Chrome, Nabu Casa",
@@ -5772,9 +5776,16 @@ var Gi = class {
 		} catch (e) {
 			this._log(e instanceof aa ? "Stopped." : `Check failed: ${j(e).message}`);
 		} finally {
-			this._session?.close(), this.running = !1, this.status = "", this._log(`Done at ${(/* @__PURE__ */ new Date()).toLocaleTimeString()}.`), await this._save(!0);
+			this._session?.close(), await this._go2rtcLog(), this.running = !1, this.status = "", this._log(`Done at ${(/* @__PURE__ */ new Date()).toLocaleTimeString()}.`), await this._save(!0);
 		}
 		return this.text;
+	}
+	async _go2rtcLog() {
+		let e = (await Qe(this._hass).catch(() => void 0))?.go2rtc.log;
+		if (e?.length) {
+			this._log(""), this._log(`go2rtc log (last ${String(e.length)} lines):`);
+			for (let t of e) this._log(`  ${t}`);
+		}
 	}
 	_log(e) {
 		this.lines.push(e), this._onChange(), performance.now() - this._lastSave > ia && this._save(!1);

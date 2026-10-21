@@ -1756,7 +1756,7 @@ gate), **2** builds live view from what step 1 decides.
 | 0. Fix four Phase 2B findings (a failing test for each first) | **Done** (v0.4.0), see "Step 0" below |
 | 1. Our own go2rtc, and a live check in the panel (gate) | **Built** (v0.4.0), see "Step 1 as built". Desktop report in (run 5); waiting for the three iPhone runs ("How to run the live check") |
 | 1. Record the reports here and in the hardware matrix; decide the live stream budget, WebRTC or MSE per setup, which cameras stay warm, the HD stream per camera | **Desktop Chrome on the LAN: recorded and decided** (v0.4.1), see "Step 1 results". The iPhone setups: waiting. The rules are fixed below, before seeing the reports |
-| 2. Stream registry, delivery, Live tab and grid, keep warm, debug panel | **In progress.** The key-frame cache is built (v0.5.0), see "Step 2: the key-frame cache"; the rest waits for the iPhone reports |
+| 2. Stream registry, delivery, Live tab and grid, keep warm, debug panel | **In progress.** The key-frame cache is built (v0.5.0) and measured on the desktop (run 6), see "Step 2: the key-frame cache"; v0.5.1 rebuilds the MSE init segment and records why warm feeds end. The rest waits for the iPhone reports |
 
 #### Step 0: four Phase 2B findings (v0.4.0)
 
@@ -2082,6 +2082,55 @@ Against go2rtc 1.9.14 and a fake camera with 4 s key frames: a viewer of a
 warm stream, 1.5 s after a key frame, got the init segment and the cached
 frames from that key frame in under 1 s; the next key frame was 2.5 s away.
 Chromium plays MSE through the cache (the audio-only stream).
+
+#### Step 2: the cache measured (run 6, desktop Chrome on Wi-Fi)
+
+The report is in the hardware matrix (run 6). Warm MSE now starts in a median
+0.71 s on subs and 0.41 s on mains and ext (run 5: 4.86 s and 2.09 s). What it
+decides, by the rules above (desktop; the iPhone runs may change the
+transports there):
+
+- **Desktop Chrome: WebRTC for a cold stream, MSE for a warm one.** Cold, WebRTC
+  stays ahead (sub median 2.67 s against 4.52 s; mains and ext within 0.05 s).
+  Warm, MSE from the cache wins by 1.4–3.2 s (medians).
+- **Kept warm by default** (mains-powered cameras whose cold sub start misses
+  1.5 s and whose warm start meets it): **Garage, Front Yard Left, Back Yard,
+  Dogs and Laundry Room.** Their warm MSE sub starts were 0.23–1.41 s; their cold
+  starts 1.6–4.2 s across runs 5 and 6. Not kept warm:
+  - Front Yard Right: its 1 s key frames start it in under 1 s cold.
+  - the Hallway: its warm start (3.69 s) waited for a later key frame because of
+    its parameter sets; it is measured again with v0.5.1.
+  - the Doorbell: a battery camera.
+
+  Four warm NVR subs hold four of its seven slots while nothing is watched. With
+  the grid open they are four of its six streams, which leaves one for HD. The
+  Laundry Room's warm sub holds one of its two slots, leaving one for HD.
+- **The direct CX410 and CX810 entries can still go.** Their warm starts through
+  the NVR (0.71 s and 0.81 s) need no direct connection.
+
+v0.5.1, from what run 6 showed:
+
+- **The MSE init segment is rebuilt from the stream** (`live/h26x.py`). When the
+  first key frame's parameter sets differ from go2rtc's init segment, the relay
+  replaces them before any viewer gets the init segment:
+  - the `avcC` or `hvcC` box (for H.265, also the profile and level from the new
+    SPS);
+  - the sample entry's and the track header's width and height, which come
+    from the new SPS: the picture size after cropping, read with an Exp-Golomb
+    reader.
+
+  `live/state` reports `rebuilt`. This should fix the three wrong MSE sizes and
+  the two late decodes.
+- **Why warm feeds end.** Each stream's unexpected feed ends are counted with
+  the last reason (`live/state` → `ends`, `last_end`), and a warm feed that ends
+  is logged as a warning. The live check shows both on the warm line and ends
+  its report with go2rtc's last 50 log lines (admins; addresses and passwords
+  removed).
+
+Checked: the picture size of five real SPS from libx264 and libx265 (cropped
+360 and 432 lines included); H.264 and H.265 init rebuilds; a relay test where
+go2rtc's init carries 640×480 parameter sets and the key frame 640×360 ones
+(the viewer gets the rebuilt init segment); end counting.
 
 ## Phase 4 — Performance, mobile, packaging, release (difficulty: Standard, 2–3 wk)
 

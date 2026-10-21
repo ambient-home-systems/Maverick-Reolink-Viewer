@@ -43,7 +43,7 @@ import {
 } from "./check-util";
 import { OurMse, OurWebRtc, StockWebRtc, type LiveSession, type SessionResult } from "./session";
 
-export const LIVE_CHECK_VERSION = "0.5.0";
+export const LIVE_CHECK_VERSION = "0.5.1";
 /** Saved reports share the playback check's store; this marks a live one. */
 export const LIVE_REPORT_PREFIX = "Live check · ";
 export const LIVE_SETUPS = [
@@ -148,6 +148,7 @@ export class LiveCheck {
       this._log(err instanceof Stopped ? "Stopped." : `Check failed: ${toError(err).message}`);
     } finally {
       this._session?.close();
+      await this._go2rtcLog();
       this.running = false;
       this.status = "";
       this._log(`Done at ${new Date().toLocaleTimeString()}.`);
@@ -157,6 +158,16 @@ export class LiveCheck {
   }
 
   // ---- Reporting ----
+
+  /** go2rtc's last log lines (admins; addresses and credentials removed). */
+  private async _go2rtcLog(): Promise<void> {
+    const status = await fetchLiveStatus(this._hass).catch(() => undefined);
+    const lines = status?.go2rtc.log;
+    if (!lines?.length) return;
+    this._log("");
+    this._log(`go2rtc log (last ${String(lines.length)} lines):`);
+    for (const line of lines) this._log(`  ${line}`);
+  }
 
   private _log(line: string): void {
     this.lines.push(line);

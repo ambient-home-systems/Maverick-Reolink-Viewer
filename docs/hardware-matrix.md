@@ -11,8 +11,8 @@ Status: **filled from four probe runs on 2026-10-17** (HA 2026.10.2, reolink-aio
 concurrency test up to 6 streams); the findings use runs 1 and 2. Run 1 (v0.0.1, up
 to 4 streams) agreed on every pass/fail result. Runs 3 (v0.1.1) and 4 (v0.1.2) are
 the Phase 2 recording playback checks, in their own tables. Run 5 (2026-10-21,
-v0.4.0) is the Phase 3 live check on desktop Chrome on the LAN; the iPhone runs
-follow.
+v0.4.0) is the Phase 3 live check on desktop Chrome on the LAN, and run 6 (v0.5.0)
+repeats it with the key-frame cache; the iPhone runs follow.
 
 ## Setup probed
 
@@ -252,6 +252,57 @@ the heaviest main, then a recording download at full speed):
 Verdict: every level kept up. `GetOnline` listed 2 logged-in clients before and
 after: the NVR does not count stream sessions as logins.
 
+Run 6, 2026-10-21: the same check with v0.5.0 (the key-frame cache: *warm* is
+now a stream kept open with its last key frame cached, and MSE starts from it),
+desktop Chrome 155 on macOS over Wi-Fi (setup labelled "Desktop Chrome, LAN").
+*Key frames*: the interval the cache saw. *Sets*: the init segment's
+parameter sets (from the stream's description) against the key frame's own.
+
+| Camera | Via | Stream | Cold WebRTC | Cold MSE | Warm WebRTC | Warm MSE | Key frames | Sets |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Front Yard Right (CX410) | NVR | sub | 0.53 s | 1.45 s | 0.91 s | 0.71 s | 0.99 s | same |
+| | NVR | main | 1.74 s | 1.87 s | 1.80 s | 0.51 s | 2.60 s | same |
+| | NVR | ext | 1.35 s | 2.09 s | 1.88 s | 0.48 s | 1.98 s | same |
+| | direct | sub | 0.98 s | 2.42 s | 0.93 s | 0.70 s | 0.99 s | differ |
+| | direct | main | 1.00 s | 1.58 s | 1.58 s | 0.29 s | 1.84 s | differ |
+| | direct | ext | 2.23 s | 1.41 s | 1.88 s | 0.42 s | 1.99 s | same |
+| Garage (RLC-520A) | NVR | sub | 3.06 s | 6.83 s | 3.44 s | 0.23 s | 4.07 s | same |
+| | NVR | main (H.265) | 1.61 s | 2.27 s | 1.44 s | 0.29 s | 1.77 s | same |
+| | NVR | ext | 1.81 s | 1.18 s | 3.88 s ³ | 0.34 s | 1.81 s | same |
+| Hallway (E1 Pro) | NVR | sub | 1.10 s | 7.53 s ¹ | 3.95 s | 3.69 s ¹ ² | 3.99 s | differ |
+| | NVR | main | 1.59 s | 2.00 s | 1.28 s | 0.65 s | 1.95 s | same |
+| | NVR | ext | 1.56 s | 1.57 s | 1.89 s | 1.38 s ³ | 1.94 s | same |
+| Front Yard Left (CX810) | NVR | sub | 4.21 s | 5.17 s | 4.00 s | 0.81 s | 4.08 s | same |
+| | NVR | main (H.265) | 1.00 s | 1.32 s | 1.55 s | 0.23 s | 2.16 s | same |
+| | NVR | ext | 1.85 s | 2.91 s | 1.92 s | 1.79 s ³ | 2.09 s | same |
+| | direct | sub | 3.21 s | 4.79 s | 3.99 s | 4.83 s ³ | 4.17 s | differ |
+| | direct | main (H.265) | 1.61 s | 1.46 s | 1.61 s | 1.73 s ³ | 1.87 s | differ |
+| | direct | ext | 3.05 s | 3.26 s | 1.90 s | 0.48 s | 2.04 s | same |
+| Back Yard (Duo 3 PoE) | NVR | sub | 2.91 s | 3.65 s ¹ | 3.96 s | 0.37 s ¹ | 4.06 s | differ |
+| | NVR | main (H.265) | 3.16 s | 1.17 s ¹ | 1.36 s | 0.39 s ¹ | 2.04 s | differ |
+| | NVR | ext | 1.55 s | 2.71 s | 1.84 s | 0.41 s | 1.98 s | same |
+| Dogs (RLC-520A) | NVR | sub | 4.05 s | 4.26 s | 3.92 s | 0.28 s | 4.02 s | differ |
+| | NVR | main | 1.02 s | 0.58 s | 1.30 s | 0.22 s | 1.56 s | same |
+| | NVR | ext | 1.81 s | 0.76 s | 1.24 s | 0.18 s | 1.35 s | same |
+| Laundry Room (E1 Zoom) | direct | sub | 2.43 s | 5.46 s | 3.93 s | 1.41 s ² | 4.00 s | differ |
+| | direct | main (H.265) | 1.97 s | 1.75 s | 1.71 s | 0.24 s | 2.02 s | differ |
+| | direct | ext | 1.84 s | 1.56 s | 1.91 s | 0.47 s | 1.98 s | same |
+| Doorbell (battery) | direct | sub | 0.57 s | 0.52 s | - | - | | |
+| | direct | main (H.265) | 0.70 s | 0.67 s | - | - | | |
+
+¹ MSE reported the wrong picture size again: Hallway sub 640×480, Back Yard sub
+1536×1152, main 7680×4320. ² Painted long after the cached frames arrived
+(3.5 s and 1.1 s): the browser waited for a later key frame. ³ The warm feed had
+ended and was opening again: go2rtc answered the MSE request after 0.8–3.6 s
+(or, for Garage ext, the WebRTC offer after 2.4 s).
+
+Medians: warm MSE sub 0.71 s (run 5: 4.86 s), main/ext 0.41 s (2.09 s); warm
+WebRTC sub 3.93 s, main/ext 1.76 s; cold WebRTC sub 2.67 s, main/ext 1.61 s;
+cold MSE sub 4.52 s, main/ext 1.57 s; Home Assistant's view 2.64 s (ours faster
+on 19 of 19). First image: HA's snapshot 0.53 s (3 failed: Laundry Room,
+Doorbell), go2rtc's frame 2.09 s. The NVR's capacity test kept up at every level
+again (download 396 Mbit/s alone, 409 with seven streams).
+
 ## Findings
 
 Live view:
@@ -330,6 +381,29 @@ Live view through go2rtc (run 5, desktop Chrome on the LAN; Phase 3 step 1):
 - **The battery Doorbell, added directly, is Baichuan only**: RTSP sub and main
   started in 0.50 and 0.57 s, the fastest of all, but there is no ext (HTTP-FLV
   needs the HTTP API). HA's snapshot of its main stream failed.
+
+Live view with the key-frame cache (run 6, v0.5.0, desktop Chrome on Wi-Fi):
+
+- **The cache works.** A warm stream over MSE started in 0.18–0.81 s on 22 of
+  27 streams: median 0.71 s on subs (4.86 s in run 5) and 0.41 s on mains and
+  ext (2.09 s). Warm WebRTC is unchanged (sub median 3.93 s), as expected:
+  WebRTC cannot be sent the cached frames.
+- **Key-frame intervals, measured**: ~4 s on every sub but the CX410's
+  (0.99 s), 1.6–2.6 s on mains, ~2 s on ext.
+- **Parameter sets differ on 10 of 27 streams**: every stream of the cameras
+  added directly but their ext, the Duo 3's sub and main, and the Hallway and
+  Dogs subs. The three streams MSE showed at the wrong size are among
+  them, which confirms the cause: the stream's description carries other
+  parameter sets than the stream. Two of them decoded only from a later key
+  frame (Hallway sub, Laundry sub). v0.5.1 rebuilds the init segment from the
+  key frame's parameter sets.
+- **Warm feeds dropped on five streams** (Garage ext, Hallway ext, Front Yard
+  Left's NVR ext and its direct sub and main) and reopened, with no reason
+  recorded. A local go2rtc keeps a warm feed through frames, WebRTC requests
+  and other readers, so the cause is on the device side. v0.5.1 records each
+  end and its reason, and adds go2rtc's log to the report.
+- Cold starts still depend on where the camera is in its key-frame interval:
+  the CX810's subs started in 3.2–4.2 s this time against 1.6–2.4 s in run 5.
 
 Recorded video (NVR RLN36; the cameras record only to the NVR):
 
