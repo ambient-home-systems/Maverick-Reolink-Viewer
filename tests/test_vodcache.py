@@ -19,13 +19,14 @@ from custom_components.reolink_viewer import bridge, vodcache
 from custom_components.reolink_viewer.bridge import CameraUrl, VodFile, VodMethod
 from custom_components.reolink_viewer.devices import PlaybackSource
 from custom_components.reolink_viewer.mp4index import OffsetShifter, OffsetShiftError
-from custom_components.reolink_viewer.remux import RemuxError, is_plain
+from custom_components.reolink_viewer.remux import is_plain
 from custom_components.reolink_viewer.scheduler import Priority, Scheduler
 from custom_components.reolink_viewer.vodcache import Recording, VodCache, VodCacheError
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
 from .mp4_fixtures import FTYP, av_moov, fragmented_av, mp4_file, real_fragmented
+from .test_fmp4 import MIME, _boxes, _check_mse_ready
 from .test_mp4index import _tfhd_bases
 
 SOURCE = PlaybackSource("cam1", "Garage", "entry1", 16)
@@ -51,7 +52,7 @@ class Server(NamedTuple):
 
 @pytest.fixture
 async def media(socket_enabled: None) -> AsyncGenerator[Server]:
-    """Serve recordings; /slow pauses after the first 100 KB until the gate opens."""
+    """Serve recordings; /slow* pause after the first 100 KB until the gate opens."""
     hits: list[str] = []
     gate = asyncio.Event()
 
@@ -75,7 +76,7 @@ async def media(socket_enabled: None) -> AsyncGenerator[Server]:
                 await asyncio.sleep(0.01)
             body = body[3000:]
         await resp.write(body[:100_000])
-        if name == "slow":
+        if name.startswith("slow"):
             await gate.wait()
         await resp.write(body[100_000:])
         await resp.write_eof()
@@ -294,11 +295,9 @@ async def test_eviction_and_restart(
         assert not (tmp_path / "vod" / "stale.mp4.part").exists()
         found = await restarted.async_open(rec("two"))
         assert found.complete
-        assert found.timing == {
-            "cache": "disk",
-            "indexed": "no",
-            "flat": "no: ffmpeg not found",
-        }
+        assert found.timing == {"cache": "disk", "indexed": "no"}
+        assert not await restarted.async_plain(found)
+        assert found.timing["flat"] == "no: ffmpeg not found"
         assert len(host.calls) == 3
 
 
@@ -420,59 +419,64 @@ async def flat_cache(
 
 
 @pytest.mark.skipif(FFMPEG is None, reason="ffmpeg is not installed")
-async def test_cached_recordings_become_plain_mp4(
+async def test_plain_copy_on_demand(
     hass: HomeAssistant, flat_cache: VodCache, tmp_path: Path
 ) -> None:
-    """After a fill the recording is rewritten; old URLs keep the original."""
+    """The plain MP4 is written when first asked for; the original stays."""
     source = tmp_path / "real.mp4"
     assert real_fragmented(source)
     EXTRA["real"] = source.read_bytes()
     try:
         entry = await flat_cache.async_open(rec("real"))
-        # A URL issued before the plain file exists is bound to the original.
-        assert flat_cache.lease(entry, 1800) is False
+        # Not before the recording is complete.
+        assert not await flat_cache.async_plain(entry)
         await flat_cache.async_wait(entry, complete=True)
         assert entry.task is not None
         await entry.task
-        for task in list(flat_cache._flat_tasks):
-            await task
+        assert entry.flat_at is None
+        assert not entry.flat_path.exists()
+        assert await flat_cache.async_plain(entry)
+        task = entry.flat_task
+        assert await flat_cache.async_plain(entry)
+        assert entry.flat_task is task  # written once
         assert entry.timing["flat"] == "yes"
         assert is_plain(entry.flat_path)
-        assert flat_cache.served_path(entry, False) == entry.path
-        assert flat_cache.lease(entry, 1800) is True
         assert flat_cache.served_path(entry, True) == entry.flat_path
-        # The original goes once such URLs have expired.
-        async_fire_time_changed(hass, dt_util.utcnow() + timedelta(minutes=29))
-        await hass.async_block_till_done()
-        assert entry.path.exists()
+        assert flat_cache.served_path(entry, False) == entry.path
+        # The original is kept for the MSE player, long after any URL.
         with patch.object(vodcache, "_clock", return_value=time.monotonic() + EXPIRED):
-            async_fire_time_changed(hass, dt_util.utcnow() + timedelta(minutes=33))
+            async_fire_time_changed(hass, dt_util.utcnow() + timedelta(hours=2))
             await hass.async_block_till_done(wait_background_tasks=True)
-        assert not entry.path.exists()
-        assert flat_cache.served_path(entry, False) == entry.flat_path
+        assert entry.path.exists()
+        assert entry.flat_path.exists()
     finally:
         EXTRA.pop("real", None)
 
 
-async def test_plain_files_found_at_startup(
+async def test_files_found_at_startup(
     hass: HomeAssistant, tmp_path: Path, media: Server
 ) -> None:
-    """A plain copy wins over the original left by a previous run."""
+    """Originals and their plain copies are kept; leftovers are removed."""
     directory = tmp_path / "vod"
     directory.mkdir()
     cache_id = rec().cache_id
     (directory / f"{cache_id}.mp4").write_bytes(BODY)
     (directory / f"{cache_id}.flat.mp4").write_bytes(b"plain")
     (directory / f"{cache_id}.flat.mp4.part").write_bytes(b"half")
+    (directory / "0123abcd.flat.mp4").write_bytes(b"no original")
     scheduler = Scheduler(default_limit=2)
     cache = VodCache(hass, scheduler, directory, 10**9, lambda: None)  # type: ignore[arg-type,return-value]
     await cache.async_setup()
-    assert sorted(p.name for p in directory.iterdir()) == [f"{cache_id}.flat.mp4"]
+    assert sorted(p.name for p in directory.iterdir()) == [
+        f"{cache_id}.flat.mp4",
+        f"{cache_id}.mp4",
+    ]
     entry = await cache.async_open(rec())
     assert entry.complete
-    assert entry.timing == {"cache": "disk", "flat": "yes"}
-    assert cache.lease(entry, 60) is True
-    assert cache.served_path(entry, False) == entry.flat_path
+    assert entry.timing == {"cache": "disk", "indexed": "no", "flat": "yes"}
+    assert await cache.async_plain(entry)
+    assert cache.served_path(entry, True) == entry.flat_path
+    assert cache.served_path(entry, False) == entry.path
     await cache.async_shutdown()
     await scheduler.async_shutdown()
 
@@ -480,7 +484,7 @@ async def test_plain_files_found_at_startup(
 async def test_failed_rewrite_keeps_the_original(
     hass: HomeAssistant, tmp_path: Path, media: Server
 ) -> None:
-    """Without a working ffmpeg the indexed original is served."""
+    """Without a working ffmpeg the original is served, and not retried."""
     host = FakeHost(media.server)
     scheduler = Scheduler(default_limit=2, default_stream_limit=1)
     async with ClientSession() as session:
@@ -496,14 +500,13 @@ async def test_failed_rewrite_keeps_the_original(
             await cache.async_setup()
             entry = await cache.async_open(rec("frag"))
             await cache.async_wait(entry, complete=True)
-            assert entry.task is not None
-            await entry.task
-            for task in list(cache._flat_tasks):
-                await task
+            assert not await cache.async_plain(entry)
+            task = entry.flat_task
+            assert not await cache.async_plain(entry)
+            assert entry.flat_task is task
             assert entry.timing["flat"].startswith("no: ")
             assert entry.flat_at is None
-            assert cache.lease(entry, 60) is False
-            assert cache.served_path(entry, False) == entry.path
+            assert cache.served_path(entry, True) == entry.path
             await cache.async_shutdown()
     await scheduler.async_shutdown()
 
@@ -578,13 +581,13 @@ async def make_cache(
                 await scheduler.async_shutdown()
 
 
-async def _complete(vc: VodCache, name: str) -> Any:
+async def _complete(vc: VodCache, name: str, *, plain: bool = False) -> Any:
     entry = await vc.async_open(rec(name))
     await vc.async_wait(entry, complete=True)
     if entry.task is not None:
         await entry.task
-    for task in list(vc._flat_tasks):
-        await task
+    if plain:
+        await vc.async_plain(entry)
     return entry
 
 
@@ -692,12 +695,13 @@ async def test_rewrite_needs_room_for_its_copy(
     monkeypatch.setattr(vodcache, "MIN_FREE_BYTES", 1_000_000)
     vc = await make_cache(ffmpeg="ffmpeg")
     with fake_disk(tmp_path / "vod", 1_000_000 + int(len(BODY) * 1.6)):
-        entry = await _complete(vc, "one")
+        entry = await _complete(vc, "one", plain=True)
         assert entry.timing["flat"] == "no: not enough free disk space"
         assert not entry.flat_path.exists()
+        assert vc.served_path(entry, True) == entry.path
         assert shutil.disk_usage(tmp_path).free >= 1_000_000
     with fake_disk(tmp_path / "vod", 1_000_000 + len(BODY) * 3):
-        other = await _complete(vc, "two")
+        other = await _complete(vc, "two", plain=True)
         assert other.timing["flat"] == "yes"
     assert vc._reserved == {}
 
@@ -706,13 +710,12 @@ async def test_live_urls_keep_their_recording(make_cache: Any, no_ffmpeg: None) 
     """A leased recording is not evicted; original and plain copy go together."""
     vc = await make_cache(ffmpeg="ffmpeg")
     first = await vc.async_open(rec("one"))
-    assert vc.lease(first, 1800) is False  # bound to the original
+    vc.lease(first, 1800)
     await vc.async_wait(first, complete=True)
     assert first.task is not None
     await first.task
-    second = await _complete(vc, "two")
-    for task in list(vc._flat_tasks):
-        await task
+    assert await vc.async_plain(first)
+    second = await _complete(vc, "two", plain=True)
     for entry in (first, second):
         assert entry.path.exists()
         assert entry.flat_path.exists()
@@ -727,82 +730,37 @@ async def test_live_urls_keep_their_recording(make_cache: Any, no_ffmpeg: None) 
     assert not second.path.exists()
     assert not second.flat_path.exists()
     assert vc.entry(rec("two")) is None
-    # The URL bound to the original still reads the original.
+    # Neither of the leased recording's files changed.
     assert vc.served_path(first, False).read_bytes() == BODY
+    assert vc.served_path(first, True).read_bytes() == b"PLAIN" + BODY
     with patch.object(vodcache, "_clock", return_value=time.monotonic() + EXPIRED):
         assert not first.busy(vodcache._clock())
 
 
-async def test_old_drop_timer_spares_a_newer_entry(
-    hass: HomeAssistant, make_cache: Any, no_ffmpeg: None
+async def test_a_rewrite_outlives_its_request(
+    make_cache: Any, no_ffmpeg: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Evicting a recording cancels its pending deletion; a newer copy is kept."""
+    """A request that goes away leaves the rewrite running for the next one."""
     vc = await make_cache(ffmpeg="ffmpeg")
-    first = await _complete(vc, "one")
-    assert first.flat_at is not None
-    cache_id = rec("one").cache_id
-    assert cache_id in vc._drop_timers
-    vc._max_bytes = 1
-    await vc._evict()
-    vc._max_bytes = 10**9
-    assert not first.path.exists()
-    assert cache_id not in vc._drop_timers
-    # Asked for again: a new fill; a URL is bound to its original.
-    second = await vc.async_open(rec("one"))
-    assert second is not first
-    assert vc.lease(second, 1800) is False
-    await vc.async_wait(second, complete=True)
-    assert second.task is not None
-    await second.task
-    for task in list(vc._flat_tasks):
-        await task
-    assert second.flat_at is not None
-    # The old entry's timer (if it were still there) has long fired.
-    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(minutes=29))
-    await hass.async_block_till_done(wait_background_tasks=True)
-    assert second.path.exists()
-    assert vc.served_path(second, False).read_bytes() == BODY
-    # Once the URL has expired, the original goes; the plain copy stays.
-    with patch.object(vodcache, "_clock", return_value=time.monotonic() + EXPIRED):
-        async_fire_time_changed(hass, dt_util.utcnow() + timedelta(minutes=33))
-        await hass.async_block_till_done(wait_background_tasks=True)
-    assert not second.path.exists()
-    assert second.flat_path.exists()
-    assert vc.served_path(second, False) == second.flat_path
+    entry = await _complete(vc, "one")
+    started = asyncio.Event()
+    release = asyncio.Event()
 
+    async def slow(binary: str, source: Path, target: Path) -> None:
+        started.set()
+        await release.wait()
+        await fake_flatten(binary, source, target)
 
-async def test_a_new_rewrite_cancels_a_pending_deletion(
-    hass: HomeAssistant,
-    make_cache: Any,
-    no_ffmpeg: None,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A deletion left by an older entry never hits a newer entry's original."""
-    vc = await make_cache(ffmpeg="ffmpeg")
-    first = await _complete(vc, "one")
-    cache_id = rec("one").cache_id
-    assert cache_id in vc._drop_timers
-    # The entry is replaced behind the timer's back, its plain copy gone,
-    # and the new entry's rewrite fails (so it schedules no deletion).
-    vc._entries.pop(cache_id)
-    first.flat_path.unlink()
-
-    async def broken(binary: str, source: Path, target: Path) -> None:
-        raise RemuxError("broken")
-
-    monkeypatch.setattr(vodcache, "async_flatten", broken)
-    second = await vc.async_open(rec("one"))
-    assert second is not first
-    for task in list(vc._flat_tasks):
-        await task
-    assert second.timing["flat"] == "no: broken"
-    # Starting the rewrite cancelled the old deletion.
-    assert cache_id not in vc._drop_timers
-    # Even if the old deletion ran, it leaves the newer entry's files alone.
-    vc._drop_original(first)(dt_util.utcnow())
-    await hass.async_block_till_done(wait_background_tasks=True)
-    assert second.path.exists()
-    assert vc.served_path(second, False) == second.path
+    monkeypatch.setattr(vodcache, "async_flatten", slow)
+    waiter = asyncio.create_task(vc.async_plain(entry))
+    await started.wait()
+    waiter.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await waiter
+    assert entry.flattening
+    release.set()
+    assert await vc.async_plain(entry)
+    assert entry.flat_path.read_bytes() == b"PLAIN" + BODY
 
 
 async def test_concurrent_opens_of_a_file_on_disk(
@@ -849,3 +807,93 @@ async def test_a_recording_still_being_written_is_cached_anew(
     # From then on the longer copy serves both.
     assert await vc.async_open(longer, at=100_000) is fresh
     assert await vc.async_open(short) is first  # the exact copy still exists
+
+
+# ---- MSE fragments (Phase 2B step 2) ----
+
+# A minute of NVR-shaped recording: 30 fragments of 2 s, absolute offsets, no
+# tfdt. /slownvr stops after its first 100 KB (about 17 fragments) until the
+# gate opens.
+NVR_MINUTE = fragmented_av(30, absolute=True, tfdt=False)
+
+
+@pytest.fixture
+def nvr_minute() -> Any:
+    EXTRA["slownvr"] = NVR_MINUTE
+    yield
+    EXTRA.pop("slownvr", None)
+
+
+async def _window_bytes(vc: VodCache, entry: Any, window: Any) -> bytes:
+    return b"".join([c async for c in vc.async_read_window(entry, window)])
+
+
+async def test_fragment_windows_follow_a_fill(
+    cache: tuple[VodCache, Scheduler, FakeHost], media: Server, nvr_minute: None
+) -> None:
+    """A start waits only for the fragments up to it, not the whole file."""
+    vc, _sched, _host = cache
+    entry = await vc.async_open(rec("slownvr"))
+    init, mime = await vc.async_init(entry)
+    assert init == FTYP + av_moov()
+    assert mime == MIME
+    # 10 s in is on disk before the pause: served while the download waits.
+    window = await vc.async_window(entry, at_ms=10_500, max_ms=4000, max_bytes=10**7)
+    assert not entry.complete
+    assert window.first == 5
+    assert [f.start_ms for f in window.fragments] == [10_000, 12_000]
+    assert (window.start_ms, window.end_ms, window.last) == (10_000, 14_000, False)
+    data = await _window_bytes(vc, entry, window)
+    moofs = [at for kind, at, _payload in _boxes(data) if kind == "moof"]
+    assert len(moofs) == 2
+    for i, at in enumerate(moofs):
+        fragment = window.fragments[i]
+        _check_mse_ready(data[at:], dict(fragment.decode))
+    # 50 s in is not on disk yet: the window waits for it.
+    later = asyncio.create_task(
+        vc.async_window(entry, at_ms=50_000, max_ms=4000, max_bytes=10**7)
+    )
+    await asyncio.sleep(0.05)
+    assert not later.done()
+    media.gate.set()
+    window = await later
+    assert window.first == 25
+    await vc.async_wait(entry, complete=True)
+    # Continuing by index; the end of the recording is flagged.
+    end = await vc.async_window(entry, first=27, max_ms=60_000, max_bytes=10**7)
+    assert [f.start_ms for f in end.fragments] == [54_000, 56_000, 58_000]
+    assert end.last
+    assert entry.public()["complete"]
+    # Past the end: the last key frame by time, nothing by index.
+    tail = await vc.async_window(entry, at_ms=10**9, max_ms=1, max_bytes=1)
+    assert (tail.first, len(tail.fragments), tail.last) == (29, 1, True)
+    none = await vc.async_window(entry, first=30, max_ms=1, max_bytes=1)
+    assert (none.first, none.fragments, none.last) == (30, (), True)
+    # Windows stop at their media time or size (at least one fragment).
+    small = await vc.async_window(entry, first=0, max_ms=1, max_bytes=10**7)
+    assert len(small.fragments) == 1
+    sized = await vc.async_window(entry, first=0, max_ms=60_000, max_bytes=12_000)
+    assert len(sized.fragments) == 2
+    assert media.hits == ["slownvr"]
+
+
+async def test_plain_files_are_not_fragments(
+    cache: tuple[VodCache, Scheduler, FakeHost],
+) -> None:
+    """A recording that is not fragmented cannot feed the MSE player."""
+    vc, _sched, _host = cache
+    entry = await vc.async_open(rec("plain"))
+    with pytest.raises(VodCacheError, match="not playable as fragments: not a frag"):
+        await vc.async_init(entry)
+    with pytest.raises(VodCacheError, match="not playable as fragments"):
+        await vc.async_window(entry, at_ms=0, max_ms=1, max_bytes=1)
+
+
+async def test_fragments_of_a_failed_fill(
+    cache: tuple[VodCache, Scheduler, FakeHost],
+) -> None:
+    """A fill that fails ends the wait with its error."""
+    vc, _sched, _host = cache
+    entry = await vc.async_open(rec("missing"))
+    with pytest.raises(VodCacheError, match="HTTP 404"):
+        await vc.async_init(entry)

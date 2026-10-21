@@ -29,15 +29,17 @@ from .timeconv import epoch_ms
 from .timeline import TimelineError
 from .views import (
     CLIP_PATH,
+    MSE_PATH,
     THUMB_PATH,
     THUMB_TTL,
     VOD_PATH,
+    MseGrant,
     ThumbGrant,
     VodGrant,
     sign,
     vod_ttl,
 )
-from .vodcache import Recording, VodCacheError
+from .vodcache import Entry, Recording, VodCacheError, expected_size
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -63,10 +65,12 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_timeline_day)
     websocket_api.async_register_command(hass, ws_timeline_warm)
     websocket_api.async_register_command(hass, ws_playback_url)
+    websocket_api.async_register_command(hass, ws_playback_mse)
     websocket_api.async_register_command(hass, ws_playback_prefetch)
     websocket_api.async_register_command(hass, ws_thumbnail_urls)
     websocket_api.async_register_command(hass, ws_media_info)
     websocket_api.async_register_command(hass, ws_playback_peek)
+    websocket_api.async_register_command(hass, ws_playback_cache_status)
     websocket_api.async_register_command(hass, ws_playback_stats)
     websocket_api.async_register_command(hass, ws_check_report)
     websocket_api.async_register_command(hass, ws_check_reports)
@@ -388,7 +392,7 @@ async def ws_timeline_days(
         probatio.Optional("stream", default="sub"): STREAM,
         # Accept a copy of today this many seconds old (then ask again).
         probatio.Optional("max_age", default=0): probatio.All(
-            int, probatio.Range(min=0, max=3600)
+            int, probatio.Range(min=0, max=86400)
         ),
     }
 )
@@ -469,6 +473,56 @@ _SEGMENT_SCHEMA: dict[probatio.Marker | str, Any] = {
 }
 
 
+async def _open_for_playback(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> tuple[ReolinkViewerConfigEntry, devices.PlaybackSource, Entry, str] | None:
+    """Start caching the recording a command asks for (errors are sent)."""
+    if (resolved := _playback_source(hass, connection, msg)) is None:
+        return None
+    entry, source = resolved
+    try:
+        recording, segment_id = await _recording(entry, source, msg)
+        cache_entry = await entry.runtime_data.vod_cache.async_open(
+            recording, Priority.PLAYBACK, at=msg.get("at")
+        )
+    except TimelineError as err:
+        connection.send_error(msg["id"], ERR_SEARCH_FAILED, str(err))
+        return None
+    except VodCacheError as err:
+        connection.send_error(msg["id"], ERR_CACHE_FAILED, str(err))
+        return None
+    return entry, source, cache_entry, segment_id
+
+
+def _playback_result(
+    hass: HomeAssistant,
+    entry: ReolinkViewerConfigEntry,
+    source: devices.PlaybackSource,
+    cache_entry: Entry,
+    segment_id: str,
+) -> dict[str, Any]:
+    """Lease the recording; return what both players need, and a clip URL."""
+    data = entry.runtime_data
+    # The copy may be one made when the recording was shorter.
+    recording = cache_entry.recording
+    # The recording stays on disk until its URLs expire.
+    ttl = vod_ttl(recording)
+    data.vod_cache.lease(cache_entry, ttl.total_seconds())
+    clip = VodGrant(recording, False, _download_name(source, recording))
+    return {
+        "clip_url": sign(hass, CLIP_PATH, data.grants.issue(clip, ttl), ttl),
+        "stream": recording.stream,
+        "segment_id": segment_id,
+        "start": recording.start_ms,
+        "end": recording.end_ms,
+        "media": data.vod_cache.media_info(source, recording.stream),
+        "cache": cache_entry.public(),
+        "expires_in": int(ttl.total_seconds()),
+    }
+
+
 @websocket_api.websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/playback/url",
@@ -485,50 +539,59 @@ async def ws_playback_url(
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    """Start caching a recording and return signed URLs to play and download it."""
+    """Start caching a recording; return signed URLs for the file player."""
     began = time.monotonic()
-    if (resolved := _playback_source(hass, connection, msg)) is None:
+    if (opened := await _open_for_playback(hass, connection, msg)) is None:
         return
-    entry, source = resolved
-    data = entry.runtime_data
-    try:
-        recording, segment_id = await _recording(entry, source, msg)
-        cache_entry = await data.vod_cache.async_open(
-            recording, Priority.PLAYBACK, at=msg.get("at")
-        )
-    except TimelineError as err:
-        connection.send_error(msg["id"], ERR_SEARCH_FAILED, str(err))
-        return
-    except VodCacheError as err:
-        connection.send_error(msg["id"], ERR_CACHE_FAILED, str(err))
-        return
-    # The copy may be one made when the recording was shorter.
+    entry, source, cache_entry, segment_id = opened
+    result = _playback_result(hass, entry, source, cache_entry, segment_id)
     recording = cache_entry.recording
-    # The URLs keep the file they are issued for, and the recording, until
-    # they expire.
     ttl = vod_ttl(recording)
-    flat = data.vod_cache.lease(cache_entry, ttl.total_seconds())
+    # A progressive URL plays the original from its start while it downloads;
+    # any other gets the plain copy, which browsers seek in without reading
+    # the whole file first.
+    progressive = msg["progressive"]
     grant = VodGrant(
-        recording, msg["progressive"], _download_name(source, recording), flat
+        recording,
+        progressive,
+        _download_name(source, recording),
+        plain=not progressive,
     )
-    token = data.grants.issue(grant, ttl)
-    clip_token = data.grants.issue(grant, ttl)
-    connection.send_result(
-        msg["id"],
-        {
-            "url": sign(hass, VOD_PATH, token, ttl),
-            "clip_url": sign(hass, CLIP_PATH, clip_token, ttl),
-            "stream": recording.stream,
-            "segment_id": segment_id,
-            "start": recording.start_ms,
-            "end": recording.end_ms,
-            "media": data.vod_cache.media_info(source, recording.stream),
-            "cache": cache_entry.public(),
-            "file": "plain" if flat else "original",
-            "expires_in": int(ttl.total_seconds()),
-            "timing": {"total_ms": round((time.monotonic() - began) * 1000, 1)},
-        },
-    )
+    token = entry.runtime_data.grants.issue(grant, ttl)
+    result["url"] = sign(hass, VOD_PATH, token, ttl)
+    result["file"] = "original" if progressive else "plain"
+    result["timing"] = {"total_ms": round((time.monotonic() - began) * 1000, 1)}
+    connection.send_result(msg["id"], result)
+
+
+@websocket_api.websocket_command(
+    {
+        probatio.Required("type"): f"{DOMAIN}/playback/mse",
+        **_SEGMENT_SCHEMA,
+        probatio.Optional("at"): int,
+    }
+)
+@websocket_api.async_response
+async def ws_playback_mse(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Start caching a recording; return the MSE player's fragment path.
+
+    The player fetches ``{base}/init`` and ``{base}/frags?...`` with HA's
+    authentication (the path is not signed: a window's query varies).
+    """
+    began = time.monotonic()
+    if (opened := await _open_for_playback(hass, connection, msg)) is None:
+        return
+    entry, source, cache_entry, segment_id = opened
+    result = _playback_result(hass, entry, source, cache_entry, segment_id)
+    recording = cache_entry.recording
+    token = entry.runtime_data.grants.issue(MseGrant(recording), vod_ttl(recording))
+    result["base"] = f"{MSE_PATH}/{token}"
+    result["timing"] = {"total_ms": round((time.monotonic() - began) * 1000, 1)}
+    connection.send_result(msg["id"], result)
 
 
 @websocket_api.websocket_command(
@@ -642,6 +705,45 @@ async def ws_playback_peek(
         return
     cache = await entry.runtime_data.vod_cache.async_peek(recording)
     connection.send_result(msg["id"], {"segment_id": segment_id, "cache": cache})
+
+
+@callback
+@websocket_api.websocket_command(
+    {
+        probatio.Required("type"): f"{DOMAIN}/playback/cache_status",
+        probatio.Required("token"): str,
+    }
+)
+def ws_playback_cache_status(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Return the download of the copy a URL was issued for, and its size.
+
+    For the player's progress while it waits, and the check's report (the
+    current search may name a newer copy of a recording still being written).
+    """
+    if (entry := _loaded_entry(hass)) is None:
+        connection.send_error(msg["id"], ERR_NOT_LOADED, "Reolink Viewer is not loaded")
+        return
+    data = entry.runtime_data
+    grant = data.grants.get(msg["token"], MseGrant) or data.grants.get(
+        msg["token"], VodGrant
+    )
+    if grant is None:
+        connection.send_error(
+            msg["id"], websocket_api.ERR_NOT_FOUND, "Unknown or expired URL"
+        )
+        return
+    cache_entry = data.vod_cache.entry(grant.recording)
+    connection.send_result(
+        msg["id"],
+        {
+            "cache": cache_entry.public() if cache_entry is not None else None,
+            "expected_bytes": expected_size(grant.recording),
+        },
+    )
 
 
 @websocket_api.websocket_command(

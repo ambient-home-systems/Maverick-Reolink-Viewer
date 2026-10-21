@@ -195,7 +195,7 @@ def parse_stsd(payload: bytes) -> tuple[str | None, int | None, int | None]:
     return entry.type, width, height
 
 
-_VISUAL_ENTRIES = frozenset({"avc1", "avc3", "hvc1", "hev1", "mp4v", "encv"})
+_VISUAL_ENTRIES = frozenset({"avc1", "avc3", "hvc1", "hev1", "mp4v", "encv", "vp09"})
 _AUDIO_ENTRIES = frozenset({"mp4a"})
 _MAX_ENTRY = 4096
 # Fixed part of a sample entry before its child boxes (after the 8-byte header).
@@ -210,6 +210,8 @@ def codec_string(entry: bytes) -> str | None:
         return None
     if box.type in _AUDIO_ENTRIES:
         return _mp4a_codec(entry[8 + _AUDIO_FIXED :])
+    if box.type == "Opus":
+        return "opus"
     if box.type not in _VISUAL_ENTRIES:
         return box.type
     children = entry[8 + _VISUAL_FIXED :]
@@ -223,6 +225,9 @@ def codec_string(entry: bytes) -> str | None:
             return f"{box.type}.{body[1]:02X}{body[2]:02X}{body[3]:02X}"
         if child.type == "hvcC" and len(body) >= 13:
             return _hevc_codec(box.type, body)
+        if child.type == "vpcC" and len(body) >= 7:
+            # vp09.<profile>.<level>.<bit depth> (version/flags first).
+            return f"vp09.{body[4]:02d}.{body[5]:02d}.{body[6] >> 4:02d}"
         offset += child.size
     return box.type
 
