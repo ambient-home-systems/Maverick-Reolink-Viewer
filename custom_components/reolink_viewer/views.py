@@ -5,15 +5,21 @@ command issues a *grant* (what may be fetched) under a random token and
 returns a path signed with HA's ``async_sign_path``. Both the signature and
 the grant expire.
 
+- ``/api/reolink_viewer/mse/{token}/init`` and ``.../frags`` feed the MSE
+  player: the recording's init segment, then windows of its fragments made
+  MSE-ready (``fmp4.py``), each sent once it is on disk. The player asks with
+  ``fetch`` and HA's own authentication (a signed path cannot carry the
+  window's query), so no signature is issued for these.
 - ``/api/reolink_viewer/vod/{token}`` serves a recording as ``video/mp4`` from
-  the disk cache, with Range. While the cache is still filling, a request from
-  the start gets the file progressively (200, chunked, for browsers that play
-  while downloading); any other request waits for the file to complete.
-- A URL issued after the cache rewrote the recording as a plain MP4 gets that
-  file; one issued before keeps the original. Issuing a URL *leases* the
-  recording (``VodCache.lease``): it is not evicted, and the URL's file is
-  neither swapped nor deleted, until the URL expires.
-- ``/api/reolink_viewer/clip/{token}`` serves the same file as a download.
+  the disk cache, with Range, to the file player (the fallback). A start from
+  the beginning of a recording still filling, for a browser that plays while
+  downloading, gets the original progressively (200, chunked); every other
+  URL gets the plain MP4, rewritten from the complete original on the first
+  request (the original if the rewrite fails).
+- Issuing a URL *leases* the recording (``VodCache.lease``): it is not
+  evicted until the URL expires.
+- ``/api/reolink_viewer/clip/{token}`` serves the recording as a download
+  (the plain copy if there is one).
 - ``/api/reolink_viewer/thumb/{token}`` serves a timeline thumbnail (JPEG).
 """
 
@@ -24,7 +30,7 @@ from http import HTTPStatus
 import logging
 import secrets
 import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from aiohttp import web
 
@@ -35,7 +41,7 @@ from homeassistant.core import HomeAssistant
 from .const import DOMAIN
 from .scheduler import Priority
 from .thumbnails import ThumbKey, ThumbnailError
-from .vodcache import Entry, Recording, VodCacheError
+from .vodcache import Entry, Recording, VodCache, VodCacheError, Window
 
 if TYPE_CHECKING:
     from .models import ReolinkViewerData
@@ -43,6 +49,7 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 
 VOD_PATH = "/api/reolink_viewer/vod"
+MSE_PATH = "/api/reolink_viewer/mse"
 CLIP_PATH = "/api/reolink_viewer/clip"
 THUMB_PATH = "/api/reolink_viewer/thumb"
 # A recording's URLs live this long plus the recording's length, so one
@@ -53,17 +60,29 @@ VOD_TTL_MAX = timedelta(hours=6)
 THUMB_TTL = timedelta(minutes=10)
 COMPLETE_TIMEOUT = 600.0
 MAX_GRANTS = 5000
+# An MSE window: media time (ms) and bytes, by default and at most.
+WINDOW_MS = 20_000
+MAX_WINDOW_MS = 300_000
+WINDOW_BYTES = 16 * 1024 * 1024
+MAX_WINDOW_BYTES = 64 * 1024 * 1024
 
 
 @dataclass(frozen=True, slots=True)
 class VodGrant:
-    """Permission to fetch one recording."""
+    """Permission to fetch one recording as a file."""
 
     recording: Recording
     progressive: bool
     download_name: str
-    # Bound to the plain copy (True) or the original (VodCache.lease).
-    flat: bool = False
+    # Served as the plain copy (made on the first request), not the original.
+    plain: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class MseGrant:
+    """Permission to fetch one recording's fragments (the MSE player)."""
+
+    recording: Recording
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,9 +97,9 @@ class Grants:
 
     def __init__(self) -> None:
         """Initialize the registry."""
-        self._items: dict[str, tuple[float, VodGrant | ThumbGrant]] = {}
+        self._items: dict[str, tuple[float, VodGrant | MseGrant | ThumbGrant]] = {}
 
-    def issue(self, grant: VodGrant | ThumbGrant, ttl: timedelta) -> str:
+    def issue(self, grant: VodGrant | MseGrant | ThumbGrant, ttl: timedelta) -> str:
         """Store a grant and return its token."""
         now = time.monotonic()
         if len(self._items) >= MAX_GRANTS:
@@ -91,7 +110,9 @@ class Grants:
         self._items[token] = (now + ttl.total_seconds(), grant)
         return token
 
-    def get[T: (VodGrant, ThumbGrant)](self, token: str, kind: type[T]) -> T | None:
+    def get[T: (VodGrant, MseGrant, ThumbGrant)](
+        self, token: str, kind: type[T]
+    ) -> T | None:
         """Return a live grant of the given kind."""
         item = self._items.get(token)
         if item is None:
@@ -153,11 +174,15 @@ class _Base(HomeAssistantView):
             from_start = requested.start in (None, 0) and requested.stop is None
             if not entry.complete and grant.progressive and from_start and not download:
                 return await self._progressive(request, data, entry, headers)
-            if not entry.complete:
-                async with asyncio.timeout(COMPLETE_TIMEOUT):
+            async with asyncio.timeout(COMPLETE_TIMEOUT):
+                if not entry.complete:
                     await cache.async_wait(entry, complete=True)
-            path = cache.served_path(entry, grant.flat)
-            return web.FileResponse(path, headers=headers)
+                if download:
+                    flat = entry.flat_at is not None
+                else:
+                    # A fragmented file is read whole before it plays.
+                    flat = grant.plain and await cache.async_plain(entry)
+            return web.FileResponse(cache.served_path(entry, flat), headers=headers)
         except VodCacheError as err:
             return web.Response(status=HTTPStatus.BAD_GATEWAY, text=str(err))
         except TimeoutError:
@@ -210,6 +235,101 @@ class ClipView(_Base):
     async def get(self, request: web.Request, token: str) -> web.StreamResponse:
         """Return the recording as an attachment."""
         return await self._vod(request, token, download=True)
+
+
+class MseView(HomeAssistantView):
+    """Serve a recording's init segment and fragments to the MSE player."""
+
+    url = MSE_PATH + "/{token}/{part}"
+    name = "api:reolink_viewer:mse"
+    requires_auth = True
+
+    async def get(
+        self, request: web.Request, token: str, part: str
+    ) -> web.StreamResponse:
+        """Return the init segment (``init``) or a window (``frags``)."""
+        hass: HomeAssistant = request.app["hass"]
+        if (data := _data(hass)) is None or part not in ("init", "frags"):
+            return _not_found()
+        grant = data.grants.get(token, MseGrant)
+        if grant is None:
+            return _not_found()
+        try:
+            query = _window_query(request)
+        except ValueError:
+            return web.Response(status=HTTPStatus.BAD_REQUEST, text="Bad window")
+        cache = data.vod_cache
+        headers = {"Cache-Control": "private, no-store"}
+        try:
+            entry = await cache.async_open(grant.recording, Priority.PLAYBACK)
+            async with asyncio.timeout(COMPLETE_TIMEOUT):
+                if part == "init":
+                    init, mime = await cache.async_init(entry)
+                    if mime:
+                        headers["X-RV-Mime"] = mime
+                    return web.Response(
+                        body=init, content_type="video/mp4", headers=headers
+                    )
+                window = await cache.async_window(entry, **query)
+        except VodCacheError as err:
+            return web.Response(status=HTTPStatus.BAD_GATEWAY, text=str(err))
+        except TimeoutError:
+            return web.Response(
+                status=HTTPStatus.GATEWAY_TIMEOUT, text="Recording not ready"
+            )
+        return await _send_window(request, cache, entry, window, headers)
+
+
+def _window_query(request: web.Request) -> dict[str, Any]:
+    """Read ``at`` (ms) or ``first`` (an index), ``ms`` and ``bytes``."""
+    query = request.query
+    result: dict[str, Any] = {
+        "max_ms": min(max(int(query.get("ms", WINDOW_MS)), 1), MAX_WINDOW_MS),
+        "max_bytes": min(
+            max(int(query.get("bytes", WINDOW_BYTES)), 1), MAX_WINDOW_BYTES
+        ),
+    }
+    if "first" in query:
+        result["first"] = int(query["first"])
+        if result["first"] < 0:
+            raise ValueError("negative index")
+    else:
+        result["at_ms"] = max(float(query.get("at", 0)), 0.0)
+    return result
+
+
+async def _send_window(
+    request: web.Request,
+    cache: VodCache,
+    entry: Entry,
+    window: Window,
+    headers: dict[str, str],
+) -> web.StreamResponse:
+    times = {
+        "X-RV-Start": window.start_ms,
+        "X-RV-End": window.end_ms,
+    }
+    response = web.StreamResponse(
+        headers={
+            **headers,
+            "Content-Type": "video/mp4",
+            "X-RV-First": str(window.first),
+            "X-RV-Count": str(len(window.fragments)),
+            "X-RV-Last": "1" if window.last else "0",
+            **{k: f"{v:.3f}" for k, v in times.items() if v is not None},
+        }
+    )
+    response.enable_chunked_encoding()
+    await response.prepare(request)
+    try:
+        async for chunk in cache.async_read_window(entry, window):
+            await response.write(chunk)
+    except VodCacheError as err:
+        # Headers are sent: end the body; the player sees a short window.
+        _LOGGER.debug("Fragments of a recording failed mid-window: %s", err)
+        return response
+    await response.write_eof()
+    return response
 
 
 class ThumbView(HomeAssistantView):

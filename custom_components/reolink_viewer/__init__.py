@@ -41,7 +41,7 @@ from .models import ReolinkViewerConfigEntry, ReolinkViewerData
 from .scheduler import HostLimits, Scheduler
 from .thumbnails import ThumbnailService
 from .timeline import TimelineService
-from .views import ClipView, ThumbView, VodView
+from .views import ClipView, MseView, ThumbView, VodView
 from .vodcache import VodCache
 from .websocket_api import async_register_commands
 
@@ -60,6 +60,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     # Views cannot be unregistered; they find the loaded entry per request.
     hass.http.register_view(VodView())
     hass.http.register_view(ClipView())
+    hass.http.register_view(MseView())
     hass.http.register_view(ThumbView())
     return True
 

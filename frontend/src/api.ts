@@ -1,4 +1,5 @@
 import type {
+  CacheStatusResult,
   Catalog,
   MediaInfoResponse,
   PlaybackUrl,
@@ -187,6 +188,26 @@ export const fetchPlaybackUrl = (
     progressive,
     ...(at === undefined ? {} : { at: Math.round(at) }),
   });
+
+/** The MSE player's fragment path for a recording (see fetchPlaybackUrl for `at`). */
+export const fetchPlaybackMse = (hass: HomeAssistant, ref: SegmentRef, at?: number): Promise<PlaybackUrl> =>
+  hass.callWS<PlaybackUrl>({
+    type: "reolink_viewer/playback/mse",
+    device_id: ref.deviceId,
+    date: ref.date,
+    segment_id: ref.segmentId,
+    stream: ref.stream,
+    ...(at === undefined ? {} : { at: Math.round(at) }),
+  });
+
+/** The token of a playback URL or fragment path (its last path segment). */
+export function urlToken(path: string): string {
+  return path.split("?")[0]?.split("/").at(-1) ?? "";
+}
+
+/** The download of the copy a URL (by its token) serves. */
+export const fetchCacheStatus = (hass: HomeAssistant, token: string): Promise<CacheStatusResult> =>
+  hass.callWS<CacheStatusResult>({ type: "reolink_viewer/playback/cache_status", token });
 
 export const prefetchSegment = (hass: HomeAssistant, ref: SegmentRef): Promise<unknown> =>
   hass.callWS({

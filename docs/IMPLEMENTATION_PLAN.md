@@ -813,8 +813,8 @@ Known limits carried into 2B and Phase 4:
 | 2B step | Status |
 | --- | --- |
 | 0. Fix the recording cache (disk accounting, eviction, leases, deletion timers, open race), DST end and refresh window, shared thumbnail fetches; correct the MSE claim above | Done (v0.2.8), see "Step 0" below |
-| 1. Measure where it hasn't been (gate): desktop Chrome on the LAN, the iPhone Companion app on Wi-Fi, over Tailscale and over Nabu Casa | Check built (v0.2.8), sharpened in v0.2.9 and v0.2.10. Three desktop runs through Nabu Casa recorded (three player and cache bugs found and fixed); a LAN desktop run (Mac) and the three iPhone runs to come, see "Step 1 results" |
-| 2. Build what the evidence calls for (speeds, HD/SD keeping the position, uncached deep seeks, bounded memory and disk) | Not started (after the gate) |
+| 1. Measure where it hasn't been (gate): desktop Chrome on the LAN, the iPhone Companion app on Wi-Fi, over Tailscale and over Nabu Casa | **Done** (2026-10-21): check built (v0.2.8), sharpened in v0.2.9 and v0.2.10; four desktop runs (three through Nabu Casa, one on the LAN) and four iPhone runs (Wi-Fi, Tailscale twice, Nabu Casa). Three player and cache bugs found and fixed. HD unmeasured (no main recording cached). See "Step 1 results" and "What step 1 decides" |
+| 2. Build what the evidence calls for (speeds, HD/SD keeping the position, uncached deep seeks, bounded memory and disk) | **Built (v0.3.0)**: MSE with server-normalized fragments, the file player as fallback; checked in Chromium (CI and a harness). Hardware check to come, see "Step 2 as built" |
 
 ##### Step 0: the recording cache (v0.2.8)
 
@@ -913,10 +913,10 @@ e.g. Front Yard Right, gives the deep-start and session parts):
 | Setup | Status |
 | --- | --- |
 | Desktop, through Nabu Casa | Runs 1 (v0.2.8), 2 (v0.2.9) and 3 (v0.2.10), 2026-10-20, below: Brave in an HA add-on, loading HA through the Nabu Casa address |
-| Desktop on the LAN | To run on v0.2.10, from a Mac |
-| iPhone app, Wi-Fi (local) | To run on v0.2.10 |
-| iPhone app, Tailscale | To run on v0.2.10 |
-| iPhone app, Nabu Casa | To run on v0.2.10 |
+| Desktop on the LAN | Run 4 (v0.2.10, 2026-10-20) below: Chrome on a Mac |
+| iPhone app, Wi-Fi (local) | iPhone run 1 (v0.2.10, 2026-10-20, with the session) below |
+| iPhone app, Tailscale | iPhone runs 2 (stopped after the events) and 3 (set to "Nabu Casa", but loaded through the Tailscale address), v0.2.10, 2026-10-20, without the session, below |
+| iPhone app, Nabu Casa | iPhone run 4 (v0.2.10, 2026-10-20, without the session) below |
 
 **Desktop run 1** (v0.2.8, Front Yard Right, with the one-hour session).
 The browser was **Brave (Chromium 155) running in a Home Assistant add-on**,
@@ -1049,6 +1049,379 @@ the link's 55–86 Mbit/s here). Reading only up to the target, and starting
 once those bytes are on disk, would cut both: on these files the target
 was 88–92 % in, so the download part would shrink a little and the read
 part to the `moov` plus a few seconds of video.
+
+**Desktop run 4: Mac on the LAN** (v0.2.10, Chrome 155 on macOS, Front Yard
+Right, plain HTTP through a local name, HTTP/1.1, without the session;
+2026-10-20):
+
+| Measure | Result |
+| --- | --- |
+| Timeline | today 197 ms, a past day 107 ms (store), again 165 ms, today again 164 ms: all under 1 s |
+| Events → first frame | 256, 123, 204 ms, 10–11 min into today's recording still being written (19.4 min so far), all where asked |
+| Deep start, not cached | 16.1 s, 57 min into a 60 min recording: download 12.8 s (259 MB at 163 Mbit/s), then Chrome read the whole original in 3.1 s (about 665 Mbit/s) |
+| Deep start, cached | 273 ms (plain file): under 2 s |
+| Auto-advance | gap 0 ms |
+| Rates | on pace at every rate. Painted 8, 15, 30, 60 and 53 fps of 7, 15, 30, 60 and 120 needed, longest gaps 200, 100, 67, 18 and 33 ms: every frame shown on time up to 4×, and the display's rate at 8×. But `getVideoPlaybackQuality` counted every frame as dropped (45 of 45 … 360 of 360) while `requestVideoFrameCallback` saw each one painted: Chrome on macOS misreports the counter here, so the check's ✗ at 0.5–2× is wrong. Step 2's check judges by painted frames where the two disagree |
+| Link | 4 MiB in 368 ms (91 Mbit/s): too short a read for a fast link; the 259 MB transfer above ran at about 665 Mbit/s |
+| MSE | as in Chromium elsewhere: `MediaSource` plays the MSE-ready fragment and rejects the NVR's shapes; no `ManagedMediaSource` |
+
+What the desktop runs say for step 2 (the iPhone runs still to come):
+
+- **Every setup is within budget once a recording is cached**: cached deep
+  starts 0.27–1.3 s, events 0.12–0.62 s, auto-advance 0–10 ms, and starts
+  land where asked.
+- **The uncached deep start has two costs, and the link decides which
+  dominates.** On the LAN almost all of it is the NVR download (12.8 of
+  16.1 s; the browser's whole-file read took 3.1 s). Through Nabu Casa the
+  read dominates (17–26 s for 180–204 MB at 55–86 Mbit/s).
+  - Serving a "start here" or plain file instead of the whole original
+    removes the read: most of the remote cost, little of the LAN cost.
+  - Starting once the bytes up to the target are on disk cuts the
+    download in proportion to the target's place in the file: on average
+    about half, but little for an event near an hour's end (95 % here:
+    12.1 s instead of 12.8 s). Without server-side seek on the NVR, that is
+    the floor for a cold click.
+  - The other lever is to make cold clicks rare: a sub hour is 58–260 MB,
+    so the 8 GiB cache holds 30 hours or more of sub. Fetching more of the
+    day's recordings in the background (prefetch priority, one at a time)
+    would leave most clicks cached.
+
+**iPhone run 1: the Companion app on home Wi-Fi** (v0.2.10, Companion app
+2026.10.1, Front Yard Right, plain HTTP to the local address, HTTP/1.1, with
+the one-hour session; 2026-10-20). The header says "iOS 18.7", but the app's
+own part of the user agent says iOS 27.0.0: WebKit's user agent has kept an
+18.x version since iOS 26. Delivery is "whole file first": the server answers
+WebKit's first request once the whole recording is on disk.
+
+| Measure | Result |
+| --- | --- |
+| Timeline | today 149 ms, a past day 106 ms (store), again 326 ms, today again 129 ms: all under 1 s |
+| Events → first frame | 894, 529, 755 ms (7–38 min into recordings the prefetch had cached, plain files), all where asked |
+| Deep start, not cached | **14.2 s**, 52 min into a 60 min recording: download 9.9 s (234 MB at 189 Mbit/s), then WebKit read the whole original in 4.1 s (about 454 Mbit/s) before its metadata. The URL was bound to the original; the plain copy (`moov` 1.3 MB) was ready 2.0 s after the download, while WebKit was still reading |
+| Deep start, cached | 814 ms (plain file): under 2 s |
+| Auto-advance | gap 22 ms (preloaded) |
+| Rates | on pace at every rate (0.50–8.00×), no stalls. Painted 7, 15, 30, 59 and 60 fps (the sub stream runs at 15 fps), longest gaps 234, 100, 59, 49 and 25 ms: every frame shown up to 2×, and WebKit's 60 fps drawing rate at 4× and 8×. Dropped 0 at 0.5–2×, 9 % at 4× (60 fps needed) and 50 % at 8× (120 needed). All judged smooth. WebKit's frame counter lags over a 6 s window: it counted 60 and 69 frames at 1× and 2× where 90 and 180 went by, so the "needed" figures there (10 and 11 fps) are too low |
+| Link | 4.2 MB in 382 ms (88 Mbit/s): too short a read again; the 234 MB read above ran at about 454 Mbit/s |
+| MSE | **no `MediaSource`, but `ManagedMediaSource`** (accepts the sub stream's `avc1.640033`). The append test played all four shapes, the NVR's own (absolute offsets, no `tfdt`) included: WebKit accepts what Chromium rejects |
+| Video | `canPlayType` "probably" for the sub stream; `getVideoPlaybackQuality` and `requestVideoFrameCallback` present; no `performance.memory` |
+| HD | not measured (no main recording cached, so its codec is unknown) |
+| One-hour session | 60 min from 4:00 PM: **0 of 54,164 frames dropped, 0 stalls**, one file change with a 7 ms gap, no reloads mid-way, and the page was never reloaded (no out-of-memory). WebKit read 7–8 min ahead (428–485 s) and kept what it had played: the whole hour (3609 s) buffered at the end, plus 687 s of the next file. JS heap not measurable in WebKit. Cache steady at 8.17 GB (cap 8.59 GB), nothing reserved; leases 3, then 2 from minute 41 (the first event's URL expired: 30 min + its 10.7 min + 1 min) |
+
+What iPhone run 1 adds for step 2:
+
+- **On the iPhone too, cached is within budget**: events 0.5–0.9 s, cached
+  deep start 0.8 s, auto-advance 22 ms, rates smooth at 0.5–8×, an hour of
+  playback without a dropped frame or a reload.
+- **The uncached deep start is again download plus whole-file read** (9.9 +
+  4.1 s). WebKit waits for the whole file anyway, and the plain copy was
+  ready 2 s after the download: binding WebKit's URL to the plain copy (or
+  to a "start here" file) would have started at about 12 s here, and over a
+  remote link spares reading the whole recording (234 MB) through it. The
+  Tailscale and Nabu Casa runs will put a number on that.
+- **MSE is open on the iPhone through `ManagedMediaSource`.** Option (a)
+  would run on `MediaSource` in Chromium and `ManagedMediaSource` in the
+  Companion app; the server's normalized fragments are needed for Chromium
+  only. Option (b) needs nothing new from either browser.
+- **Rates need only the control**: smooth on the iPhone at every rate, and
+  on the desktop by painted frames.
+- **HD is still unmeasured on every setup**: no main recording has been
+  cached, so the check could not name the main stream's codec.
+- **Check fixes for step 2**: take the iOS version from the app's part of
+  the user agent; judge smoothness by painted frames (WebKit's counter lags,
+  macOS Chrome's misreports).
+
+**iPhone runs 2 and 3: the Companion app through Tailscale** (v0.2.10,
+2026-10-20, HTTPS to the Tailscale address, HTTP/2, without the session).
+Run 2 (Front Yard Right, 7:29 PM) was stopped after its events. Run 3 (Front
+Yard Left, 8:18 PM) was set to "iPhone app, Nabu Casa", but the page came
+from the Tailscale address ("page Tailscale"), so it is a Tailscale run.
+
+| Measure | Result |
+| --- | --- |
+| Timeline (run 3) | today **6.2 s**: the server held no copy of today newer than 15 min for this camera, so the tab waited for the NVR's search (server 6.1 s), not the link. A past day 193 ms (store), again 234 ms, today again 175 ms |
+| Newest event, not cached (run 2) | **42.8 s.** The event was 23 s old, 29.1 min into the recording still being written, so no cached copy reached it: download 6.8 s (112 MB at 131 Mbit/s), then WebKit read the whole original in 35.5 s (about 25 Mbit/s). The plain copy was ready 0.7 s after the download |
+| Events → first frame, cached | run 2: 1451 ms (the next event, in the same recording now cached); run 3: 2402, 2040 and 1185 ms (plain files the prefetch had cached), two over the 2 s budget. A start is the URL, a 2-byte probe, the `moov` (0.6 MB of 1.2 MB) and the target, one after another: answers took 41–333 ms each, and WebKit waited 0.3–0.8 s after the probe before asking for more (0.1 s at home) |
+| Deep start, not cached (run 3) | 7.1 s, 53 min into a 60 min recording: download 2.9 s (63 MB at 173 Mbit/s), then WebKit read the whole original in 3.9 s (about 129 Mbit/s). Plain copy ready 0.8 s after the download |
+| Deep start, cached (run 3) | 1305 ms (plain file): under 2 s |
+| Auto-advance (run 3) | gap 19 ms (preloaded) |
+| Rates (run 3) | on pace at every rate, no stalls. Painted 7, 15, 29, 50 and 59 fps (15 fps source), longest gaps 233, 117, 67, 58 and 31 ms. Dropped 0 at 0.5–2×, 14 % at 4× and 49 % at 8×. All judged smooth |
+| Link (run 3) | 4.2 MB in 1640 ms (20.5 Mbit/s, first answer 166 ms): a short read on a slow-to-answer link; the 63 MB read ran at about 129 Mbit/s |
+| MSE, HD (run 3) | as in iPhone run 1: `ManagedMediaSource` only, all four shapes play; HD not measured |
+
+What the Tailscale runs add for step 2:
+
+- **Remotely, the whole-original read is the cost**, and it grows with the
+  file and shrinks with the link: 35.5 s for 112 MB at 25 Mbit/s, 3.9 s for
+  63 MB at 129 Mbit/s. In both runs the plain copy was ready under a second
+  after the download. Binding WebKit's URL to it would have made these
+  starts about 9 s and 5 s. This is step 2's first change.
+- **The newest event on a continuous camera is the common cold click.** It
+  is always in the recording still being written, past any cached copy, and
+  such a recording can only be fetched whole from its start (6.8 s for
+  29 min here). After the change above, that download is what is left.
+- **Cached starts over a remote link (1.2–2.4 s) are round trips**: the
+  probe, the `moov` and the target in sequence at 150–330 ms each, plus
+  WebKit's own pauses. Fewer or smaller requests would help: a "start here"
+  file's `moov` covers only what follows the target; MSE needs an init
+  segment and one fragment, with no probe.
+- **Rates and auto-advance do not depend on the link** once the file is
+  cached: the same as at home.
+- **Timeline**: a camera not opened for 15 min waits for the NVR's search
+  (6.2 s here). Showing the older copy at once and refreshing behind it, as
+  within 15 min, would remove that wait.
+
+**iPhone run 4: the Companion app through Nabu Casa** (v0.2.10, Front Yard
+Right, HTTPS through the Nabu Casa address, HTTP/1.1, without the session;
+2026-10-20, 8:26 PM):
+
+| Measure | Result |
+| --- | --- |
+| Timeline | today 184 ms, a past day 213 ms, again 338 ms, today again 234 ms (stale copy): all under 1 s |
+| Newest event, not cached | **22.3 s.** The event was 6.4 min old, 20.3 min into the recording still being written (25.4 min so far): the server's download took about 4.5 s (93 MB), then WebKit read the whole original in 17.4 s (about 43 Mbit/s) |
+| Events → first frame, cached | 1369 and 973 ms (the next two events, in the same recording, now cached as a plain file). Answers took 39–84 ms; a request opening a new connection (HTTP/1.1) waited 75–143 ms first |
+| Deep start, not cached | **83.5 s**, 44.3 min into a 60 min recording: download 9.7 s (215 MB at 177 Mbit/s), then WebKit read the whole original in 72.8 s (about 24 Mbit/s). The plain copy was ready 1.9 s after the download |
+| Deep start, cached | 2226 ms (plain file), just over 2 s: five requests in sequence (the probe, the 1.3 MB `moov` in two reads, the target), and WebKit waited 0.7 s after the probe |
+| Auto-advance | gap 24 ms |
+| Rates | on pace at every rate, no stalls. Painted 7, 15, 30, 59 and 60 fps, longest gaps 233, 101, 50, 43 and 39 ms. Dropped 0 at 0.5–2×, 9 % at 4× and 45 % at 8×. All judged smooth |
+| Link | 4.2 MB in 800 ms (42 Mbit/s, first answer 154 ms); the long reads above ran at 24–43 Mbit/s |
+| MSE, HD | as in the other iPhone runs |
+| Check bug | the three event lines say "server: not cached". The check asked about each recording as the day stood when it began; the recording being written had grown since, so the server looked for a newer copy than the one played. Step 2's check takes the server's record of the copy it was served |
+
+##### What step 1 decides (the gate, 2026-10-21)
+
+Every setup has been measured: desktop Chrome on the LAN and through Nabu
+Casa, and the iPhone Companion app on home Wi-Fi, through Tailscale and
+through Nabu Casa. HD is the one thing no run could measure: no main
+recording was cached on any of them, so the check could not name the main
+stream's codec. It moves to step 2's hardware check.
+
+Uncached starts, every run (sub stream; "read" is the browser reading the
+whole original before its first frame):
+
+| Run | Setup | Position | File | NVR download | Browser read | First frame |
+| --- | --- | --- | --- | --- | --- | --- |
+| desktop 1 | Brave on the HA host, Nabu Casa | 53 of 60 min | 204 MB | 10.4 s | 25.8 s (62 Mbit/s) | 36.6 s |
+| desktop 2 | same | 55 of 60 min | 180 MB | 9.9 s | 16.8 s (86 Mbit/s) | 27.0 s |
+| desktop 3 | same | 55 of 60 min | 58 MB | 3.1 s | 5.5 s | 8.8 s |
+| desktop 4 | Mac, LAN | 57 of 60 min | 259 MB | 12.8 s | 3.1 s (665 Mbit/s) | 16.1 s |
+| iPhone 1 | Wi-Fi | 52 of 60 min | 234 MB | 9.9 s | 4.1 s (454 Mbit/s) | 14.2 s |
+| iPhone 2 | Tailscale | newest event, 29 of 29 min | 112 MB | 6.8 s | 35.5 s (25 Mbit/s) | 42.8 s |
+| iPhone 3 | Tailscale | 53 of 60 min | 63 MB | 2.9 s | 3.9 s (129 Mbit/s) | 7.1 s |
+| iPhone 4 | Nabu Casa | newest event, 20 of 25 min | 93 MB | 4.5 s | 17.4 s (43 Mbit/s) | 22.3 s |
+| iPhone 4 | Nabu Casa | 44 of 60 min | 215 MB | 9.7 s | 72.8 s (24 Mbit/s) | 83.5 s |
+
+Everything else is within budget, or close to it, on every setup:
+
+- Timeline 106–518 ms (a camera not opened for 15 min: 6.2 s, the NVR's
+  search).
+- Cached starts: 0.12–0.9 s on the LAN and Wi-Fi, 0.97–2.4 s remotely,
+  where three to five requests in sequence at 40–330 ms each set the time.
+- Auto-advance 0–24 ms, every start where asked.
+- Rates 0.5–8× on pace everywhere, every frame painted up to the display's
+  rate (Chrome on the HA host aside, which draws in software).
+- An hour of playback: Chrome's heap bounded (+7.7 MB/h), the iPhone
+  without a dropped frame or a reload, the cache under its cap.
+- `MediaSource` in Chromium and `ManagedMediaSource` (not `MediaSource`) in
+  the Companion app on iOS 27, both playing the normalized fragment.
+
+##### Step 2: what to build (decided 2026-10-21 from step 1)
+
+**Uncached deep starts: (a) MSE with server-normalized fragments.** Both
+candidates remove the whole-file read, which is most of every remote cold
+start above. Only (a) also meets "start once the bytes up to the target are
+on disk":
+
+- A "start here" MP4 needs a complete `moov`, the size of every sample it
+  covers, so it can only be made from bytes already downloaded. To play on
+  past them the player would have to chain files.
+- Normalized fragments can be served as soon as each one is on disk, while
+  the download runs on. A start costs the download up to the target plus
+  one round trip for a window of fragments: no probe and no `moov` reads
+  (the init segment is the NVR's own 1.1 KB `moov`).
+- Both browsers have it: `MediaSource` in Chromium, `ManagedMediaSource` in
+  the Companion app (which even plays the NVR's own fragments; Chromium
+  needs them normalized).
+- Each of the player's two `<video>` elements gets a `MediaSource` per
+  recording. The next recording is preloaded in the hidden one, as now, so
+  auto-advance stays a swap. (Built that way, rather than one
+  `SourceBuffer` for consecutive recordings: same gaps, simpler mapping.)
+
+From the runs above, starts would be the download up to the target plus
+about half a second. For example, iPhone 4's 44-min start would be about
+8 s instead of 83.5 s, and its newest event about 4 s instead of 22.3 s.
+
+**Fallback: the current file player**, when MSE is missing or rejects the
+codec, an append fails, or the user turns MSE off. Its URL is bound to the
+plain copy, waiting for the rewrite (under 2 s after the download in every
+run), whenever the browser would otherwise read the whole original: WebKit
+always, and any browser for a start past the file's first 3 s.
+
+Build order, each part with tests, and a real-browser test where the
+browser matters:
+
+1. **Normalizer** (`fmp4.py`): parse an NVR fragment; rewrite each `traf`
+   to `default-base-is-moof` without `base-data-offset`; add a `tfdt` from
+   the track's running decode time; make `trun` data offsets relative to
+   the `moof`. Index a cache file's fragments (time → bytes) incrementally,
+   while it downloads. Tested on `tests/mp4_fixtures.py`'s NVR-shaped files.
+2. **MSE view**: the init segment and windows of normalized fragments by
+   media time, under a signed URL with a lease like the VOD grant. A window
+   past the download waits for it. Cache fills already go through the
+   scheduler.
+3. **Playwright append test**: Chromium appends the normalized NVR-shaped
+   fixtures and plays across a window boundary to the end; the raw
+   fragments fail to append (the control). Playwright's Chromium has no
+   H.264 or AAC, so the test media is VP9 with Opus.
+4. **MSE player**, a state machine:
+   - windows fetched ahead by time and by bytes, trimmed behind;
+   - `ManagedMediaSource`'s `startstreaming` and `endstreaming` respected;
+   - the next recording preloaded in the second `<video>`;
+   - falls back to the file player on any error.
+5. **Controls**: speed 0.5–8×; HD/SD switch at the exact position; scrubbing
+   on the sub stream (frames while dragging, the chosen stream on release).
+6. **Bounded memory and disk**: buffer caps behind and ahead, by seconds and
+   bytes; the disk cap as in step 0. The session check reports both.
+7. **Debug panel**: player mode (MSE, `ManagedMediaSource` or file), windows
+   fetched and their wait, buffered ahead and behind, trims, fallbacks.
+8. **Check fixes**:
+   - report the player mode;
+   - judge smoothness by painted frames where the counters disagree;
+   - take the iOS version from the app's part of the user agent;
+   - take the server's record of the copy served;
+   - use a longer link test.
+9. **Timeline**: show an older copy of today at once at any age, then
+   refresh behind it.
+
+Step 2 exit criteria:
+
+- all of 2A's;
+- an uncached deep start begins once the bytes up to the target are on
+  disk (times recorded);
+- speeds 0.5–8× work;
+- the HD/SD switch keeps the position;
+- a one-hour session stays within the buffer and disk caps;
+- the iPhone app plays, seeks and auto-advances on Wi-Fi, through Tailscale
+  and through Nabu Casa.
+
+##### Step 2 as built (v0.3.0)
+
+Server (`custom_components/reolink_viewer/`):
+
+- `fmp4.py`: `FragmentIndex` follows a cache file as it grows (the init
+  segment and its codec string, then each `moof` + `mdat` with its decode
+  time per track, counted from the start). `normalize_fragment` rewrites
+  one fragment as MSE requires. An ffmpeg-made MSE-ready file put in the
+  NVR's shape (absolute offsets, no `tfdt`) normalizes back to the same
+  bytes, for H.264/AAC and VP9/Opus.
+- `views.py`: `/api/reolink_viewer/mse/{token}/init` (the init segment,
+  its MIME type in `X-RV-Mime`) and `/frags?at=ms|first=n&ms=&bytes=` (a
+  window of fragments: from the sync fragment showing `at`, or by index;
+  `X-RV-First`, `-Count`, `-Start`, `-End`, `-Last`). A window waits for
+  its first fragment to be on disk, then takes what is there. The player
+  fetches these with HA's own authentication (`hass.fetchWithAuth`): a
+  signed path cannot carry a window's query. The token is a grant, leased
+  like the VOD URLs.
+- `websocket_api.py`: `playback/mse` (the fragment path, plus a signed clip
+  URL), `playback/cache_status` (the download of the copy a URL serves:
+  the player's progress note and the check's record), and `max_age` up to
+  a day.
+- `vodcache.py` (layout 5): the original is kept, because the MSE player
+  reads it. The plain copy is written only when the file player first asks
+  for it, and a URL that does not stream from the start gets it (the
+  original if the rewrite fails). The deletion timers of step 0 are gone
+  with the deletions.
+- `mp4.py`: VP9 (`vpcC`) and Opus codec strings.
+
+Panel (`frontend/src/`):
+
+- `playback/mse-feeder.ts`: feeds one `<video>` from the view. It starts
+  with a 4 s window at the target, then keeps 30 s ahead at 1× (rate times
+  that, at most 240 s and 48 MiB), and trims to 30 s behind. It uses
+  `ManagedMediaSource` where it exists, and `MediaSource` otherwise.
+  - It extends the last window by index when the buffer ends just short of
+    the play position, and steps over small gaps.
+  - It ends the stream again after trims (a `remove()` reopens it).
+  - It makes room on a full buffer.
+  - It reports `MseUnsupported` (no MSE, a codec refused, an append error,
+    "not playable as fragments") apart from other failures (an expired
+    URL, the network).
+- `playback/player.ts`: each `<video>` plays a file URL or an MSE feeder.
+  It swaps and preloads by recording, not by URL (each URL is a new
+  grant). It adds `seekWithin` (a start inside the recording on screen,
+  reported at `seeked`), `preview` (a frame while scrubbing, if buffered),
+  `rate` and an overlay note.
+- `components/playback.ts`:
+  - MSE where the browser has it. A fallback failure hands that stream to
+    the file player, and the Debug setting can force the file player.
+  - A start inside the recording on screen is a seek, without a new URL.
+  - Speed selector, 0.5–8×; it carries over to the next recording.
+  - While a start waits, a note shows the recorder's download ("Fetching
+    the HD recording from the recorder: 412 MB of about 2900 MB").
+  - Scrubbing shows frames from the buffer, and the sub-stream thumbnail as
+    before.
+  - Debug rows "Player" (API, codecs, windows, ahead/behind, trims, and the
+    setting) and "Fell back to the file player".
+  - Today's older copy is shown at once at any age, then refreshed.
+- Check v0.3.0:
+  - reports the player;
+  - takes the server's record of the copy served;
+  - reads the link for 3 s;
+  - judges smoothness by painted frames where the dropped-frame counter
+    disagrees with them;
+  - takes the iOS version from the app's part of the user agent.
+
+Checked:
+
+- Python: 491 tests, 95 % coverage.
+- Panel: 136 tests, including the feeder against a fake `MediaSource`.
+- CI job "MSE in Chromium (Playwright)": through the real view and HA auth,
+  Chromium starts 3.5 s into an NVR-shaped VP9/Opus recording, plays
+  across a window boundary to the end, and refuses the raw fragment.
+- The built panel in Chromium (headless, Playwright) against a fake HA
+  serving NVR-shaped VP9/Opus recordings through `fmp4.py`, with a
+  simulated download:
+
+| Case | Result |
+| --- | --- |
+| Uncached start 16.8 of 21 min (16 MB at 2 MB/s) | first frame 5.7 s: the download up to the target (about 80 % of it) |
+| Same, at 0.5 MB/s | 22.7 s, with the progress note; no repeated requests while waiting |
+| Seek within the recording | 31–58 ms |
+| Rates 0.5, 2, 4, 8× | 0.50, 2.00, 3.97, 7.91× effective |
+| Auto-advance | 2.8 ms gap at 1×, 8.4 ms at 8× (the speed carries over) |
+| HD/SD switch | position kept (moved 0.01 s) |
+| Scrub preview in the buffer | shown |
+| A recording the server cannot serve as fragments | file player at the same position; the stream stays on it until the setting changes |
+| URL expired mid-play (8 s lifetime) | 404, reloaded where it was (one recovery) |
+| 21 min played at 8× | JS heap 2.5–7 MB; at most about 390 s buffered (about 357 ahead and 40 behind); about 100 trims |
+
+Found and fixed in that harness:
+
+- After trimming, the stream was no longer ended, so the video waited at
+  the end at 8×.
+- The first request of each start went out twice.
+- A window ending a hair before the play position was asked for again and
+  again.
+- A seek within the recording dropped the next recording's preload.
+- A seek within a recording whose feeder had failed hung.
+
+Hardware check for v0.3.0 (the step 2 exit criteria):
+
+1. Update to v0.3.0 and restart HA. Reload the panel; in the Companion
+   app, reset the frontend cache (Settings → Companion App → Debugging).
+2. In each setup, **Debug → Player** should read `MediaSource` (desktop
+   Chrome) or `ManagedMediaSource` (iPhone).
+3. Desktop Chrome on the LAN, Front Yard Right: run the check without the
+   session. Then by hand:
+   - every speed;
+   - SD → HD → SD on a playing recording (the position is kept; the first
+     HD start shows the download note);
+   - drag the timeline cursor inside the playing recording.
+4. iPhone app on home Wi-Fi: run the check **with** the 60-min session.
+   Then tap HD on an event once (the HD decision, untested so far).
+5. iPhone app through Tailscale and through Nabu Casa (Wi-Fi off): run the
+   check without the session. The newest event and the uncached deep start
+   should begin after about the NVR download up to them (seconds), not
+   after a whole-file read (22–84 s in step 1).
 
 #### 2A as built (v0.2.0)
 

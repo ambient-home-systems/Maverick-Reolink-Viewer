@@ -386,7 +386,8 @@ describe("rv-playback", () => {
     await flush();
     await flush();
     const after = sentOf(hass, "reolink_viewer/playback/url");
-    expect(after).toHaveLength(before + 2); // the recording again, and its successor
+    // The recording again; its successor stays preloaded.
+    expect(after).toHaveLength(before + 1);
     expect(after[before]).toMatchObject({ segment_id: "s1", progressive: false });
     expect(el._cursor).toBe(T0 + 60 * MIN + 50_000);
     expect(el._metrics.recoveries).toBe(1);
@@ -502,5 +503,135 @@ describe("rv-playback", () => {
         : base<T>(message);
     const el = await mount(hass);
     expect(el.renderRoot.textContent).toContain("Could not load recordings: day search failed");
+  });
+});
+
+describe("rv-playback with MSE", () => {
+  /** A MediaSource that never opens: enough to choose the MSE player. */
+  class IdleMediaSource extends EventTarget {
+    static isTypeSupported = () => true;
+    readyState = "closed";
+  }
+
+  function mseHass(): FakeHass {
+    const hass = playbackHass();
+    const day = makeDay();
+    const base = hass.callWS.bind(hass);
+    hass.fetchWithAuth = vi.fn(() => new Promise<Response>(() => undefined));
+    hass.callWS = <T,>(message: Record<string, unknown>) => {
+      if (message.type === "reolink_viewer/playback/mse") {
+        hass.sent.push(message);
+        const seg = day.segments.find((s) => s.id === message.segment_id);
+        const playback: PlaybackUrl = {
+          ...playbackUrl(String(message.segment_id), seg?.start ?? 0),
+          base: `/api/reolink_viewer/mse/tok-${String(message.segment_id)}-${hass.sent.length}`,
+        };
+        delete playback.url;
+        return Promise.resolve(playback as T);
+      }
+      if (message.type === "reolink_viewer/playback/cache_status") {
+        hass.sent.push(message);
+        return Promise.resolve({ cache: { complete: false, bytes: 40_000_000, error: null }, expected_bytes: 260_000_000 } as T);
+      }
+      return base<T>(message);
+    };
+    return hass;
+  }
+
+  beforeEach(() => {
+    vi.stubGlobal("MediaSource", IdleMediaSource);
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:mse");
+    vi.spyOn(URL, "revokeObjectURL").mockReturnValue(undefined);
+    window.localStorage.clear();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+    window.localStorage.clear();
+  });
+
+  it("plays through MSE, and seeks within the recording on screen without a new URL", async () => {
+    const hass = mseHass();
+    const el = await mount(hass);
+    await el.playAt(T0 + 60 * MIN + 30_000);
+    await flush();
+    const mse = sentOf(hass, "reolink_viewer/playback/mse");
+    expect(mse[0]).toMatchObject({ segment_id: "s1", at: T0 + 60 * MIN + 30_000 });
+    expect(sentOf(hass, "reolink_viewer/playback/url").filter((m) => m.segment_id === "s1")).toHaveLength(0);
+    const player = el.renderRoot.querySelector("rv-player");
+    expect(player?.mse).toBe(true);
+    expect(player?.current?.mse?.base).toContain("/api/reolink_viewer/mse/tok-s1");
+    expect(el._metrics.delivery).toBe("MSE (MediaSource)");
+    expect(el._describeMode()).toBe("MSE (MediaSource)");
+    // The next recording is preloaded through MSE too.
+    expect(mse.some((m) => m.segment_id === "s2")).toBe(true);
+    const before = sentOf(hass, "reolink_viewer/playback/mse").length;
+    await el.playAt(T0 + 61 * MIN);
+    await flush();
+    expect(sentOf(hass, "reolink_viewer/playback/mse")).toHaveLength(before);
+    expect(el._metrics.delivery).toBe("MSE (MediaSource), same recording");
+    expect(el._cursor).toBe(T0 + 61 * MIN);
+  });
+
+  it("hands a stream to the file player when MSE cannot play it", async () => {
+    const hass = mseHass();
+    const el = await mount(hass);
+    await el.playAt(T0 + 60 * MIN + 30_000);
+    await flush();
+    const player = el.renderRoot.querySelector("rv-player");
+    player?.dispatchEvent(
+      new CustomEvent("rv-player-error", {
+        detail: { message: "MSE cannot play hvc1", segmentId: "s1", played: false, fallback: true },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    await flush();
+    await flush();
+    expect(sentOf(hass, "reolink_viewer/playback/url").at(-1)).toMatchObject({
+      segment_id: "s1",
+      at: T0 + 60 * MIN + 30_000,
+    });
+    expect(el._metrics).toMatchObject({ fallbacks: 1, lastFallback: "MSE cannot play hvc1" });
+    expect(el._describeMode()).toBe("MSE (MediaSource), file player for sub after a failure");
+    expect(player?.mse).toBe(false);
+    await el.updateComplete;
+    expect(el.renderRoot.textContent).toContain("1× (last: MSE cannot play hvc1)");
+  });
+
+  it("can be told to use the file player only", async () => {
+    const hass = mseHass();
+    const el = await mount(hass);
+    await el.playAt(T0 + 60 * MIN + 30_000);
+    await flush();
+    const select = el.renderRoot.querySelector<HTMLSelectElement>('select[aria-label="Player"]');
+    if (!select) throw new Error("no player select");
+    select.value = "file";
+    select.dispatchEvent(new Event("change"));
+    await flush();
+    await flush();
+    expect(window.localStorage.getItem("reolink-viewer-player")).toBe("file");
+    expect(sentOf(hass, "reolink_viewer/playback/url").at(-1)).toMatchObject({ segment_id: "s1" });
+    expect(el._describeMode()).toBe("file player only (Debug setting)");
+  });
+
+  it("sets the speed, and shows the recorder's download while a start waits", async () => {
+    const hass = mseHass();
+    const el = await mount(hass);
+    const speed = el.renderRoot.querySelector<HTMLSelectElement>('select[aria-label="Playback speed"]');
+    if (!speed) throw new Error("no speed select");
+    expect([...speed.options].map((o) => o.textContent)).toEqual(["0.5×", "1×", "2×", "4×", "8×"]);
+    speed.value = "4";
+    speed.dispatchEvent(new Event("change"));
+    await el.updateComplete;
+    const player = el.renderRoot.querySelector("rv-player");
+    expect(player?.rate).toBe(4);
+    // The video waits for its first frame (happy-dom would report one at once).
+    vi.spyOn(HTMLMediaElement.prototype, "play").mockImplementation(() => new Promise<void>(() => undefined));
+    await el.playAt(T0 + 60 * MIN + 30_000);
+    await new Promise((resolve) => setTimeout(resolve, 1_100));
+    expect(el._note).toBe("Fetching the recording from the recorder: 40 MB of about 260 MB");
+    expect(String(sentOf(hass, "reolink_viewer/playback/cache_status")[0]?.token)).toMatch(/^tok-s1-/);
   });
 });

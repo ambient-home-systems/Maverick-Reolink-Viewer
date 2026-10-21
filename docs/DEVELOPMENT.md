@@ -21,19 +21,22 @@ custom_components/reolink_viewer/
   timeline.py        # day/month timelines: permanent cache for past days, 60 s for today
   vodcache.py        # disk cache of recordings: fills under the stream budget, LRU
   mp4index.py        # writes a sidx index into cached recordings (fast browser seeks)
-  remux.py           # rewrites cached recordings as plain MP4 with ffmpeg (no re-encoding)
+  fmp4.py            # indexes a cached recording's fragments as it grows; makes each MSE-ready
+  remux.py           # rewrites cached recordings as plain MP4 with ffmpeg (the file player)
   thumbnails.py      # recording thumbnails: time buckets, de-duplication, disk LRU
   checks.py          # saved playback check reports (a phone's run, read on a desktop)
-  views.py           # signed, short-lived /vod, /clip, /thumb URLs (no camera URLs)
+  views.py           # /mse (HA auth) and signed, short-lived /vod, /clip, /thumb URLs (no camera URLs)
   websocket_api.py   # status, devices, catalog, probe, timeline/*, playback/*, thumbnail/*
   models.py          # runtime data of the config entry
   translations/en.json
   frontend_dist/     # built panel bundle (committed; CI checks it matches the source)
 frontend/            # Lit + TypeScript panel, built with Vite
   src/components/    # device list, device page, overview, settings, playback tab
-  src/playback/      # timeline canvas + math, calendar, event list, player, codec checks,
-                     # the playback check (check.ts) and its MSE probe (mse-probe.ts, mse-sample.ts)
-tests/               # pytest-homeassistant-custom-component
+  src/playback/      # timeline canvas + math, calendar, event list, player (MSE feeder in
+                     # mse-feeder.ts, else a file URL), codec checks, the playback check
+                     # (check.ts) and its MSE probe (mse-probe.ts, mse-sample.ts)
+tests/               # pytest-homeassistant-custom-component; test_mse_browser.py drives
+                     # Playwright's Chromium (mse_append.cjs) through the MSE view
 scripts/             # setup_dev.sh, probe_to_matrix.py, make_mse_sample.py (writes mse-sample.ts);
                      # playback_check.js and inspect_recording.js (paste into the browser console)
 ```

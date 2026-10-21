@@ -54,6 +54,12 @@ describe("browserLabel", () => {
         "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1",
       ),
     ).toBe("iOS 17.4, Safari");
+    // Since iOS 26 WebKit's part says 18.x; the app's part has the real version.
+    expect(
+      browserLabel(
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Home Assistant/2026.10.1 (io.robbie.HomeAssistant; build:2026.3213; iOS 27.0.0) Mobile/HomeAssistant, like Safari",
+      ),
+    ).toBe("iOS 27.0, Companion app 2026.10.1");
     expect(
       browserLabel(
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36",
@@ -120,6 +126,15 @@ describe("rates and sums", () => {
     const fast = sample({ rate: 8, mediaS: 48, decoded: 1200, dropped: 700, painted: 360, maxGapMs: 34 });
     expect(smooth(fast)).toBe(true);
     expect(smooth({ ...fast, maxGapMs: 300 })).toBe(false);
+    // Chrome on macOS: every frame counted dropped, every frame painted.
+    const mac = sample({ rate: 1, wallMs: 6000, mediaS: 6, decoded: 90, dropped: 90, painted: 90, maxGapMs: 70 });
+    expect(smooth(mac)).toBe(true);
+    expect(describeRate(mac)).toContain("disagrees");
+    expect(smooth({ ...mac, painted: 70 })).toBe(false);
+    // WebKit: the counter lags (60 counted, 90 painted).
+    expect(smooth(sample({ rate: 1, wallMs: 6000, mediaS: 6, decoded: 60, dropped: 0, painted: 90, maxGapMs: 100 }))).toBe(true);
+    // A browser drawing in software: the counters agree, and they count.
+    expect(smooth(sample({ rate: 1, wallMs: 6000, mediaS: 6, decoded: 90, dropped: 9, painted: 81, maxGapMs: 120 }))).toBe(false);
     const clamped = describeRate(sample({ rate: 8, applied: 2, painted: undefined, maxGapMs: undefined, ended: true }));
     expect(clamped).toContain("browser set 2×");
     expect(clamped).toContain("the file ended");

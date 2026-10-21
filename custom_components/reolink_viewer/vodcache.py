@@ -23,13 +23,14 @@ served from the cache, with Range, by ``views.py``:
 - the first fill of a camera's stream records its codec and size (from the
   ``moov``) for the browser's MediaCapabilities check;
 - room is left after the ``moov`` for a segment index (``mp4index.py``),
-  written once the file is complete, so browsers seek without reading the
-  whole file first;
-- a complete recording is then rewritten as a plain MP4 (``remux.py``), one
-  at a time: Chrome read the indexed fragmented files whole before playing.
-  A URL keeps the file it was issued for (the original if the plain copy was
-  not ready yet) for its whole life; the original is deleted once the last
-  URL bound to it has expired.
+  written once the file is complete;
+- the MSE player reads the original as fragments made MSE-ready on the fly
+  (``fmp4.py``), each as soon as it is on disk, so a start deep in a
+  recording waits only for the bytes up to it;
+- the file player (the fallback) gets a plain MP4 (``remux.py``), rewritten
+  from the complete original when first asked for, one at a time: browsers
+  read a fragmented file whole before playing it. The original is kept (the
+  MSE player needs it); both go together when evicted.
 
 File I/O runs in the executor; device I/O goes through the scheduler.
 """
@@ -45,17 +46,17 @@ from pathlib import Path
 import shutil
 import struct
 import time
-from typing import Any
+from typing import Any, BinaryIO
 
 from aiohttp import ClientError, ClientSession, ClientTimeout
 
-from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
-from homeassistant.helpers.event import async_call_later
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 
 from . import bridge
 from .bridge import VodFile, VodMethod
 from .devices import PlaybackSource
+from .fmp4 import Fragment, FragmentError, FragmentIndex
 from .mp4 import BoxScanner
 from .mp4index import (
     OffsetShifter,
@@ -93,23 +94,45 @@ MEDIA_STORE_KEY = "reolink_viewer.media"
 SUFFIX = ".mp4"
 PART_SUFFIX = ".part"
 FLAT_SUFFIX = ".flat.mp4"
-# A lease outlasts its URL by this much; the original is deleted this long
-# after the last lease bound to it ended.
+# A lease outlasts its URL by this much.
 LEASE_MARGIN_S = 60.0
-DROP_MARGIN_S = 60.0
 # Part of each file's cache id: bumping it retires files of an older layout
 # (they become unknown files, evicted first). 2: segment index added.
 # 3: also indexed when fragments use absolute offsets (the NVR's do).
 # 4: the recording's end is part of the id, so a recording still being
 # written is cached anew once it has grown past its copy.
-LAYOUT = 4
+# 5: the original is kept next to the plain copy (the MSE player reads it).
+LAYOUT = 5
 # A copy of a recording that has since grown still serves a start at least
 # this long before the copy's end.
 COVER_MARGIN_MS = 60_000
+# Fragments are read and made MSE-ready in batches of about this many bytes.
+FRAGMENT_BATCH = 4 * 1024 * 1024
 
 
 class VodCacheError(Exception):
     """A recording could not be cached."""
+
+
+@dataclass(frozen=True, slots=True)
+class Window:
+    """Fragments to send the MSE player: ``first`` is the first one's index."""
+
+    first: int
+    fragments: tuple[Fragment, ...]
+    # The recording ends with these (it is complete and nothing follows).
+    last: bool
+
+    @property
+    def start_ms(self) -> float | None:
+        """Return the media time the window starts at."""
+        return self.fragments[0].start_ms if self.fragments else None
+
+    @property
+    def end_ms(self) -> float | None:
+        """Return the media time the window ends at."""
+        last = self.fragments[-1] if self.fragments else None
+        return last.start_ms + last.duration_ms if last else None
 
 
 @dataclass(frozen=True, slots=True)
@@ -153,13 +176,12 @@ class Entry:
     changed: asyncio.Condition = field(default_factory=asyncio.Condition)
     # When the plain MP4 became available (monotonic), or None.
     flat_at: float | None = None
-    flattening: bool = False
-    # False once the original was deleted (only the plain copy is left).
-    has_original: bool = True
-    # Live URLs can read this recording until lease_until; those bound to the
-    # original (issued before the plain copy) until original_until (_clock).
+    flat_task: asyncio.Task[None] | None = None
+    # Live URLs can read this recording until then (_clock).
     lease_until: float = 0.0
-    original_until: float = 0.0
+    # The original's fragments found so far (the MSE player's reads).
+    fragments: FragmentIndex | None = None
+    index_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
     @property
     def part_path(self) -> Path:
@@ -175,6 +197,11 @@ class Entry:
     def filling(self) -> bool:
         """Return True while a fill task runs."""
         return self.task is not None and not self.task.done()
+
+    @property
+    def flattening(self) -> bool:
+        """Return True while the plain MP4 is being written."""
+        return self.flat_task is not None and not self.flat_task.done()
 
     def leased(self, now: float) -> bool:
         """Return True while a live URL can read this recording."""
@@ -212,8 +239,6 @@ class VodCache:
         self._ffmpeg = ffmpeg_binary
         self._flatten_lock = asyncio.Lock()
         self._flat_tasks: set[asyncio.Task[None]] = set()
-        # Pending deletions of originals: cache id -> (entry, cancel).
-        self._drop_timers: dict[str, tuple[Entry, CALLBACK_TYPE]] = {}
         # Bytes expected at a path that are not all on disk yet (fills and
         # rewrites), and the lock under which room is made for them.
         self._reserved: dict[Path, int] = {}
@@ -247,13 +272,14 @@ class VodCache:
             if path.name.endswith(PART_SUFFIX):
                 path.unlink(missing_ok=True)
             elif path.name.endswith(FLAT_SUFFIX):
-                found[path.name.removesuffix(FLAT_SUFFIX)] = path.stat().st_size
-            elif path.suffix == SUFFIX:
-                if path.stem + FLAT_SUFFIX in names:
-                    # No URL from a previous run can still need the original.
+                cache_id = path.name.removesuffix(FLAT_SUFFIX)
+                if cache_id + SUFFIX not in names:
+                    # A plain copy without its original serves no MSE player.
                     path.unlink(missing_ok=True)
-                else:
-                    found[path.stem] = path.stat().st_size
+                    continue
+                found[cache_id] = found.get(cache_id, 0) + path.stat().st_size
+            elif path.suffix == SUFFIX:
+                found[path.stem] = found.get(path.stem, 0) + path.stat().st_size
         # Files from a previous run cannot be matched to recordings until asked
         # for; keep them on disk, counted by _disk_usage, evictable by age.
         return found
@@ -263,9 +289,6 @@ class VodCache:
         self._closed = True
         tasks = [e.task for e in self._entries.values() if e.task is not None]
         tasks += list(self._flat_tasks)
-        for _entry, cancel in self._drop_timers.values():
-            cancel()
-        self._drop_timers.clear()
         for task in tasks:
             task.cancel()
         if tasks:
@@ -351,26 +374,22 @@ class VodCache:
         path: Path,
         priority: Priority,
         failed: Entry | None,
-        found: tuple[str, int, bool] | None,
+        found: tuple[int, bool, bool] | None,
     ) -> Entry:
         entry = Entry(recording, path, priority=priority)
         if failed is not None:
             # URLs issued for the failed fill still read this recording.
             entry.lease_until = failed.lease_until
-            entry.original_until = failed.original_until
         self._entries[recording.cache_id] = entry
         if found is None:
             return entry
-        kind, size, indexed = found
+        size, indexed, flat = found
         entry.written = size
         entry.complete = True
-        if kind == "flat":
-            entry.flat_at = 0.0  # every URL gets the plain file
-            entry.has_original = False
-            entry.timing = {"cache": "disk", "flat": "yes"}
-        else:
-            entry.timing = {"cache": "disk", "indexed": "yes" if indexed else "no"}
-            self._start_flatten(entry)
+        entry.timing = {"cache": "disk", "indexed": "yes" if indexed else "no"}
+        if flat:
+            entry.flat_at = 0.0
+            entry.timing["flat"] = "yes"
         return entry
 
     async def async_peek(self, recording: Recording) -> dict[str, Any] | None:
@@ -381,29 +400,24 @@ class VodCache:
         found = await self._hass.async_add_executor_job(_on_disk, path)
         if found is None:
             return None
-        kind, size, _indexed = found
+        size, _indexed, flat = found
         return {
             "complete": True,
             "bytes": size,
             "error": None,
             "cache": "disk",
-            "flat": "yes" if kind == "flat" else "not yet",
+            "flat": "yes" if flat else "not yet",
         }
 
-    def lease(self, entry: Entry, seconds: float) -> bool:
+    def lease(self, entry: Entry, seconds: float) -> None:
         """Keep a recording readable by a URL valid for ``seconds``.
 
-        Returns True if the URL is bound to the plain copy, False if to the
-        original (the plain copy is not ready yet). Neither the recording nor
-        the file the URL is bound to is evicted or swapped while it lasts
-        (plus a margin for a request sent just before it expires).
+        Neither its original nor its plain copy is evicted while it lasts
+        (plus a margin for a request sent just before it expires), and
+        neither file is ever swapped.
         """
         until = _clock() + seconds + LEASE_MARGIN_S
         entry.lease_until = max(entry.lease_until, until)
-        flat = entry.flat_at is not None
-        if not flat:
-            entry.original_until = max(entry.original_until, until)
-        return flat
 
     async def _fill(self, entry: Entry) -> None:
         rec = entry.recording
@@ -435,46 +449,48 @@ class VodCache:
         else:
             entry.timing["fill_ms"] = _ms(began)
             await self._evict()
-            self._start_flatten(entry)
         finally:
             async with entry.changed:
                 entry.changed.notify_all()
 
-    # ---- Plain MP4 ----
+    # ---- Plain MP4 (the file player) ----
 
     def served_path(self, entry: Entry, flat: bool) -> Path:
-        """Return the file for a URL bound to the plain copy or the original.
-
-        A URL keeps its file for its whole life (``lease``), so a playing
-        video never sees its bytes change.
-        """
-        if flat or not entry.has_original:
+        """Return the plain copy if asked for and made, else the original."""
+        if flat and entry.flat_at is not None:
             return entry.flat_path
         return entry.path
 
-    def _start_flatten(self, entry: Entry) -> None:
-        if self._ffmpeg is None:
-            entry.timing["flat"] = "no: ffmpeg not found"
-            return
-        if self._closed:
-            return
-        if entry.flat_at is not None or entry.flattening:
-            return
-        entry.flattening = True
-        task = self._hass.async_create_background_task(
-            self._flatten(entry), f"reolink_viewer flatten {entry.path.stem[:8]}"
-        )
-        self._flat_tasks.add(task)
-        task.add_done_callback(self._flat_tasks.discard)
+    async def async_plain(self, entry: Entry) -> bool:
+        """Make sure a complete recording has its plain copy; return if it has.
+
+        The first call starts the rewrite and every call waits for it. A
+        rewrite that failed is not tried again for this entry: its URLs keep
+        getting the original.
+        """
+        if entry.flat_at is not None:
+            return True
+        if not entry.complete or self._closed:
+            return False
+        if entry.flat_task is None:
+            if self._ffmpeg is None:
+                entry.timing["flat"] = "no: ffmpeg not found"
+                return False
+            task = self._hass.async_create_background_task(
+                self._flatten(entry), f"reolink_viewer flatten {entry.path.stem[:8]}"
+            )
+            entry.flat_task = task
+            self._flat_tasks.add(task)
+            task.add_done_callback(self._flat_tasks.discard)
+        # A request that goes away leaves the rewrite running for the next.
+        await asyncio.shield(entry.flat_task)
+        return entry.flat_at is not None
 
     async def _flatten(self, entry: Entry) -> None:
         """Rewrite a complete recording as a plain MP4 (one at a time)."""
         assert self._ffmpeg is not None
         target = entry.flat_path
         part = target.with_name(target.name + PART_SUFFIX)
-        # A deletion still pending from an older entry of this recording
-        # must not hit this one's original.
-        self._cancel_drop(entry.recording.cache_id)
         try:
             async with self._flatten_lock:
                 try:
@@ -500,47 +516,124 @@ class VodCache:
             entry.timing["flat"] = f"no: {err}"
             _LOGGER.debug("Plain MP4 of %s failed: %s", entry.path.stem[:8], err)
             await self._hass.async_add_executor_job(_unlink, part)
-            return
         except BaseException:
             await self._hass.async_add_executor_job(_unlink, part)
             raise
         finally:
             self._reserved.pop(part, None)
-            entry.flattening = False
-        self._schedule_drop(entry)
 
-    def _schedule_drop(self, entry: Entry) -> None:
-        """Delete the original once no URL bound to it can be used."""
-        if self._closed:
-            return
-        cache_id = entry.recording.cache_id
-        self._cancel_drop(cache_id)
-        delay = max(entry.original_until - _clock(), 0.0) + DROP_MARGIN_S
-        cancel = async_call_later(self._hass, delay, self._drop_original(entry))
-        self._drop_timers[cache_id] = (entry, cancel)
+    # ---- MSE fragments ----
 
-    def _cancel_drop(self, cache_id: str) -> None:
-        if (pending := self._drop_timers.pop(cache_id, None)) is not None:
-            pending[1]()
+    async def async_init(self, entry: Entry) -> tuple[bytes, str | None]:
+        """Return the init segment (ftyp + moov) and its MIME type with codecs."""
+        index = await self._await_index(entry, lambda i: i.init is not None)
+        assert index.init is not None
+        return index.init, index.mime
 
-    def _drop_original(self, entry: Entry) -> Callable[[datetime], None]:
-        @callback
-        def drop(_now: datetime) -> None:
-            cache_id = entry.recording.cache_id
-            if (pending := self._drop_timers.get(cache_id)) and pending[0] is entry:
-                del self._drop_timers[cache_id]
-            # Only the entry that made the plain copy deletes its original.
-            if self._entries.get(cache_id) is not entry or entry.flat_at is None:
-                return
-            if not entry.has_original:
-                return
-            if entry.original_until > _clock():
-                self._schedule_drop(entry)
-                return
-            entry.has_original = False
-            self._hass.async_add_executor_job(_unlink, entry.path)
+    async def async_window(
+        self,
+        entry: Entry,
+        *,
+        at_ms: float | None = None,
+        first: int | None = None,
+        max_ms: float,
+        max_bytes: int,
+    ) -> Window:
+        """Return the fragments to send next, waiting for the first to be on disk.
 
-        return drop
+        From ``first`` (an index), or from the sync fragment showing ``at_ms``
+        (ms of media time). Then as many as are on disk, up to ``max_ms`` of
+        media and ``max_bytes`` (at least one fragment).
+        """
+
+        def start(index: FragmentIndex) -> int | None:
+            if first is not None:
+                return first if first < len(index.fragments) else None
+            return index.find(at_ms or 0.0)
+
+        index = await self._await_index(entry, lambda i: start(i) is not None)
+        begin = start(index)
+        if begin is None:
+            # The recording ends before that point.
+            if first is None and index.fragments:
+                begin = _last_sync(index)
+            else:
+                return Window(len(index.fragments), (), last=True)
+        chosen: list[Fragment] = []
+        media = 0.0
+        size = 0
+        for fragment in index.fragments[begin:]:
+            if chosen and (media >= max_ms or size + fragment.size > max_bytes):
+                break
+            chosen.append(fragment)
+            media += fragment.duration_ms
+            size += fragment.size
+        last = entry.complete and begin + len(chosen) == len(index.fragments)
+        return Window(begin, tuple(chosen), last=last)
+
+    async def async_read_window(
+        self, entry: Entry, window: Window
+    ) -> AsyncIterator[bytes]:
+        """Yield the window's fragments, made MSE-ready, in batches."""
+        index = entry.fragments
+        assert index is not None
+        entry.readers += 1
+        entry.last_access = time.monotonic()
+        try:
+            batch: list[int] = []
+            size = 0
+            for i, fragment in enumerate(window.fragments, window.first):
+                batch.append(i)
+                size += fragment.size
+                if (
+                    size >= FRAGMENT_BATCH
+                    or i == window.first + len(window.fragments) - 1
+                ):
+                    yield await self._hass.async_add_executor_job(
+                        _read_fragments, self._candidates(entry), index, batch
+                    )
+                    batch, size = [], 0
+        except FragmentError as err:
+            raise VodCacheError(f"not playable as fragments: {err}") from err
+        finally:
+            entry.readers -= 1
+            entry.last_access = time.monotonic()
+
+    async def _await_index(
+        self, entry: Entry, ready: Callable[[FragmentIndex], bool]
+    ) -> FragmentIndex:
+        """Index the original as it fills until ``ready`` (or it is complete)."""
+        if entry.fragments is None:
+            entry.fragments = FragmentIndex()
+        index = entry.fragments
+        while True:
+            if entry.error is not None and not entry.complete:
+                raise VodCacheError(entry.error)
+            written, complete = entry.written, entry.complete
+            if written:
+                try:
+                    async with entry.index_lock:
+                        await self._hass.async_add_executor_job(
+                            _scan_fragments, self._candidates(entry), index, written
+                        )
+                except FileNotFoundError as err:
+                    # The fill failed and removed its file meanwhile.
+                    raise VodCacheError(entry.error or "recording file gone") from err
+                if index.error is not None:
+                    raise VodCacheError(f"not playable as fragments: {index.error}")
+                if ready(index):
+                    return index
+            if complete:
+                if index.init is None:
+                    raise VodCacheError("not playable as fragments: no moov")
+                return index
+            await self.async_wait(entry, offset=written)
+
+    def _candidates(self, entry: Entry) -> tuple[Path, Path]:
+        """Where the original is: the part file while filling, then its name."""
+        if entry.complete:
+            return entry.path, entry.part_path
+        return entry.part_path, entry.path
 
     # ---- Disk space ----
 
@@ -803,7 +896,6 @@ class VodCache:
                 freed += size
             # Forget it: it is fetched again when asked for.
             self._entries.pop(cache_id, None)
-            self._cancel_drop(cache_id)
         self._usage["disk"] -= freed
         self._usage["free"] += freed
         return freed >= need
@@ -895,14 +987,42 @@ def _flat_extra(entry: Entry) -> int:
     return int(entry.written * FLAT_MARGIN)
 
 
-def _on_disk(path: Path) -> tuple[str, int, bool] | None:
-    """Return what a previous run left of a recording: plain copy or original."""
-    flat = path.with_name(path.stem + FLAT_SUFFIX)
-    if flat.exists():
-        return "flat", flat.stat().st_size, False
-    if path.exists():
-        return "original", path.stat().st_size, has_index(str(path))
-    return None
+def _on_disk(path: Path) -> tuple[int, bool, bool] | None:
+    """Return what a previous run left: the original's size, index, plain copy."""
+    if not path.exists():
+        return None
+    flat = path.with_name(path.stem + FLAT_SUFFIX).exists()
+    return path.stat().st_size, has_index(str(path)), flat
+
+
+def _last_sync(index: FragmentIndex) -> int:
+    """Return the last fragment that starts with a sync sample."""
+    last = len(index.fragments) - 1
+    while last > 0 and not index.fragments[last].sync:
+        last -= 1
+    return last
+
+
+def _open_original(candidates: tuple[Path, Path]) -> BinaryIO:
+    try:
+        return candidates[0].open("rb")
+    except FileNotFoundError:
+        # Renamed between the check and the open.
+        return candidates[1].open("rb")
+
+
+def _scan_fragments(
+    candidates: tuple[Path, Path], index: FragmentIndex, available: int
+) -> None:
+    with _open_original(candidates) as file:
+        index.scan(file, available)
+
+
+def _read_fragments(
+    candidates: tuple[Path, Path], index: FragmentIndex, numbers: list[int]
+) -> bytes:
+    with _open_original(candidates) as file:
+        return b"".join(index.read_fragment(file, i) for i in numbers)
 
 
 def _cache_id_of(path: Path) -> str:

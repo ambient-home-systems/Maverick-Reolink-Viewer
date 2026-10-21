@@ -325,4 +325,8 @@ def test_codec_strings() -> None:
     assert codec_string(audio_entry("mp4a", he_aac)) == "mp4a.40.5"
     assert codec_string(audio_entry("mp4a")) == "mp4a.40.2"
     assert codec_string(box("tx3g", bytes(8))) == "tx3g"
+    # VP9 and Opus (Chromium's MSE test media): vp09.<profile>.<level>.<depth>.
+    vpcc = box("vpcC", bytes([1, 0, 0, 0, 0, 10, 0x80]) + bytes(5))
+    assert codec_string(visual_entry("vp09", 160, 90, vpcc)) == "vp09.00.10.08"
+    assert codec_string(audio_entry("Opus")) == "opus"
     assert codec_string(b"\0") is None

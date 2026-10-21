@@ -1,13 +1,16 @@
 import { LitElement, css, html, nothing, type PropertyValues, type TemplateResult } from "lit";
 
 import {
+  fetchCacheStatus,
   fetchMediaInfo,
+  fetchPlaybackMse,
   fetchPlaybackUrl,
   fetchThumbnailUrls,
   fetchTimelineDay,
   fetchTimelineDays,
   prefetchSegment,
   toError,
+  urlToken,
   type SegmentRef,
 } from "../api";
 import {
@@ -22,8 +25,16 @@ import {
 import { canPlayMain, playsProgressive, type StreamDecision } from "../playback/codec";
 import "../playback/calendar";
 import "../playback/event-list";
+import { mseApiName } from "../playback/mse-feeder";
 import "../playback/player";
-import type { AdvanceDetail, FirstFrameDetail, PlayItem, PlayerErrorDetail, RvPlayer } from "../playback/player";
+import {
+  RATES,
+  type AdvanceDetail,
+  type FirstFrameDetail,
+  type PlayItem,
+  type PlayerErrorDetail,
+  type RvPlayer,
+} from "../playback/player";
 import { ThumbLoader } from "../playback/thumb-loader";
 import { dateIn, firstDayOfWeek, formatClock, formatDay } from "../playback/time";
 import "../playback/timeline";
@@ -63,7 +74,7 @@ export const EVENTS_RETRY_MS = 10_000;
 /** Quick retries in a row before the normal refresh takes over. */
 export const EVENTS_RETRIES = 3;
 /** Show a copy of today up to this old (s) at once, then refresh it quietly. */
-export const STALE_TODAY_S = 900;
+export const STALE_TODAY_S = 86_400;
 /** Recordings at least this long are on continuously recording cameras. */
 const LONG_RECORDING_MS = 10 * MINUTE;
 /** Thumbnails of the event list: one per 10 s. */
@@ -80,7 +91,18 @@ export const PRELOAD_LEAD_MS = 3 * MINUTE;
 export const RECOVER_EVERY_MS = 60_000;
 /** Minutes of the playback check's optional session (memory and disk). */
 export const CHECK_SESSION_MIN = 60;
+/** While a start waits for the recorder, its download is shown this often. */
+export const PROGRESS_EVERY_MS = 1_000;
+/**
+ * A seek within the recording on screen (MSE) needs no new URL, if the copy
+ * playing reaches the time by this much (a recording still being written).
+ */
+const SEEK_WITHIN_MARGIN_MS = 60_000;
 const CHECK_SETUP_KEY = "reolink-viewer-check-setup";
+const PLAYER_MODE_KEY = "reolink-viewer-player";
+
+/** "auto": MSE where the browser has it (else the file player); "file": always the file player. */
+export type PlayerMode = "auto" | "file";
 /** A check cut short is looked for once per page load. */
 let interruptedLookedFor = false;
 
@@ -99,6 +121,9 @@ export interface Metrics {
   /** Mid-play read failures recovered by reloading (URL expired, network). */
   recoveries?: number;
   lastRecovery?: string;
+  /** Switches from the MSE player to the file player, and why. */
+  fallbacks?: number;
+  lastFallback?: string;
 }
 
 /**
@@ -133,6 +158,9 @@ export class RvPlayback extends LitElement {
     _checkSession: { state: true },
     _checkNote: { state: true },
     _reports: { state: true },
+    _rate: { state: true },
+    _note: { state: true },
+    _mode: { state: true },
   };
 
   declare hass: HomeAssistant | undefined;
@@ -162,6 +190,11 @@ export class RvPlayback extends LitElement {
   declare _checkSession: boolean;
   declare _checkNote: string | undefined;
   declare _reports: SavedReport[] | undefined;
+  /** Playback speed. */
+  declare _rate: number;
+  /** Over the video while a start waits (the recorder's download). */
+  declare _note: string | undefined;
+  declare _mode: PlayerMode;
 
   private _daySeq = 0;
   private _playSeq = 0;
@@ -182,6 +215,9 @@ export class RvPlayback extends LitElement {
   /** A recording whose successor's URL is asked for near its end. */
   private _preloadPending: { segment: Segment; seq: number } | undefined;
   private _recoveredAt = -Infinity;
+  /** Streams whose recordings the MSE player could not play here. */
+  private readonly _mseFailed = new Set<Stream>();
+  private _lastPreview = 0;
 
   constructor() {
     super();
@@ -203,6 +239,8 @@ export class RvPlayback extends LitElement {
     this._checkRunning = false;
     this._checkSetup = rememberedSetup();
     this._checkSession = false;
+    this._rate = 1;
+    this._mode = rememberedMode();
   }
 
   private get _zone(): string | undefined {
@@ -372,11 +410,19 @@ export class RvPlayback extends LitElement {
     // starts: the start point is this, not whatever the cursor shows then.
     const wanted = target.segment.start + target.offset;
     this._cursor = wanted;
+    if (this._seekWithin(target.segment, wanted, requestedAt)) {
+      this._schedulePreload(target.segment, seq, wanted);
+      return;
+    }
     this._starting = seq;
     const began = performance.now();
     try {
+      const mse = this._useMse(this._stream);
       const progressive = this._progressive && target.offset < PROGRESSIVE_SEEK_LIMIT_MS;
-      const playback = await fetchPlaybackUrl(hass, this._ref(target.segment), progressive, wanted);
+      const ref = this._ref(target.segment);
+      const playback = mse
+        ? await fetchPlaybackMse(hass, ref, wanted)
+        : await fetchPlaybackUrl(hass, ref, progressive, wanted);
       if (seq !== this._playSeq) return;
       this._playing = playback;
       this._metrics = {
@@ -387,17 +433,102 @@ export class RvPlayback extends LitElement {
         stream: playback.stream,
         cache: playback.cache,
         codec: playback.media?.codec ?? null,
-        delivery: deliveryOf(progressive, this._progressive, playback.cache.complete),
+        delivery: mse
+          ? `MSE (${mseApiName() ?? "?"})${playback.cache.complete ? ", cached" : ""}`
+          : deliveryOf(progressive, this._progressive, playback.cache.complete),
       };
       // Main and sub recordings start a few seconds apart: keep the wall time.
       const offset = Math.max(0, wanted - playback.start);
-      await this._player?.play(toItem(playback), offset, requestedAt);
+      await this._player?.play(this._toItem(playback), offset, requestedAt);
+      void this._showDownload(playback, seq);
       this._schedulePreload(target.segment, seq, wanted);
     } catch (err) {
       if (seq === this._playSeq) this._playError(toError(err).message);
     } finally {
       if (this._starting === seq) this._starting = undefined;
     }
+  }
+
+  /**
+   * A start inside the recording on screen, played through MSE: a seek (the
+   * player fetches what it lacks), not a new URL. Returns whether it was one.
+   */
+  private _seekWithin(segment: Segment, wanted: number, requestedAt: number): boolean {
+    const player = this._player;
+    const item = player?.current;
+    if (!player?.mse || !this._useMse(this._stream) || !item || item.segmentId !== segment.id) return false;
+    if (this._playing?.stream !== this._stream) return false;
+    // A copy of a recording still being written reaches only so far.
+    if (item.end < segment.end && wanted > item.end - SEEK_WITHIN_MARGIN_MS) return false;
+    this._metrics = {
+      ...this._metrics,
+      urlMs: 0,
+      firstFrameMs: undefined,
+      delivery: `MSE (${mseApiName() ?? "?"}), same recording`,
+    };
+    player.seekWithin(Math.max(0, wanted - item.start), requestedAt);
+    return true;
+  }
+
+  /** Which player plays recordings, for the check's report. */
+  _describeMode(): string {
+    const api = mseApiName();
+    if (this._mode === "file") return "file player only (Debug setting)";
+    if (!api) return "file player (this browser has no MSE)";
+    if (typeof this.hass?.fetchWithAuth !== "function") return "file player (no authenticated fetch)";
+    const failed = [...this._mseFailed];
+    return `MSE (${api})${failed.length ? `, file player for ${failed.join(", ")} after a failure` : ""}`;
+  }
+
+  /** Whether to play a stream through MSE: the browser has it, it worked, it is wanted. */
+  private _useMse(stream: Stream): boolean {
+    return (
+      this._mode === "auto" &&
+      mseApiName() !== undefined &&
+      typeof this.hass?.fetchWithAuth === "function" &&
+      !this._mseFailed.has(stream)
+    );
+  }
+
+  private _toItem(playback: PlaybackUrl): PlayItem {
+    const common = {
+      recording: `${playback.stream}:${playback.segment_id}:${playback.end}`,
+      segmentId: playback.segment_id,
+      start: playback.start,
+      end: playback.end,
+    };
+    const hass = this.hass;
+    if (playback.base && hass?.fetchWithAuth) {
+      const fetchWithAuth = hass.fetchWithAuth.bind(hass);
+      return {
+        ...common,
+        key: playback.base,
+        mse: { base: playback.base, fetch: fetchWithAuth, durationMs: playback.end - playback.start },
+      };
+    }
+    const url = playback.url ?? "";
+    return { ...common, key: url, url };
+  }
+
+  /** While a start waits for the recorder's download, show how far it got. */
+  private async _showDownload(playback: PlaybackUrl, seq: number): Promise<void> {
+    const hass = this.hass;
+    const token = urlToken(playback.base ?? playback.url ?? "");
+    if (!hass || !token || playback.cache.complete) return;
+    const waiting = () => seq === this._playSeq && this._metrics.firstFrameMs === undefined && !this._playFailure;
+    while (waiting()) {
+      await sleep(PROGRESS_EVERY_MS);
+      if (!waiting()) break;
+      try {
+        const status = await fetchCacheStatus(hass, token);
+        if (!waiting() || !status.cache || status.cache.complete || status.cache.error) break;
+        const hd = playback.stream === "main" ? "HD " : "";
+        this._note = `Fetching the ${hd}recording from the recorder: ${megabytes(status.cache.bytes)} of about ${megabytes(status.expected_bytes)}`;
+      } catch {
+        break;
+      }
+    }
+    if (seq === this._playSeq) this._note = undefined;
   }
 
   /** Preload the next recording now, or near this one's end if that is far. */
@@ -428,10 +559,15 @@ export class RvPlayback extends LitElement {
       await this._player?.preload(undefined);
       return;
     }
+    // Already waiting in the hidden buffer (e.g. after a seek in this recording).
+    if (this._player?.preloaded?.recording.startsWith(`${this._stream}:${next.id}:`)) return;
     try {
-      const playback = await fetchPlaybackUrl(hass, this._ref(next), this._progressive, next.start);
+      const ref = this._ref(next);
+      const playback = this._useMse(this._stream)
+        ? await fetchPlaybackMse(hass, ref, next.start)
+        : await fetchPlaybackUrl(hass, ref, this._progressive, next.start);
       if (seq !== this._playSeq) return;
-      await this._player?.preload(toItem(playback));
+      await this._player?.preload(this._toItem(playback));
     } catch {
       // Preloading is an optimisation: the next file is fetched when needed.
     }
@@ -469,6 +605,18 @@ export class RvPlayback extends LitElement {
 
   /** The player failed: a read mid-way is retried where it was, else as below. */
   private _onPlayerError(detail: PlayerErrorDetail): void {
+    if (detail.fallback && this._useMse(this._stream)) {
+      // The MSE player cannot play this stream here: the file player takes over.
+      this._mseFailed.add(this._stream);
+      this._metrics = {
+        ...this._metrics,
+        fallbacks: (this._metrics.fallbacks ?? 0) + 1,
+        lastFallback: detail.message,
+      };
+      const where = detail.played ? (this._player?.time ?? this._cursor) : this._cursor;
+      if (where !== undefined) void this.playAt(where);
+      return;
+    }
     const at = this._player?.time;
     const now = performance.now();
     if (detail.played && at !== undefined && now - this._recoveredAt > RECOVER_EVERY_MS) {
@@ -515,6 +663,15 @@ export class RvPlayback extends LitElement {
     }
   }
 
+  /** Dragging the cursor: move it, and show the frame there if it is buffered. */
+  private _onScrub(time: number): void {
+    this._cursor = time;
+    const now = performance.now();
+    if (now - this._lastPreview < 80) return;
+    this._lastPreview = now;
+    this._player?.preview(time);
+  }
+
   private _jump(direction: 1 | -1): void {
     const from = this._cursor ?? this._view.start;
     const event = direction > 0 ? nextEvent(this._events, from) : previousEvent(this._events, from);
@@ -525,6 +682,18 @@ export class RvPlayback extends LitElement {
     this._cursor = event.start;
     if (this._day) this._view = centreOn(this._view, event.start, this._day);
     void this.playAt(event.start);
+  }
+
+  private _setRate(rate: number): void {
+    this._rate = rate;
+  }
+
+  private _setMode(mode: PlayerMode): void {
+    this._mode = mode;
+    this._mseFailed.clear();
+    rememberMode(mode);
+    const at = this._player?.time ?? this._cursor;
+    if (this._playing && at !== undefined) void this.playAt(at);
   }
 
   private _setStream(stream: Stream): void {
@@ -658,6 +827,9 @@ export class RvPlayback extends LitElement {
       },
       get progressive() {
         return el._progressive;
+      },
+      get mode() {
+        return el._describeMode();
       },
       get monthDays() {
         return el._monthDays;
@@ -820,6 +992,17 @@ export class RvPlayback extends LitElement {
             this._setStream("main");
           }}
         >HD</button>
+        <label class="small speed"
+          >Speed
+          <select
+            aria-label="Playback speed"
+            @change=${(e: Event) => {
+              this._setRate(Number((e.target as HTMLSelectElement).value));
+            }}
+          >
+            ${RATES.map((rate) => html`<option .value=${String(rate)} ?selected=${rate === this._rate}>${rate}×</option>`)}
+          </select></label
+        >
         ${this._playing
           ? html`<a class="button" href=${this._playing.clip_url} download>Download clip</a>`
           : nothing}
@@ -894,6 +1077,21 @@ export class RvPlayback extends LitElement {
             ? ` · ${this._playing.file} file`
             : ""}
         </dd>
+        <dt>Player</dt>
+        <dd>
+          ${describePlayer(this._player)}
+          <select
+            aria-label="Player"
+            @change=${(e: Event) => {
+              this._setMode((e.target as HTMLSelectElement).value as PlayerMode);
+            }}
+          >
+            <option value="auto" ?selected=${this._mode === "auto"}>MSE where possible</option>
+            <option value="file" ?selected=${this._mode === "file"}>File player only</option>
+          </select>
+        </dd>
+        <dt>Fell back to the file player</dt>
+        <dd>${m.fallbacks ? `${m.fallbacks}× (last: ${m.lastFallback ?? "?"})` : "never"}</dd>
         <dt>Day</dt>
         <dd>
           ${this._day
@@ -912,6 +1110,8 @@ export class RvPlayback extends LitElement {
       <div class="layout">
         <div class="main">
           <rv-player
+            .rate=${this._rate}
+            .note=${this._note}
             @rv-first-frame=${(e: CustomEvent<FirstFrameDetail>) => {
               this._metrics = { ...this._metrics, firstFrameMs: e.detail.ms };
               this._resumeThumbs();
@@ -968,7 +1168,7 @@ export class RvPlayback extends LitElement {
                 void this.playAt(e.detail.time);
               }}
               @rv-scrub=${(e: CustomEvent<TimeDetail>) => {
-                this._cursor = e.detail.time;
+                this._onScrub(e.detail.time);
               }}
               @rv-hover=${(e: CustomEvent<HoverDetail>) => void this._onHover(e.detail)}
               @rv-hover-end=${() => {
@@ -1081,6 +1281,11 @@ export class RvPlayback extends LitElement {
         min-width: 44px;
         text-align: center;
       }
+      .speed {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
       a.button {
         padding: 6px 14px;
         border-radius: 4px;
@@ -1151,8 +1356,25 @@ export class RvPlayback extends LitElement {
   ];
 }
 
-function toItem(playback: PlaybackUrl): PlayItem {
-  return { url: playback.url, segmentId: playback.segment_id, start: playback.start, end: playback.end };
+const sleep = (ms: number): Promise<void> =>
+  new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+
+const megabytes = (bytes: number): string => `${Math.round(bytes / 1_000_000)} MB`;
+
+/** The debug panel's player line: MSE with its buffer, or the file player. */
+export function describePlayer(player: RvPlayer | null): string {
+  const stats = player?.mseStats;
+  if (!stats) return player?.current ? "file player" : "–";
+  const parts = [
+    stats.api,
+    stats.mime.replace(/^video\/mp4; codecs=/, ""),
+    `${stats.windows} windows, ${(stats.bytes / 1_000_000).toFixed(1)} MB${stats.lastWaitMs === undefined ? "" : `, last in ${Math.round(stats.lastWaitMs)} ms`}`,
+    `${Math.round(stats.ahead)} s ahead, ${Math.round(stats.behind)} s behind`,
+    `${stats.trims} trims`,
+  ];
+  return parts.join(" · ");
 }
 
 /** How the last recording was delivered, for the debug panel. */
@@ -1177,6 +1399,22 @@ function rememberedSetup(): string {
     // No storage: guess from the browser.
   }
   return /iPhone|iPad/.test(navigator.userAgent) ? "iPhone app, Wi-Fi (local)" : "Desktop Chrome, LAN";
+}
+
+function rememberedMode(): PlayerMode {
+  try {
+    return window.localStorage.getItem(PLAYER_MODE_KEY) === "file" ? "file" : "auto";
+  } catch {
+    return "auto";
+  }
+}
+
+function rememberMode(mode: PlayerMode): void {
+  try {
+    window.localStorage.setItem(PLAYER_MODE_KEY, mode);
+  } catch {
+    // Not remembered.
+  }
 }
 
 function rememberSetup(setup: string): void {

@@ -22,9 +22,12 @@ from custom_components.reolink_viewer.views import VodGrant
 from custom_components.reolink_viewer.vodcache import Recording
 from homeassistant.core import HomeAssistant
 
-from .mp4_fixtures import mp4_file
+from .mp4_fixtures import FTYP, av_moov, fragmented_av, mp4_file
+from .test_fmp4 import MIME, _boxes, _check_mse_ready
 
 BODY = mp4_file(moov_first=True, mdat_bytes=300_000)
+# What the fake NVR serves (a test may swap in another recording).
+SERVED = {"body": BODY}
 DAY = "2026-10-17"
 
 
@@ -38,7 +41,7 @@ def fixed_now() -> Generator[None]:
 @pytest.fixture
 async def media_server(socket_enabled: None) -> AsyncGenerator[TestServer]:
     async def handler(request: web.Request) -> web.StreamResponse:
-        return web.Response(body=BODY, content_type="video/mp4")
+        return web.Response(body=SERVED["body"], content_type="video/mp4")
 
     app = web.Application()
     app.router.add_get("/rec", handler)
@@ -123,10 +126,10 @@ async def test_timeline_commands(
             "type": "reolink_viewer/timeline/day",
             "device_id": camera,
             "date": DAY,
-            "max_age": 7200,
+            "max_age": 86401,
         },
     )
-    assert msg["success"] is False  # max_age is capped at an hour
+    assert msg["success"] is False  # max_age is capped at a day
     msg = await _ws(
         client,
         {"type": "reolink_viewer/timeline/day", "device_id": "nope", "date": DAY},
@@ -215,6 +218,24 @@ async def test_playback_url_and_views(
     )
     assert msg["result"]["cache"]["complete"] is True
     assert msg["result"]["end"] == day["segments"][0]["end"]
+    # A URL that does not stream from the start gets the plain copy, made on
+    # the first request (here ffmpeg may not take the synthetic file: then the
+    # original, as stored).
+    msg = await _ws(
+        client,
+        {
+            "type": "reolink_viewer/playback/url",
+            "device_id": camera,
+            "date": DAY,
+            "segment_id": seg_id,
+            "progressive": False,
+        },
+    )
+    assert msg["result"]["file"] == "plain"
+    resp = await http.get(msg["result"]["url"])
+    assert resp.status == 200
+    (entry,) = wired.runtime_data.vod_cache._entries.values()
+    assert "flat" in entry.timing
 
     msg = await _ws(
         client,
@@ -230,6 +251,138 @@ async def test_playback_url_and_views(
     assert resp.status == 200
     assert resp.content_type == "image/jpeg"
     assert await resp.read() == b"\xff\xd8jpegdata"
+
+
+@pytest.fixture
+def nvr_recording() -> Generator[bytes]:
+    """The fake NVR serves a recording in its own fragment shape."""
+    body = fragmented_av(30, absolute=True, tfdt=False)
+    SERVED["body"] = body
+    yield body
+    SERVED["body"] = BODY
+
+
+async def test_mse_fragments(
+    hass: HomeAssistant,
+    hass_ws_client: WebSocketGenerator,
+    hass_client: ClientSessionGenerator,
+    hass_client_no_auth: ClientSessionGenerator,
+    wired: MockConfigEntry,
+    nvr_recording: bytes,
+) -> None:
+    """The MSE player's init segment and windows, behind HA's own auth."""
+    client = await hass_ws_client(hass)
+    camera = await _camera_id(client)
+    day = (
+        await _ws(
+            client,
+            {"type": "reolink_viewer/timeline/day", "device_id": camera, "date": DAY},
+        )
+    )["result"]
+    msg = await _ws(
+        client,
+        {
+            "type": "reolink_viewer/playback/mse",
+            "device_id": camera,
+            "date": DAY,
+            "segment_id": day["segments"][0]["id"],
+            "at": day["segments"][0]["start"],
+        },
+    )
+    result = msg["result"]
+    base = result["base"]
+    assert base.startswith("/api/reolink_viewer/mse/")
+    assert "authSig" not in base
+    assert "authSig=" in result["clip_url"]
+    assert result["expires_in"] == 35 * 60
+    assert result["start"] == day["segments"][0]["start"]
+    assert "127.0.0.1" not in str(result)
+
+    http = await hass_client()
+    resp = await http.get(f"{base}/init")
+    assert resp.status == 200
+    assert resp.headers["X-RV-Mime"] == MIME
+    assert await resp.read() == FTYP + av_moov()
+    resp = await http.get(f"{base}/frags?at=10500&ms=4000")
+    assert resp.status == 200
+    headers = {k: resp.headers[f"X-RV-{k}"] for k in ("First", "Count", "Last")}
+    assert headers == {"First": "5", "Count": "2", "Last": "0"}
+    assert float(resp.headers["X-RV-Start"]) == 10_000
+    assert float(resp.headers["X-RV-End"]) == 14_000
+    data = await resp.read()
+    moofs = [at for kind, at, _payload in _boxes(data) if kind == "moof"]
+    assert len(moofs) == 2
+    _check_mse_ready(data[moofs[0] :], {1: 5 * 50 * 3600, 2: 5 * 31 * 1024})
+    resp = await http.get(f"{base}/frags?first=28&ms=60000")
+    assert resp.headers["X-RV-Count"] == "2"
+    assert resp.headers["X-RV-Last"] == "1"
+    await resp.read()
+
+    # The download of the copy served, by the URL's token.
+    token = base.rsplit("/", 1)[-1]
+    msg = await _ws(
+        client, {"type": "reolink_viewer/playback/cache_status", "token": token}
+    )
+    assert msg["result"]["cache"]["complete"] is True
+    assert msg["result"]["cache"]["bytes"] > len(nvr_recording)  # + index room
+    assert msg["result"]["expected_bytes"] > 0
+    clip_token = result["clip_url"].split("?")[0].rsplit("/", 1)[-1]
+    msg = await _ws(
+        client, {"type": "reolink_viewer/playback/cache_status", "token": clip_token}
+    )
+    assert msg["result"]["cache"]["complete"] is True
+    msg = await _ws(
+        client, {"type": "reolink_viewer/playback/cache_status", "token": "nope"}
+    )
+    assert msg["error"]["code"] == "not_found"
+
+    # HA's auth is required, the token must be live, the window well-formed.
+    anonymous = await hass_client_no_auth()
+    resp = await anonymous.get(f"{base}/init")
+    assert resp.status == 401
+    for path, status in (
+        (f"{base}/frags?at=soon", 400),
+        (f"{base}/frags?first=-1", 400),
+        (f"{base}/other", 404),
+        ("/api/reolink_viewer/mse/nope/init", 404),
+    ):
+        resp = await http.get(path)
+        assert resp.status == status, path
+
+
+async def test_mse_errors(
+    hass: HomeAssistant,
+    hass_ws_client: WebSocketGenerator,
+    hass_client: ClientSessionGenerator,
+    wired: MockConfigEntry,
+) -> None:
+    """A recording that is not fragmented, and a recording that is late."""
+    client = await hass_ws_client(hass)
+    camera = await _camera_id(client)
+    day = (
+        await _ws(
+            client,
+            {"type": "reolink_viewer/timeline/day", "device_id": camera, "date": DAY},
+        )
+    )["result"]
+    ref = {"device_id": camera, "date": DAY, "segment_id": day["segments"][0]["id"]}
+    msg = await _ws(client, {"type": "reolink_viewer/playback/mse", **ref})
+    base = msg["result"]["base"]
+    http = await hass_client()
+    resp = await http.get(f"{base}/init")
+    assert resp.status == 502
+    assert "not playable as fragments" in await resp.text()
+    msg = await _ws(
+        client, {"type": "reolink_viewer/playback/mse", **ref, "segment_id": "1"}
+    )
+    assert msg["error"]["code"] == "search_failed"
+    cache = wired.runtime_data.vod_cache
+    with (
+        patch.object(views, "COMPLETE_TIMEOUT", 0),
+        patch.object(cache, "async_window", side_effect=TimeoutError),
+    ):
+        resp = await http.get(f"{base}/frags")
+        assert resp.status == 504
 
 
 async def test_a_live_url_keeps_its_recording(
