@@ -38,7 +38,8 @@ frontend/            # Lit + TypeScript panel, built with Vite
 tests/               # pytest-homeassistant-custom-component; test_mse_browser.py drives
                      # Playwright's Chromium (mse_append.cjs) through the MSE view
 scripts/             # setup_dev.sh, probe_to_matrix.py, make_mse_sample.py (writes mse-sample.ts);
-                     # playback_check.js and inspect_recording.js (paste into the browser console)
+                     # playback_check.js and inspect_recording.js (paste into the browser console);
+                     # desktop-check/ runs the playback check in Chrome without clicking
 ```
 
 ## Environment

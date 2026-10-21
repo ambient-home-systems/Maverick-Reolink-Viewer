@@ -1,0 +1,16 @@
+{
+  "name": "reolink-viewer-desktop-check",
+  "private": true,
+  "description": "Runs the Reolink Viewer playback check in Google Chrome without clicking",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "check": "node run-check.mjs"
+  },
+  "dependencies": {
+    "playwright-core": "1.56.1"
+  }
+}
