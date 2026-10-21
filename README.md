@@ -9,22 +9,27 @@ built-in [Reolink integration](https://www.home-assistant.io/integrations/reolin
   (person, vehicle, animal, face, package, visitor, ...) and recording thumbnails
 - smooth recorded-video playback and low-latency live view
 
-**Status: Phase 1 done** (device details and every setting; v0.1.0, verified on the
-owner's hardware, see the [plan](docs/IMPLEMENTATION_PLAN.md#phase-1-status-2026-10-17)).
-The **Reolink** sidebar panel lists your NVRs, Home Hubs and cameras (a camera that is
-in Home Assistant both via an NVR and directly is shown once). Each device has an
+**Status: Phase 2 done** (event timeline and recorded-video playback; v0.3.2,
+verified on the owner's hardware in Chrome and in the iPhone Companion app, at home
+and remotely, see the [plan](docs/IMPLEMENTATION_PLAN.md#phase-2-status)). Live view
+comes next.
+
+**Phase 1 (v0.1.0, done):** the **Reolink** sidebar panel lists your NVRs, Home Hubs
+and cameras (a camera that is in Home Assistant both via an NVR and directly is shown
+once). Each device has an
 **Overview** (latest snapshot, model, firmware, streams, network, ports, storage,
 battery, features) and a **Settings** tab with every entity the Reolink integration
 creates, grouped by category, each with a plain-language explanation, search, and a
 confirmation before disruptive actions. Admins can enable disabled entities and run a
-read-only hardware probe.
+read-only hardware probe (see the
+[plan](docs/IMPLEMENTATION_PLAN.md#phase-1-status-2026-10-17)).
 
 **Phase 2A (v0.2.7, done):** cameras that record to the NVR
 get a **Playback** tab: a zoomable timeline of the day with colored markers for each
 detection type, hover thumbnails, a calendar, an event list, and a player that moves
 on to the next recording by itself. Live view comes in a later phase.
 
-**Phase 2B (in progress, v0.3.0):** recordings play through Media Source
+**Phase 2B (v0.3.2, done):** recordings play through Media Source
 Extensions (ManagedMediaSource in the iOS Companion app): a start deep in a
 recording that is not cached yet begins once the recorder has sent the bytes
 up to it, instead of after the whole file. The file player remains as a
@@ -33,7 +38,10 @@ scrubbing, and a progress note while the recorder sends a recording. The
 recording cache keeps to its disk budget, and a built-in **playback check**
 (Playback tab → Debug) measures playback on the device it runs on; on a
 computer, [`scripts/desktop-check`](scripts/desktop-check/README.md) runs it
-in Chrome without clicking.
+in Chrome without clicking. On the owner's NVR, a start 41–57 min into an
+hour-long recording that is not cached yet takes 7–13 s (the recorder's download up
+to there) on a computer and an iPhone, at home, through Tailscale and through Nabu
+Casa; a start in a cached recording takes under half a second.
 
 Requires Home Assistant 2026.10 or newer with the Reolink integration set up.
 
