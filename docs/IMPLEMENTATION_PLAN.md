@@ -814,7 +814,7 @@ Known limits carried into 2B and Phase 4:
 | --- | --- |
 | 0. Fix the recording cache (disk accounting, eviction, leases, deletion timers, open race), DST end and refresh window, shared thumbnail fetches; correct the MSE claim above | Done (v0.2.8), see "Step 0" below |
 | 1. Measure where it hasn't been (gate): desktop Chrome on the LAN, the iPhone Companion app on Wi-Fi, over Tailscale and over Nabu Casa | **Done** (2026-10-21): check built (v0.2.8), sharpened in v0.2.9 and v0.2.10; four desktop runs (three through Nabu Casa, one on the LAN) and four iPhone runs (Wi-Fi, Tailscale twice, Nabu Casa). Three player and cache bugs found and fixed. HD unmeasured (no main recording cached). See "Step 1 results" and "What step 1 decides" |
-| 2. Build what the evidence calls for (speeds, HD/SD keeping the position, uncached deep seeks, bounded memory and disk) | **In progress**: MSE with server-normalized fragments, the file player as fallback; see "Step 2: what to build" |
+| 2. Build what the evidence calls for (speeds, HD/SD keeping the position, uncached deep seeks, bounded memory and disk) | **Built (v0.3.0)**: MSE with server-normalized fragments, the file player as fallback; checked in Chromium (CI and a harness). Hardware check to come, see "Step 2 as built" |
 
 ##### Step 0: the recording cache (v0.2.8)
 
@@ -1241,8 +1241,10 @@ on disk":
 - Both browsers have it: `MediaSource` in Chromium, `ManagedMediaSource` in
   the Companion app (which even plays the NVR's own fragments; Chromium
   needs them normalized).
-- One `SourceBuffer` can hold consecutive recordings at their wall-clock
-  offsets. Auto-advance, rates and scrubbing then act on one element.
+- Each of the player's two `<video>` elements gets a `MediaSource` per
+  recording. The next recording is preloaded in the hidden one, as now, so
+  auto-advance stays a swap. (Built that way, rather than one
+  `SourceBuffer` for consecutive recordings: same gaps, simpler mapping.)
 
 From the runs above, starts would be the download up to the target plus
 about half a second. For example, iPhone 4's 44-min start would be about
@@ -1252,7 +1254,7 @@ about half a second. For example, iPhone 4's 44-min start would be about
 codec, an append fails, or the user turns MSE off. Its URL is bound to the
 plain copy, waiting for the rewrite (under 2 s after the download in every
 run), whenever the browser would otherwise read the whole original: WebKit
-always, and any browser for a start past the file's first minute.
+always, and any browser for a start past the file's first 3 s.
 
 Build order, each part with tests, and a real-browser test where the
 browser matters:
@@ -1267,12 +1269,13 @@ browser matters:
    past the download waits for it. Cache fills already go through the
    scheduler.
 3. **Playwright append test**: Chromium appends the normalized NVR-shaped
-   fixtures (H.264 with AAC) and plays across a window boundary and a file
-   boundary; the raw fragments fail to append (the control).
+   fixtures and plays across a window boundary to the end; the raw
+   fragments fail to append (the control). Playwright's Chromium has no
+   H.264 or AAC, so the test media is VP9 with Opus.
 4. **MSE player**, a state machine:
    - windows fetched ahead by time and by bytes, trimmed behind;
    - `ManagedMediaSource`'s `startstreaming` and `endstreaming` respected;
-   - the next recording appended at its offset;
+   - the next recording preloaded in the second `<video>`;
    - falls back to the file player on any error.
 5. **Controls**: speed 0.5–8×; HD/SD switch at the exact position; scrubbing
    on the sub stream (frames while dragging, the chosen stream on release).
@@ -1299,6 +1302,126 @@ Step 2 exit criteria:
 - a one-hour session stays within the buffer and disk caps;
 - the iPhone app plays, seeks and auto-advances on Wi-Fi, through Tailscale
   and through Nabu Casa.
+
+##### Step 2 as built (v0.3.0)
+
+Server (`custom_components/reolink_viewer/`):
+
+- `fmp4.py`: `FragmentIndex` follows a cache file as it grows (the init
+  segment and its codec string, then each `moof` + `mdat` with its decode
+  time per track, counted from the start). `normalize_fragment` rewrites
+  one fragment as MSE requires. An ffmpeg-made MSE-ready file put in the
+  NVR's shape (absolute offsets, no `tfdt`) normalizes back to the same
+  bytes, for H.264/AAC and VP9/Opus.
+- `views.py`: `/api/reolink_viewer/mse/{token}/init` (the init segment,
+  its MIME type in `X-RV-Mime`) and `/frags?at=ms|first=n&ms=&bytes=` (a
+  window of fragments: from the sync fragment showing `at`, or by index;
+  `X-RV-First`, `-Count`, `-Start`, `-End`, `-Last`). A window waits for
+  its first fragment to be on disk, then takes what is there. The player
+  fetches these with HA's own authentication (`hass.fetchWithAuth`): a
+  signed path cannot carry a window's query. The token is a grant, leased
+  like the VOD URLs.
+- `websocket_api.py`: `playback/mse` (the fragment path, plus a signed clip
+  URL), `playback/cache_status` (the download of the copy a URL serves:
+  the player's progress note and the check's record), and `max_age` up to
+  a day.
+- `vodcache.py` (layout 5): the original is kept, because the MSE player
+  reads it. The plain copy is written only when the file player first asks
+  for it, and a URL that does not stream from the start gets it (the
+  original if the rewrite fails). The deletion timers of step 0 are gone
+  with the deletions.
+- `mp4.py`: VP9 (`vpcC`) and Opus codec strings.
+
+Panel (`frontend/src/`):
+
+- `playback/mse-feeder.ts`: feeds one `<video>` from the view. It starts
+  with a 4 s window at the target, then keeps 30 s ahead at 1× (rate times
+  that, at most 240 s and 48 MiB), and trims to 30 s behind. It uses
+  `ManagedMediaSource` where it exists, and `MediaSource` otherwise.
+  - It extends the last window by index when the buffer ends just short of
+    the play position, and steps over small gaps.
+  - It ends the stream again after trims (a `remove()` reopens it).
+  - It makes room on a full buffer.
+  - It reports `MseUnsupported` (no MSE, a codec refused, an append error,
+    "not playable as fragments") apart from other failures (an expired
+    URL, the network).
+- `playback/player.ts`: each `<video>` plays a file URL or an MSE feeder.
+  It swaps and preloads by recording, not by URL (each URL is a new
+  grant). It adds `seekWithin` (a start inside the recording on screen,
+  reported at `seeked`), `preview` (a frame while scrubbing, if buffered),
+  `rate` and an overlay note.
+- `components/playback.ts`:
+  - MSE where the browser has it. A fallback failure hands that stream to
+    the file player, and the Debug setting can force the file player.
+  - A start inside the recording on screen is a seek, without a new URL.
+  - Speed selector, 0.5–8×; it carries over to the next recording.
+  - While a start waits, a note shows the recorder's download ("Fetching
+    the HD recording from the recorder: 412 MB of about 2900 MB").
+  - Scrubbing shows frames from the buffer, and the sub-stream thumbnail as
+    before.
+  - Debug rows "Player" (API, codecs, windows, ahead/behind, trims, and the
+    setting) and "Fell back to the file player".
+  - Today's older copy is shown at once at any age, then refreshed.
+- Check v0.3.0:
+  - reports the player;
+  - takes the server's record of the copy served;
+  - reads the link for 3 s;
+  - judges smoothness by painted frames where the dropped-frame counter
+    disagrees with them;
+  - takes the iOS version from the app's part of the user agent.
+
+Checked:
+
+- Python: 491 tests, 95 % coverage.
+- Panel: 136 tests, including the feeder against a fake `MediaSource`.
+- CI job "MSE in Chromium (Playwright)": through the real view and HA auth,
+  Chromium starts 3.5 s into an NVR-shaped VP9/Opus recording, plays
+  across a window boundary to the end, and refuses the raw fragment.
+- The built panel in Chromium (headless, Playwright) against a fake HA
+  serving NVR-shaped VP9/Opus recordings through `fmp4.py`, with a
+  simulated download:
+
+| Case | Result |
+| --- | --- |
+| Uncached start 16.8 of 21 min (16 MB at 2 MB/s) | first frame 5.7 s: the download up to the target (about 80 % of it) |
+| Same, at 0.5 MB/s | 22.7 s, with the progress note; no repeated requests while waiting |
+| Seek within the recording | 31–58 ms |
+| Rates 0.5, 2, 4, 8× | 0.50, 2.00, 3.97, 7.91× effective |
+| Auto-advance | 2.8 ms gap at 1×, 8.4 ms at 8× (the speed carries over) |
+| HD/SD switch | position kept (moved 0.01 s) |
+| Scrub preview in the buffer | shown |
+| A recording the server cannot serve as fragments | file player at the same position; the stream stays on it until the setting changes |
+| URL expired mid-play (8 s lifetime) | 404, reloaded where it was (one recovery) |
+| 21 min played at 8× | JS heap 2.5–7 MB; at most about 390 s buffered (about 357 ahead and 40 behind); about 100 trims |
+
+Found and fixed in that harness:
+
+- After trimming, the stream was no longer ended, so the video waited at
+  the end at 8×.
+- The first request of each start went out twice.
+- A window ending a hair before the play position was asked for again and
+  again.
+- A seek within the recording dropped the next recording's preload.
+- A seek within a recording whose feeder had failed hung.
+
+Hardware check for v0.3.0 (the step 2 exit criteria):
+
+1. Update to v0.3.0 and restart HA. Reload the panel; in the Companion
+   app, reset the frontend cache (Settings → Companion App → Debugging).
+2. In each setup, **Debug → Player** should read `MediaSource` (desktop
+   Chrome) or `ManagedMediaSource` (iPhone).
+3. Desktop Chrome on the LAN, Front Yard Right: run the check without the
+   session. Then by hand:
+   - every speed;
+   - SD → HD → SD on a playing recording (the position is kept; the first
+     HD start shows the download note);
+   - drag the timeline cursor inside the playing recording.
+4. iPhone app on home Wi-Fi: run the check **with** the 60-min session.
+   Then tap HD on an event once (the HD decision, untested so far).
+5. iPhone app through Tailscale and through Nabu Casa (Wi-Fi off): run the
+   check without the session. The newest event and the uncached deep start
+   should begin after about the NVR download up to them (seconds), not
+   after a whole-file read (22–84 s in step 1).
 
 #### 2A as built (v0.2.0)
 

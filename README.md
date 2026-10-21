@@ -24,11 +24,14 @@ get a **Playback** tab: a zoomable timeline of the day with colored markers for 
 detection type, hover thumbnails, a calendar, an event list, and a player that moves
 on to the next recording by itself. Live view comes in a later phase.
 
-**Phase 2B (in progress, v0.2.10):** the recording cache keeps to its disk
-budget and never removes a file that is playing; long recordings play through
-(URLs no longer expire mid-way); a built-in **playback check** (Playback tab →
-Debug) measures playback on the device it runs on, including the iOS
-Companion app, ahead of the continuous player.
+**Phase 2B (in progress, v0.3.0):** recordings play through Media Source
+Extensions (ManagedMediaSource in the iOS Companion app): a start deep in a
+recording that is not cached yet begins once the recorder has sent the bytes
+up to it, instead of after the whole file. The file player remains as a
+fallback. Speeds 0.5–8×, HD/SD switching at the same moment, frames while
+scrubbing, and a progress note while the recorder sends a recording. The
+recording cache keeps to its disk budget, and a built-in **playback check**
+(Playback tab → Debug) measures playback on the device it runs on.
 
 Requires Home Assistant 2026.10 or newer with the Reolink integration set up.
 
