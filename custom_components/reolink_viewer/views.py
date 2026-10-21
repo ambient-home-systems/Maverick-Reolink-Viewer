@@ -16,8 +16,10 @@ the grant expire.
   downloading, gets the original progressively (200, chunked); every other
   URL gets the plain MP4, rewritten from the complete original on the first
   request (the original if the rewrite fails).
-- Issuing a URL *leases* the recording (``VodCache.lease``): it is not
-  evicted until the URL expires.
+- Issuing a player's URL *leases* the recording (``VodCache.lease``): it is
+  not evicted until the URL expires or the player releases it. Each request
+  marks the lease as used, so a lease nobody has used for a while gives way
+  to a fill behind a click.
 - ``/api/reolink_viewer/clip/{token}`` serves the recording as a download
   (the plain copy if there is one).
 - ``/api/reolink_viewer/thumb/{token}`` serves a timeline thumbnail (JPEG).
@@ -162,6 +164,7 @@ class _Base(HomeAssistantView):
         cache = data.vod_cache
         try:
             entry = await cache.async_open(grant.recording, Priority.PLAYBACK)
+            cache.touch(token)
             headers: dict[str, str] = {
                 "Content-Type": "video/mp4",
                 "Cache-Control": "private, no-store",
@@ -262,6 +265,7 @@ class MseView(HomeAssistantView):
         headers = {"Cache-Control": "private, no-store"}
         try:
             entry = await cache.async_open(grant.recording, Priority.PLAYBACK)
+            cache.touch(token)
             async with asyncio.timeout(COMPLETE_TIMEOUT):
                 if part == "init":
                     init, mime = await cache.async_init(entry)

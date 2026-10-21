@@ -15,7 +15,7 @@ from pytest_homeassistant_custom_component.typing import (
     WebSocketGenerator,
 )
 
-from custom_components.reolink_viewer import bridge, timeline, views
+from custom_components.reolink_viewer import bridge, timeline, views, vodcache
 from custom_components.reolink_viewer.devices import PlaybackSource
 from custom_components.reolink_viewer.thumbnails import ThumbKey
 from custom_components.reolink_viewer.views import VodGrant
@@ -427,6 +427,99 @@ async def test_a_live_url_keeps_its_recording(
     assert resp.status == 206
     assert await resp.read() == BODY[100:200]
     assert reolink_host.get_vod_source.await_count == 1
+
+
+async def test_leases_follow_the_player(
+    hass: HomeAssistant,
+    hass_ws_client: WebSocketGenerator,
+    hass_client: ClientSessionGenerator,
+    hass_client_no_auth: ClientSessionGenerator,
+    wired: MockConfigEntry,
+    nvr_recording: bytes,
+) -> None:
+    """Reads keep a URL's lease fresh; the player releases it when it moves on."""
+    client = await hass_ws_client(hass)
+    camera = await _camera_id(client)
+    day = (
+        await _ws(
+            client,
+            {"type": "reolink_viewer/timeline/day", "device_id": camera, "date": DAY},
+        )
+    )["result"]
+    ref = {"device_id": camera, "date": DAY, "segment_id": day["segments"][0]["id"]}
+    msg = await _ws(client, {"type": "reolink_viewer/playback/mse", **ref})
+    base = msg["result"]["base"]
+    http = await hass_client()
+    resp = await http.get(f"{base}/init")
+    assert resp.status == 200
+    await resp.read()
+    cache = wired.runtime_data.vod_cache
+    (entry,) = cache._entries.values()
+    await cache.async_wait(entry, complete=True)
+    assert entry.task is not None
+    await entry.task
+    idle = vodcache.LEASE_IDLE_S
+    assert entry.busy(vodcache._clock(), idle=idle)
+    # Not read for a while: a click elsewhere may take its room; a read keeps it.
+    later = vodcache._clock() + idle + 1
+    with patch.object(vodcache, "_clock", return_value=later):
+        assert entry.busy(later)
+        assert not entry.busy(later, idle=idle)
+        resp = await http.get(f"{base}/frags?first=0&ms=1000")
+        await resp.read()
+        assert entry.busy(later, idle=idle)
+    # The file player's URL is leased (and read) the same way.
+    msg = await _ws(client, {"type": "reolink_viewer/playback/url", **ref})
+    url = msg["result"]["url"]
+    plain = await hass_client_no_auth()
+    resp = await plain.get(url)
+    await resp.read()
+    # The player moved on: both released; the URLs still work, unleased.
+    tokens = [base.rsplit("/", 1)[-1], url.split("?")[0].rsplit("/", 1)[-1]]
+    msg = await _ws(
+        client,
+        {"type": "reolink_viewer/playback/release", "tokens": [*tokens, "nope"]},
+    )
+    assert msg["success"]
+    assert not entry.busy(vodcache._clock())
+    resp = await http.get(f"{base}/init")
+    assert resp.status == 200
+    await resp.read()
+    assert not entry.busy(vodcache._clock())
+
+
+async def test_a_window_cut_short_ends_cleanly(
+    hass: HomeAssistant,
+    hass_ws_client: WebSocketGenerator,
+    hass_client: ClientSessionGenerator,
+    wired: MockConfigEntry,
+    nvr_recording: bytes,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A recording file gone mid-window ends the body; nothing is raised."""
+    client = await hass_ws_client(hass)
+    camera = await _camera_id(client)
+    day = (
+        await _ws(
+            client,
+            {"type": "reolink_viewer/timeline/day", "device_id": camera, "date": DAY},
+        )
+    )["result"]
+    ref = {"device_id": camera, "date": DAY, "segment_id": day["segments"][0]["id"]}
+    msg = await _ws(client, {"type": "reolink_viewer/playback/mse", **ref})
+    base = msg["result"]["base"]
+    http = await hass_client()
+    resp = await http.get(f"{base}/init")
+    await resp.read()
+
+    def gone(*_args: Any) -> bytes:
+        raise FileNotFoundError("the fill failed and removed its file")
+
+    monkeypatch.setattr(vodcache, "_read_fragments", gone)
+    resp = await http.get(f"{base}/frags?first=0&ms=4000")
+    assert resp.status == 200
+    assert resp.headers["X-RV-Count"] == "2"
+    assert await resp.read() == b""
 
 
 async def test_playback_errors(

@@ -9,6 +9,7 @@ import {
   fetchTimelineDay,
   fetchTimelineDays,
   prefetchSegment,
+  releasePlayback,
   toError,
   urlToken,
   type SegmentRef,
@@ -431,7 +432,10 @@ export class RvPlayback extends LitElement {
       const playback = mse
         ? await fetchPlaybackMse(hass, ref, wanted)
         : await fetchPlaybackUrl(hass, ref, progressive, wanted);
-      if (seq !== this._playSeq) return;
+      if (seq !== this._playSeq) {
+        this._release(playback);
+        return;
+      }
       this._playing = playback;
       this._metrics = {
         ...this._metrics,
@@ -498,12 +502,22 @@ export class RvPlayback extends LitElement {
     );
   }
 
+  /** The player no longer needs a recording: its URL's lease can end. */
+  private _release(playback: PlaybackUrl): void {
+    const hass = this.hass;
+    const token = urlToken(playback.base ?? playback.url ?? "");
+    if (hass && token) releasePlayback(hass, [token]).catch(() => undefined);
+  }
+
   private _toItem(playback: PlaybackUrl): PlayItem {
     const common = {
       recording: `${playback.stream}:${playback.segment_id}:${playback.end}`,
       segmentId: playback.segment_id,
       start: playback.start,
       end: playback.end,
+      release: () => {
+        this._release(playback);
+      },
     };
     const hass = this.hass;
     if (playback.base && hass?.fetchWithAuth) {
@@ -574,7 +588,10 @@ export class RvPlayback extends LitElement {
       const playback = this._useMse(this._stream)
         ? await fetchPlaybackMse(hass, ref, next.start)
         : await fetchPlaybackUrl(hass, ref, this._progressive, next.start);
-      if (seq !== this._playSeq) return;
+      if (seq !== this._playSeq) {
+        this._release(playback);
+        return;
+      }
       await this._player?.preload(this._toItem(playback));
     } catch {
       // Preloading is an optimisation: the next file is fetched when needed.

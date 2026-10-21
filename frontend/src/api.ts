@@ -205,6 +205,13 @@ export function urlToken(path: string): string {
   return path.split("?")[0]?.split("/").at(-1) ?? "";
 }
 
+/**
+ * End the leases of playback URLs (by token): the player no longer holds
+ * their recordings, so the server may evict them for others.
+ */
+export const releasePlayback = (hass: HomeAssistant, tokens: string[]): Promise<unknown> =>
+  hass.callWS({ type: "reolink_viewer/playback/release", tokens });
+
 /** The download of the copy a URL (by its token) serves. */
 export const fetchCacheStatus = (hass: HomeAssistant, token: string): Promise<CacheStatusResult> =>
   hass.callWS<CacheStatusResult>({ type: "reolink_viewer/playback/cache_status", token });
