@@ -14,13 +14,8 @@ import pytest
 from custom_components.reolink_viewer.bridge import CameraUrl, LiveProtocol
 from custom_components.reolink_viewer.devices import LiveSource
 from custom_components.reolink_viewer.live import relay as relay_module
-from custom_components.reolink_viewer.live.relay import (
-    MseRelay,
-    Viewer,
-    compare_parameter_sets,
-    init_parameter_sets,
-    sample_parameter_sets,
-)
+from custom_components.reolink_viewer.live.h26x import init_config
+from custom_components.reolink_viewer.live.relay import MseRelay, Viewer
 from custom_components.reolink_viewer.live.streams import (
     LiveError,
     LiveStream,
@@ -32,19 +27,17 @@ from homeassistant.core import HomeAssistant
 from .conftest import TEST_PASSWORD
 from .mp4_fixtures import (
     AUDIO_FRAME,
+    AVC_SPS_360,
+    AVC_SPS_480,
     FRAME,
-    HEVC_IDR,
-    HEVC_PPS,
-    HEVC_SPS,
     IDR,
     P_SLICE,
     PPS,
     SPS,
-    VPS,
+    avcc,
     go2rtc_audio_init,
     go2rtc_fragment,
     go2rtc_init,
-    hvcc,
     nals,
     visual_entry,
 )
@@ -179,39 +172,6 @@ async def settle() -> None:
         await asyncio.sleep(0)
 
 
-# ---- Parameter sets ----
-
-
-def test_parameter_sets() -> None:
-    """The init's sets against a key frame's: same, differ, none, unknown."""
-    found = init_parameter_sets(go2rtc_init())
-    assert found is not None
-    types, length, sets = found
-    assert length == 4
-    assert sets == {SPS, PPS}
-    same = sample_parameter_sets(nals(SPS, PPS, IDR), types, length)
-    assert compare_parameter_sets(sets, same) == "same"
-    other = bytes([0x67, 0x64, 0x00, 0x1E]) + SPS[4:]
-    differ = sample_parameter_sets(nals(other, PPS, IDR), types, length)
-    assert compare_parameter_sets(sets, differ) == "differ"
-    assert compare_parameter_sets(sets, sample_parameter_sets(nals(IDR), types, 4)) == (
-        "none"
-    )
-    broken = sample_parameter_sets(b"\0\0\1\0" + IDR, types, length)
-    assert compare_parameter_sets(sets, broken) == "unknown"
-    # H.265: VPS, SPS and PPS from the hvcC arrays.
-    hevc = go2rtc_init(
-        visual_entry("hvc1", 3840, 2160, hvcc(VPS, HEVC_SPS, HEVC_PPS)), audio=False
-    )
-    found = init_parameter_sets(hevc)
-    assert found is not None
-    types, length, sets = found
-    assert sets == {VPS, HEVC_SPS, HEVC_PPS}
-    stream = sample_parameter_sets(nals(VPS, HEVC_SPS, HEVC_PPS, HEVC_IDR), types, 4)
-    assert compare_parameter_sets(sets, stream) == "same"
-    assert init_parameter_sets(go2rtc_audio_init()) is None
-
-
 # ---- Feeds ----
 
 
@@ -277,6 +237,51 @@ async def test_a_viewer_waits_for_the_first_key_frame(
     await relay.async_shutdown()
     assert socket.closed
     assert viewer.closed
+
+
+async def test_the_init_is_rebuilt_from_the_stream(
+    setup: tuple[MseRelay, FakeServer, Scheduler],
+) -> None:
+    """go2rtc's init carries the description's sets; the key frame's replace them."""
+    relay, server, _scheduler = setup
+    viewer = await relay.async_attach(SUB, CHROME)
+    (socket,) = server.sockets
+    described = go2rtc_init(visual_entry("avc1", 640, 480, avcc(AVC_SPS_480, PPS)))
+    key = go2rtc_fragment(1, 1, 0, nals(AVC_SPS_360, PPS, IDR))
+    socket.binary(described + key)
+    data = await drain(viewer)
+    assert data.endswith(key)
+    config = init_config(data[: -len(key)])
+    assert config is not None
+    assert config.sets == {AVC_SPS_360, PPS}
+    state = relay.state(SUB)
+    assert state is not None
+    assert state["parameter_sets"] == "rebuilt"
+    # A later viewer gets the rebuilt one too.
+    late = await relay.async_attach(SUB, CHROME)
+    assert await drain(late) == data
+    await relay.async_shutdown()
+
+
+async def test_feed_ends_are_counted(
+    setup: tuple[MseRelay, FakeServer, Scheduler],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A warm feed that go2rtc drops is counted, logged, and opened again."""
+    relay, server, _scheduler = setup
+    await relay.async_keep_warm(SUB, True, key_frame_timeout=0)
+    with patch.object(relay_module, "RETRY_S", (0.0,)):
+        server.sockets[0].end()
+        for _ in range(100):
+            await asyncio.sleep(0.01)
+            if len(server.sockets) == 2 and relay.state(SUB) is not None:
+                break
+    state = relay.state(SUB)
+    assert state is not None
+    assert state["ends"] == 1
+    assert state["last_end"] == "go2rtc closed the stream"
+    assert "kept warm stopped" in caplog.text
+    await relay.async_shutdown()
 
 
 async def test_feeds_are_shared_by_codecs(

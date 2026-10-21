@@ -445,10 +445,15 @@ export interface LiveCacheState {
   cached_bytes: number;
   /**
    * The init segment's parameter sets (go2rtc takes them from the stream's
-   * description) against the first key frame's: "none" if it carries none;
-   * null before a key frame, or without H.264/H.265 video.
+   * description) against the first key frame's: "rebuilt" when they differed
+   * and the init segment was rebuilt from the key frame's, "differ" when it
+   * could not be, "none" if the key frame carries none; null before a key
+   * frame, or without H.264/H.265 video.
    */
-  parameter_sets: "same" | "differ" | "none" | "unknown" | null;
+  parameter_sets: "same" | "rebuilt" | "differ" | "none" | "unknown" | null;
+  /** The stream's feeds that ended on their own (go2rtc dropped them), and why. */
+  ends: number;
+  last_end: string | null;
 }
 
 export interface LiveStreamState {

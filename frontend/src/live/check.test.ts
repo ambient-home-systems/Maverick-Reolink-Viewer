@@ -115,7 +115,15 @@ function fakeHass(admin: boolean) {
           return Promise.resolve([{ urls: ["stun:stun.home-assistant.io:3478"] }]);
         case "reolink_viewer/live/status":
           return Promise.resolve({
-            go2rtc: { state: "running", version: "1.9.14", binary: "system", error: null, restarts: 0, webrtc_port: 18556 },
+            go2rtc: {
+              state: "running",
+              version: "1.9.14",
+              binary: "system",
+              error: null,
+              restarts: 0,
+              webrtc_port: 18556,
+              log: ["WRN [rtsp] error=EOF url=<url>"],
+            },
             running: {},
             preloaded: [],
             sessions: 0,
@@ -135,7 +143,9 @@ function fakeHass(admin: boolean) {
               key_interval_ms: 4000,
               cached_ms: 900,
               cached_bytes: 51200,
-              parameter_sets: "differ",
+              parameter_sets: "rebuilt",
+              ends: 1,
+              last_end: "go2rtc closed the stream",
             },
           });
         case "reolink_viewer/live/preload":
@@ -227,7 +237,10 @@ describe("LiveCheck", () => {
     expect(text).toContain("WebRTC ✗ codecs not matched: video:H265");
     expect(text).toContain("Home Assistant's view (camera.fyr_fluent): snapshot");
     expect(text).toContain("warm (key frame cached in");
-    expect(text).toContain("; key frames every 4.00 s; parameter sets: differ):");
+    expect(text).toContain(
+      "; key frames every 4.00 s; parameter sets: rebuilt; feed ended 1× (go2rtc closed the stream)):",
+    );
+    expect(text).toContain("go2rtc log (last 1 lines):\n  WRN [rtsp] error=EOF url=<url>");
     expect(text).toContain("warm: not measured (battery camera: never kept warm)");
     expect(text).toContain("Capacity test: RLN36");
     expect(text).toContain("  verdict: every level kept up");

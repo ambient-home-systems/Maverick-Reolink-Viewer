@@ -16,10 +16,13 @@ decodes from the key frame and shows the newest frame without waiting.
   it gets a feed of its own.
 - A viewer whose data has waited more than ``MAX_BEHIND_S`` to be sent is
   dropped: its player reconnects and starts again at the newest key frame.
-- The feed compares the parameter sets in the init segment (go2rtc takes them
-  from the stream's description) with those in the key frames (the stream's
-  own). Over MSE, three NVR streams showed a size their WebRTC frames did
-  not have.
+- go2rtc takes the init segment's parameter sets from the stream's
+  description; the key frames carry the stream's own. Where they differ (most
+  Reolink streams, runs 5 and 6), the feed rebuilds the init segment from the
+  first key frame's (``h26x.py``): over MSE, three NVR streams showed a size
+  their WebRTC frames did not have, and one decoded nothing until its second
+  key frame.
+- Each stream's feed ends are counted, with the last reason, for the check.
 
 go2rtc writes one ``moof`` + ``mdat`` per frame, marking key frames in the
 sample flags; the feed reads no more than the boxes' headers and flags.
@@ -39,7 +42,6 @@ from aiohttp import ClientError, ClientWebSocketResponse, WSMsgType
 from custom_components.reolink_viewer.fmp4 import (
     FragmentError,
     Track,
-    child_boxes,
     fragment_runs,
     init_tracks,
 )
@@ -47,6 +49,7 @@ from custom_components.reolink_viewer.mp4 import parse_box_header
 from homeassistant.core import HomeAssistant
 
 from .go2rtc import Go2rtcError, Go2rtcServer, redact
+from .h26x import VideoConfig, compare_sets, init_config, rebuild_init, sample_sets
 from .streams import Hold, LiveError, LiveStream, StreamRegistry
 
 _LOGGER = logging.getLogger(__name__)
@@ -65,14 +68,6 @@ MAX_BEHIND_S = 10.0
 # for STABLE_S).
 RETRY_S = (1.0, 2.0, 5.0, 10.0, 30.0, 60.0)
 STABLE_S = 60.0
-
-_AVC_ENTRIES = frozenset({"avc1", "avc3"})
-_HEVC_ENTRIES = frozenset({"hvc1", "hev1"})
-# NAL unit types of the parameter sets: SPS and PPS; VPS, SPS and PPS.
-_AVC_SETS = frozenset({7, 8})
-_HEVC_SETS = frozenset({32, 33, 34})
-# Bytes of a VisualSampleEntry before its child boxes (after the box header).
-_VISUAL_FIXED = 78
 
 
 class Viewer:
@@ -153,7 +148,7 @@ class Feed:
         self._moof: bytes | None = None
         self._tracks: dict[int, Track] = {}
         self._video: Track | None = None
-        self._init_sets: tuple[frozenset[int], int, frozenset[bytes]] | None = None
+        self._config: VideoConfig | None = None
         self._gop: list[bytes] = []
         self._gop_bytes = 0
         self._gop_start: int | None = None
@@ -320,7 +315,7 @@ class Feed:
         self._video = next(
             (t for t in self._tracks.values() if t.handler == "vide"), None
         )
-        self._init_sets = init_parameter_sets(init)
+        self._config = init_config(init)
 
     def _fragment(self, moof: bytes, mdat: bytes, sample: bytes) -> None:
         runs = fragment_runs(moof, self._tracks)
@@ -355,13 +350,25 @@ class Feed:
             if self._key_at is not None:
                 self.key_interval_s = now - self._key_at
             self._key_at = now
-            if self.parameter_sets is None and self._init_sets is not None:
-                types, length, init_sets = self._init_sets
-                self.parameter_sets = compare_parameter_sets(
-                    init_sets, sample_parameter_sets(sample, types, length)
-                )
+            if self.parameter_sets is None and self._config is not None:
+                self._check_sets(self._config, sample)
         self._gop_start = decode
         self._key_frame.set()
+
+    def _check_sets(self, config: VideoConfig, sample: bytes) -> None:
+        """Compare the key frame's parameter sets; rebuild the init if they differ.
+
+        Viewers are sent the init segment with their first key frame, so the
+        first key frame's sets can still replace go2rtc's.
+        """
+        sets = sample_sets(sample, config)
+        self.parameter_sets = compare_sets(config.sets, sets)
+        if self.parameter_sets != "differ" or sets is None or self.init is None:
+            return
+        rebuilt = rebuild_init(self.init, sets, hevc=config.hevc)
+        if rebuilt is not None:
+            self.init = rebuilt
+            self.parameter_sets = "rebuilt"
 
     def _end(self, error: str | None) -> None:
         if self.ended:
@@ -397,6 +404,8 @@ class MseRelay:
         self._retries: dict[str, int] = {}
         self._timers: dict[str, asyncio.TimerHandle] = {}
         self._closing: set[Feed] = set()
+        # Per stream: feeds that ended on their own, and the last reason.
+        self._ends: dict[str, tuple[int, str]] = {}
         self._stopped = False
 
     async def async_attach(self, stream: LiveStream, codecs: str) -> Viewer:
@@ -452,9 +461,15 @@ class MseRelay:
         return list(self._warm)
 
     def state(self, stream: LiveStream) -> dict[str, Any] | None:
-        """Return the cache of a stream (its first feed), if it has one."""
+        """Return the cache of a stream (its first feed), if it has one.
+
+        With how many of its feeds ended on their own, and the last reason.
+        """
         feeds = self._feeds.get(stream.name)
-        return feeds[0].state() if feeds else None
+        if not feeds:
+            return None
+        ends, last = self._ends.get(stream.name, (0, None))
+        return {**feeds[0].state(), "ends": ends, "last_end": last}
 
     def forget(self, feed: Feed) -> None:
         """Stop new viewers joining a feed that is closing (use Feed.close)."""
@@ -471,11 +486,14 @@ class MseRelay:
         self.forget(feed)
         self._closing.discard(feed)
         name = feed.stream.name
+        ran = time.monotonic() - feed.started_at
+        if error is not None and feed.mime:
+            count, _last = self._ends.get(name, (0, ""))
+            self._ends[name] = (count + 1, redact(error))
         if not feed.warm or name not in self._warm or self._stopped:
             return
-        ran = time.monotonic() - feed.started_at
-        _LOGGER.debug(
-            "The warm feed of %s ended after %.0f s: %s",
+        _LOGGER.warning(
+            "A %s stream kept warm stopped after %.0f s (%s); opening it again",
             feed.stream.kind,
             ran,
             redact(error or "closed"),
@@ -579,116 +597,3 @@ def _mime_codecs(mime: str) -> str:
     """Return the codecs of a MIME type: video/mp4; codecs="a,b" → a,b."""
     _, _, rest = mime.partition("codecs=")
     return rest.strip().strip('"')
-
-
-def init_parameter_sets(
-    init: bytes,
-) -> tuple[frozenset[int], int, frozenset[bytes]] | None:
-    """Return a video init segment's parameter sets.
-
-    That is (their NAL unit types, the stream's NAL length size, the sets),
-    read from the ``avcC`` or ``hvcC`` box. None without H.264 or H.265 video.
-    """
-    for entry_type, entry in _sample_entries(init):
-        if entry_type in _AVC_ENTRIES:
-            config = _config(entry, "avcC")
-            if config is not None and len(config) >= 7:
-                return _AVC_SETS, (config[4] & 3) + 1, _avcc_sets(config)
-        elif entry_type in _HEVC_ENTRIES:
-            config = _config(entry, "hvcC")
-            if config is not None and len(config) >= 23:
-                return _HEVC_SETS, (config[21] & 3) + 1, _hvcc_sets(config)
-    return None
-
-
-def sample_parameter_sets(
-    sample: bytes, types: frozenset[int], length: int
-) -> frozenset[bytes] | None:
-    """Return the parameter sets in a sample (length-prefixed NAL units).
-
-    None if the bytes are not NAL units of that length size.
-    """
-    found: set[bytes] = set()
-    pos = 0
-    while pos < len(sample):
-        if pos + length > len(sample):
-            return None
-        size = int.from_bytes(sample[pos : pos + length], "big")
-        pos += length
-        if size == 0 or pos + size > len(sample):
-            return None
-        nal = sample[pos : pos + size]
-        pos += size
-        kind = nal[0] & 0x1F if types is _AVC_SETS else (nal[0] >> 1) & 0x3F
-        if kind in types:
-            found.add(nal)
-    return frozenset(found)
-
-
-def compare_parameter_sets(
-    init: frozenset[bytes], stream: frozenset[bytes] | None
-) -> str:
-    """Return "same", "differ", "none" (the key frame has none) or "unknown"."""
-    if stream is None:
-        return "unknown"
-    if not stream:
-        return "none"
-    return "same" if stream <= init else "differ"
-
-
-def _sample_entries(init: bytes) -> list[tuple[str, bytes]]:
-    """Return the sample entries (type, box payload) of every track."""
-    entries: list[tuple[str, bytes]] = []
-    for moov_type, moov in child_boxes(init):
-        if moov_type != "moov":
-            continue
-        for trak_type, trak in child_boxes(moov):
-            if trak_type != "trak":
-                continue
-            for stsd in _path(trak, ("mdia", "minf", "stbl", "stsd")):
-                # Full box (4 bytes) and entry count (4 bytes), then entries.
-                entries.extend(child_boxes(stsd[8:]))
-    return entries
-
-
-def _path(data: bytes, path: tuple[str, ...]) -> list[bytes]:
-    found = [data]
-    for name in path:
-        found = [p for d in found for t, p in child_boxes(d) if t == name]
-    return found
-
-
-def _config(entry: bytes, name: str) -> bytes | None:
-    for box_type, payload in child_boxes(entry[_VISUAL_FIXED:]):
-        if box_type == name:
-            return payload
-    return None
-
-
-def _avcc_sets(config: bytes) -> frozenset[bytes]:
-    sets: list[bytes] = []
-    pos = 5
-    # The SPS, then the PPS; the SPS count shares its byte with reserved bits.
-    for mask in (0x1F, 0xFF):
-        if pos >= len(config):
-            break
-        count = config[pos] & mask
-        pos += 1
-        for _ in range(count):
-            size = int.from_bytes(config[pos : pos + 2], "big")
-            sets.append(config[pos + 2 : pos + 2 + size])
-            pos += 2 + size
-    return frozenset(sets)
-
-
-def _hvcc_sets(config: bytes) -> frozenset[bytes]:
-    sets: list[bytes] = []
-    pos = 23
-    for _ in range(config[22]):
-        count = int.from_bytes(config[pos + 1 : pos + 3], "big")
-        pos += 3
-        for _ in range(count):
-            size = int.from_bytes(config[pos : pos + 2], "big")
-            sets.append(config[pos + 2 : pos + 2 + size])
-            pos += 2 + size
-    return frozenset(sets)
