@@ -1754,8 +1754,8 @@ gate), **2** builds live view from what step 1 decides.
 | Step | Status |
 | --- | --- |
 | 0. Fix four Phase 2B findings (a failing test for each first) | **Done** (v0.4.0), see "Step 0" below |
-| 1. Our own go2rtc, and a live check in the panel (gate) | **Built** (v0.4.0), see "Step 1 as built". Desktop report in (run 5); waiting for the three iPhone runs ("How to run the live check") |
-| 1. Record the reports here and in the hardware matrix; decide the live stream budget, WebRTC or MSE per setup, which cameras stay warm, the HD stream per camera | **Desktop Chrome on the LAN: recorded and decided** (v0.4.1), see "Step 1 results". The iPhone setups: waiting. The rules are fixed below, before seeing the reports |
+| 1. Our own go2rtc, and a live check in the panel (gate) | **Built** (v0.4.0), see "Step 1 as built". Desktop report in (run 5), iPhone on Wi-Fi in (run 11); waiting for the iPhone through Tailscale and Nabu Casa ("How to run the live check") |
+| 1. Record the reports here and in the hardware matrix; decide the live stream budget, WebRTC or MSE per setup, which cameras stay warm, the HD stream per camera | **Desktop Chrome on the LAN: recorded and decided** (v0.4.1), see "Step 1 results". **The iPhone app on Wi-Fi: recorded and decided** (run 11), see "Step 2: the iPhone on Wi-Fi". Tailscale and Nabu Casa: waiting. The rules are fixed below, before seeing the reports |
 | 2. Stream registry, delivery, Live tab and grid, keep warm, debug panel | **In progress.** The key-frame cache is built (v0.5.0) and measured on the desktop (run 6), see "Step 2: the key-frame cache"; v0.5.1 rebuilds the MSE init segment and records why warm feeds end (run 7: the sizes are right). v0.5.2 measured the last two oddities (run 8); v0.5.3 fixed the late H.264 paints (run 9: warm MSE median 0.15 s); run 10 (v0.5.4) confirms it. v0.5.5 files each live check report under its device. The rest waits for the iPhone reports |
 
 #### Step 0: four Phase 2B findings (v0.4.0)
@@ -2278,6 +2278,51 @@ which named only the setup and the time:
   playback check's did, placed off screen the way clipboard.js does it for iOS.
   Where copying is blocked anyway, the page says so, shows the report's text,
   and points to Saved reports on a computer (every run is saved on the server).
+
+#### Step 2: the iPhone on Wi-Fi (run 11, v0.5.5)
+
+The report is in the hardware matrix (run 11): the Companion app on home Wi-Fi,
+with the page over HTTP from the LAN address. Every session played: WebRTC
+connected in 56 of 56, and MSE (ManagedMediaSource) played all 29 cold and all
+27 warm streams.
+
+What it decides, by the rules:
+
+- **The iPhone app on Wi-Fi: WebRTC for a cold stream, MSE for a warm one**,
+  as on the desktop.
+  - Cold, WebRTC is as fast or faster: 2.51 s against MSE's 3.61 s on subs,
+    and 1.35 s against 1.47 s on mains and ext (within 0.3 s). Both wait for
+    the camera's next key frame.
+  - Warm, MSE starts at once from the key-frame cache: 0.09 s on subs and
+    0.17 s on mains and ext, against WebRTC's 3.91 s and 1.90 s.
+  - MSE carries the cameras' AAC audio as it is (ManagedMediaSource takes
+    `mp4a`).
+- **HD on the iPhone: the main stream on every camera but the Duo 3, which
+  uses ext**, as on the desktop. ManagedMediaSource accepts `hvc1`, and WebRTC
+  agreed on H.265 in every H.265 session. Each H.265 main played over both
+  transports: the RLC-520A "Garage", the CX810 (3840×2160), the E1 Zoom and
+  the Doorbell. Warm MSE started the mains-powered ones in 0.22–0.30 s. The
+  panel still asks `decodingInfo` at each camera's size before it picks the
+  main, and uses ext where the answer is not smooth. The Duo 3's 7680×2160
+  main painted its first frame too (0.69 s warm), but the rule keeps it on
+  ext: a first frame says nothing about decoding 20 fps at that size.
+- **Kept warm by default: unchanged** (Garage, Hallway, Front Yard Left, Back
+  Yard, Dogs and Laundry Room). Cold, their subs took 2.37–3.87 s, except
+  Dogs, whose 0.44 s landed just before a key frame. Warm, every one started
+  in 0.07–0.10 s.
+- **The CX410 and CX810 direct entries can still go.** Through the NVR their
+  cold subs started within 0.1 s of the direct ones (0.82 against 0.87 s, and
+  3.36 against 3.28 s), and warm within 0.02 s.
+
+The exit criteria, on the iPhone at home:
+- Warm streams play live in under 1.5 s: yes, 0.69 s at worst (the Duo 3's
+  main).
+- Live is faster than the stock view: yes, 19 of 19 streams. Home
+  Assistant's view took a median 1.76 s here.
+- The iPhone works on Wi-Fi: yes.
+- Every tile shows its snapshot in under 0.5 s: no. HA's snapshot took a
+  median 0.57 s, and 1.83 s for the Laundry Room's sub. This still needs step
+  2's image cache.
 
 ## Phase 4 — Performance, mobile, packaging, release (difficulty: Standard, 2–3 wk)
 

@@ -15,7 +15,8 @@ v0.4.0) is the Phase 3 live check on desktop Chrome on the LAN, and run 6 (v0.5.
 repeats it with the key-frame cache, run 7 (v0.5.1) with the init segment
 rebuilt from the stream, run 8 (v0.5.2) with the MSE steps timed, run 9
 (v0.5.3) with H.264 frames declared in decode order, and run 10 (v0.5.4) once
-more; the iPhone runs follow.
+more. Run 11 (v0.5.5) is the first iPhone run, in the Companion app on home
+Wi-Fi; Tailscale and Nabu Casa follow.
 
 ## Setup probed
 
@@ -404,6 +405,50 @@ The capacity test kept up at every level. Level 1's first frame took 3.46 s and
 level 2's 3.99 s, both within the key-frame wait. The download ran at
 397 Mbit/s alone and 416 Mbit/s with seven streams. go2rtc logged nothing past
 its start.
+
+Run 11, 2026-10-22: v0.5.5, the iPhone (iOS 27.0, Companion app 2026.10.2) on
+home Wi-Fi, with the page loaded over HTTP from the LAN address. MSE is
+ManagedMediaSource; it takes `avc1`, `hvc1` and AAC (`mp4a`), not FLAC or Opus.
+WebRTC receives H.264 and H.265. No capacity test (the desktop runs had it).
+
+| Camera | Via | Warm MSE sub / main / ext | Cold sub: WebRTC, MSE |
+| --- | --- | --- | --- |
+| Front Yard Right (CX410) | NVR | 0.10 / 0.37 / 0.14 s | 1.17 s, 0.47 s |
+| | direct | 0.09 / 0.36 / 0.14 s | 0.84 s, 0.90 s |
+| Garage (RLC-520A) | NVR | 0.09 / 0.25 / 0.10 s | 3.82 s, 3.68 s |
+| Hallway (E1 Pro) | NVR | 0.09 / 0.19 / 0.14 s | 2.37 s, 3.54 s |
+| Front Yard Left (CX810) | NVR | 0.07 / 0.24 / 0.14 s | 2.85 s, 3.87 s |
+| | direct | 0.09 / 0.22 / 0.13 s | 2.81 s, 3.76 s |
+| Back Yard (Duo 3 PoE) | NVR | 0.08 / 0.69 / 0.10 s | 2.65 s, 3.69 s |
+| Dogs (RLC-520A) | NVR | 0.10 / 0.41 / 0.15 s | 0.44 s, 0.36 s |
+| Laundry Room (E1 Zoom) | direct | 0.07 / 0.30 / 0.09 s | 3.52 s, 3.71 s |
+| Doorbell (battery) | direct | - | 0.62 s, 0.47 s |
+
+The H.265 mains on the iPhone, over both transports:
+
+| Camera | Size | Cold WebRTC | Cold MSE | Warm MSE |
+| --- | --- | --- | --- | --- |
+| Garage (RLC-520A), NVR | 2560×1920 | 2.19 s | 1.71 s | 0.25 s |
+| Front Yard Left (CX810), NVR | 3840×2160 | 1.31 s | 1.67 s | 0.24 s |
+| Front Yard Left (CX810), direct | 3840×2160 | 1.25 s | 1.34 s | 0.22 s |
+| Back Yard (Duo 3), NVR | 7680×2160 | 1.44 s | 1.42 s | 0.69 s |
+| Laundry Room (E1 Zoom), direct | 3840×2160 | 1.35 s | 1.76 s | 0.30 s |
+| Doorbell, direct | 2048×2048 | 0.66 s | 0.54 s | (battery) |
+
+Medians:
+- **Warm MSE:** 0.09 s on subs (0.07–0.10 s) and 0.17 s on mains and ext
+  (0.09–0.69 s). Signed URLs took 4–24 ms (the desktop's took about 20 ms).
+- **Warm WebRTC:** 3.91 s on subs, 1.90 s on mains and ext.
+- **Cold WebRTC:** 2.51 s on subs, 1.35 s on mains and ext.
+- **Cold MSE:** 3.61 s on subs, 1.47 s on mains and ext.
+- **Home Assistant's view:** 1.76 s; ours was faster on 19 of 19.
+- **HA's snapshot:** 0.57 s, and it worked on all 19 entities. The Laundry
+  Room's sub took 1.83 s.
+- **go2rtc's frame:** 2.08 s. It failed once, on Front Yard Left's H.265 main
+  through the NVR while warm.
+- **WebRTC:** connected in 56 of 56 sessions, all host/udp.
+
+go2rtc logged nothing past its start.
 
 ## Findings
 
