@@ -370,6 +370,58 @@ def fragment_runs(
     return _fragment_runs(moof, tracks)
 
 
+def set_sample_size(moof: bytes, size: int) -> bytes | None:
+    """Return a one-sample ``moof`` (go2rtc's) with its sample's size changed.
+
+    The size is in the trun (per sample) or the tfhd (default); data offsets
+    are unchanged, the moof keeps its size. None for other layouts.
+    """
+    box = parse_box_header(moof[:16], 0)
+    if box is None:
+        return None
+    out = bytearray(moof)
+    trafs = []
+    pos = box.header
+    for box_type, raw, header in _boxes(moof[box.header :]):
+        if box_type == "traf":
+            trafs.append((pos, raw, header))
+        pos += len(raw)
+    if len(trafs) != 1:
+        return None
+    traf_at, traf, traf_header = trafs[0]
+    pos = traf_at + traf_header
+    # Each child's payload: (start, end) in the moof.
+    sites: dict[str, tuple[int, int]] = {}
+    for child_type, child, child_header in _boxes(traf[traf_header:]):
+        sites.setdefault(child_type, (pos + child_header, pos + len(child)))
+        pos += len(child)
+    if "tfhd" not in sites or "trun" not in sites:
+        return None
+    run, run_end = sites["trun"]
+    if run + 8 > run_end:
+        return None
+    run_flags = int.from_bytes(out[run + 1 : run + 4], "big")
+    (count,) = struct.unpack_from(">I", out, run + 4)
+    if count != 1:
+        return None
+    if run_flags & _TRUN_SIZE:
+        at = run + 8 + 4 * bool(run_flags & _TRUN_DATA_OFFSET)
+        at += 4 * bool(run_flags & _TRUN_FIRST_FLAGS)
+        at += 4 * bool(run_flags & _TRUN_DURATION)
+        end = run_end
+    else:
+        head, end = sites["tfhd"]
+        flags = int.from_bytes(out[head + 1 : head + 4], "big")
+        if not flags & _TFHD_SIZE:
+            return None
+        at = head + 8 + 8 * bool(flags & _TFHD_BASE_OFFSET)
+        at += 4 * bool(flags & _TFHD_DESCRIPTION) + 4 * bool(flags & _TFHD_DURATION)
+    if at + 4 > end:
+        return None
+    struct.pack_into(">I", out, at, size)
+    return bytes(out)
+
+
 def child_boxes(data: bytes) -> list[tuple[str, bytes]]:
     """Return the boxes in ``data``, in order: (type, payload)."""
     return _children(data)

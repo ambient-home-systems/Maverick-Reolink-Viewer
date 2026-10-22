@@ -14,7 +14,7 @@ import pytest
 from custom_components.reolink_viewer.bridge import CameraUrl, LiveProtocol
 from custom_components.reolink_viewer.devices import LiveSource
 from custom_components.reolink_viewer.live import relay as relay_module
-from custom_components.reolink_viewer.live.h26x import init_config
+from custom_components.reolink_viewer.live.h26x import init_config, limit_reorder
 from custom_components.reolink_viewer.live.relay import MseRelay, Viewer
 from custom_components.reolink_viewer.live.streams import (
     LiveError,
@@ -28,6 +28,7 @@ from .conftest import TEST_PASSWORD
 from .mp4_fixtures import (
     AUDIO_FRAME,
     AVC_SPS_360,
+    AVC_SPS_360_UNLIMITED,
     AVC_SPS_480,
     FRAME,
     IDR,
@@ -258,9 +259,42 @@ async def test_the_init_is_rebuilt_from_the_stream(
     state = relay.state(SUB)
     assert state is not None
     assert state["parameter_sets"] == "rebuilt"
+    assert state["frame_order"] == "reorder 2"  # x264's own limit: kept
     # A later viewer gets the rebuilt one too.
     late = await relay.async_attach(SUB, CHROME)
     assert await drain(late) == data
+    await relay.async_shutdown()
+
+
+async def test_the_frame_order_is_limited(
+    setup: tuple[MseRelay, FakeServer, Scheduler],
+) -> None:
+    """An SPS without a reorder limit gets one, in the init and the key frames."""
+    relay, server, _scheduler = setup
+    viewer = await relay.async_attach(SUB, CHROME)
+    (socket,) = server.sockets
+    init = go2rtc_init(visual_entry("avc1", 640, 360, avcc(AVC_SPS_360_UNLIMITED, PPS)))
+    key = go2rtc_fragment(1, 1, 0, nals(AVC_SPS_360_UNLIMITED, PPS, IDR))
+    socket.binary(init + key + video(2, key=False))
+    data = await drain(viewer)
+    limited = limit_reorder(AVC_SPS_360_UNLIMITED)
+    assert limited is not None
+    sent_key = go2rtc_fragment(1, 1, 0, nals(limited, PPS, IDR))
+    assert data.endswith(sent_key + video(2, key=False))
+    config = init_config(data[: -len(sent_key + video(2, key=False))])
+    assert config is not None
+    assert config.sets == {limited, PPS}
+    state = relay.state(SUB)
+    assert state is not None
+    assert state["frame_order"] == "limit added"
+    assert state["parameter_sets"] == "same"
+    # Every later key frame too.
+    socket.binary(
+        go2rtc_fragment(3, 1, 2 * FRAME, nals(AVC_SPS_360_UNLIMITED, PPS, IDR))
+    )
+    assert await drain(viewer) == go2rtc_fragment(
+        3, 1, 2 * FRAME, nals(limited, PPS, IDR)
+    )
     await relay.async_shutdown()
 
 

@@ -117,6 +117,7 @@ export function cacheLabel(cache: LiveCacheState | null | undefined): string {
   const parts = [
     cache.key_interval_ms !== null ? `key frames every ${seconds(cache.key_interval_ms)}` : undefined,
     cache.parameter_sets !== null ? `parameter sets: ${cache.parameter_sets}` : undefined,
+    cache.frame_order ? `frame order: ${cache.frame_order}` : undefined,
     cache.ends ? `feed ended ${String(cache.ends)}× (${cache.last_end ?? "?"})` : undefined,
     `feed opened ${seconds(cache.age_ms)} before`,
   ].filter(Boolean);

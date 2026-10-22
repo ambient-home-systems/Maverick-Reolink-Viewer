@@ -468,3 +468,6 @@ HEVC_SPS_432 = bytes.fromhex(
     "42010101600000030090000003000003005da00300806c596566924caf0168080000030008000003007840"
 )
 HEVC_PPS_REAL = bytes.fromhex("4401c172b46240")
+# AVC_SPS_360 without its VUI bitstream restriction (no reorder limit), as some
+# cameras send their SPS.
+AVC_SPS_360_UNLIMITED = bytes.fromhex("67640016acd940a02ff970110000030001000003001e04")

@@ -451,6 +451,12 @@ export interface LiveCacheState {
    * frame, or without H.264/H.265 video.
    */
   parameter_sets: "same" | "rebuilt" | "differ" | "none" | "unknown" | null;
+  /**
+   * H.264: "decode order" (POC type 2), "reorder N" (the stream's own limit) or
+   * "limit added" (the SPS said nothing; the relay's says decode order, or
+   * Chrome on macOS holds up to 16 frames back over MSE). Null otherwise.
+   */
+  frame_order: string | null;
   /** Since this feed opened (a warm feed younger than expected was replaced). */
   age_ms: number;
   /** The stream's feeds that ended on their own (go2rtc dropped them), and why. */
