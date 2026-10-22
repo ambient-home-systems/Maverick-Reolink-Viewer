@@ -1754,8 +1754,8 @@ gate), **2** builds live view from what step 1 decides.
 | Step | Status |
 | --- | --- |
 | 0. Fix four Phase 2B findings (a failing test for each first) | **Done** (v0.4.0), see "Step 0" below |
-| 1. Our own go2rtc, and a live check in the panel (gate) | **Built** (v0.4.0), see "Step 1 as built". Desktop report in (run 5), iPhone on Wi-Fi in (run 11); waiting for the iPhone through Tailscale and Nabu Casa ("How to run the live check") |
-| 1. Record the reports here and in the hardware matrix; decide the live stream budget, WebRTC or MSE per setup, which cameras stay warm, the HD stream per camera | **Desktop Chrome on the LAN: recorded and decided** (v0.4.1), see "Step 1 results". **The iPhone app on Wi-Fi: recorded and decided** (run 11), see "Step 2: the iPhone on Wi-Fi". Tailscale and Nabu Casa: waiting. The rules are fixed below, before seeing the reports |
+| 1. Our own go2rtc, and a live check in the panel (gate) | **Built** (v0.4.0), see "Step 1 as built". Desktop report in (run 5), iPhone on Wi-Fi (run 11) and through Tailscale (run 12) in; waiting for the iPhone through Nabu Casa ("How to run the live check") |
+| 1. Record the reports here and in the hardware matrix; decide the live stream budget, WebRTC or MSE per setup, which cameras stay warm, the HD stream per camera | **Desktop Chrome on the LAN: recorded and decided** (v0.4.1), see "Step 1 results". **The iPhone app on Wi-Fi and through Tailscale: recorded and decided** (runs 11 and 12), see "Step 2: the iPhone on Wi-Fi" and "Step 2: the iPhone through Tailscale". Nabu Casa: waiting. The rules are fixed below, before seeing the reports |
 | 2. Stream registry, delivery, Live tab and grid, keep warm, debug panel | **In progress.** The key-frame cache is built (v0.5.0) and measured on the desktop (run 6), see "Step 2: the key-frame cache"; v0.5.1 rebuilds the MSE init segment and records why warm feeds end (run 7: the sizes are right). v0.5.2 measured the last two oddities (run 8); v0.5.3 fixed the late H.264 paints (run 9: warm MSE median 0.15 s); run 10 (v0.5.4) confirms it. v0.5.5 files each live check report under its device. The rest waits for the iPhone reports |
 
 #### Step 0: four Phase 2B findings (v0.4.0)
@@ -2323,6 +2323,57 @@ The exit criteria, on the iPhone at home:
 - Every tile shows its snapshot in under 0.5 s: no. HA's snapshot took a
   median 0.57 s, and 1.83 s for the Laundry Room's sub. This still needs step
   2's image cache.
+
+#### Step 2: the iPhone through Tailscale (run 12, v0.5.5)
+
+The report is in the hardware matrix (run 12): the same iPhone with Wi-Fi off,
+the page over HTTPS at the Tailscale address. Every session played again.
+WebRTC connected in 56 of 56 sessions: 45 straight over Tailscale, and 11
+through a TURN relay. MSE played all 29 cold and all 27 warm streams.
+
+What it decides, by the rules:
+
+- **The iPhone app through Tailscale: WebRTC for a cold stream, MSE for a
+  warm one**, as at home.
+  - Cold, WebRTC is as fast or faster: 2.16 s against MSE's 3.58 s on subs,
+    and 1.75 s against 1.90 s on mains and ext.
+  - Warm, MSE's 0.40 s and 1.12 s beat WebRTC's 3.90 s and 1.75 s.
+- **HD: unchanged**, the main on every camera but the Duo 3. Each H.265 main
+  played over both transports again.
+- **Kept warm by default: unchanged.** Warm, the six subs started in
+  0.28–0.45 s; cold, they took 1.59–4.12 s.
+- **The CX410 and CX810 direct entries can still go.** This run's cold subs
+  differ: Front Yard Right started 0.56 s slower through the NVR (1.50 against
+  0.94 s), and Front Yard Left 1.91 s faster (2.06 against 3.97 s). Each figure
+  is the mean of the cold WebRTC and MSE starts. Over the eight runs that
+  measured both paths (runs 5–12), the gap ran from 0.71 s faster to 1.99 s
+  slower through the NVR for Front Yard Right, and from 1.91 s faster to 1.89 s
+  slower for Front Yard Left. Its median is about 0 s for both cameras: where
+  the camera is in its key-frame interval decides it, not the path.
+
+What the run shows beyond the rules:
+
+- **A warm main costs its cached frames' transfer on a slow link.** Warm MSE
+  started the mains in 1.31–1.86 s here, against 0.19–0.69 s at home. The
+  relay sends the init segment and every frame since the last key frame as
+  one message. For a main that is up to 2 s of 3–10 Mbit/s video, about
+  1–2.5 MB, and the link carried roughly 10–15 Mbit/s. No viewer waits on it
+  in step 2's design: only subs are kept warm (0.28–0.45 s here), and full
+  screen starts the main in the background and swaps it in on its first
+  frame. If a main is ever kept warm for remote viewers, sending the key frame
+  first and catching up from it would show a picture sooner.
+- **WebRTC mostly goes straight over Tailscale.** 45 of 56 sessions paired
+  the iPhone with one of go2rtc's own addresses and skipped the relay. Home
+  Assistant's own view went through a relay in all 19 of its sessions.
+
+The exit criteria, on the iPhone through Tailscale:
+- The iPhone works through Tailscale: yes.
+- Live is faster than the stock view: yes, 19 of 19 streams. Home
+  Assistant's view took a median 3.64 s here.
+- Warm streams under 1.5 s is a LAN criterion. Here the warm subs, which the
+  grid uses, started in 0.45 s at worst.
+- Every tile shows its snapshot in under 0.5 s: no. HA's snapshot took a
+  median 0.72 s; step 2's image cache is still needed.
 
 ## Phase 4 — Performance, mobile, packaging, release (difficulty: Standard, 2–3 wk)
 
