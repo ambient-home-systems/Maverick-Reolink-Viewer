@@ -293,7 +293,7 @@ def test_verdict() -> None:
     slow = {
         "level": 2,
         "added": "b sub",
-        "first_frame_s": 5.0,
+        "first_frame_s": 8.0,
         "streams": [stream, {**stream, "stream": "b sub", "fps": 11.0}],
     }
     report = {"levels": [ok, slow]}
@@ -301,8 +301,16 @@ def test_verdict() -> None:
     assert result["first_failing_level"] == 2
     assert result["reasons"] == [
         "b sub at 11.0 of 15.0 fps",
-        "first frame 5.0 s (level 1: 1.0 s)",
+        "first frame 8.0 s (past a 4.5 s key-frame wait and 3.0 s)",
     ]
+    # A first frame anywhere within a key-frame interval is no slowdown (run 9:
+    # level 1 started in 0.38 s, level 6 in 3.47 s, every stream at its rate).
+    lucky = {**ok, "first_frame_s": 0.38}
+    unlucky = {**ok, "level": 2, "first_frame_s": 3.47}
+    assert capacity.verdict({"levels": [lucky, unlucky]}, None) == {
+        "first_failing_level": None,
+        "reasons": [],
+    }
     fill = {"level": 3, "added": "recording download", "streams": [stream]}
     fill["fill"] = {"mbit_s": 100.0}
     assert capacity.verdict({"levels": [ok, fill]}, 400.0)["reasons"] == [

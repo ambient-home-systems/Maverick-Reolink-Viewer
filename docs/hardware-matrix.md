@@ -13,8 +13,8 @@ to 4 streams) agreed on every pass/fail result. Runs 3 (v0.1.1) and 4 (v0.1.2) a
 the Phase 2 recording playback checks, in their own tables. Run 5 (2026-10-21,
 v0.4.0) is the Phase 3 live check on desktop Chrome on the LAN, and run 6 (v0.5.0)
 repeats it with the key-frame cache, run 7 (v0.5.1) with the init segment
-rebuilt from the stream, and run 8 (v0.5.2) with the MSE steps timed; the iPhone
-runs follow.
+rebuilt from the stream, run 8 (v0.5.2) with the MSE steps timed, and run 9
+(v0.5.3) with H.264 frames declared in decode order; the iPhone runs follow.
 
 ## Setup probed
 
@@ -357,6 +357,35 @@ cold WebRTC sub 2.18 s, main/ext 1.35 s; Home Assistant's view 2.49 s (ours
 faster on 18 of 19); HA's snapshot 0.60 s (19 of 19 this time). go2rtc logged
 nothing past its start; the capacity test kept up at every level.
 
+Run 9, 2026-10-21: v0.5.3 (the relay gives every H.264 SPS that sets no
+reorder limit one that says decode order), same Mac on Wi-Fi. Every H.264 stream
+reported "frame order: limit added": none of them sets a limit. Cold starts are
+still where the camera is in its key-frame interval.
+
+| Camera | Via | Warm MSE sub / main / ext | Cold sub: WebRTC, MSE |
+| --- | --- | --- | --- |
+| Front Yard Right (CX410) | NVR | 0.15 / 0.58 / 0.19 s | 1.19 s, 1.09 s |
+| | direct | 0.70 / 0.27 / 0.16 s | 0.80 s, 0.86 s |
+| Garage (RLC-520A) | NVR | 0.16 / 0.23 / 0.15 s | 2.70 s, 2.66 s |
+| Hallway (E1 Pro) | NVR | 0.15 / 0.19 / 0.18 s | 1.13 s, 1.07 s |
+| Front Yard Left (CX810) | NVR | 0.14 / 0.22 / 0.18 s | 0.90 s, 0.75 s |
+| | direct | 0.20 / 0.24 / 0.16 s | 0.70 s, 0.76 s |
+| Back Yard (Duo 3 PoE) | NVR | 0.15 / 0.31 / 0.14 s | 3.38 s, 3.67 s |
+| Dogs (RLC-520A) | NVR | 0.14 / 0.22 / 0.16 s | 1.00 s, 2.91 s |
+| Laundry Room (E1 Zoom) | direct | 0.13 / 0.24 / 0.15 s | 3.74 s, 3.67 s |
+| Doorbell (battery) | direct | - | 0.89 s, 0.66 s |
+
+Medians: warm MSE sub 0.15 s (run 8: 0.77 s), main/ext 0.19 s (0.30 s), all 27
+under 0.71 s; cold MSE sub 1.08 s (4.24 s), main/ext 1.60 s; cold WebRTC sub
+1.07 s, main/ext 1.17 s; warm WebRTC sub 3.88 s, main/ext 1.77 s; Home
+Assistant's view 2.71 s (ours faster on 19 of 19); HA's snapshot 0.59 s, go2rtc's
+frame 2.11 s. Cold MSE now paints 10–30 ms after its first data on every stream
+(run 8: up to 4 s on H.264 subs). The capacity test's verdict flagged level 6:
+Front Yard Left's sub started in 3.47 s against level 1's 0.38 s, both within a
+4 s key-frame interval, with every stream at its frame rate (v0.5.4 no longer
+counts that). At level 5 all five streams paused 1.3–1.4 s at once and kept
+their frame rates; the download ran at 330 Mbit/s with seven streams (390 alone).
+
 ## Findings
 
 Live view:
@@ -490,6 +519,19 @@ With the MSE steps timed (run 8, v0.5.2):
   that far behind. WebRTC shows frames as they are decoded, so it is not
   affected. v0.5.3 gives such streams an SPS that says frames come in decode
   order; the live check's warm line names the frame order.
+
+With frames declared in decode order (run 9, v0.5.3):
+
+- **No H.264 stream of these cameras sets a reorder limit**: all reported
+  "limit added", sub, main and ext alike.
+- **MSE now shows the first frame as soon as it arrives**: 10–30 ms after the
+  first data on every stream, cold or warm. Warm MSE starts in 0.13–0.70 s
+  (median 0.15 s on subs, 0.19 s on mains and ext), the Hallway's sub in 0.15 s
+  (run 8: 3.69 s). Cold MSE subs start like cold WebRTC (1.08 s against 1.07 s).
+- **The capacity test's first-frame rule mistook key-frame luck for a
+  slowdown** (3.47 s against level 1's 0.38 s, on 4 s key frames). v0.5.4 counts
+  only a first frame later than the longest key-frame interval (4.5 s) and
+  3 s more.
 
 Recorded video (NVR RLN36; the cameras record only to the NVR):
 

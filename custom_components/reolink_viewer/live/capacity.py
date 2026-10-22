@@ -18,8 +18,11 @@ how many clients the device lists as logged in (GetOnline), when it says.
 
 A level **fails** when a stream delivers no frame. It **slows down** when a
 stream falls below ``FPS_SHARE`` of its frame rate, the new stream's first
-frame takes more than twice the first level's and at least ``TTFF_MARGIN_S``
-more, or the download falls below ``FILL_SHARE`` of its speed alone.
+frame takes longer than a key-frame wait can explain (``KEY_INTERVAL_S``, the
+longest these cameras use, and ``TTFF_MARGIN_S`` more), or the download falls
+below ``FILL_SHARE`` of its speed alone. A first frame anywhere within a
+key-frame interval is where the camera happened to be in it (Phase 3, run 9:
+level 1 started in 0.38 s, level 6 in 3.47 s, both on 4 s key frames).
 """
 
 import asyncio
@@ -52,6 +55,8 @@ FILL_ALONE_S = 4.0
 FPS_SHARE = 0.85
 FILL_SHARE = 0.7
 TTFF_MARGIN_S = 3.0
+# The longest key-frame interval measured on these cameras (runs 6-9: 4.37 s).
+KEY_INTERVAL_S = 4.5
 SLOT_TIMEOUT = 120.0
 RUN_TIMEOUT = 900.0
 FILL_MAX_BYTES = 2 * 1024**3
@@ -362,7 +367,6 @@ class CapacityTest:
 
 def verdict(report: dict[str, Any], fill_alone: float | None) -> dict[str, Any]:
     """Return the first level that fails or slows down, and why."""
-    baseline: float | None = None
     for level in report["levels"]:
         reasons: list[str] = []
         for stream in level.get("streams", []):
@@ -377,10 +381,11 @@ def verdict(report: dict[str, Any], fill_alone: float | None) -> dict[str, Any]:
                 )
         first = level.get("first_frame_s")
         if first is not None:
-            if baseline is None:
-                baseline = first
-            elif first > max(2 * baseline, baseline + TTFF_MARGIN_S):
-                reasons.append(f"first frame {first} s (level 1: {baseline} s)")
+            if first > KEY_INTERVAL_S + TTFF_MARGIN_S:
+                reasons.append(
+                    f"first frame {first} s (past a {KEY_INTERVAL_S} s"
+                    f" key-frame wait and {TTFF_MARGIN_S} s)"
+                )
         elif "first_frame_s" in level:
             reasons.append(f"{level['added']}: no first frame")
         fill = level.get("fill")
