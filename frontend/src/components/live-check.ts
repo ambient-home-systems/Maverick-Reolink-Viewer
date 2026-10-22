@@ -1,10 +1,16 @@
 import { LitElement, css, html, nothing, type TemplateResult } from "lit";
 
 import { fetchLiveCameras, fetchLiveStatus, toError } from "../api";
+import { copyText } from "../clipboard";
 import { LIVE_REPORT_PREFIX, LIVE_SETUPS, LiveCheck, type LiveCheckOptions } from "../live/check";
+import { reportSource } from "../live/check-util";
 import { fetchCheckReports, type SavedReport } from "../playback/check";
+import { deviceSetup, setupMismatch } from "../playback/check-util";
 import { sharedStyles } from "../styles";
 import { LIVE_STREAMS, type HomeAssistant, type LiveCamera, type LiveStatus, type LiveStreamKind } from "../types";
+import { toast } from "./navigation";
+
+const SETUP_KEY = "reolink-viewer-live-check-setup";
 
 /** The capacity test downloads a recording at full speed: on by default only at home. */
 export function capacityByDefault(setup: string): boolean {
@@ -32,6 +38,7 @@ export class RvLiveCheck extends LitElement {
     _reports: { state: true },
     _error: { state: true },
     _copied: { state: true },
+    _shown: { state: true },
   };
 
   declare hass: HomeAssistant | undefined;
@@ -49,12 +56,14 @@ export class RvLiveCheck extends LitElement {
   declare _reports: SavedReport[] | undefined;
   declare _error: string | undefined;
   declare _copied: string | undefined;
+  /** A saved report whose text is on the page, because copying it was blocked. */
+  declare _shown: string | undefined;
 
   private _loaded = false;
 
   constructor() {
     super();
-    this._setup = LIVE_SETUPS[0];
+    this._setup = rememberedSetup();
     this._streams = [...LIVE_STREAMS];
     this._warm = true;
     this._stock = true;
@@ -142,12 +151,13 @@ export class RvLiveCheck extends LitElement {
   }
 
   private async _copy(text: string, which: string): Promise<void> {
-    try {
-      await navigator.clipboard.writeText(text);
+    if (await copyText(text)) {
       this._copied = which;
-    } catch {
-      this._copied = undefined;
+      return;
     }
+    this._copied = undefined;
+    this._shown = which;
+    toast(this, "Copying is blocked here: copy it from Saved reports on a computer, or select the text", "error");
   }
 
   protected override render(): TemplateResult {
@@ -170,6 +180,7 @@ export class RvLiveCheck extends LitElement {
             ?disabled=${running}
             @change=${(e: Event) => {
               this._setup = (e.target as HTMLSelectElement).value;
+              rememberSetup(this._setup);
             }}
           >
             ${LIVE_SETUPS.map((s) => html`<option value=${s} ?selected=${s === this._setup}>${s}</option>`)}
@@ -238,6 +249,12 @@ export class RvLiveCheck extends LitElement {
               >`
           : nothing}
       </div>
+      ${setupMismatch(this._setup, navigator.userAgent)
+        ? html`<div class="banner warning" role="alert">
+            The setup “${this._setup}” is for another device: pick the one for this device, so the report is
+            filed under it.
+          </div>`
+        : nothing}
       <div class="actions">
         ${running
           ? html`<button @click=${() => this._check?.stop()}>Stop</button>`
@@ -290,10 +307,15 @@ export class RvLiveCheck extends LitElement {
       <ul class="reports">
         ${reports.map(
           (r) => html`<li>
-            <span>${r.setup.slice(LIVE_REPORT_PREFIX.length)} · ${new Date(r.updated).toLocaleString()}${r.done ? "" : " (not finished)"}</span>
+            <span
+              >${[r.setup.slice(LIVE_REPORT_PREFIX.length), reportSource(r.text), new Date(r.updated).toLocaleString()]
+                .filter(Boolean)
+                .join(" · ")}${r.done ? "" : " (not finished)"}</span
+            >
             <button class="text" @click=${() => void this._copy(r.text, r.id)}>
               ${this._copied === r.id ? "Copied" : "Copy"}
             </button>
+            ${this._shown === r.id ? html`<pre class="report">${r.text}</pre>` : nothing}
           </li>`,
         )}
       </ul>
@@ -358,14 +380,39 @@ export class RvLiveCheck extends LitElement {
       }
       .reports li {
         display: flex;
+        flex-wrap: wrap;
         gap: 8px;
         align-items: center;
+      }
+      .reports pre {
+        flex-basis: 100%;
+        user-select: text;
+        -webkit-user-select: text;
       }
       .error {
         color: var(--error-color, #db4437);
       }
     `,
   ];
+}
+
+/** The setup chosen last on this device, else a guess from the browser. */
+function rememberedSetup(): string {
+  try {
+    const saved = window.localStorage.getItem(SETUP_KEY);
+    if (saved && (LIVE_SETUPS as readonly string[]).includes(saved)) return saved;
+  } catch {
+    // No storage: guess from the browser.
+  }
+  return deviceSetup(navigator.userAgent);
+}
+
+function rememberSetup(setup: string): void {
+  try {
+    window.localStorage.setItem(SETUP_KEY, setup);
+  } catch {
+    // Not remembered.
+  }
 }
 
 if (!customElements.get("rv-live-check")) {

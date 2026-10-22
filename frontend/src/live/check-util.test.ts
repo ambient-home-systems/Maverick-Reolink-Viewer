@@ -7,6 +7,7 @@ import {
   median,
   mseCodecs,
   pairInfo,
+  reportSource,
   rtcIceServers,
   seconds,
   streamLabel,
@@ -19,6 +20,19 @@ describe("live check helpers", () => {
       "avc1.640029,avc1.64002A,avc1.640033,mp4a.40.2",
     );
     expect(mseCodecs(() => false)).toBe("");
+  });
+
+  it("tells where a saved report was made", () => {
+    const report = [
+      "Reolink Viewer live check v0.5.4 · iPhone app, Tailscale · 10/22/2026, 9:00:00 AM",
+      "Browser: iOS 27.0, Companion app 2026.10.1 · page Tailscale over https · screen 402×874 @3x",
+      "User agent: Mozilla/5.0 (iPhone)",
+    ].join("\n");
+    expect(reportSource(report)).toBe("v0.5.4 · iOS 27.0, Companion app 2026.10.1");
+    expect(reportSource("Reolink Viewer live check v0.5.2 · Desktop Chrome, LAN\nBrowser: Chrome 155 (macOS)")).toBe(
+      "v0.5.2 · Chrome 155 (macOS)",
+    );
+    expect(reportSource("cut short")).toBe("");
   });
 
   it("describes ICE servers without addresses or credentials", () => {

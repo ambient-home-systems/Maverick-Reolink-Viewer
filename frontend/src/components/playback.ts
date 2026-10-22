@@ -14,6 +14,7 @@ import {
   urlToken,
   type SegmentRef,
 } from "../api";
+import { copyText } from "../clipboard";
 import {
   PlaybackCheck,
   SETUPS,
@@ -24,6 +25,7 @@ import {
   type CheckTarget,
   type SavedReport,
 } from "../playback/check";
+import { deviceSetup } from "../playback/check-util";
 import { canPlayMain, playsProgressive, type StreamDecision } from "../playback/codec";
 import "../playback/calendar";
 import "../playback/event-list";
@@ -1455,7 +1457,7 @@ function rememberedSetup(): string {
   } catch {
     // No storage: guess from the browser.
   }
-  return /iPhone|iPad/.test(navigator.userAgent) ? "iPhone app, Wi-Fi (local)" : "Desktop Chrome, LAN";
+  return deviceSetup(navigator.userAgent);
 }
 
 function rememberedMode(): PlayerMode {
@@ -1479,35 +1481,6 @@ function rememberSetup(setup: string): void {
     window.localStorage.setItem(CHECK_SETUP_KEY, setup);
   } catch {
     // Not remembered.
-  }
-}
-
-/** Copy text: the Clipboard API (secure pages), else a selected textarea. */
-export async function copyText(text: string): Promise<boolean> {
-  // Undefined on plain-HTTP pages (as Home Assistant is on the LAN).
-  const clipboard = (navigator as { clipboard?: Clipboard }).clipboard;
-  try {
-    if (window.isSecureContext && clipboard) {
-      await clipboard.writeText(text);
-      return true;
-    }
-  } catch {
-    // Fall back below.
-  }
-  const area = document.createElement("textarea");
-  area.value = text;
-  area.setAttribute("readonly", "");
-  area.style.cssText = "position:fixed;top:0;left:0;opacity:0";
-  document.body.append(area);
-  area.select();
-  area.setSelectionRange(0, text.length);
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-deprecated -- the only way on plain-HTTP pages
-    return document.execCommand("copy");
-  } catch {
-    return false;
-  } finally {
-    area.remove();
   }
 }
 

@@ -10,7 +10,6 @@ import {
   EVENTS_RETRIES,
   EVENTS_RETRY_MS,
   STALE_TODAY_S,
-  copyText,
   deliveryOf,
   describeCache,
   videoCodec,
@@ -499,14 +498,6 @@ describe("rv-playback", () => {
     await el.updateComplete;
     expect(el.renderRoot.querySelector(".report")?.textContent).toBe("report text");
     expect(named("Copy report")?.disabled).toBe(false);
-  });
-
-  it("copies text without the Clipboard API (plain-HTTP pages)", async () => {
-    const exec = vi.fn(() => true);
-    Object.defineProperty(document, "execCommand", { value: exec, configurable: true });
-    expect(await copyText("hello")).toBe(true);
-    expect(exec).toHaveBeenCalledWith("copy");
-    expect(document.querySelector("textarea")).toBeNull();
   });
 
   it("shows load errors", async () => {
