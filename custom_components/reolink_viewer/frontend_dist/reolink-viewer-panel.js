@@ -3582,7 +3582,7 @@ function Zn(e) {
     <dd>${$n(e.network)}</dd>
     ${e.battery ? T`<dt>Battery</dt>
           <dd>
-            ${e.battery.percent ?? "?"}%${e.battery.status ? ` · ${e.battery.status}` : ""}${e.battery.temperature_c === null ? "" : ` · ${e.battery.temperature_c} °C`}
+            ${e.battery.percent ?? "?"}%${e.battery.status ? ` · ${e.battery.status}` : ""}${e.battery.temperature_c === null ? "" : ` · ${e.battery.temperature_c} °C`}${e.wired_power ? " · on wired power" : ""}
           </dd>` : D}
     <dt>Recordings</dt>
     <dd>${e.supports_replay ? "playback supported" : "no playback"}</dd>
@@ -6848,7 +6848,7 @@ function Aa(e) {
 customElements.get("rv-device-page") || customElements.define("rv-device-page", Ta);
 //#endregion
 //#region src/live/check.ts
-var ja = "0.11.0", Ma = "Live check · ", Na = [
+var ja = "0.12.0", Ma = "Live check · ", Na = [
 	"Desktop Chrome, LAN",
 	"Desktop Chrome, Tailscale",
 	"Desktop Chrome, Nabu Casa",

@@ -196,6 +196,8 @@ class ChannelInfo:
     supports_stream: bool
     main: StreamEncoding
     sub: StreamEncoding
+    # A battery camera running on wired power: it never sleeps.
+    wired_power: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -499,6 +501,28 @@ def _positive(value: object) -> bool:
     return type(value) is int and value > 0
 
 
+def _wired_power(api: Host, channel: int) -> bool:
+    """Return True if a battery camera reports running on wired power.
+
+    reolink-aio keeps the power supply status of the camera's battery info
+    ("normal" when wired) per channel, and the last one as the host's own
+    flag, which it uses to decide that a wired battery camera serves RTSP. It
+    has no accessor for either, so this reads its private state. The host's
+    flag counts only on a camera added directly (an NVR's mixes channels).
+    Anything unexpected reads as not wired: the camera is then treated as on
+    battery, as before.
+    """
+    try:
+        status = api._battery[channel].get("powerSupplyStatus")  # noqa: SLF001
+    except AttributeError, KeyError, TypeError:
+        status = None
+    if isinstance(status, str):
+        return status == "normal"
+    if api.is_nvr or api.is_hub:
+        return False
+    return _safe(lambda: api.baichuan._wired_power) is True  # noqa: SLF001
+
+
 class ReolinkHostHandle:
     """Typed access to one loaded Reolink host."""
 
@@ -584,6 +608,7 @@ class ReolinkHostHandle:
 
     def _channel_info(self, channel: int) -> ChannelInfo:
         api = self._api
+        is_battery = bool(api.supported(channel, "battery"))
         return ChannelInfo(
             channel=channel,
             name=api.camera_name(channel),
@@ -592,12 +617,13 @@ class ReolinkHostHandle:
             firmware_version=api.camera_sw_version(channel),
             online=bool(api.camera_online(channel)),
             sleeping=bool(api.sleeping(channel)),
-            is_battery=bool(api.supported(channel, "battery")),
+            is_battery=is_battery,
             is_doorbell=bool(api.is_doorbell(channel)),
             supports_replay=bool(api.supported(channel, "replay")),
             supports_stream=channel in api.stream_channels,
             main=self._encoding(channel, "main"),
             sub=self._encoding(channel, "sub"),
+            wired_power=is_battery and _wired_power(api, channel),
         )
 
     # ---- Device registry mapping and cached details (no I/O) ----
@@ -706,6 +732,7 @@ class ReolinkHostHandle:
             "online": info.online,
             "sleeping": info.sleeping,
             "is_battery": info.is_battery,
+            "wired_power": info.wired_power,
             "is_doorbell": info.is_doorbell,
             "is_dual_lens": bool(_safe(lambda: api.is_dual_lens)),
             "supports_replay": info.supports_replay,

@@ -19,7 +19,7 @@ put on it:
 | 0 | Foundations, CI, adapter layer, hardware discovery | High | 1–2 wk | Done (2026-10-17) |
 | 1 | Device details and every setting, with explanations | Standard (catalog) / High (panel shell) | 2–3 wk | Done (2026-10-17) |
 | 2 | Event timeline, thumbnails, smooth playback | High (backend) / Very high (player) | 3–5 wk | Done (2026-10-21, v0.3.2). 2A (2026-10-20, v0.2.7): timeline 105–287 ms, first frame 0.6–1.1 s, auto-advance 6–7 ms on hardware. 2B: MSE player; uncached deep starts are the NVR's download up to the target (6.9–13.0 s in hour-long recordings, up to 84 s before), speeds 0.5–8×, HD/SD at the same moment, one-hour sessions within the caps, the iPhone app on Wi-Fi, Tailscale and Nabu Casa |
-| 3 | Live view via go2rtc, grid, fullscreen, PTZ | High | 3–4 wk | In progress. Step 0 done (four Phase 2B fixes). Step 1 done: our own go2rtc and the live check (v0.4.0), measured on desktop Chrome on the LAN and the iPhone app at home, through Tailscale and through Nabu Casa (runs 5–13), and decided. Step 2 in progress: the key-frame cache (v0.5.0–v0.5.5), the image cache (v0.6.0), the Live grid and Live tab (v0.7.0), keep warm per camera (v0.8.0), full-screen HD (v0.9.0), PTZ, presets, siren and floodlight (v0.10.0), and the picture first for cameras that record nowhere (v0.11.0) are built |
+| 3 | Live view via go2rtc, grid, fullscreen, PTZ | High | 3–4 wk | In progress. Step 0 done (four Phase 2B fixes). Step 1 done: our own go2rtc and the live check (v0.4.0), measured on desktop Chrome on the LAN and the iPhone app at home, through Tailscale and through Nabu Casa (runs 5–13), and decided. Step 2 in progress: the key-frame cache (v0.5.0–v0.5.5), the image cache (v0.6.0), the Live grid and Live tab (v0.7.0), keep warm per camera (v0.8.0), full-screen HD (v0.9.0), PTZ, presets, siren and floodlight (v0.10.0), the picture first for cameras that record nowhere (v0.11.0), and battery cameras on wired power watched like the others (v0.12.0) are built |
 | 4 | Performance, mobile, packaging, first release | Standard | 2–3 wk | Not started |
 | 5 | Optional R&D: Baichuan live/playback | Very high | 4–8 wk, time-boxed with gates | Not started |
 
@@ -1756,7 +1756,7 @@ gate), **2** builds live view from what step 1 decides.
 | 0. Fix four Phase 2B findings (a failing test for each first) | **Done** (v0.4.0), see "Step 0" below |
 | 1. Our own go2rtc, and a live check in the panel (gate) | **Done** (v0.4.0), see "Step 1 as built". Every setup's report is in: desktop Chrome on the LAN (run 5), the iPhone app on Wi-Fi (run 11), through Tailscale (run 12) and through Nabu Casa (run 13) |
 | 1. Record the reports here and in the hardware matrix; decide the live stream budget, WebRTC or MSE per setup, which cameras stay warm, the HD stream per camera | **Desktop Chrome on the LAN: recorded and decided** (v0.4.1), see "Step 1 results". **Done for every setup.** Desktop Chrome on the LAN (v0.4.1), see "Step 1 results"; the iPhone app on Wi-Fi, through Tailscale and through Nabu Casa (runs 11–13), see "Step 2: the iPhone on Wi-Fi", "… through Tailscale" and "… through Nabu Casa". The rules are fixed below, before seeing the reports |
-| 2. Stream registry, delivery, Live tab and grid, keep warm, debug panel | **In progress.** The key-frame cache is built (v0.5.0) and measured on the desktop (run 6), see "Step 2: the key-frame cache"; v0.5.1 rebuilds the MSE init segment and records why warm feeds end (run 7: the sizes are right). v0.5.2 measured the last two oddities (run 8); v0.5.3 fixed the late H.264 paints (run 9: warm MSE median 0.15 s); run 10 (v0.5.4) confirms it. v0.5.5 files each live check report under its device. v0.6.0 keeps each camera's last picture for the tiles, see "Step 2: the image cache"; the live check measures it. v0.7.0: the Live grid and each camera's Live tab, see "Step 2: the Live grid". v0.8.0: keep warm per camera and the NVR budget of 7, see "Step 2: keep warm". v0.9.0: full-screen HD, see "Step 2: full-screen HD". v0.10.0: the camera's controls over its live view, see "Step 2: PTZ, presets, siren and floodlight". The owner checked v0.9.0 and v0.10.0 on the hardware. v0.11.0: the E1 Zoom's picture first, see "Step 2: the picture first". Next: a debug view per tile |
+| 2. Stream registry, delivery, Live tab and grid, keep warm, debug panel | **In progress.** The key-frame cache is built (v0.5.0) and measured on the desktop (run 6), see "Step 2: the key-frame cache"; v0.5.1 rebuilds the MSE init segment and records why warm feeds end (run 7: the sizes are right). v0.5.2 measured the last two oddities (run 8); v0.5.3 fixed the late H.264 paints (run 9: warm MSE median 0.15 s); run 10 (v0.5.4) confirms it. v0.5.5 files each live check report under its device. v0.6.0 keeps each camera's last picture for the tiles, see "Step 2: the image cache"; the live check measures it. v0.7.0: the Live grid and each camera's Live tab, see "Step 2: the Live grid". v0.8.0: keep warm per camera and the NVR budget of 7, see "Step 2: keep warm". v0.9.0: full-screen HD, see "Step 2: full-screen HD". v0.10.0: the camera's controls over its live view, see "Step 2: PTZ, presets, siren and floodlight". The owner checked v0.9.0 and v0.10.0 on the hardware. v0.11.0: the E1 Zoom's picture first, see "Step 2: the picture first"; the owner checked it on the hardware. v0.12.0: a battery camera on wired power is watched like the others, see "Step 2: battery cameras on wired power". Next: a debug view per tile |
 
 #### Step 0: four Phase 2B findings (v0.4.0)
 
@@ -2632,6 +2632,32 @@ tapped"). By Phase 1's rule, it applies to any camera that records nowhere
   turned on before stays on (Home Assistant restores it): the owner's
   Laundry Room switch was on by v0.8.0's default, and is turned off once by
   hand.
+
+On the hardware (the owner, 2026-10-22): the Laundry Room tile shows its
+picture with "Picture from" and its time, and plays no video; a tap plays it,
+and it keeps playing.
+
+#### Step 2: battery cameras on wired power (v0.12.0)
+
+The owner's Doorbell is a battery camera, but wired, and it records all the
+time: it never sleeps. Live view treated it as a battery camera (a tap to
+watch, no keep-warm switch, its picture taken only when a stream starts),
+which only made it slower. The owner chose to detect it:
+
+- **Wired power** comes from the camera's battery info: its power supply
+  status ("normal" when wired), which reolink-aio keeps per channel, and as
+  the host's own flag for a camera added directly. reolink-aio uses it
+  itself to let a wired battery camera serve RTSP, but has no accessor for
+  it, so the bridge reads it, guarded: anything unexpected reads as on
+  battery, as before. An NVR's host flag mixes its channels, so only the
+  per-channel status counts there.
+- **On wired power, a battery camera is watched like the others**: its tile
+  plays at once, its picture is taken every 30 s while shown, and it gets a
+  keep-warm switch (on by default where its host's budget has room, like
+  any camera). The Overview's battery line says "on wired power".
+- **Unplugged**, it is a battery camera again at the next look (every
+  minute for the switches): it waits for a tap, may sleep, and its
+  keep-warm switch is unavailable, so it is not kept awake.
 
 ## Phase 4 — Performance, mobile, packaging, release (difficulty: Standard, 2–3 wk)
 

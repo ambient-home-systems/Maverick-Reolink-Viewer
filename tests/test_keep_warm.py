@@ -283,3 +283,41 @@ async def test_battery_cameras_get_none_and_gone_cameras_are_unavailable(
     live = viewer_entry.runtime_data.live
     assert live is not None
     assert live.warm._wanted == {}
+
+
+async def test_a_wired_battery_camera_is_watched_like_any_other(
+    hass: HomeAssistant,
+    reolink_host: MagicMock,
+    loaded_with_entities: MockConfigEntry,
+    viewer_entry: MockConfigEntry,
+) -> None:
+    """On wired power it never sleeps; unplugged, it is a battery camera again."""
+    entities = er.async_get(hass)
+    (switch,) = [
+        e
+        for e in er.async_entries_for_config_entry(entities, viewer_entry.entry_id)
+        if e.domain == "switch"
+    ]
+    reolink_host.supported.side_effect = lambda *_args: True
+    reolink_host._battery = {0: {"powerSupplyStatus": "normal"}}
+    (source,) = devices.async_image_sources(hass).values()
+    assert source.is_battery is False
+    (camera,) = devices.async_live_cameras(hass)
+    assert camera["connections"][0]["is_battery"] is False
+
+    # Unplugged: on battery, so it may sleep; its switch is unavailable.
+    reolink_host._battery = {0: {"powerSupplyStatus": "none"}}
+    (source,) = devices.async_image_sources(hass).values()
+    assert source.is_battery is True
+    async_fire_time_changed(hass, dt_util.utcnow() + DISCOVER_S)
+    await hass.async_block_till_done()
+    state = hass.states.get(switch.entity_id)
+    assert state is not None
+    assert state.state == "unavailable"
+    # Plugged in again: available again.
+    reolink_host._battery = {0: {"powerSupplyStatus": "normal"}}
+    async_fire_time_changed(hass, dt_util.utcnow() + DISCOVER_S * 2)
+    await hass.async_block_till_done()
+    state = hass.states.get(switch.entity_id)
+    assert state is not None
+    assert state.state == STATE_ON

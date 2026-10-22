@@ -188,6 +188,8 @@ export interface ChannelDetails {
   online: boolean;
   sleeping: boolean;
   is_battery: boolean;
+  /** A battery camera running on wired power (it never sleeps). */
+  wired_power?: boolean;
   is_doorbell: boolean;
   is_dual_lens: boolean;
   supports_replay: boolean;

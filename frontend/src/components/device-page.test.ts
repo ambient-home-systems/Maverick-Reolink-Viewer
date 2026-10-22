@@ -64,6 +64,7 @@ const DETAILS: DeviceDetails = {
     online: true,
     sleeping: false,
     is_battery: true,
+    wired_power: true,
     is_doorbell: false,
     is_dual_lens: false,
     supports_replay: true,
@@ -238,7 +239,7 @@ describe("rv-overview", () => {
     expect(text).toContain("Direct");
     expect(text).toContain("channel 1");
     expect(text).toContain("H.265 · 25 fps · 6144 kbps");
-    expect(text).toContain("80% · charging · 21 °C");
+    expect(text).toContain("80% · charging · 21 °C · on wired power");
     expect(text).toContain("person, animal");
     expect(text).toContain("Wi-Fi, -52 dBm");
     expect(text).toContain("RTSP on (554) · RTMP off (1935) · ONVIF on (8000)");

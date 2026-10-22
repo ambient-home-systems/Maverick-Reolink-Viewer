@@ -5,7 +5,8 @@ Assistant's state like any other setting: the panel turns them on and off
 with ``switch.turn_on`` and ``switch.turn_off``, and automations can too.
 Their state is restored after a restart. A camera's switch is added once its
 Reolink entry has loaded (looked for again every DISCOVER_S); a camera that
-goes away leaves its switch unavailable.
+goes away leaves its switch unavailable, and so does a battery camera on
+wired power once it is unplugged.
 
 By default a camera's switch is on, as many per host as its stream budget
 allows after one HD stream: a warm sub stream starts at once, a cold one
@@ -68,7 +69,9 @@ async def async_setup_entry(
         if new:
             async_add_entities(new)
         for camera_id, switch in switches.items():
-            switch.set_present(camera_id in sources)
+            # Gone, or unplugged (a battery camera on wired power until now).
+            source = sources.get(camera_id)
+            switch.set_present(source is not None and not source.is_battery)
 
     discover()
     entry.async_on_unload(async_track_time_interval(hass, discover, DISCOVER_S))

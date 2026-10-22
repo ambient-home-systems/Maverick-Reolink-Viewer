@@ -214,7 +214,7 @@ function renderChannel(ch: ChannelDetails): TemplateResult {
             ${ch.battery.percent ?? "?"}%${ch.battery.status ? ` · ${ch.battery.status}` : ""}${ch
               .battery.temperature_c !== null
               ? ` · ${ch.battery.temperature_c} °C`
-              : ""}
+              : ""}${ch.wired_power ? " · on wired power" : ""}
           </dd>`
       : nothing}
     <dt>Recordings</dt>

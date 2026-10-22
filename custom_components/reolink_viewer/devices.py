@@ -112,6 +112,8 @@ class LiveSource:
     entry_id: str
     channel: int
     via: Via
+    # On battery power: it sleeps unless watched (not a battery camera that
+    # runs on wired power).
     is_battery: bool = False
     # It records somewhere (an NVR, an SD card). One that records nowhere (the
     # E1 Zoom) is watched for its picture: video only when asked for.
@@ -509,7 +511,9 @@ def _live_source(camera: _Camera, conn: _Connection) -> LiveSource | None:
     if conn.channel is None or conn.handle is None:
         return None
     try:
-        battery = bool(conn.handle.channel_details(conn.channel).get("is_battery"))
+        details = conn.handle.channel_details(conn.channel)
+        # On wired power a battery camera never sleeps: watched like any other.
+        battery = bool(details.get("is_battery")) and not details.get("wired_power")
     except Exception:  # flags are optional
         _LOGGER.debug("Cannot read channel details", exc_info=True)
         battery = False
