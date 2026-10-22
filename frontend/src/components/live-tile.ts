@@ -15,9 +15,11 @@ import type {
   HomeAssistant,
   LiveCamera,
   LiveConnection,
+  LiveControls,
   LiveImage,
   LiveStreamKind,
 } from "../types";
+import "./live-controls";
 
 /** Scrolled out of view this long, a tile stops its stream (a quick scroll back keeps it). */
 export const OFFSCREEN_GRACE_MS = 3000;
@@ -49,6 +51,7 @@ export class RvLiveTile extends LitElement {
     warm: { attribute: false },
     openable: { type: Boolean },
     suspended: { attribute: false },
+    controls: { attribute: false },
     _state: { state: true },
     _onScreen: { state: true },
     _pageVisible: { state: true },
@@ -71,6 +74,8 @@ export class RvLiveTile extends LitElement {
   declare openable: boolean;
   /** Another tile is full screen: stop now (it is hidden behind it). */
   declare suspended: boolean;
+  /** The camera's controls, shown on its own view and in full screen. */
+  declare controls: LiveControls | undefined;
   declare _state: PlayerState;
   declare _onScreen: boolean;
   declare _pageVisible: boolean;
@@ -364,6 +369,13 @@ export class RvLiveTile extends LitElement {
         ${this.hdShown ? nothing : this._renderStatus(state)}
         ${this._renderHd()}
       </div>
+      ${this.controls && (this._full || !this.openable)
+        ? html`<rv-live-controls
+            .hass=${this.hass}
+            .controls=${this.controls}
+            .cameraName=${name}
+          ></rv-live-controls>`
+        : nothing}
       <button
         class="corner-button"
         aria-label=${this._full ? "Exit full screen" : `${name} full screen`}

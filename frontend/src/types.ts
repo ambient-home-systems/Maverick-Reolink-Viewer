@@ -420,6 +420,32 @@ export interface LiveCamera {
   connections: LiveConnection[];
   /** Its "keep live view warm" switch (mains-powered cameras only). */
   keep_warm_entity?: string | null;
+  /** Home Assistant's entities to control it with while watching. */
+  controls?: LiveControls;
+}
+
+/** A PTZ move: a press of its button starts it, PTZ stop ends it. */
+export type PtzMove =
+  | "left"
+  | "right"
+  | "up"
+  | "down"
+  | "left_up"
+  | "left_down"
+  | "right_up"
+  | "right_down"
+  | "zoom_in"
+  | "zoom_out";
+
+/** A camera's controls, as entity ids of the Reolink integration's entities. */
+export interface LiveControls {
+  /** PTZ buttons by move, with "stop" (always there when PTZ is). */
+  ptz?: Partial<Record<PtzMove | "stop", string>>;
+  preset?: string;
+  zoom?: string;
+  focus?: string;
+  siren?: string;
+  floodlight?: string;
 }
 
 export interface Go2rtcStatus {

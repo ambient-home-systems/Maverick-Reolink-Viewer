@@ -145,6 +145,42 @@ async def test_device_entities_and_details(
     assert_no_secrets(result)
 
 
+async def test_live_controls(
+    hass: HomeAssistant,
+    reolink_host: MagicMock,
+    loaded_with_entities: MockConfigEntry,
+) -> None:
+    """A camera's enabled controls; never the NVR's own siren or a disabled entity."""
+    (camera,) = devices.async_live_cameras(hass)
+    controls = camera["controls"]
+    assert set(controls) == {"ptz", "preset", "zoom", "focus", "siren", "floodlight"}
+    assert controls["siren"] == "siren.test_reolink_cam_siren"
+    assert controls["floodlight"] == "light.test_reolink_cam_floodlight"
+    assert controls["preset"] == "select.test_reolink_cam_ptz_preset"
+    # Diagonals and zoom buttons are disabled by default in Home Assistant.
+    assert controls["ptz"] == {
+        move: f"button.test_reolink_cam_ptz_{move}"
+        for move in ("stop", "left", "right", "up", "down")
+    }
+
+    ent_reg = er.async_get(hass)
+    ent_reg.async_update_entity("button.test_reolink_cam_ptz_zoom_in", disabled_by=None)
+    ent_reg.async_update_entity(
+        "light.test_reolink_cam_floodlight", disabled_by=er.RegistryEntryDisabler.USER
+    )
+    (camera,) = devices.async_live_cameras(hass)
+    assert camera["controls"]["ptz"]["zoom_in"] == "button.test_reolink_cam_ptz_zoom_in"
+    assert "floodlight" not in camera["controls"]
+
+    # Without PTZ stop nothing would end a move: no PTZ.
+    ent_reg.async_update_entity(
+        "button.test_reolink_cam_ptz_stop", disabled_by=er.RegistryEntryDisabler.USER
+    )
+    (camera,) = devices.async_live_cameras(hass)
+    assert "ptz" not in camera["controls"]
+    assert camera["controls"]["preset"] == "select.test_reolink_cam_ptz_preset"
+
+
 async def test_host_device(
     hass: HomeAssistant,
     hass_ws_client: WebSocketGenerator,

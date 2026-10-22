@@ -5,7 +5,8 @@
 // API (what the panel gets from HA's frontend), the panel bundle as HA serves
 // it, and the live grid: the tile's picture from the image cache, then its
 // stream starting (cold: a WebRTC session through HA, seen in live/status).
-// Then full screen: the HD stream starts as well, and stops on the way back.
+// Then full screen: the HD stream starts as well, the camera's controls show
+// (a PTZ arrow held and let go), and HD stops on the way back.
 // go2rtc sends only H.264 and H.265 video, which Playwright's Chromium cannot
 // decode, so no frame shows here: the hardware runs check that. Then the grid
 // goes away and the server must hold nothing. Prints one line of JSON.
@@ -54,11 +55,17 @@ async function run({ origin, token }) {
     user: { is_admin: true },
     states: {},
     callWS: (message) => send(message).then(({ result }) => result),
+    callService: (domain, service, serviceData, target) =>
+      send({ type: "call_service", domain, service, service_data: serviceData, target }).then(() => undefined),
     connection: {
       subscribeMessage: (callback, message) =>
         send(message, callback).then(({ id }) => () => send({ type: "unsubscribe_events", subscription: id }).then(() => undefined)),
     },
   };
+
+  // Entity states, as HA's frontend has them (the controls show what they say).
+  const { result: states } = await send({ type: "get_states" });
+  hass.states = Object.fromEntries(states.map((state) => [state.entity_id, state]));
 
   await import(`${origin}/reolink_viewer_static/reolink-viewer-panel.js`);
   const began = performance.now();
@@ -97,18 +104,30 @@ async function run({ origin, token }) {
   while (performance.now() < fullAt + 20_000) {
     const now = await status();
     if (holding(now, "main")) {
-      result.hd = { ms: Math.round(performance.now() - fullAt), sub: holding(now, "sub"), state: tile?._hdState, full: tile?.full };
+      // The sub stream's player keeps running (its sessions here fail over to MSE and retry).
+      result.hd = { ms: Math.round(performance.now() - fullAt), sub: tile?._player?.running, state: tile?._hdState, full: tile?.full };
       break;
     }
     await sleep(100);
   }
+  // Full screen shows the camera's controls: hold "Move left", then let go.
+  const controls = tile?.shadowRoot?.querySelector("rv-live-controls");
+  await controls?.updateComplete;
+  const left = controls?.shadowRoot?.querySelector('button[aria-label="Move left"]');
+  result.ptz = left ? "found" : "missing";
+  left?.dispatchEvent(new PointerEvent("pointerdown", { pointerId: 1, bubbles: true }));
+  await sleep(300);
+  left?.dispatchEvent(new PointerEvent("pointerup", { pointerId: 1, bubbles: true }));
+  await sleep(500);
+  result.ptzError = controls?._error ?? null;
+
   // Back: HD stops; the sub stream keeps playing.
   tile?.shadowRoot?.querySelector(".corner-button")?.click();
   const backAt = performance.now();
   while (performance.now() < backAt + 10_000) {
     const now = await status();
     if (!holding(now, "main")) {
-      result.back = { sub: holding(now, "sub"), full: tile?.full };
+      result.back = { sub: tile?._player?.running, full: tile?.full };
       break;
     }
     await sleep(100);

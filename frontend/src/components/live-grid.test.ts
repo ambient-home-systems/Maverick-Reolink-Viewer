@@ -80,6 +80,7 @@ const CAMERAS: LiveCamera[] = [
       },
     ],
     keep_warm_entity: "switch.garage_keep_live_view_warm",
+    controls: { siren: "siren.garage_siren" },
   },
   {
     id: "cam2",
@@ -472,6 +473,20 @@ describe("full screen", () => {
     }
   });
 
+  it("shows the camera's controls in full screen, not on its grid tile", async () => {
+    const { garage, doorbell } = await garageAndBell();
+    const controls = (tile: Element) => tile.shadowRoot?.querySelector("rv-live-controls");
+    expect(controls(garage)).toBeNull();
+    fullButton(garage).click();
+    await settle(garage);
+    expect(controls(garage)?.controls).toEqual({ siren: "siren.garage_siren" });
+    expect(controls(garage)?.cameraName).toBe("Garage");
+    // A camera without controls has none, full screen or not.
+    fullButton(doorbell).click();
+    await settle(doorbell);
+    expect(controls(doorbell)).toBeNull();
+  });
+
   it("stops HD when the tile goes away", async () => {
     const { garage } = await garageAndBell();
     fullButton(garage).click();
@@ -522,6 +537,9 @@ describe("rv-live-camera", () => {
     const tile = el.shadowRoot?.querySelector("rv-live-tile");
     expect(tile?.camera?.id).toBe("cam1");
     expect(tile?.openable).toBe(false);
+    // Its own view: the controls show without full screen.
+    await tile?.updateComplete;
+    expect(tile?.shadowRoot?.querySelector("rv-live-controls")?.controls).toEqual({ siren: "siren.garage_siren" });
     el.deviceId = "nope";
     await el.updateComplete;
     expect(el.shadowRoot?.textContent).toContain("cannot be watched live");

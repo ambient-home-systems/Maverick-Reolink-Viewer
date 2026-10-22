@@ -144,6 +144,7 @@ async def test_chromium_starts_the_live_grid(
     hass: HomeAssistant,
     hass_client: ClientSessionGenerator,
     hass_access_token: str,
+    reolink_host: MagicMock,
     grid_live: MockConfigEntry,
 ) -> None:
     """The grid shows the camera's picture, starts it over WebRTC, and HD in full screen."""
@@ -172,14 +173,23 @@ async def test_chromium_starts_the_live_grid(
     # Cold: a WebRTC session through Home Assistant, holding the camera's sub.
     assert result["state"] == {"kind": "starting", "transport": "WebRTC"}, result
     assert list(result["running"].values()) == [1], result
-    # Full screen: the HD stream (the main, H.264 here) starts next to the sub
-    # stream, cold over WebRTC, or over MSE once WebRTC has failed (this
-    # Chromium offers go2rtc no H.264); back from it, only the sub is held.
+    # Full screen: the HD stream (the main, H.264 here) starts while the sub
+    # stream's player keeps running, cold over WebRTC, or over MSE once WebRTC
+    # has failed (this Chromium offers go2rtc no H.264); back from it, the main
+    # is let go and the sub's player still runs.
     assert result["hd"]["sub"] is True, result
     assert result["hd"]["full"] is True, result
     assert result["hd"]["state"]["kind"] == "starting", result
     assert result["hd"]["state"]["transport"] in ("WebRTC", "MSE"), result
     assert result["back"] == {"sub": True, "full": False}, result
+    # Its PTZ arrow, held and let go: Home Assistant's button actions moved the
+    # camera left and then stopped it.
+    assert result["ptz"] == "found", result
+    assert result["ptzError"] is None, result
+    commands = [
+        c.kwargs.get("command") for c in reolink_host.set_ptz_command.call_args_list
+    ]
+    assert commands == ["Left", "Stop"], commands
     # The grid went away: nothing holds the stream, nobody watches the pictures.
     assert result["after"] == {"sessions": 0, "running": {}}, result
     service = grid_live.runtime_data.live
