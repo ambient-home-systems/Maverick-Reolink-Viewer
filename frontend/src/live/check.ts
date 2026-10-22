@@ -43,7 +43,7 @@ import {
 } from "./check-util";
 import { OurMse, OurWebRtc, StockWebRtc, type LiveSession, type SessionResult } from "./session";
 
-export const LIVE_CHECK_VERSION = "0.5.1";
+export const LIVE_CHECK_VERSION = "0.5.2";
 /** Saved reports share the playback check's store; this marks a live one. */
 export const LIVE_REPORT_PREFIX = "Live check · ";
 export const LIVE_SETUPS = [
@@ -63,6 +63,8 @@ const COLD_WAIT_MS = 10_000;
 /** After keeping a stream warm starts, let it settle before measuring. */
 const WARM_SETTLE_MS = 2_000;
 const IMAGE_TIMEOUT_MS = 15_000;
+/** An MSE start that paints this long after its data came gets a video-only retry. */
+const LATE_PAINT_MS = 1_000;
 const SAVE_EVERY_MS = 10_000;
 
 export interface LiveCheckOptions {
@@ -268,6 +270,7 @@ export class LiveCheck {
       const result = await this._session_(transport, ref, COLD_TIMEOUT_MS);
       record("cold", transport, result);
       cold.push(`${transport} ${describe(result)}${isCold ? "" : " (a viewer kept it running: not cold)"}`);
+      if (transport === "MSE") cold.push(...(await this._videoOnly(result, ref, COLD_TIMEOUT_MS, where)));
     }
     this._log(`  cold: ${cold.join(" · ")}`);
 
@@ -310,6 +313,7 @@ export class LiveCheck {
           const result = await this._session_(transport, ref, WARM_TIMEOUT_MS);
           record("warm", transport, result);
           warm.push(`${transport} ${describe(result)}`);
+          if (transport === "MSE") warm.push(...(await this._videoOnly(result, ref, WARM_TIMEOUT_MS, where)));
         }
         const cache = (await fetchLiveState(this._hass, ref).catch(() => undefined))?.cache;
         const cached = keyFrame ? `key frame cached in ${seconds(upMs)}` : `no key frame in ${seconds(upMs)}`;
@@ -347,6 +351,18 @@ export class LiveCheck {
         ? new OurWebRtc(this._hass, video, ref, this._ice, timeoutMs)
         : new OurMse(this._hass, video, ref, timeoutMs),
     );
+  }
+
+  /**
+   * An MSE start that painted long after its data came: the same over video
+   * only, to tell whether audio held it back. Not in the summary.
+   */
+  private async _videoOnly(result: SessionResult, ref: LiveRef, timeoutMs: number, where: string): Promise<string[]> {
+    if (!result.ok || result.firstFrameMs === undefined || !("appended" in result.steps)) return [];
+    if (result.firstFrameMs - result.steps.appended <= LATE_PAINT_MS) return [];
+    this._status(`${where}: MSE video only`);
+    const retry = await this._watch((video) => new OurMse(this._hass, video, ref, timeoutMs, location.href, true));
+    return [`MSE video only ${describe(retry)}`];
   }
 
   private _stock(entityId: string): Promise<SessionResult> {
@@ -517,7 +533,8 @@ export class LiveCheck {
 /** "1.23 s (answer 120 ms, connected 300 ms; host/udp ↔ host/udp, h264 640×360)". */
 export function describe(result: SessionResult): string {
   const steps = Object.entries(result.steps)
-    .filter(([name]) => ["answer", "connected", "mime", "appended", "first data"].includes(name))
+    .filter(([name]) => ["answer", "connected", "url", "open", "mime", "first data", "appended"].includes(name))
+    .sort(([, a], [, b]) => a - b)
     .map(([name, ms]) => `${name} ${ms} ms`);
   const pair = result.pair;
   const path = pair?.local ? `${pair.local} ↔ ${pair.remote ?? "?"}${pair.rttMs !== undefined ? `, rtt ${pair.rttMs} ms` : ""}` : undefined;

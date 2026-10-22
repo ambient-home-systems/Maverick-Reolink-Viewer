@@ -34,8 +34,8 @@ vi.mock("./session", () => {
       }
     },
     OurMse: class extends Fake {
-      constructor(_h: unknown, _v: unknown, ref: unknown, timeout: number) {
-        super("mse", ref, timeout);
+      constructor(_h: unknown, _v: unknown, ref: unknown, timeout: number, _base?: string, videoOnly?: boolean) {
+        super(videoOnly ? "mse-video" : "mse", ref, timeout);
       }
     },
     StockWebRtc: class extends Fake {
@@ -144,6 +144,7 @@ function fakeHass(admin: boolean) {
               cached_ms: 900,
               cached_bytes: 51200,
               parameter_sets: "rebuilt",
+              age_ms: 9100,
               ends: 1,
               last_end: "go2rtc closed the stream",
             },
@@ -238,7 +239,7 @@ describe("LiveCheck", () => {
     expect(text).toContain("Home Assistant's view (camera.fyr_fluent): snapshot");
     expect(text).toContain("warm (key frame cached in");
     expect(text).toContain(
-      "; key frames every 4.00 s; parameter sets: rebuilt; feed ended 1× (go2rtc closed the stream)):",
+      "; key frames every 4.00 s; parameter sets: rebuilt; feed ended 1× (go2rtc closed the stream); feed opened 9.10 s before):",
     );
     expect(text).toContain("go2rtc log (last 1 lines):\n  WRN [rtsp] error=EOF url=<url>");
     expect(text).toContain("warm: not measured (battery camera: never kept warm)");
@@ -275,6 +276,26 @@ describe("LiveCheck", () => {
     expect(await stopped.run()).toContain("Stopped.");
   });
 
+  it("retries a late MSE start over video only", async () => {
+    const { hass } = fakeHass(true);
+    // Data at 0.16 s, painted at 3.74 s: one key-frame interval later.
+    outcome.set("mse:sub", { firstFrameMs: 3740, steps: { open: 90, mime: 127, appended: 160 } });
+    outcome.set("mse-video:sub", { firstFrameMs: 300, steps: { appended: 150 } });
+    const check = new LiveCheck(
+      hass,
+      { setup: "Other", streams: ["sub"], warm: true, stock: false, capacity: false, cameraIds: ["cam1"] },
+      document.createElement("div"),
+    );
+    vi.spyOn(check as unknown as { _pause(ms: number): Promise<void> }, "_pause").mockResolvedValue();
+    check.afterFrameMs = 0;
+    const text = await check.run();
+    expect(text).toContain("MSE 3.74 s (open 90 ms, mime 127 ms, appended 160 ms;");
+    expect(text).toContain("· MSE video only 0.30 s (appended 150 ms;");
+    // Once cold and once warm, per connection of the camera; never in the summary.
+    expect(plays.filter((p) => p.kind === "mse-video")).toHaveLength(4);
+    expect(text).toContain("warm MSE, sub: median 3.74 s");
+  });
+
   it("skips a stream the connection does not serve", async () => {
     const { hass, calls } = fakeHass(true);
     const check = new LiveCheck(
@@ -296,6 +317,6 @@ describe("LiveCheck", () => {
         steps: { url: 20, mime: 300, appended: 700, open: 50 },
         mse: { api: "ManagedMediaSource", mime: 'video/mp4; codecs="avc1.640029,mp4a.40.2"' },
       }),
-    ).toBe("1.50 s (mime 300 ms, appended 700 ms; avc1.640029,mp4a.40.2)");
+    ).toBe("1.50 s (url 20 ms, open 50 ms, mime 300 ms, appended 700 ms; avc1.640029,mp4a.40.2)");
   });
 });
