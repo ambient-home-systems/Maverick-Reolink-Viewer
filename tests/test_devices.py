@@ -145,6 +145,26 @@ async def test_device_entities_and_details(
     assert_no_secrets(result)
 
 
+async def test_a_camera_records_without_playback(
+    hass: HomeAssistant,
+    reolink_host: MagicMock,
+    loaded_with_entities: MockConfigEntry,
+) -> None:
+    """Kept recordings make it record, even where playback is not possible."""
+    handle = bridge.ReolinkHostHandle
+    with patch.object(handle, "records_locally", return_value=False):
+        (camera,) = devices.async_live_cameras(hass)
+        assert camera["records"] is True
+        (source,) = devices.async_image_sources(hass).values()
+        assert source.records is True
+        assert devices.async_playback_sources(hass) == []
+        with patch.object(handle, "stores_recordings", return_value=False):
+            (camera,) = devices.async_live_cameras(hass)
+            assert camera["records"] is False
+            (source,) = devices.async_image_sources(hass).values()
+            assert source.records is False
+
+
 async def test_live_controls(
     hass: HomeAssistant,
     reolink_host: MagicMock,

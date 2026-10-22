@@ -6848,7 +6848,7 @@ function Aa(e) {
 customElements.get("rv-device-page") || customElements.define("rv-device-page", Ta);
 //#endregion
 //#region src/live/check.ts
-var ja = "0.12.0", Ma = "Live check · ", Na = [
+var ja = "0.12.1", Ma = "Live check · ", Na = [
 	"Desktop Chrome, LAN",
 	"Desktop Chrome, Tailscale",
 	"Desktop Chrome, Nabu Casa",

@@ -418,6 +418,7 @@ export interface LiveCamera {
   id: string;
   name: string;
   model: string | null;
+  /** An NVR or its SD card keeps its recordings (playable here or not). */
   records: boolean;
   connections: LiveConnection[];
   /** Its "keep live view warm" switch (mains-powered cameras only). */

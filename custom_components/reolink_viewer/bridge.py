@@ -748,7 +748,7 @@ class ReolinkHostHandle:
         }
 
     def records_locally(self, channel: int) -> bool:
-        """Return True if this host stores recordings of the channel.
+        """Return True if this host stores recordings of the channel we can play.
 
         An NVR or Home Hub records its channels; a camera added directly records
         only when it has a storage device (SD card) and replay support.
@@ -756,6 +756,15 @@ class ReolinkHostHandle:
         api = self._api
         if not _safe(api.supported, channel, "replay"):
             return False
+        return self.stores_recordings(channel)
+
+    def stores_recordings(self, channel: int) -> bool:
+        """Return True if this host keeps recordings of the channel, playable or not.
+
+        As records_locally, without needing replay support: a Baichuan-only
+        camera (the battery Doorbell) records to its SD card but reports none.
+        """
+        api = self._api
         return bool(api.is_nvr) or bool(_safe(lambda: api.hdd_list))
 
     def _fingerprints(self, channel: int) -> frozenset[str]:

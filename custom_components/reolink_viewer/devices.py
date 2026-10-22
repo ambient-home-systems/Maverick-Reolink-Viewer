@@ -115,8 +115,9 @@ class LiveSource:
     # On battery power: it sleeps unless watched (not a battery camera that
     # runs on wired power).
     is_battery: bool = False
-    # It records somewhere (an NVR, an SD card). One that records nowhere (the
-    # E1 Zoom) is watched for its picture: video only when asked for.
+    # It records somewhere (an NVR, an SD card), playable here or not. One that
+    # records nowhere (the E1 Zoom) is watched for its picture: video only when
+    # asked for.
     records: bool = True
 
     @property
@@ -525,7 +526,20 @@ def _live_source(camera: _Camera, conn: _Connection) -> LiveSource | None:
         channel=conn.channel,
         via=conn.via,
         is_battery=battery,
-        records=any(c.playback_source for c in camera.connections),
+        records=_records_somewhere(camera),
+    )
+
+
+def _records_somewhere(camera: _Camera) -> bool:
+    """Return True if an NVR or the camera's own storage keeps its recordings.
+
+    Whether or not this integration can play them (see _mark_playback_source).
+    """
+    return any(
+        conn.handle is not None
+        and conn.channel is not None
+        and conn.handle.stores_recordings(conn.channel)
+        for conn in camera.connections
     )
 
 
@@ -646,7 +660,7 @@ def async_live_cameras(
                     "name": _device_name(camera.primary.device)
                     or camera.primary.entry_title,
                     "model": camera.primary.device.model,
-                    "records": any(c.playback_source for c in camera.connections),
+                    "records": _records_somewhere(camera),
                     "connections": connections,
                     "controls": _live_controls(ent_reg, camera.connections),
                 }
