@@ -113,6 +113,9 @@ class LiveSource:
     channel: int
     via: Via
     is_battery: bool = False
+    # It records somewhere (an NVR, an SD card). One that records nowhere (the
+    # E1 Zoom) is watched for its picture: video only when asked for.
+    records: bool = True
 
     @property
     def key(self) -> str:
@@ -518,6 +521,7 @@ def _live_source(camera: _Camera, conn: _Connection) -> LiveSource | None:
         channel=conn.channel,
         via=conn.via,
         is_battery=battery,
+        records=any(c.playback_source for c in camera.connections),
     )
 
 

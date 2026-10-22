@@ -10,7 +10,9 @@ goes away leaves its switch unavailable.
 By default a camera's switch is on, as many per host as its stream budget
 allows after one HD stream: a warm sub stream starts at once, a cold one
 waits for the camera's next key frame, up to 4 s (Phase 3 step 1). Battery
-cameras get none: they are never kept warm, so they can sleep.
+cameras get none: they are never kept warm, so they can sleep. A camera that
+records nowhere (the E1 Zoom) is watched for its picture, its video only when
+asked for, so its switch is off by default.
 """
 
 from datetime import datetime, timedelta
@@ -75,12 +77,12 @@ async def async_setup_entry(
 def default_warm(sources: dict[str, LiveSource], scheduler: Scheduler) -> set[str]:
     """Return the cameras kept warm by default.
 
-    Mains-powered cameras, in channel order, as many per host as its stream
-    budget allows after one HD stream.
+    Mains-powered cameras that record, in channel order, as many per host as
+    its stream budget allows after one HD stream.
     """
     by_host: dict[str, list[tuple[int, str]]] = {}
     for camera_id, source in sources.items():
-        if not source.is_battery:
+        if not source.is_battery and source.records:
             by_host.setdefault(source.entry_id, []).append((source.channel, camera_id))
     on: set[str] = set()
     for entry_id, cameras in by_host.items():

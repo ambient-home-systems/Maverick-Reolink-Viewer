@@ -76,7 +76,9 @@ background and swapping it in on its first frame. HD is the main stream where th
 browser decodes it smoothly at its size, else the camera's H.264 ext stream. v0.10.0 puts
 each camera's **controls** over its live view (its Live tab and full screen): PTZ moves
 while an arrow is held, presets, zoom and focus, the floodlight, and the siren (after a
-confirmation), all through Home Assistant's own entities and actions.
+confirmation), all through Home Assistant's own entities and actions. v0.11.0 shows a camera
+that records nowhere (like an E1 Zoom kept for snapshots) as its **picture first**: its tile
+shows its latest picture and plays video when tapped, and it is not kept warm by default.
 
 Requires Home Assistant 2026.10 or newer with the Reolink integration set up.
 

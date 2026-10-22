@@ -174,6 +174,9 @@ def test_default_warm_fits_the_budget() -> None:
     sources = {s.camera_id: s for s in (GARAGE, HALL, DOORBELL, third, direct)}
     # The NVR's 3 slots leave 2 (channels 0 and 1); the camera's 2 leave 1.
     assert default_warm(sources, scheduler) == {"cam4", "cam1", "cam5"}
+    # A camera that records nowhere is watched for its picture: not kept warm.
+    sources["cam5"] = replace(direct, records=False)
+    assert default_warm(sources, scheduler) == {"cam4", "cam1"}
 
 
 async def _ws(client: Any, payload: dict[str, Any]) -> dict[str, Any]:
@@ -200,6 +203,7 @@ async def test_switches_set_and_restore_keep_warm(
     ]
     cameras = devices.async_image_sources(hass)
     assert len(ours) == len([s for s in cameras.values() if not s.is_battery]) >= 1
+    assert all(s.records for s in cameras.values())  # through the NVR
     entity_id = ours[0].entity_id
     assert entity_id.endswith("_keep_live_view_warm")
     state = hass.states.get(entity_id)

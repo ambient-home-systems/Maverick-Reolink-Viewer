@@ -97,6 +97,22 @@ const CAMERAS: LiveCamera[] = [
       },
     ],
   },
+  {
+    // The E1 Zoom: records nowhere, so it is watched for its picture.
+    id: "cam3",
+    name: "Laundry Room",
+    model: "E1 Zoom",
+    records: false,
+    connections: [
+      {
+        connection_id: "laundry",
+        via: "direct",
+        entry_title: "Laundry Room",
+        is_battery: false,
+        streams: { sub: { encoding, entity_id: null, warm: false } },
+      },
+    ],
+  },
 ];
 
 function fakeHass(fail = false) {
@@ -247,6 +263,36 @@ describe("rv-live-grid", () => {
       { view: "device", id: "cam2", tab: "live" },
       { view: "device", id: "cam2", tab: "live" },
     ]);
+  });
+
+  it("shows a camera that records nowhere as its picture until tapped", async () => {
+    const fake = fakeHass();
+    const { tiles } = await mountGrid(fake.hass);
+    const laundry = tiles().at(2);
+    if (!laundry) throw new Error("no laundry tile");
+    const player = () => players.find((p) => p.ref.connectionId === "laundry");
+    expect(player()?.running ?? false).toBe(false);
+    const text = () => laundry.shadowRoot?.textContent ?? "";
+    expect(text()).toContain("No picture yet");
+    expect(text()).toContain("Tap to watch live");
+    expect(text()).not.toContain("Battery camera");
+    // Its picture shows, with when it was taken.
+    const taken = new Date(2026, 9, 22, 14, 5).getTime();
+    fake.image({ images: { cam3: { url: "/api/reolink_viewer/live/image/t3?authSig=y", taken } } });
+    await flush();
+    await laundry.updateComplete;
+    expect(laundry.shadowRoot?.querySelector("img")?.getAttribute("src")).toBe(
+      "/api/reolink_viewer/live/image/t3?authSig=y",
+    );
+    expect(text()).toContain(
+      `Picture from ${new Date(taken).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`,
+    );
+    // A tap plays its video.
+    tileBox(laundry).click();
+    await laundry.updateComplete;
+    await flush();
+    expect(player()?.starts).toBe(1);
+    expect(text()).not.toContain("Tap to watch live");
   });
 
   it("stops when the page is hidden or the tile scrolls away, and starts again", async () => {
