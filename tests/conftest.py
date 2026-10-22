@@ -69,6 +69,16 @@ def auto_enable_custom_integrations(enable_custom_integrations: None) -> None:
     """Enable custom integrations in every test."""
 
 
+@pytest.fixture(autouse=True)
+def no_warm_keeping() -> Generator[None]:
+    """Do not keep cameras warm on setup: it would start go2rtc in every test.
+
+    The keep-warm tests run the keeper's reconcile themselves.
+    """
+    with patch("custom_components.reolink_viewer.live.warm.WarmKeeper.start"):
+        yield
+
+
 def make_vod_file(
     start: datetime, minutes: int = 5, name: str | None = None
 ) -> VOD_file:

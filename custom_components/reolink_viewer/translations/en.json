@@ -15,5 +15,12 @@
       "description": "Reolink Viewer could not use the Reolink integration's internals, which changed in this Home Assistant release: {errors}\n\nThe Reolink panel still lists your devices from the device registry, but the hardware probe is disabled. Update Reolink Viewer, or report the error at the project's issue tracker.",
       "title": "Reolink Viewer is running in degraded mode"
     }
+  },
+  "entity": {
+    "switch": {
+      "keep_warm": {
+        "name": "{camera} keep live view warm"
+      }
+    }
   }
 }

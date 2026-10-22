@@ -415,6 +415,8 @@ export interface LiveCamera {
   model: string | null;
   records: boolean;
   connections: LiveConnection[];
+  /** Its "keep live view warm" switch (mains-powered cameras only). */
+  keep_warm_entity?: string | null;
 }
 
 export interface Go2rtcStatus {

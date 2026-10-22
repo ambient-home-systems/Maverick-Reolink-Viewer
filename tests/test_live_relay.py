@@ -510,6 +510,54 @@ async def test_keep_warm(
     await relay.async_keep_warm(SUB, False)  # not warm: nothing to do
 
 
+def is_closed(socket: FakeSocket) -> bool:
+    """Whether the relay closed a socket (a call, so mypy does not narrow it)."""
+    return socket.closed
+
+
+async def test_keep_warm_owners(
+    setup: tuple[MseRelay, FakeServer, Scheduler],
+) -> None:
+    """The setting and the live check each keep a stream warm; it stays until both let go."""
+    relay, server, scheduler = setup
+    assert (
+        await relay.async_keep_warm(SUB, True, owner="setting", key_frame_timeout=0)
+        is False
+    )
+    assert (
+        await relay.async_keep_warm(SUB, True, key_frame_timeout=0) is False
+    )  # the check
+    assert relay.warm_owners(SUB) == {"setting", "check"}
+    assert len(server.sockets) == 1
+    # The check lets go: still warm for the setting.
+    await relay.async_keep_warm(SUB, False)
+    await settle()
+    assert relay.warm_streams() == [SUB.name]
+    assert relay.warm_owners(SUB) == {"setting"}
+    assert not is_closed(server.sockets[0])
+    assert slots(scheduler) == 1
+    await relay.async_keep_warm(SUB, False, owner="setting")
+    await settle()
+    assert relay.warm_streams() == []
+    assert relay.warm_owners(SUB) == set()
+    assert is_closed(server.sockets[0])
+    assert slots(scheduler) == 0
+    # A failed start leaves an owner who already kept it warm.
+    assert (
+        await relay.async_keep_warm(SUB, True, owner="setting", key_frame_timeout=0)
+        is False
+    )
+    server.sockets[1].end()
+    await settle()
+    server.answer = {"type": "error", "value": "dial tcp: connection refused"}
+    with pytest.raises(LiveError):
+        await relay.async_keep_warm(SUB, True)
+    assert relay.warm_owners(SUB) == {"setting"}
+    assert relay.warm_streams() == [SUB.name]
+    await relay.async_shutdown()
+    assert relay.warm_owners(SUB) == set()
+
+
 async def test_keep_warm_fails(
     setup: tuple[MseRelay, FakeServer, Scheduler],
 ) -> None:

@@ -319,6 +319,24 @@ describe("LiveCheck", () => {
     expect(text).toContain("warm MSE, sub: median 3.74 s");
   });
 
+  it("says when a camera's switch keeps it warm instead of waiting for it to go cold", async () => {
+    const { hass, calls } = fakeHass(true);
+    const switched: LiveCamera = { ...CAMERAS[0], keep_warm_entity: "switch.fyr_keep_live_view_warm" };
+    (hass.states as Record<string, unknown>)["switch.fyr_keep_live_view_warm"] = { state: "on" };
+    const check = new LiveCheck(
+      hass,
+      { setup: "Other", streams: ["sub"], warm: false, stock: false, capacity: false, cameraIds: ["cam1"] },
+      document.createElement("div"),
+    );
+    vi.spyOn(check as unknown as { _cameras(): Promise<LiveCamera[]> }, "_cameras").mockResolvedValue([switched]);
+    check.afterFrameMs = 0;
+    const text = await check.run();
+    // Through the NVR (its warm sub): no wait; directly: as before.
+    expect(text).toContain("WebRTC 0.80 s (answer 100 ms, connected 200 ms; host/udp ↔ host/udp; 640×360) (kept warm by its switch; turn it off to measure cold: not cold)");
+    const stateCalls = calls.filter((c) => c.type === "reolink_viewer/live/state");
+    expect(stateCalls.every((c) => c.connection_id === "c-direct")).toBe(true);
+  });
+
   it("skips a stream the connection does not serve", async () => {
     const { hass, calls } = fakeHass(true);
     const check = new LiveCheck(

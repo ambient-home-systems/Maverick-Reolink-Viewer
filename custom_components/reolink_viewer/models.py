@@ -26,6 +26,8 @@ class ReolinkViewerData:
     grants: Grants = field(default_factory=Grants)
     live: LiveService | None = None
     probe_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    # False in degraded mode: no live features that need the bridge.
+    compat_ok: bool = True
 
 
 type ReolinkViewerConfigEntry = ConfigEntry[ReolinkViewerData]

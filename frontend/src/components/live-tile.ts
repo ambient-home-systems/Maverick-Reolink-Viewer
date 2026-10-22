@@ -36,6 +36,7 @@ export class RvLiveTile extends LitElement {
     stream: { attribute: false },
     image: { attribute: false },
     iceServers: { attribute: false },
+    warm: { attribute: false },
     openable: { type: Boolean },
     _state: { state: true },
     _onScreen: { state: true },
@@ -50,6 +51,8 @@ export class RvLiveTile extends LitElement {
   declare image: LiveImage | undefined;
   /** Undefined until loaded: a cold start (WebRTC) waits for them. */
   declare iceServers: RTCIceServer[] | undefined;
+  /** Kept warm (start over MSE); undefined: as the server said in live/cameras. */
+  declare warm: boolean | undefined;
   /** Clicking it opens the camera (the grid); otherwise it is the camera's own view. */
   declare openable: boolean;
   declare _state: PlayerState;
@@ -123,7 +126,7 @@ export class RvLiveTile extends LitElement {
   protected override updated(): void {
     const player = this._ensurePlayer();
     if (!player) return;
-    player.options.warm = this.connection?.streams[this.stream]?.warm === true;
+    player.options.warm = this.warm ?? this.connection?.streams[this.stream]?.warm === true;
     if (this.shouldPlay) {
       clearTimeout(this._offscreenTimer);
       this._offscreenTimer = undefined;

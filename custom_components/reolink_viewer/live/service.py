@@ -21,6 +21,7 @@ from .go2rtc import Go2rtcServer
 from .images import LiveImages
 from .relay import MseRelay
 from .streams import StreamRegistry
+from .warm import WarmKeeper
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -61,6 +62,8 @@ class LiveService:
         self.registry.on_start = self.images.stream_started
         # MSE goes through the key-frame cache; it also keeps streams warm.
         self.relay = MseRelay(hass, self.registry, self.async_server)
+        # Keeps warm what the cameras' switches ask for (started by setup).
+        self.warm = WarmKeeper(hass, self.relay)
         self.sessions: dict[str, WebRtcSession] = {}
         # One capacity test at a time (it holds a host for itself).
         self.capacity_lock = asyncio.Lock()
@@ -92,6 +95,7 @@ class LiveService:
             if session.ws is not None:
                 await session.ws.close()
         self.sessions.clear()
+        await self.warm.async_shutdown()
         await self.images.async_shutdown()
         await self.relay.async_shutdown()
         await self.registry.async_shutdown()

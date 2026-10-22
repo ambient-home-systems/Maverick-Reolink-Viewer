@@ -43,9 +43,10 @@ import {
   seconds,
   streamLabel,
 } from "./check-util";
+import { liveConnection } from "./data";
 import { OurMse, OurWebRtc, StockWebRtc, type LiveSession, type SessionResult } from "./session";
 
-export const LIVE_CHECK_VERSION = "0.7.0";
+export const LIVE_CHECK_VERSION = "0.8.0";
 /** Saved reports share the playback check's store; this marks a live one. */
 export const LIVE_REPORT_PREFIX = "Live check · ";
 export const LIVE_SETUPS = [
@@ -329,12 +330,16 @@ export class LiveCheck {
 
     // Cold: go2rtc is not connected to the camera.
     const cold: string[] = [];
+    const switchOn = camera.keep_warm_entity ? this._hass.states[camera.keep_warm_entity]?.state === "on" : false;
+    // Its switch keeps it warm: it never goes cold, so do not wait for it.
+    const keptWarm = switchOn && stream === "sub" && liveConnection(camera) === connection;
+    const keptBy = keptWarm ? "kept warm by its switch; turn it off to measure cold" : "a viewer kept it running";
     for (const transport of ["WebRTC", "MSE"] as const) {
       this._status(`${where}: cold ${transport}`);
-      const isCold = await this._waitCold(ref);
+      const isCold = keptWarm ? false : await this._waitCold(ref);
       const result = await this._session_(transport, ref, COLD_TIMEOUT_MS);
       record("cold", transport, result);
-      cold.push(`${transport} ${describe(result)}${isCold ? "" : " (a viewer kept it running: not cold)"}`);
+      cold.push(`${transport} ${describe(result)}${isCold ? "" : ` (${keptBy}: not cold)`}`);
       if (transport === "MSE") cold.push(...(await this._videoOnly(result, ref, COLD_TIMEOUT_MS, where)));
     }
     this._log(`  cold: ${cold.join(" · ")}`);
