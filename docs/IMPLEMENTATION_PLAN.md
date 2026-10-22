@@ -1756,7 +1756,7 @@ gate), **2** builds live view from what step 1 decides.
 | 0. Fix four Phase 2B findings (a failing test for each first) | **Done** (v0.4.0), see "Step 0" below |
 | 1. Our own go2rtc, and a live check in the panel (gate) | **Built** (v0.4.0), see "Step 1 as built". Desktop report in (run 5); waiting for the three iPhone runs ("How to run the live check") |
 | 1. Record the reports here and in the hardware matrix; decide the live stream budget, WebRTC or MSE per setup, which cameras stay warm, the HD stream per camera | **Desktop Chrome on the LAN: recorded and decided** (v0.4.1), see "Step 1 results". The iPhone setups: waiting. The rules are fixed below, before seeing the reports |
-| 2. Stream registry, delivery, Live tab and grid, keep warm, debug panel | **In progress.** The key-frame cache is built (v0.5.0) and measured on the desktop (run 6), see "Step 2: the key-frame cache"; v0.5.1 rebuilds the MSE init segment and records why warm feeds end (run 7: the sizes are right). v0.5.2 measured the last two oddities (run 8); v0.5.3 fixes the late H.264 paints. The rest waits for the iPhone reports |
+| 2. Stream registry, delivery, Live tab and grid, keep warm, debug panel | **In progress.** The key-frame cache is built (v0.5.0) and measured on the desktop (run 6), see "Step 2: the key-frame cache"; v0.5.1 rebuilds the MSE init segment and records why warm feeds end (run 7: the sizes are right). v0.5.2 measured the last two oddities (run 8); v0.5.3 fixed the late H.264 paints (run 9: warm MSE median 0.15 s). The rest waits for the iPhone reports |
 
 #### Step 0: four Phase 2B findings (v0.4.0)
 
@@ -1879,7 +1879,8 @@ lists as logged in. reolink-aio 0.21.18 has no session counter; the bridge
 sends the read-only `GetOnline` command through reolink-aio's generic request
 and reports the length of its list, or why it could not. The first level that
 fails (a stream without frames) or slows down (below 85 % of its frame rate,
-a first frame over twice level 1's and 3 s more, or the download below 70 %
+a first frame over twice level 1's and 3 s more (v0.5.4: past a 4.5 s
+key-frame wait and 3 s, run 9), or the download below 70 %
 of its speed alone) is the verdict.
 
 **The live check** (Reolink → **Open the live check**; `frontend/src/live/`):
@@ -2203,6 +2204,48 @@ Checked:
   sample.
 - **The moof sample-size rewrite**, in the tfhd or the trun; other layouts are
   left alone.
+
+#### Step 2: MSE in decode order measured (run 9, v0.5.3)
+
+The report is in the hardware matrix (run 9). With every H.264 stream's SPS
+saying decode order, MSE shows a frame as soon as it arrives:
+- **Warm MSE** starts in 0.13–0.70 s on all 27 streams: median 0.15 s on subs,
+  0.19 s on mains and ext.
+- **Cold MSE subs** start like cold WebRTC (1.08 s against 1.07 s).
+
+What it decides, by the rules (desktop):
+
+- **Desktop Chrome: WebRTC for a cold stream, MSE for a warm one** (unchanged).
+  Cold: WebRTC sub 1.07 s against MSE 1.08 s (within 0.3 s), mains and ext
+  1.17 s against 1.60 s. Warm: MSE 0.15 s against WebRTC 3.88 s. MSE also
+  carries the cameras' AAC audio as it is; WebRTC needs it transcoded.
+- **Kept warm by default: Garage, Hallway, Front Yard Left, Back Yard, Dogs and
+  Laundry Room.** Every mains-powered camera with 4 s sub key frames: their cold
+  start is wherever the camera is in its interval (0.2–4.6 s; each missed 1.5 s
+  in at least one run). Warm, they start in 0.13–0.20 s. Front Yard Right is not
+  on the list: its 1 s key frames start it cold in 0.5–1.2 s. The Doorbell is a
+  battery camera.
+- **Budget.** The five warm NVR subs hold five of its seven slots while nothing
+  is watched. With the grid open they are five of its six streams, and one slot
+  is left for HD. The Laundry Room's warm sub holds one of its two slots.
+- **The NVR budget stays 7.** Every level of every run kept its frame rate.
+  Run 9's verdict flagged level 6 only for a first frame within a key-frame
+  interval (see below).
+
+v0.5.4:
+
+- **The capacity verdict's first-frame rule.** A new stream's first frame
+  counts as a slowdown only when it takes longer than the longest key-frame
+  interval these cameras use (4.5 s) and 3 s more. Before, the rule compared it
+  with level 1's, and both are where the camera happened to be in its interval
+  (0.16–4.16 s across runs 5–9).
+
+The exit criteria, on the desktop:
+- Warm streams play live in under 1.5 s: yes, 0.70 s at worst.
+- Cold times are recorded: yes.
+- Live is faster than the stock view: yes, 19 of 19 streams.
+- Every tile shows its snapshot in under 0.5 s: no. HA's snapshot takes a
+  median 0.59 s, so this needs step 2's image cache.
 
 ## Phase 4 — Performance, mobile, packaging, release (difficulty: Standard, 2–3 wk)
 

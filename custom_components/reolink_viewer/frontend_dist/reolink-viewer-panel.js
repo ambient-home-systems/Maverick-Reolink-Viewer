@@ -5736,7 +5736,7 @@ var Gi = class {
 	close() {
 		this._ws?.close(), super.close(), this._url && URL.revokeObjectURL(this._url);
 	}
-}, Xi = "0.5.3", Zi = "Live check · ", Qi = [
+}, Xi = "0.5.4", Zi = "Live check · ", Qi = [
 	"Desktop Chrome, LAN",
 	"Desktop Chrome, Tailscale",
 	"Desktop Chrome, Nabu Casa",
