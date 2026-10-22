@@ -33,6 +33,8 @@ export const TILE_FULL_EVENT = "rv-live-full";
  * it. It plays while it is on screen and the page is visible, and stops
  * otherwise (the stream, if kept warm, stays warm on the server). A battery
  * camera waits for a tap, so it is woken only when someone wants to watch.
+ * So does a camera that records nowhere (the E1 Zoom): it is watched for its
+ * picture, kept fresh while shown, and its video plays when tapped.
  *
  * Full screen plays HD: the stream `chooseHd` picks starts in the background
  * while the sub stream keeps playing, and replaces it on its first frame (the
@@ -167,6 +169,11 @@ export class RvLiveTile extends LitElement {
     );
   }
 
+  /** Video only when tapped: a battery camera, or one watched for its picture. */
+  get waitsForTap(): boolean {
+    return this.connection?.is_battery === true || this.camera?.records === false;
+  }
+
   /** Full screen, with HD showing (the sub stream is stopped). */
   get hdShown(): boolean {
     return this._full && this._hdState.kind === "playing";
@@ -180,7 +187,7 @@ export class RvLiveTile extends LitElement {
   enterFull(): void {
     if (this._full) return;
     this._full = true;
-    this._wanted = true; // a battery camera: asking for it is watching it
+    this._wanted = true; // a camera waiting for a tap: asking for it is watching it
     if (document.fullscreenEnabled && typeof this.requestFullscreen === "function") {
       this.requestFullscreen()
         .then(() => {
@@ -223,7 +230,7 @@ export class RvLiveTile extends LitElement {
       this._hdPlayer = undefined;
       this._hd = undefined;
       this._hdChoosing = undefined;
-      this._wanted = this._full || !this.connection?.is_battery;
+      this._wanted = this._full || !this.waitsForTap;
     }
     this.toggleAttribute("full", this._full);
   }
@@ -410,6 +417,16 @@ export class RvLiveTile extends LitElement {
 
   private _renderStatus(state: PlayerState): TemplateResult | typeof nothing {
     if (!this._wanted) {
+      if (!this.connection?.is_battery) {
+        // Watched for its picture: show it as it is, with when it was taken.
+        const taken = this.image
+          ? new Date(this.image.taken).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+          : undefined;
+        return html`<div class="status picture">
+          <span class="badge">${taken ? `Picture from ${taken}` : "No picture yet"}</span>
+          <span class="badge accent">Tap to watch live</span>
+        </div>`;
+      }
       return html`<div class="status center">
         <span class="badge">Tap to watch</span>
         <span class="small">Battery camera: it wakes when you watch it</span>
@@ -558,6 +575,11 @@ export class RvLiveTile extends LitElement {
       .status.corner {
         top: 8px;
         right: 8px;
+      }
+      .status.picture {
+        top: 8px;
+        left: 8px;
+        flex-wrap: wrap;
       }
       .spinner {
         width: 16px;

@@ -2291,6 +2291,9 @@ var Sn = 3e3, Cn = "rv-live-open", wn = "rv-live-full", Tn = class extends A {
 	get shouldPlay() {
 		return this.isConnected && this._wanted && !this.suspended && this._pageVisible && this._onScreen && this.connection?.streams[this.stream] !== void 0;
 	}
+	get waitsForTap() {
+		return this.connection?.is_battery === !0 || this.camera?.records === !1;
+	}
 	get hdShown() {
 		return this._full && this._hdState.kind === "playing";
 	}
@@ -2316,7 +2319,7 @@ var Sn = 3e3, Cn = "rv-live-open", wn = "rv-live-full", Tn = class extends A {
 		}));
 	}
 	willUpdate(e) {
-		(e.has("connection") || e.has("stream")) && (this._player?.stop(), this._player = void 0, this._hdPlayer?.stop(), this._hdPlayer = void 0, this._hd = void 0, this._hdChoosing = void 0, this._wanted = this._full || !this.connection?.is_battery), this.toggleAttribute("full", this._full);
+		(e.has("connection") || e.has("stream")) && (this._player?.stop(), this._player = void 0, this._hdPlayer?.stop(), this._hdPlayer = void 0, this._hd = void 0, this._hdChoosing = void 0, this._wanted = this._full || !this.waitsForTap), this.toggleAttribute("full", this._full);
 	}
 	updated() {
 		this._driveSub(), this._driveHd();
@@ -2419,7 +2422,23 @@ var Sn = 3e3, Cn = "rv-live-open", wn = "rv-live-full", Tn = class extends A {
     </div>`;
 	}
 	_renderStatus(e) {
-		return this._wanted ? this.connection?.streams[this.stream] ? e.kind === "starting" ? T`<div class="status corner">
+		if (!this._wanted) {
+			if (!this.connection?.is_battery) {
+				let e = this.image ? new Date(this.image.taken).toLocaleTimeString([], {
+					hour: "numeric",
+					minute: "2-digit"
+				}) : void 0;
+				return T`<div class="status picture">
+          <span class="badge">${e ? `Picture from ${e}` : "No picture yet"}</span>
+          <span class="badge accent">Tap to watch live</span>
+        </div>`;
+			}
+			return T`<div class="status center">
+        <span class="badge">Tap to watch</span>
+        <span class="small">Battery camera: it wakes when you watch it</span>
+      </div>`;
+		}
+		return this.connection?.streams[this.stream] ? e.kind === "starting" ? T`<div class="status corner">
         <span class="spinner" aria-label="Connecting"></span>
       </div>` : e.kind === "waiting" ? T`<div class="status center" role="alert">
         <span class="small">Cannot play: ${e.error}</span>
@@ -2432,9 +2451,6 @@ var Sn = 3e3, Cn = "rv-live-open", wn = "rv-live-full", Tn = class extends A {
         </button>
       </div>` : D : T`<div class="status center">
         <span class="badge">No ${this.stream} stream</span>
-      </div>` : T`<div class="status center">
-        <span class="badge">Tap to watch</span>
-        <span class="small">Battery camera: it wakes when you watch it</span>
       </div>`;
 	}
 	static styles = [M, o`
@@ -2552,6 +2568,11 @@ var Sn = 3e3, Cn = "rv-live-open", wn = "rv-live-full", Tn = class extends A {
       .status.corner {
         top: 8px;
         right: 8px;
+      }
+      .status.picture {
+        top: 8px;
+        left: 8px;
+        flex-wrap: wrap;
       }
       .spinner {
         width: 16px;
@@ -6827,7 +6848,7 @@ function Aa(e) {
 customElements.get("rv-device-page") || customElements.define("rv-device-page", Ta);
 //#endregion
 //#region src/live/check.ts
-var ja = "0.10.0", Ma = "Live check · ", Na = [
+var ja = "0.11.0", Ma = "Live check · ", Na = [
 	"Desktop Chrome, LAN",
 	"Desktop Chrome, Tailscale",
 	"Desktop Chrome, Nabu Casa",
