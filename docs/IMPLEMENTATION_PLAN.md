@@ -19,7 +19,7 @@ put on it:
 | 0 | Foundations, CI, adapter layer, hardware discovery | High | 1–2 wk | Done (2026-10-17) |
 | 1 | Device details and every setting, with explanations | Standard (catalog) / High (panel shell) | 2–3 wk | Done (2026-10-17) |
 | 2 | Event timeline, thumbnails, smooth playback | High (backend) / Very high (player) | 3–5 wk | Done (2026-10-21, v0.3.2). 2A (2026-10-20, v0.2.7): timeline 105–287 ms, first frame 0.6–1.1 s, auto-advance 6–7 ms on hardware. 2B: MSE player; uncached deep starts are the NVR's download up to the target (6.9–13.0 s in hour-long recordings, up to 84 s before), speeds 0.5–8×, HD/SD at the same moment, one-hour sessions within the caps, the iPhone app on Wi-Fi, Tailscale and Nabu Casa |
-| 3 | Live view via go2rtc, grid, fullscreen, PTZ | High | 3–4 wk | In progress. Step 0 done (four Phase 2B fixes). Step 1 built (v0.4.0): our own go2rtc and the live check; waiting for the hardware reports (the gate) |
+| 3 | Live view via go2rtc, grid, fullscreen, PTZ | High | 3–4 wk | In progress. Step 0 done (four Phase 2B fixes). Step 1 done: our own go2rtc and the live check (v0.4.0), measured on desktop Chrome on the LAN and the iPhone app at home, through Tailscale and through Nabu Casa (runs 5–13), and decided. Step 2 in progress: the key-frame cache is built (v0.5.0–v0.5.5) |
 | 4 | Performance, mobile, packaging, first release | Standard | 2–3 wk | Not started |
 | 5 | Optional R&D: Baichuan live/playback | Very high | 4–8 wk, time-boxed with gates | Not started |
 
@@ -1754,8 +1754,8 @@ gate), **2** builds live view from what step 1 decides.
 | Step | Status |
 | --- | --- |
 | 0. Fix four Phase 2B findings (a failing test for each first) | **Done** (v0.4.0), see "Step 0" below |
-| 1. Our own go2rtc, and a live check in the panel (gate) | **Built** (v0.4.0), see "Step 1 as built". Desktop report in (run 5), iPhone on Wi-Fi (run 11) and through Tailscale (run 12) in; waiting for the iPhone through Nabu Casa ("How to run the live check") |
-| 1. Record the reports here and in the hardware matrix; decide the live stream budget, WebRTC or MSE per setup, which cameras stay warm, the HD stream per camera | **Desktop Chrome on the LAN: recorded and decided** (v0.4.1), see "Step 1 results". **The iPhone app on Wi-Fi and through Tailscale: recorded and decided** (runs 11 and 12), see "Step 2: the iPhone on Wi-Fi" and "Step 2: the iPhone through Tailscale". Nabu Casa: waiting. The rules are fixed below, before seeing the reports |
+| 1. Our own go2rtc, and a live check in the panel (gate) | **Done** (v0.4.0), see "Step 1 as built". Every setup's report is in: desktop Chrome on the LAN (run 5), the iPhone app on Wi-Fi (run 11), through Tailscale (run 12) and through Nabu Casa (run 13) |
+| 1. Record the reports here and in the hardware matrix; decide the live stream budget, WebRTC or MSE per setup, which cameras stay warm, the HD stream per camera | **Desktop Chrome on the LAN: recorded and decided** (v0.4.1), see "Step 1 results". **Done for every setup.** Desktop Chrome on the LAN (v0.4.1), see "Step 1 results"; the iPhone app on Wi-Fi, through Tailscale and through Nabu Casa (runs 11–13), see "Step 2: the iPhone on Wi-Fi", "… through Tailscale" and "… through Nabu Casa". The rules are fixed below, before seeing the reports |
 | 2. Stream registry, delivery, Live tab and grid, keep warm, debug panel | **In progress.** The key-frame cache is built (v0.5.0) and measured on the desktop (run 6), see "Step 2: the key-frame cache"; v0.5.1 rebuilds the MSE init segment and records why warm feeds end (run 7: the sizes are right). v0.5.2 measured the last two oddities (run 8); v0.5.3 fixed the late H.264 paints (run 9: warm MSE median 0.15 s); run 10 (v0.5.4) confirms it. v0.5.5 files each live check report under its device. The rest waits for the iPhone reports |
 
 #### Step 0: four Phase 2B findings (v0.4.0)
@@ -2374,6 +2374,72 @@ The exit criteria, on the iPhone through Tailscale:
   grid uses, started in 0.45 s at worst.
 - Every tile shows its snapshot in under 0.5 s: no. HA's snapshot took a
   median 0.72 s; step 2's image cache is still needed.
+
+#### Step 2: the iPhone through Nabu Casa (run 13, v0.5.5)
+
+The report is in the hardware matrix (run 13): the same iPhone with Wi-Fi and
+Tailscale off, the page over HTTPS at the Nabu Casa address. Every session
+played again. WebRTC connected in 56 of 56 sessions: 47 without a relay, and
+9 through a TURN relay. MSE played all 29 cold and all 27 warm streams.
+
+What it decides, by the rules:
+
+- **The iPhone app through Nabu Casa: WebRTC for a cold stream, MSE for a
+  warm one**, as everywhere else.
+  - Cold, WebRTC is faster: 1.76 s against MSE's 2.99 s on subs, and 1.61 s
+    against 2.17 s on mains and ext.
+  - Warm, MSE's 0.38 s and 0.95 s beat WebRTC's 3.88 s and 1.71 s.
+- **HD: unchanged**, the main on every camera but the Duo 3. Each H.265 main
+  played over both transports again.
+- **Kept warm by default: unchanged.** Warm, the six subs started in
+  0.30–0.58 s; cold, they took 1.21–4.26 s.
+- **The CX410 and CX810 direct entries can still go.** Through the NVR their
+  cold subs started within 0.21 s of the direct ones (1.09 against 1.04 s,
+  and 2.74 against 2.95 s), and warm within 0.07 s.
+
+As through Tailscale, the warm mains started in 1.11–2.03 s: the cached frames
+since the last key frame cross the link as one message. Full screen hides it
+by swapping the main in on its first frame.
+
+The exit criteria, on the iPhone through Nabu Casa:
+- The iPhone works through Nabu Casa: yes.
+- Live is faster than the stock view: yes, 19 of 19 streams. Home
+  Assistant's view took a median 2.63 s here.
+- The warm subs the grid uses started in 0.58 s at worst.
+- Every tile shows its snapshot in under 0.5 s: no. HA's snapshot took a
+  median 0.77 s where it worked, and failed on the Laundry Room's and the
+  Doorbell's four entities.
+
+#### Step 1's decisions, every setup in (runs 5–13)
+
+| Setup | Cold stream | Warm stream | HD |
+| --- | --- | --- | --- |
+| Desktop Chrome, LAN | WebRTC | MSE | main; ext on the Duo 3 |
+| iPhone app, Wi-Fi | WebRTC | MSE | main (H.265 too, if `decodingInfo` says smooth); ext on the Duo 3 |
+| iPhone app, Tailscale | WebRTC | MSE | as on Wi-Fi |
+| iPhone app, Nabu Casa | WebRTC | MSE | as on Wi-Fi |
+
+- **Delivery is the same everywhere**, so step 2 needs no per-setup table.
+  It starts a cold stream over WebRTC and a warm one over MSE, and each falls
+  back to the other.
+- **NVR budget: 7.** Cameras added directly keep 2.
+- **Kept warm by default:** Garage, Hallway, Front Yard Left, Back Yard, Dogs
+  and Laundry Room (their subs).
+- **The CX410 and CX810 direct entries can go.**
+- **Snapshots:** HA's snapshot misses 0.5 s on every setup (median 0.43–0.77 s
+  across runs 5–13), and it failed on 1–8 entities in five of those nine
+  runs. Step 2's own image cache has to meet the criterion.
+
+The exit criteria so far:
+- Warm streams play live in under 1.5 s on the LAN: yes, on the desktop and
+  the iPhone.
+- Cold times are recorded: yes, on every setup.
+- Live is faster than the stock view: yes, 19 of 19 streams on every setup.
+- The iPhone works on Wi-Fi, Tailscale and Nabu Casa: yes.
+- Every tile shows its snapshot in under 0.5 s: not yet (step 2's image
+  cache).
+- The Phase 2 playback criteria still hold, and a 24-hour soak passes: at the
+  end of step 2.
 
 ## Phase 4 — Performance, mobile, packaging, release (difficulty: Standard, 2–3 wk)
 

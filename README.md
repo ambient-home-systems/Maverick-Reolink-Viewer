@@ -14,7 +14,10 @@ recorded-video playback; v0.3.2, verified on the owner's hardware in Chrome and 
 iPhone Companion app, at home and remotely, see the
 [plan](docs/IMPLEMENTATION_PLAN.md#phase-2-status)). v0.4.0 runs the integration's own
 go2rtc and adds a **live check** (Reolink → Open the live check) that measures live
-view on each device before the live tab and grid are built, see the
+view on each device before the live tab and grid are built. Its reports are in, from
+desktop Chrome on the LAN and the iPhone app at home, through Tailscale and through
+Nabu Casa: live view will start a stream over WebRTC, or over MSE when it is kept
+warm, and the live tab and grid are next. See the
 [plan](docs/IMPLEMENTATION_PLAN.md#phase-3-status).
 
 **Phase 1 (v0.1.0, done):** the **Reolink** sidebar panel lists your NVRs, Home Hubs
