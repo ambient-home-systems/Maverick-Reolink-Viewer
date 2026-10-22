@@ -202,6 +202,45 @@ async def test_stream_size_unknown(
     assert main.codec == "h264"
 
 
+@pytest.mark.parametrize(
+    ("battery", "is_nvr", "host_flag", "wired"),
+    [
+        ({0: {"powerSupplyStatus": "normal"}}, True, False, True),
+        ({0: {"powerSupplyStatus": "none"}}, False, True, False),  # per channel wins
+        ({}, False, True, True),  # a camera added directly: the host's flag
+        ({}, True, True, False),  # an NVR's flag mixes its channels
+        ({0: {"powerSupplyStatus": 1}}, False, False, False),
+        (None, True, True, False),  # renamed or gone in reolink-aio
+    ],
+)
+async def test_wired_power(
+    hass: HomeAssistant,
+    reolink_host: MagicMock,
+    loaded_reolink: MockConfigEntry,
+    battery: Any,
+    is_nvr: bool,
+    host_flag: bool,
+    wired: bool,
+) -> None:
+    """A battery camera on wired power, as reolink-aio learned it."""
+    reolink_host.supported.side_effect = lambda *_args: True
+    reolink_host.is_nvr = is_nvr
+    reolink_host.is_hub = False
+    reolink_host.baichuan._wired_power = host_flag
+    if battery is None:
+        del reolink_host._battery
+    else:
+        reolink_host._battery = battery
+    (host,) = bridge.async_get_hosts(hass)
+    channel = host.info().channels[0]
+    assert channel.is_battery is True
+    assert channel.wired_power is wired
+    assert host.channel_details(0)["wired_power"] is wired
+    # Not a battery camera: never "wired power".
+    reolink_host.supported.side_effect = lambda _ch, cap, *_args: cap != "battery"
+    assert host.info().channels[0].wired_power is False
+
+
 async def test_get_host(hass: HomeAssistant, loaded_reolink: MockConfigEntry) -> None:
     """Lookup by entry id."""
     assert bridge.async_get_host(hass, loaded_reolink.entry_id).entry_id == (

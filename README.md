@@ -79,6 +79,8 @@ while an arrow is held, presets, zoom and focus, the floodlight, and the siren (
 confirmation), all through Home Assistant's own entities and actions. v0.11.0 shows a camera
 that records nowhere (like an E1 Zoom kept for snapshots) as its **picture first**: its tile
 shows its latest picture and plays video when tapped, and it is not kept warm by default.
+v0.12.0 watches a battery camera on **wired power** (a wired doorbell) like any other: it
+plays at once and can be kept warm; unplugged, it goes back to waiting for a tap.
 
 Requires Home Assistant 2026.10 or newer with the Reolink integration set up.
 
