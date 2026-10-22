@@ -241,6 +241,24 @@ async def test_wired_power(
     assert host.info().channels[0].wired_power is False
 
 
+async def test_stores_recordings_without_replay(
+    hass: HomeAssistant, reolink_host: MagicMock, loaded_reolink: MockConfigEntry
+) -> None:
+    """Recordings kept (an NVR, an SD card) whether or not replay is reported."""
+    (host,) = bridge.async_get_hosts(hass)
+    assert host.stores_recordings(0) is True  # an NVR
+    assert host.records_locally(0) is True
+    reolink_host.is_nvr = False
+    reolink_host.hdd_list = []
+    assert host.stores_recordings(0) is False  # a camera without an SD card
+    reolink_host.hdd_list = [0]
+    assert host.stores_recordings(0) is True
+    # Baichuan only (the battery Doorbell): an SD card, but no replay reported.
+    reolink_host.supported.side_effect = lambda _ch, cap, *_args: cap != "replay"
+    assert host.stores_recordings(0) is True
+    assert host.records_locally(0) is False
+
+
 async def test_get_host(hass: HomeAssistant, loaded_reolink: MockConfigEntry) -> None:
     """Lookup by entry id."""
     assert bridge.async_get_host(hass, loaded_reolink.entry_id).entry_id == (

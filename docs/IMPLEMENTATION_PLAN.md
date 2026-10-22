@@ -1756,7 +1756,7 @@ gate), **2** builds live view from what step 1 decides.
 | 0. Fix four Phase 2B findings (a failing test for each first) | **Done** (v0.4.0), see "Step 0" below |
 | 1. Our own go2rtc, and a live check in the panel (gate) | **Done** (v0.4.0), see "Step 1 as built". Every setup's report is in: desktop Chrome on the LAN (run 5), the iPhone app on Wi-Fi (run 11), through Tailscale (run 12) and through Nabu Casa (run 13) |
 | 1. Record the reports here and in the hardware matrix; decide the live stream budget, WebRTC or MSE per setup, which cameras stay warm, the HD stream per camera | **Desktop Chrome on the LAN: recorded and decided** (v0.4.1), see "Step 1 results". **Done for every setup.** Desktop Chrome on the LAN (v0.4.1), see "Step 1 results"; the iPhone app on Wi-Fi, through Tailscale and through Nabu Casa (runs 11–13), see "Step 2: the iPhone on Wi-Fi", "… through Tailscale" and "… through Nabu Casa". The rules are fixed below, before seeing the reports |
-| 2. Stream registry, delivery, Live tab and grid, keep warm, debug panel | **In progress.** The key-frame cache is built (v0.5.0) and measured on the desktop (run 6), see "Step 2: the key-frame cache"; v0.5.1 rebuilds the MSE init segment and records why warm feeds end (run 7: the sizes are right). v0.5.2 measured the last two oddities (run 8); v0.5.3 fixed the late H.264 paints (run 9: warm MSE median 0.15 s); run 10 (v0.5.4) confirms it. v0.5.5 files each live check report under its device. v0.6.0 keeps each camera's last picture for the tiles, see "Step 2: the image cache"; the live check measures it. v0.7.0: the Live grid and each camera's Live tab, see "Step 2: the Live grid". v0.8.0: keep warm per camera and the NVR budget of 7, see "Step 2: keep warm". v0.9.0: full-screen HD, see "Step 2: full-screen HD". v0.10.0: the camera's controls over its live view, see "Step 2: PTZ, presets, siren and floodlight". The owner checked v0.9.0 and v0.10.0 on the hardware. v0.11.0: the E1 Zoom's picture first, see "Step 2: the picture first"; the owner checked it on the hardware. v0.12.0: a battery camera on wired power is watched like the others, see "Step 2: battery cameras on wired power". Next: a debug view per tile |
+| 2. Stream registry, delivery, Live tab and grid, keep warm, debug panel | **In progress.** The key-frame cache is built (v0.5.0) and measured on the desktop (run 6), see "Step 2: the key-frame cache"; v0.5.1 rebuilds the MSE init segment and records why warm feeds end (run 7: the sizes are right). v0.5.2 measured the last two oddities (run 8); v0.5.3 fixed the late H.264 paints (run 9: warm MSE median 0.15 s); run 10 (v0.5.4) confirms it. v0.5.5 files each live check report under its device. v0.6.0 keeps each camera's last picture for the tiles, see "Step 2: the image cache"; the live check measures it. v0.7.0: the Live grid and each camera's Live tab, see "Step 2: the Live grid". v0.8.0: keep warm per camera and the NVR budget of 7, see "Step 2: keep warm". v0.9.0: full-screen HD, see "Step 2: full-screen HD". v0.10.0: the camera's controls over its live view, see "Step 2: PTZ, presets, siren and floodlight". The owner checked v0.9.0 and v0.10.0 on the hardware. v0.11.0: the E1 Zoom's picture first, see "Step 2: the picture first"; the owner checked it on the hardware. v0.12.0: a battery camera on wired power is watched like the others, see "Step 2: battery cameras on wired power"; v0.12.1 fixes the Doorbell being shown picture-first. Next: a debug view per tile |
 
 #### Step 0: four Phase 2B findings (v0.4.0)
 
@@ -2658,6 +2658,20 @@ which only made it slower. The owner chose to detect it:
 - **Unplugged**, it is a battery camera again at the next look (every
   minute for the switches): it waits for a tap, may sleep, and its
   keep-warm switch is unavailable, so it is not kept awake.
+
+On the hardware (the owner, 2026-10-22): the Doorbell's Overview says "on
+wired power", but its tile still waited for a tap, with "Tap to watch live":
+picture first. The Doorbell is added directly, records to its SD card ("SD 1:
+47.16% used") and not on the NVR, and is Baichuan only: it reports no replay
+support ("Recordings: no playback"). "Records somewhere" was taken from the
+playback source, which needs replay support, so it counted as recording
+nowhere, like the E1 Zoom.
+
+**v0.12.1:** a camera records somewhere when an NVR or its own storage (an SD
+card) keeps its recordings, whether or not this integration can play them
+(`bridge.stores_recordings`). The picture first and the keep-warm default use
+that; the Playback tab still needs replay support. Playing the Doorbell's SD
+recordings (Baichuan only) is left for later.
 
 ## Phase 4 — Performance, mobile, packaging, release (difficulty: Standard, 2–3 wk)
 
