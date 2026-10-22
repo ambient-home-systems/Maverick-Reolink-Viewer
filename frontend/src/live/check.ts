@@ -44,9 +44,10 @@ import {
   streamLabel,
 } from "./check-util";
 import { liveConnection } from "./data";
+import { chooseHd } from "./hd";
 import { OurMse, OurWebRtc, StockWebRtc, type LiveSession, type SessionResult } from "./session";
 
-export const LIVE_CHECK_VERSION = "0.8.0";
+export const LIVE_CHECK_VERSION = "0.9.0";
 /** Saved reports share the playback check's store; this marks a live one. */
 export const LIVE_REPORT_PREFIX = "Live check · ";
 export const LIVE_SETUPS = [
@@ -143,6 +144,7 @@ export class LiveCheck {
       await this._header();
       const cameras = await this._cameras();
       await this._ourImages(cameras);
+      await this._hdChoices(cameras);
       for (const camera of cameras) {
         for (const connection of camera.connections) {
           for (const stream of this.options.streams) {
@@ -309,6 +311,16 @@ export class LiveCheck {
       }
     } finally {
       await unsubscribe().catch(() => undefined);
+    }
+  }
+
+  /** What full screen plays on each camera in this browser, and why (as the tiles choose). */
+  private async _hdChoices(cameras: LiveCamera[]): Promise<void> {
+    this._log("");
+    this._log("Full screen (HD), in this browser:");
+    for (const camera of cameras) {
+      const connection = liveConnection(camera);
+      if (connection) this._log(`  ${camera.name}: ${(await chooseHd(connection)).reason}`);
     }
   }
 

@@ -495,7 +495,11 @@ async def test_live_commands_when_go2rtc_cannot_run(
     msg = await _ws(client, {"type": "reolink_viewer/live/status"})
     assert msg["result"]["go2rtc"]["state"] == "stopped"
     msg = await _ws(client, {"type": "reolink_viewer/live/cameras"})
-    connection_id = msg["result"]["cameras"][0]["connections"][0]["connection_id"]
+    connection = msg["result"]["cameras"][0]["connections"][0]
+    connection_id = connection["connection_id"]
+    # Each stream's size, for the panel's HD choice (ext has no encoding).
+    main = connection["streams"]["main"]["encoding"]
+    assert (main["codec"], main["width"], main["height"]) == ("h264", 2560, 1440)
     ref = {"connection_id": connection_id, "stream": "sub"}
     nope = {"connection_id": "nope", "stream": "sub"}
     for kind in ("mse", "frame", "state"):

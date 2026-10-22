@@ -95,6 +95,9 @@ describe("live check helpers", () => {
     expect(median([])).toBeUndefined();
     expect(streamLabel("sub", { codec: "h264", frame_rate: 15, bit_rate: 512 })).toBe("sub (h264, 15 fps, 512 kbps)");
     expect(streamLabel("ext", null)).toBe("ext");
+    expect(streamLabel("main", { codec: "h265", frame_rate: 20, bit_rate: null, width: 7680, height: 2160 })).toBe(
+      "main (h265, 7680×2160, 20 fps)",
+    );
     expect(streamLabel("main", { codec: null, frame_rate: null, bit_rate: null })).toBe("main");
   });
 

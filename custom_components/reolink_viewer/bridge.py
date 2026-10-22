@@ -175,6 +175,8 @@ class StreamEncoding:
     codec: str | None
     bit_rate: int | None
     frame_rate: int | None
+    width: int | None = None
+    height: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -474,6 +476,29 @@ def _safe(func: Any, *args: Any) -> Any:
         raise
 
 
+def _stream_size(api: Host, channel: int, stream: str) -> tuple[int | None, int | None]:
+    """Return a stream's configured width and height, or None for each if unknown.
+
+    reolink-aio keeps them from the device's encoder settings (GetEnc) but has
+    no accessor for them, so this reads its private state: the one place that
+    does. Anything other than two positive integers reads as unknown, and the
+    panel then plays H.265 mains' ext stream (it cannot ask the browser
+    whether it decodes them at their size).
+    """
+    try:
+        settings = api._enc_settings[channel][f"{stream}Stream"]  # noqa: SLF001
+        width, height = settings["width"], settings["height"]
+    except AttributeError, KeyError, TypeError:
+        return None, None
+    if _positive(width) and _positive(height):
+        return width, height
+    return None, None
+
+
+def _positive(value: object) -> bool:
+    return type(value) is int and value > 0
+
+
 class ReolinkHostHandle:
     """Typed access to one loaded Reolink host."""
 
@@ -548,10 +573,13 @@ class ReolinkHostHandle:
 
     def _encoding(self, channel: int, stream: str) -> StreamEncoding:
         api = self._api
+        width, height = _stream_size(api, channel, stream)
         return StreamEncoding(
             codec=_safe(api.encoding, channel, stream),
             bit_rate=_safe(api.bit_rate, channel, stream),
             frame_rate=_safe(api.frame_rate, channel, stream),
+            width=width,
+            height=height,
         )
 
     def _channel_info(self, channel: int) -> ChannelInfo:

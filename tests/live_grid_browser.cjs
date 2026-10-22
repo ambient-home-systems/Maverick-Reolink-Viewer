@@ -5,6 +5,7 @@
 // API (what the panel gets from HA's frontend), the panel bundle as HA serves
 // it, and the live grid: the tile's picture from the image cache, then its
 // stream starting (cold: a WebRTC session through HA, seen in live/status).
+// Then full screen: the HD stream starts as well, and stops on the way back.
 // go2rtc sends only H.264 and H.265 video, which Playwright's Chromium cannot
 // decode, so no frame shows here: the hardware runs check that. Then the grid
 // goes away and the server must hold nothing. Prints one line of JSON.
@@ -87,6 +88,31 @@ async function run({ origin, token }) {
     await sleep(100);
   }
   result.tiles = grid.shadowRoot?.querySelectorAll("rv-live-tile").length ?? 0;
+
+  // Full screen: HD (the main stream, H.264 here) starts next to the sub stream.
+  const tile = tileOf();
+  const holding = (now, kind) => Object.entries(now.running).some(([name, holds]) => name.endsWith(`_${kind}`) && holds > 0);
+  tile?.shadowRoot?.querySelector(".corner-button")?.click();
+  const fullAt = performance.now();
+  while (performance.now() < fullAt + 20_000) {
+    const now = await status();
+    if (holding(now, "main")) {
+      result.hd = { ms: Math.round(performance.now() - fullAt), sub: holding(now, "sub"), state: tile?._hdState, full: tile?.full };
+      break;
+    }
+    await sleep(100);
+  }
+  // Back: HD stops; the sub stream keeps playing.
+  tile?.shadowRoot?.querySelector(".corner-button")?.click();
+  const backAt = performance.now();
+  while (performance.now() < backAt + 10_000) {
+    const now = await status();
+    if (!holding(now, "main")) {
+      result.back = { sub: holding(now, "sub"), full: tile?.full };
+      break;
+    }
+    await sleep(100);
+  }
   grid.remove();
   await sleep(1000);
   const after = await status();

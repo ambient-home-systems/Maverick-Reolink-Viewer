@@ -50,7 +50,8 @@ frontend/            # Lit + TypeScript panel, built with Vite
                      # (check.ts) and its MSE probe (mse-probe.ts, mse-sample.ts)
   src/live/          # the live sessions: WebRTC (ours and HA's), MSE over the signed
                      # websocket (session.ts); the player that keeps one playing
-                     # (player.ts); what the live views share (data.ts); the live check
+                     # (player.ts); what the live views share (data.ts); which stream
+                     # full screen plays in HD (hd.ts); the live check
 tests/               # pytest-homeassistant-custom-component; test_mse_browser.py and
                      # test_live_browser.py drive Playwright's Chromium (mse_append.cjs,
                      # live_browser.cjs, live_grid_browser.cjs: the panel's grid);

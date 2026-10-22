@@ -329,6 +329,161 @@ describe("rv-live-grid", () => {
   });
 });
 
+describe("full screen", () => {
+  type RvLiveTile = HTMLElementTagNameMap["rv-live-tile"];
+  const fullButton = (tile: Element) => {
+    const button = tile.shadowRoot?.querySelector<HTMLButtonElement>(".corner-button");
+    if (!button) throw new Error("no full-screen button");
+    return button;
+  };
+  const settle = async (tile: RvLiveTile) => {
+    await flush();
+    await tile.updateComplete;
+    await flush();
+    await tile.updateComplete;
+  };
+
+  async function garageAndBell() {
+    const { hass } = fakeHass();
+    const { tiles } = await mountGrid(hass);
+    const garage = tiles().at(0);
+    const doorbell = tiles().at(1);
+    if (!garage || !doorbell) throw new Error("no tiles");
+    return { garage, doorbell };
+  }
+
+  it("plays HD in the background and swaps it in on its first frame", async () => {
+    const { garage, doorbell } = await garageAndBell();
+    const sub = () => players.find((p) => p.ref.connectionId === "nvr1" && p.ref.stream === "sub");
+    const hd = () => players.find((p) => p.ref.stream === "main");
+    const bell = () => players.find((p) => p.ref.connectionId === "bell");
+    // The doorbell is watched too (a tap), then the garage goes full screen.
+    tileBox(doorbell).click();
+    await settle(doorbell);
+    expect(bell()?.running).toBe(true);
+    fullButton(garage).click();
+    await settle(garage);
+    await settle(doorbell);
+    expect(garage.full).toBe(true);
+    expect(garage.hasAttribute("full")).toBe(true);
+    // The main stream (H.264 here) starts cold, over WebRTC; the sub keeps playing.
+    expect(hd()?.ref).toEqual({ connectionId: "nvr1", stream: "main" });
+    expect(hd()?.options.warm).toBe(false);
+    expect(hd()?.running).toBe(true);
+    expect(sub()?.running).toBe(true);
+    expect(garage.shadowRoot?.textContent).toContain("HD starting…");
+    // The other tiles stop while it is full screen.
+    expect(bell()?.running).toBe(false);
+    // A click in full screen does not open the camera.
+    const routes: unknown[] = [];
+    garage.addEventListener("rv-live-open", (e) => routes.push(e));
+    tileBox(garage).click();
+    expect(routes).toEqual([]);
+
+    // HD's first frame: it shows, and the sub stream stops.
+    hd()?.setState({ kind: "playing", transport: "WebRTC", result: { ok: true, steps: {} } });
+    await settle(garage);
+    expect(tileBox(garage).classList.contains("hd-on")).toBe(true);
+    expect(garage.hdShown).toBe(true);
+    expect(sub()?.running).toBe(false);
+    expect(garage.shadowRoot?.querySelector(".hd-status .badge")?.textContent).toBe("HD");
+
+    // HD ends and starts again: the sub stream plays meanwhile.
+    hd()?.setState({ kind: "starting", transport: "WebRTC" });
+    await settle(garage);
+    expect(sub()?.running).toBe(true);
+    expect(tileBox(garage).classList.contains("hd-on")).toBe(false);
+
+    // Back: HD stops, the sub stream plays, and so do the other tiles.
+    fullButton(garage).click();
+    await settle(garage);
+    await settle(doorbell);
+    expect(garage.full).toBe(false);
+    expect(garage.hasAttribute("full")).toBe(false);
+    expect(hd()?.running).toBe(false);
+    expect(sub()?.running).toBe(true);
+    expect(bell()?.running).toBe(true);
+  });
+
+  it("says why it stays in SD, and why HD cannot play", async () => {
+    const { garage, doorbell } = await garageAndBell();
+    // The doorbell has no main or ext stream here; full screen wakes it.
+    fullButton(doorbell).click();
+    await settle(doorbell);
+    expect(players.find((p) => p.ref.connectionId === "bell")?.running).toBe(true);
+    expect(doorbell.shadowRoot?.textContent).toContain("SD only: no main stream, and there is no ext stream");
+    doorbell.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, composed: true }));
+    await settle(doorbell);
+    expect(doorbell.full).toBe(false);
+
+    fullButton(garage).click();
+    await settle(garage);
+    const hd = players.find((p) => p.ref.stream === "main");
+    hd?.setState({ kind: "waiting", error: "WebRTC: the NVR is busy", retryAt: Date.now() + 1000 });
+    await settle(garage);
+    expect(garage.shadowRoot?.textContent).toContain("HD cannot play: WebRTC: the NVR is busy");
+    expect(players.find((p) => p.ref.connectionId === "nvr1" && p.ref.stream === "sub")?.running).toBe(true);
+    // Esc leaves full screen when it fills the window.
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    await settle(garage);
+    expect(garage.full).toBe(false);
+    expect(hd?.running).toBe(false);
+  });
+
+  it("uses the browser's full screen where it has one, and follows it", async () => {
+    const { garage } = await garageAndBell();
+    let element: Element | null = null;
+    Object.defineProperty(document, "fullscreenEnabled", { value: true, configurable: true });
+    Object.defineProperty(document, "fullscreenElement", { get: () => element, configurable: true });
+    const exitFullscreen = vi.fn(() => {
+      element = null;
+      return Promise.resolve();
+    });
+    Object.defineProperty(document, "exitFullscreen", { value: exitFullscreen, configurable: true });
+    const requestFullscreen = vi.fn(() => {
+      element = garage;
+      return Promise.resolve();
+    });
+    garage.requestFullscreen = requestFullscreen;
+    try {
+      fullButton(garage).click();
+      await settle(garage);
+      expect(requestFullscreen).toHaveBeenCalledTimes(1);
+      // Esc is the browser's then: the tile follows when it leaves.
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+      expect(garage.full).toBe(true);
+      element = null;
+      document.dispatchEvent(new Event("fullscreenchange"));
+      await settle(garage);
+      expect(garage.full).toBe(false);
+      expect(exitFullscreen).not.toHaveBeenCalled();
+
+      // Its own button leaves the browser's full screen too.
+      fullButton(garage).click();
+      await settle(garage);
+      fullButton(garage).click();
+      await settle(garage);
+      expect(exitFullscreen).toHaveBeenCalledTimes(1);
+      expect(garage.full).toBe(false);
+    } finally {
+      for (const name of ["fullscreenEnabled", "fullscreenElement", "exitFullscreen"]) {
+        Reflect.deleteProperty(document, name);
+      }
+    }
+  });
+
+  it("stops HD when the tile goes away", async () => {
+    const { garage } = await garageAndBell();
+    fullButton(garage).click();
+    await settle(garage);
+    const hd = players.find((p) => p.ref.stream === "main");
+    expect(hd?.running).toBe(true);
+    garage.remove();
+    expect(hd?.running).toBe(false);
+    expect(garage.full).toBe(false);
+  });
+});
+
 describe("rv-live-camera", () => {
   it("turns keep warm on and off through Home Assistant's switch", async () => {
     const fake = fakeHass();

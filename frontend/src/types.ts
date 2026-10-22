@@ -69,6 +69,9 @@ export interface StreamEncoding {
   codec: string | null;
   bit_rate: number | null;
   frame_rate: number | null;
+  /** The configured picture size, when the device reported it. */
+  width?: number | null;
+  height?: number | null;
 }
 
 export type DeviceKind = "camera" | "nvr" | "hub";

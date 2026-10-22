@@ -146,7 +146,7 @@ async def test_chromium_starts_the_live_grid(
     hass_access_token: str,
     grid_live: MockConfigEntry,
 ) -> None:
-    """The panel's grid shows the camera's picture, then starts it over WebRTC."""
+    """The grid shows the camera's picture, starts it over WebRTC, and HD in full screen."""
     node_path = await hass.async_add_executor_job(_node_path)
     if node_path is None:
         _missing("node with Playwright is not installed")
@@ -172,6 +172,14 @@ async def test_chromium_starts_the_live_grid(
     # Cold: a WebRTC session through Home Assistant, holding the camera's sub.
     assert result["state"] == {"kind": "starting", "transport": "WebRTC"}, result
     assert list(result["running"].values()) == [1], result
+    # Full screen: the HD stream (the main, H.264 here) starts next to the sub
+    # stream, cold over WebRTC, or over MSE once WebRTC has failed (this
+    # Chromium offers go2rtc no H.264); back from it, only the sub is held.
+    assert result["hd"]["sub"] is True, result
+    assert result["hd"]["full"] is True, result
+    assert result["hd"]["state"]["kind"] == "starting", result
+    assert result["hd"]["state"]["transport"] in ("WebRTC", "MSE"), result
+    assert result["back"] == {"sub": True, "full": False}, result
     # The grid went away: nothing holds the stream, nobody watches the pictures.
     assert result["after"] == {"sessions": 0, "running": {}}, result
     service = grid_live.runtime_data.live

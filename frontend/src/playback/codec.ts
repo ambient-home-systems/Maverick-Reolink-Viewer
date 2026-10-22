@@ -8,9 +8,10 @@ export interface StreamDecision {
   reason: string;
 }
 
-type DecodingInfo = (config: MediaDecodingConfiguration) => Promise<MediaCapabilitiesDecodingInfo>;
+export type DecodingInfo = (config: MediaDecodingConfiguration) => Promise<MediaCapabilitiesDecodingInfo>;
 
-function decoder(): DecodingInfo | undefined {
+/** The browser's MediaCapabilities.decodingInfo, if it has one. */
+export function decoder(): DecodingInfo | undefined {
   // Older browsers have no MediaCapabilities at all.
   const caps = (navigator as { mediaCapabilities?: Partial<MediaCapabilities> }).mediaCapabilities;
   const decodingInfo = caps?.decodingInfo;

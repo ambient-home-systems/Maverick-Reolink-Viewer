@@ -1,6 +1,7 @@
 """Tests for the bridge over HA's Reolink integration."""
 
 from datetime import UTC, datetime, timedelta, timezone
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -145,7 +146,10 @@ async def test_host_info(
         "codec": "h264",
         "bit_rate": 4096,
         "frame_rate": 25,
+        "width": 2560,
+        "height": 1440,
     }
+    assert (channel.sub.width, channel.sub.height) == (640, 360)
 
     reolink_host.is_hub = True
     assert host.info().device_type == "hub"
@@ -167,6 +171,35 @@ async def test_host_info_missing_encoding(
     reolink_host.timezone.side_effect = RuntimeError("unexpected")
     with pytest.raises(RuntimeError):
         host.timezone()
+
+
+@pytest.mark.parametrize(
+    "settings",
+    [
+        {},  # GetEnc not read yet
+        {0: {"mainStream": {"width": 2560}}},  # no height
+        {0: {"mainStream": {"width": "2560", "height": 1440}}},
+        {0: {"mainStream": {"width": 0, "height": 0}}},
+        {0: {"mainStream": {"width": True, "height": 1440}}},
+        {0: None},
+        None,  # renamed or gone in reolink-aio
+    ],
+)
+async def test_stream_size_unknown(
+    hass: HomeAssistant,
+    reolink_host: MagicMock,
+    loaded_reolink: MockConfigEntry,
+    settings: Any,
+) -> None:
+    """A size is two positive integers from the encoder settings, or unknown."""
+    if settings is None:
+        del reolink_host._enc_settings
+    else:
+        reolink_host._enc_settings = settings
+    (host,) = bridge.async_get_hosts(hass)
+    main = host.info().channels[0].main
+    assert (main.width, main.height) == (None, None)
+    assert main.codec == "h264"
 
 
 async def test_get_host(hass: HomeAssistant, loaded_reolink: MockConfigEntry) -> None:
