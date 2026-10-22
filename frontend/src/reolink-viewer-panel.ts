@@ -4,6 +4,7 @@ import { fetchCatalog, fetchDevices, runProbe, toError, warmTimelines, type Prob
 import "./components/device-list";
 import "./components/device-page";
 import "./components/live-check";
+import "./components/live-grid";
 import {
   NAVIGATE_EVENT,
   TOAST_EVENT,
@@ -172,6 +173,8 @@ export class ReolinkViewerPanel extends LitElement {
               .deviceId=${route.id}
               .tab=${route.tab}
             ></rv-device-page>`
+          : route.view === "live"
+            ? html`<rv-live-grid .hass=${this.hass}></rv-live-grid>`
           : route.view === "live-check"
             ? html`<div>
                   <button class="text" @click=${() => {
@@ -220,11 +223,17 @@ export class ReolinkViewerPanel extends LitElement {
     return html`<section class="card">
       <h2>Live view</h2>
       <p class="muted">
-        Live view is being built. The live check measures how fast each camera starts live on this
-        device, over WebRTC and MSE, and compares it with Home Assistant's own camera view.
+        Every camera live, each showing its last picture until its video starts. The live check
+        measures how fast each camera starts on this device and compares it with Home Assistant's
+        own camera view.
       </p>
       <div class="actions">
         <button class="primary" @click=${() => {
+          this.navigate({ view: "live" });
+        }}>
+          Watch live
+        </button>
+        <button @click=${() => {
           this.navigate({ view: "live-check" });
         }}>
           Open the live check

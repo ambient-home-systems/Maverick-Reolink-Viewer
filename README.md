@@ -62,7 +62,11 @@ v0.5.0 adds a key-frame cache: every MSE viewer of a stream shares one feed that
 the frames since the camera's last key frame, so a stream kept warm starts at once
 instead of waiting up to 4 s for the camera's next key frame. v0.6.0 keeps each
 camera's last picture on the server, taken while a live page is open (battery cameras
-only while awake), so a tile can show it before its video starts.
+only while awake), so a tile can show it before its video starts. v0.7.0 adds **live
+view** (Reolink → Watch live): every camera in a grid, each showing its last picture and
+fading into video, and a **Live** tab on each camera. A stream kept warm starts over MSE
+from its cached key frame, any other over WebRTC; each falls back to the other, and a
+tile pauses when it is off screen or the page is hidden. Battery cameras wait for a tap.
 
 Requires Home Assistant 2026.10 or newer with the Reolink integration set up.
 

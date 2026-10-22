@@ -397,9 +397,16 @@ export interface LiveConnection {
   is_battery: boolean;
   /**
    * Per stream the connection can serve (no ext without HTTP-FLV): its
-   * configured encoding (none for ext) and HA's camera entity showing it.
+   * configured encoding (none for ext), HA's camera entity showing it, and
+   * whether it is kept warm (then it plays over MSE from its cached key frame).
    */
-  streams: Partial<Record<LiveStreamKind, { encoding: StreamEncoding | null; entity_id: string | null }>>;
+  streams: Partial<Record<LiveStreamKind, LiveStreamInfo>>;
+}
+
+export interface LiveStreamInfo {
+  encoding: StreamEncoding | null;
+  entity_id: string | null;
+  warm?: boolean;
 }
 
 export interface LiveCamera {

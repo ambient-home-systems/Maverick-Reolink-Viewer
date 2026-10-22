@@ -16,7 +16,7 @@ Nothing secret is sent: no unique ids, identifiers, serial numbers, MAC
 addresses or configuration URLs (they carry the device address).
 """
 
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 import logging
 from typing import Any, Literal
@@ -553,12 +553,14 @@ def async_image_sources(hass: HomeAssistant) -> dict[str, LiveSource]:
 
 
 @callback
-def async_live_cameras(hass: HomeAssistant) -> list[dict[str, Any]]:
+def async_live_cameras(
+    hass: HomeAssistant, warm: Callable[[LiveSource, str], bool] | None = None
+) -> list[dict[str, Any]]:
     """Return every camera with its connections, streams and HA camera entities.
 
     Each connection lists, per live stream it can serve, the configured
-    encoding and the enabled camera entity showing it in Home Assistant's own
-    view (if any).
+    encoding, the enabled camera entity showing it in Home Assistant's own
+    view (if any) and, given ``warm``, whether it is kept warm.
     """
     model = _async_build(hass, degraded=False)
     ent_reg = er.async_get(hass)
@@ -599,6 +601,7 @@ def async_live_cameras(hass: HomeAssistant) -> list[dict[str, Any]]:
                         stream: {
                             "encoding": encodings.get(stream),
                             "entity_id": entities.get(stream),
+                            "warm": warm is not None and warm(source, stream),
                         }
                         for stream in LIVE_STREAMS
                         if LIVE_PROTOCOLS[stream] in protocols

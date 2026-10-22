@@ -5,6 +5,7 @@ import { deviceTypeLabel } from "../format";
 import { statesChanged } from "../render-filter";
 import { sharedStyles } from "../styles";
 import type { Catalog, DeviceResponse, HassEntities, HomeAssistant, Unsubscribe } from "../types";
+import "./live-grid";
 import { navigate, type Tab } from "./navigation";
 import "./overview";
 import "./playback";
@@ -174,13 +175,15 @@ export class RvDevicePage extends LitElement {
                   missing. Settings still work.
                 </div>`
               : nothing}
-            ${this.tab === "playback" && hasPlayback(device)
+            ${this.tab === "live" && hasLive(device)
+              ? html`<rv-live-camera .hass=${this.hass} .deviceId=${node.id}></rv-live-camera>`
+              : this.tab === "playback" && hasPlayback(device)
               ? html`<rv-playback
                   .hass=${this.hass}
                   .deviceId=${node.id}
                   .cameraName=${node.name ?? ""}
                 ></rv-playback>`
-              : this.tab === "overview" || this.tab === "playback"
+              : this.tab === "overview" || this.tab === "playback" || this.tab === "live"
               ? html`<rv-overview .hass=${this.hass} .device=${device}></rv-overview>`
               : html`<rv-settings
                   .hass=${this.hass}
@@ -237,6 +240,7 @@ export class RvDevicePage extends LitElement {
 
 const TAB_LABELS: Record<Tab, string> = {
   overview: "Overview",
+  live: "Live",
   playback: "Playback",
   settings: "Settings",
 };
@@ -246,8 +250,18 @@ export function hasPlayback(device: DeviceResponse): boolean {
   return device.node.kind === "camera" && device.node.connections.some((c) => c.playback_source);
 }
 
+/** A camera can be watched live, unless the integration runs degraded (no live service). */
+export function hasLive(device: DeviceResponse): boolean {
+  return device.node.kind === "camera" && !device.degraded;
+}
+
 export function tabsFor(device: DeviceResponse): Tab[] {
-  return hasPlayback(device) ? ["overview", "playback", "settings"] : ["overview", "settings"];
+  return [
+    "overview",
+    ...(hasLive(device) ? (["live"] as const) : []),
+    ...(hasPlayback(device) ? (["playback"] as const) : []),
+    "settings",
+  ];
 }
 
 /** Every entity whose state the page shows. */

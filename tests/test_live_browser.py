@@ -1,10 +1,13 @@
-"""Chromium watches live through Home Assistant (Phase 3 step 1).
+"""Chromium watches live through Home Assistant (Phase 3 steps 1 and 2).
 
 The browser talks to Home Assistant's websocket API: a WebRTC session through
 ``reolink_viewer/live/webrtc`` to our go2rtc (trickle ICE both ways), then MSE
 through the signed websocket proxy. Playwright's Chromium has no H.264, so the
-fake camera's stream is Opus audio only: the signaling, ICE and media paths
-are the same as for video.
+fake camera's stream there is Opus audio only: the signaling, ICE and media
+paths are the same as for video. Then the panel's live grid, from the bundle
+Home Assistant serves: the camera's picture, then its stream starting over
+WebRTC (go2rtc sends only H.264 or H.265 video, which this Chromium cannot
+decode, so frames are left to the hardware runs).
 
 Needs go2rtc, ffmpeg (libopus), node and Playwright with Chromium; skipped
 without them unless RV_BROWSER_TESTS=1 (CI), where it fails instead.
@@ -14,6 +17,7 @@ import asyncio
 import json
 import os
 from pathlib import Path
+import subprocess
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -29,6 +33,7 @@ from .test_live_go2rtc import _finder
 from .test_mse_browser import _missing, _node_path
 
 SCRIPT = Path(__file__).with_name("live_browser.cjs")
+GRID_SCRIPT = Path(__file__).with_name("live_grid_browser.cjs")
 
 
 @pytest.fixture
@@ -99,3 +104,76 @@ async def test_chromium_watches_live_through_home_assistant(
     assert service is not None
     assert service.registry.running() == {}
     assert service.sessions == {}
+
+
+@pytest.fixture
+async def grid_live(
+    hass: HomeAssistant, reolink_host: MagicMock, opus_live: MockConfigEntry
+) -> MockConfigEntry:
+    """The Opus stream as sub, and the camera's picture a real JPEG."""
+    picture = await hass.async_add_executor_job(_jpeg)
+    reolink_host.get_snapshot = AsyncMock(return_value=picture)
+    return opus_live
+
+
+def _jpeg() -> bytes:
+    """A 64x36 JPEG, as a camera's sub-size snapshot."""
+    return subprocess.run(
+        [
+            "ffmpeg",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc2=size=64x36",
+            "-frames:v",
+            "1",
+            "-f",
+            "mjpeg",
+            "pipe:1",
+        ],
+        capture_output=True,
+        check=True,
+    ).stdout
+
+
+@pytest.mark.timeout(120)
+async def test_chromium_starts_the_live_grid(
+    hass: HomeAssistant,
+    hass_client: ClientSessionGenerator,
+    hass_access_token: str,
+    grid_live: MockConfigEntry,
+) -> None:
+    """The panel's grid shows the camera's picture, then starts it over WebRTC."""
+    node_path = await hass.async_add_executor_job(_node_path)
+    if node_path is None:
+        _missing("node with Playwright is not installed")
+    http = await hass_client()
+    origin = str(http.make_url("/")).rstrip("/")
+    process = await asyncio.create_subprocess_exec(
+        "node",
+        str(GRID_SCRIPT),
+        origin,
+        hass_access_token,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        env={**os.environ, "NODE_PATH": node_path},
+    )
+    stdout, stderr = await asyncio.wait_for(process.communicate(), 100)
+    assert process.returncode == 0, stderr.decode()
+    result = json.loads(stdout.decode().strip().splitlines()[-1])
+    assert "error" not in result, result
+    assert result["pageErrors"] == [], result
+    assert result["tiles"] >= 1, result
+    # The picture from the image cache (a signed URL, from memory).
+    assert result["pictureWidth"] == 64, result
+    # Cold: a WebRTC session through Home Assistant, holding the camera's sub.
+    assert result["state"] == {"kind": "starting", "transport": "WebRTC"}, result
+    assert list(result["running"].values()) == [1], result
+    # The grid went away: nothing holds the stream, nobody watches the pictures.
+    assert result["after"] == {"sessions": 0, "running": {}}, result
+    service = grid_live.runtime_data.live
+    assert service is not None
+    assert service.images.stats()["watches"] == 0

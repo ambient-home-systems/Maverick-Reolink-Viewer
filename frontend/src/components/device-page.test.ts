@@ -142,11 +142,11 @@ describe("rv-device-page", () => {
     ]);
   });
 
-  it("offers Playback only for cameras that record", async () => {
+  it("offers Live for cameras and Playback only for cameras that record", async () => {
     const hass = makeHass(okDevices());
     const el = await mount(hass, "playback");
     const tabs = () => [...(el.shadowRoot?.querySelectorAll('[role="tab"]') ?? [])].map((b) => b.textContent.trim());
-    expect(tabs()).toEqual(["Overview", "Playback", "Settings"]);
+    expect(tabs()).toEqual(["Overview", "Live", "Playback", "Settings"]);
     const playback = el.shadowRoot?.querySelector("rv-playback");
     expect(playback?.deviceId).toBe("dev-cam");
     expect(playback?.cameraName).toBe("Front Yard");
@@ -159,12 +159,18 @@ describe("rv-device-page", () => {
     });
     hass.responses["reolink_viewer/device"] = snapshotOnly;
     expect(hasPlayback(snapshotOnly)).toBe(false);
-    expect(tabsFor(snapshotOnly)).toEqual(["overview", "settings"]);
+    expect(tabsFor(snapshotOnly)).toEqual(["overview", "live", "settings"]);
     await el.reload();
     await el.updateComplete;
-    expect(tabs()).toEqual(["Overview", "Settings"]);
+    expect(tabs()).toEqual(["Overview", "Live", "Settings"]);
     expect(el.shadowRoot?.querySelector("rv-playback")).toBeNull();
     expect(el.shadowRoot?.querySelector("rv-overview")).not.toBeNull();
+
+    // The Live tab watches the camera; degraded mode has no live service.
+    el.tab = "live";
+    await el.updateComplete;
+    expect(el.shadowRoot?.querySelector("rv-live-camera")?.deviceId).toBe("dev-cam");
+    expect(tabsFor({ ...snapshotOnly, degraded: true })).toEqual(["overview", "settings"]);
   });
 
   it("reloads after an entity registry change of its own entities", async () => {
