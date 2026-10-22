@@ -19,6 +19,8 @@
 - ``live/preload`` (admin): keep a stream warm (its feed open, a key frame
   cached), or stop.
 - ``live/capacity`` (admin): the capacity test of a host, as a subscription.
+- ``live/soak``: the soak report's samples since a time, and one taken now
+  (``soak.py``).
 """
 
 import asyncio
@@ -45,6 +47,7 @@ from .capacity import CapacityError, CapacityTest
 from .go2rtc import Go2rtcError, redact
 from .images import CameraImage
 from .service import MAX_EARLY_CANDIDATES, LiveService, WebRtcSession
+from .soak import SAMPLE_S
 from .streams import LiveError, LiveStream
 from .views import LIVE_FRAME_PATH, LIVE_IMAGE_PATH, LIVE_MSE_PATH
 from .warm import keep_warm_unique_id
@@ -74,6 +77,7 @@ def async_register_live_commands(hass: HomeAssistant) -> None:
         ws_live_state,
         ws_live_preload,
         ws_live_capacity,
+        ws_live_soak,
     ):
         websocket_api.async_register_command(hass, command)
 
@@ -387,6 +391,29 @@ def ws_live_images(
                 }
             },
         )
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        probatio.Required("type"): f"{DOMAIN}/live/soak",
+        probatio.Optional("since", default=0): int,
+    }
+)
+@websocket_api.async_response
+async def ws_live_soak(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Return the soak report's samples since a time (epoch ms), and one now."""
+    if (resolved := _live(hass, connection, msg["id"])) is None:
+        return
+    soak = resolved[1].soak
+    now = await soak.async_sample()
+    connection.send_result(
+        msg["id"],
+        {"sample_s": SAMPLE_S, "samples": soak.samples(msg["since"]), "now": now},
     )
 
 

@@ -179,6 +179,12 @@ async def test_chromium_starts_the_live_grid(
     assert result["debug"][0].startswith("test_reolink_cam · "), result
     assert result["debug"][1].startswith("SD (sub, kept warm): "), result
     assert result["debug"][2].startswith("  server: go2rtc "), result
+    # The soak report: the server's samples, the tile's counts, the verdicts.
+    soak = result["soak"]
+    assert soak[0].startswith("Reolink Viewer soak report v"), result
+    assert any(line.startswith("go2rtc: running") for line in soak), soak
+    assert any(line.startswith("  test_reolink_cam: ") for line in soak), soak
+    assert "✗ Not 24 h yet: the grid has been open 0.0 h" in soak, soak
     # Full screen: the HD stream (the main, H.264 here) starts while the sub
     # stream's player keeps running, cold over WebRTC, or over MSE once WebRTC
     # has failed (this Chromium offers go2rtc no H.264); back from it, the main

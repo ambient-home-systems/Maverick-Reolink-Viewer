@@ -10,6 +10,7 @@ const players = vi.hoisted(
     [] as {
       ref: { connectionId: string; stream: string };
       options: PlayerOptions;
+      counts: { plays: number; drops: number; failures: number };
       running: boolean;
       starts: number;
       retries: number;
@@ -23,6 +24,7 @@ vi.mock("../live/player", () => {
     starts = 0;
     retries = 0;
     events: { at: number; text: string }[] = [];
+    counts = { plays: 0, drops: 0, failures: 0 };
     state: PlayerState = { kind: "idle" };
     constructor(
       _hass: unknown,
@@ -120,6 +122,7 @@ function fakeHass(fail = false) {
   const sent: Record<string, unknown>[] = [];
   const services: unknown[][] = [];
   let failService = false;
+  let failSoak = false;
   let unsubscribed = 0;
   let images: ((event: LiveImagesEvent) => void) | undefined;
   const hass = {
@@ -137,6 +140,18 @@ function fakeHass(fail = false) {
       if (message.type === "web_rtc/ice_servers") return Promise.resolve([{ urls: ["stun:s"] }]);
       if (message.type === "reolink_viewer/live/state") {
         return Promise.resolve({ state: null, holds: 1, preloaded: false, cache: null });
+      }
+      if (message.type === "reolink_viewer/live/soak") {
+        if (failSoak) return Promise.reject(new Error("not loaded"));
+        const now = {
+          at: Date.now(),
+          go2rtc: { state: "running", restarts: 0, memory_kb: 40_960 },
+          webrtc_sessions: 0,
+          feeds: { feeds: 1, warm: 1, viewers: 1, ends: 0 },
+          hosts: [{ name: "RLN36", streams: 1, limit: 7, waiting: 0, cpu: null }],
+          battery: [],
+        };
+        return Promise.resolve({ sample_s: 300, samples: [], now });
       }
       return Promise.resolve(null);
     }),
@@ -160,6 +175,9 @@ function fakeHass(fail = false) {
     services,
     failService: () => {
       failService = true;
+    },
+    failSoak: () => {
+      failSoak = true;
     },
     unsubscribed: () => unsubscribed,
     image: (event: LiveImagesEvent) => images?.(event),
@@ -578,6 +596,76 @@ describe("full screen", () => {
     garage.remove();
     expect(hd?.running).toBe(false);
     expect(garage.full).toBe(false);
+  });
+});
+
+describe("soak report", () => {
+  const soakButton = (el: Element) => {
+    const button = [...(el.shadowRoot?.querySelectorAll("button") ?? [])].find(
+      (b) => b.textContent.trim() === "Soak report",
+    );
+    if (!button) throw new Error("no Soak report button");
+    return button;
+  };
+  const panelButton = (el: Element, label: string) => {
+    const button = [...(el.shadowRoot?.querySelectorAll(".soak button") ?? [])].find(
+      (b) => b.textContent.trim() === label,
+    );
+    if (!button) throw new Error(`no ${label} button`);
+    return button as HTMLButtonElement;
+  };
+
+  it("reads the samples since the grid opened, with what each tile counted", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    const opened = new Date(2026, 9, 22, 16, 0).getTime();
+    vi.setSystemTime(opened);
+    const fake = fakeHass();
+    const { el } = await mountGrid(fake.hass);
+    // An hour visible, an hour hidden, two hours visible.
+    const visibility = (state: "visible" | "hidden") => {
+      Object.defineProperty(document, "visibilityState", { value: state, configurable: true });
+      document.dispatchEvent(new Event("visibilitychange"));
+    };
+    vi.setSystemTime(opened + 3_600_000);
+    visibility("hidden");
+    vi.setSystemTime(opened + 7_200_000);
+    visibility("visible");
+    vi.setSystemTime(opened + 14_400_000);
+    const garage = players.find((p) => p.ref.connectionId === "nvr1");
+    if (!garage) throw new Error("no player");
+    garage.counts.plays = 2;
+
+    soakButton(el).click();
+    await flush();
+    await el.updateComplete;
+    expect(fake.sent).toContainEqual({ type: "reolink_viewer/live/soak", since: opened });
+    const text = el.shadowRoot?.querySelector(".soak pre")?.textContent ?? "";
+    expect(text).toContain("Reolink Viewer soak report v");
+    expect(text).toContain("Grid open 4.0 h");
+    expect(text).toContain("page visible 75%");
+    expect(text).toContain("  RLN36: 1 → 1 of 7 (peak 1)");
+    expect(text).toContain("  Garage: 2 · 0 · 0");
+    expect(text).toContain("✗ Not 24 h yet: the grid has been open 4.0 h");
+    expect(text).toContain("⚠ The page was visible only 75% of the time");
+
+    panelButton(el, "Refresh").click();
+    await flush();
+    expect(fake.sent.filter((m) => m.type === "reolink_viewer/live/soak")).toHaveLength(2);
+    panelButton(el, "Close").click();
+    await el.updateComplete;
+    expect(el.shadowRoot?.querySelector(".soak")).toBeNull();
+  });
+
+  it("says why there is no report", async () => {
+    const fake = fakeHass();
+    const { el } = await mountGrid(fake.hass);
+    fake.failSoak();
+    soakButton(el).click();
+    await flush();
+    await el.updateComplete;
+    expect(el.shadowRoot?.querySelector(".soak")?.textContent).toContain(
+      "Could not make the soak report: not loaded",
+    );
   });
 });
 

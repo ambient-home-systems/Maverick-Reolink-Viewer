@@ -73,9 +73,13 @@ def auto_enable_custom_integrations(enable_custom_integrations: None) -> None:
 def no_warm_keeping() -> Generator[None]:
     """Do not keep cameras warm on setup: it would start go2rtc in every test.
 
-    The keep-warm tests run the keeper's reconcile themselves.
+    The keep-warm tests run the keeper's reconcile themselves. Nor sample for
+    the soak report (a loop in every test); its tests take samples themselves.
     """
-    with patch("custom_components.reolink_viewer.live.warm.WarmKeeper.start"):
+    with (
+        patch("custom_components.reolink_viewer.live.warm.WarmKeeper.start"),
+        patch("custom_components.reolink_viewer.live.soak.SoakRecorder.start"),
+    ):
         yield
 
 

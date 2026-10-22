@@ -1,7 +1,10 @@
 import { LitElement, css, html, nothing, type TemplateResult } from "lit";
 
-import { toError } from "../api";
+import { fetchLiveSoak, toError } from "../api";
+import { copyText } from "../clipboard";
+import { LIVE_CHECK_VERSION } from "../live/check";
 import { LiveData, cameraFor, isWarm, liveConnection } from "../live/data";
+import { soakReport } from "../live/soak";
 import { sharedStyles } from "../styles";
 import type { HomeAssistant, LiveCamera } from "../types";
 import "./live-tile";
@@ -11,18 +14,112 @@ import { navigate } from "./navigation";
  * Every camera live, on its sub stream (Reolink → Live). Each tile shows the
  * camera's last picture at once and fades into video; a click opens the
  * camera's Live tab. While one tile is full screen, the others stop.
+ *
+ * Its soak report (Phase 3's 24-hour soak) reads the server's samples since
+ * the grid opened (live/soak) and what each tile counted, and says whether
+ * each exit criterion held. The grid counts how long the page was visible
+ * (tiles pause while it is hidden).
  */
 export class RvLiveGrid extends LitElement {
   static override properties = {
     hass: { attribute: false },
     _full: { state: true },
+    _soak: { state: true },
   };
 
   declare hass: HomeAssistant | undefined;
   /** The camera full screen, if any. */
   declare _full: string | undefined;
+  /** The soak report shown: its text, why it failed, or still loading. */
+  declare _soak: { text: string; copied?: boolean } | { error: string } | "loading" | undefined;
 
   private readonly _data = new LiveData(this);
+  private _openedAt = Date.now();
+  private _visibleMs = 0;
+  /** Since when the page has been visible (undefined while hidden). */
+  private _visibleSince: number | undefined;
+
+  override connectedCallback(): void {
+    super.connectedCallback();
+    this._openedAt = Date.now();
+    this._visibleMs = 0;
+    this._visibleSince = document.visibilityState === "hidden" ? undefined : this._openedAt;
+    document.addEventListener("visibilitychange", this._onVisibility);
+  }
+
+  override disconnectedCallback(): void {
+    super.disconnectedCallback();
+    document.removeEventListener("visibilitychange", this._onVisibility);
+  }
+
+  private readonly _onVisibility = (): void => {
+    const now = Date.now();
+    if (this._visibleSince !== undefined) this._visibleMs += now - this._visibleSince;
+    this._visibleSince = document.visibilityState === "hidden" ? undefined : now;
+  };
+
+  private async _openSoak(): Promise<void> {
+    const hass = this.hass;
+    if (!hass) return;
+    this._soak = "loading";
+    try {
+      const soak = await fetchLiveSoak(hass, this._openedAt);
+      const now = Date.now();
+      const tiles = [...(this.shadowRoot?.querySelectorAll("rv-live-tile") ?? [])].map((tile) => tile.soakCounts());
+      const text = soakReport({
+        version: LIVE_CHECK_VERSION,
+        openedAt: this._openedAt,
+        now,
+        visibleMs: this._visibleMs + (this._visibleSince !== undefined ? now - this._visibleSince : 0),
+        sampleS: soak.sample_s,
+        samples: [...soak.samples, soak.now],
+        tiles,
+      });
+      this._soak = { text };
+    } catch (err) {
+      this._soak = { error: toError(err).message };
+    }
+  }
+
+  private _renderSoak(): TemplateResult | typeof nothing {
+    const soak = this._soak;
+    if (!soak) return nothing;
+    const close = html`<button
+      @click=${() => {
+        this._soak = undefined;
+      }}
+    >
+      Close
+    </button>`;
+    if (soak === "loading") return html`<div class="card soak"><p class="muted">Reading the samples…</p></div>`;
+    if ("error" in soak) {
+      return html`<div class="banner error soak" role="alert">
+        Could not make the soak report: ${soak.error} ${close}
+      </div>`;
+    }
+    return html`<div class="card soak" role="region" aria-label="Soak report">
+      <pre>${soak.text}</pre>
+      <div class="actions">
+        <button
+          @click=${() => {
+            void copyText(soak.text).then((ok) => {
+              this._soak = { ...soak, copied: ok };
+            });
+          }}
+        >
+          ${soak.copied === undefined ? "Copy" : soak.copied ? "Copied" : "Could not copy"}
+        </button>
+        <button
+          @click=${() => {
+            void this._openSoak();
+          }}
+        >
+          Refresh
+        </button>
+        ${close}
+      </div>
+    </div>`;
+  }
 
   protected override willUpdate(): void {
     this._data.hass = this.hass;
@@ -41,7 +138,17 @@ export class RvLiveGrid extends LitElement {
           ← Devices
         </button>
         <h2>Live</h2>
+        <button
+          class="text soak-button"
+          title="After 24 hours with the grid open: did live view hold up?"
+          @click=${() => {
+            void this._openSoak();
+          }}
+        >
+          Soak report
+        </button>
       </div>
+      ${this._renderSoak()}
       ${data.error
         ? html`<div class="banner error" role="alert">
             Could not load live view: ${data.error}
@@ -110,6 +217,21 @@ export class RvLiveGrid extends LitElement {
       .back {
         padding-left: 0;
         color: var(--primary-color);
+      }
+      .soak-button {
+        margin-left: auto;
+        color: var(--primary-color);
+      }
+      .soak pre {
+        margin: 0 0 8px;
+        font-size: 12px;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+      .soak .actions {
+        display: flex;
+        gap: 8px;
+        justify-content: flex-end;
       }
       .grid {
         display: grid;
