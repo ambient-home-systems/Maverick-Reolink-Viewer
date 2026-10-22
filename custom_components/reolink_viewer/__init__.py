@@ -181,14 +181,16 @@ async def async_setup_entry(
         hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, stop_live)
     )
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    if compat.ok:
 
-        @callback
-        def keep_warm(_hass: HomeAssistant) -> None:
+    @callback
+    def started(_hass: HomeAssistant) -> None:
+        # Samples for the soak report; and the streams the cameras' switches
+        # keep warm, which come up once Home Assistant runs (Reolink too).
+        live.soak.start()
+        if compat.ok:
             live.warm.start()
 
-        # The cameras' streams come up once Home Assistant runs (Reolink too).
-        entry.async_on_unload(async_at_started(hass, keep_warm))
+    entry.async_on_unload(async_at_started(hass, started))
 
     if not hass.data.get(DATA_STATIC_REGISTERED):
         await hass.http.async_register_static_paths(

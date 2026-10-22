@@ -660,6 +660,11 @@ class ReolinkHostHandle:
                     return DeviceRef(DeviceRole.CHIME, None)
         return DeviceRef(DeviceRole.OTHER, None)
 
+    def cpu_usage(self) -> int | None:
+        """Return the host's CPU use (%) as last reported (cached data only)."""
+        value = _safe(lambda: self._api.cpu_usage)
+        return value if _positive(value) or value == 0 else None
+
     def host_details(self) -> dict[str, Any]:
         """Return a curated, client-safe summary of the host (cached data only)."""
         api = self._api

@@ -69,6 +69,8 @@ export class LivePlayer {
   state: PlayerState = { kind: "idle" };
   /** Its last EVENT_LOG events, oldest first. */
   readonly events: PlayerEvent[] = [];
+  /** Since it was made, for the soak report: first frames, ends after one, failed starts. */
+  readonly counts = { plays: 0, drops: 0, failures: 0 };
   private _session: LiveSession | undefined;
   private _timer: ReturnType<typeof setTimeout> | undefined;
   private _failures = 0;
@@ -137,6 +139,7 @@ export class LivePlayer {
       if (result.ok) {
         const first = result.firstFrameMs;
         this._note(`${transport}: playing${first !== undefined ? `, first frame in ${(first / 1000).toFixed(2)} s` : ""}`);
+        this.counts.plays += 1;
         this._set({ kind: "playing", transport, result });
         return;
       }
@@ -144,6 +147,7 @@ export class LivePlayer {
       this._session = undefined;
       error = `${transport}: ${result.error ?? "failed"}`;
       this._note(error);
+      this.counts.failures += 1;
     }
     this._failures += 1;
     this._wait(run, error);
@@ -160,6 +164,7 @@ export class LivePlayer {
     session.close();
     this._session = undefined;
     this._note(`ended after ${Math.round((Date.now() - began) / 1000)} s: ${reason}`);
+    this.counts.drops += 1;
     if (Date.now() - began >= STABLE_MS) {
       this._failures = 0;
       void this._attempt(run);

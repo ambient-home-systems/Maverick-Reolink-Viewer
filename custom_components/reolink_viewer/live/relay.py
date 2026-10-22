@@ -539,6 +539,16 @@ class MseRelay:
         """Return the go2rtc names of the streams kept warm."""
         return list(self._warm)
 
+    def stats(self) -> dict[str, int]:
+        """Return the open feeds, the streams kept warm, viewers and feeds ended."""
+        feeds = [feed for group in self._feeds.values() for feed in group]
+        return {
+            "feeds": len(feeds),
+            "warm": len(self._warm),
+            "viewers": sum(len(feed.viewers) for feed in feeds),
+            "ends": sum(count for count, _last in self._ends.values()),
+        }
+
     def warm_owners(self, stream: LiveStream) -> set[str]:
         """Return who keeps a stream warm."""
         return set(self._owners.get(stream.name, ()))

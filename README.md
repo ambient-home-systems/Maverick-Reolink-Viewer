@@ -83,6 +83,9 @@ v0.12.0 watches a battery camera on **wired power** (a wired doorbell) like any 
 plays at once and can be kept warm; unplugged, it goes back to waiting for a tap.
 v0.13.0 gives every tile a **debug view** (its ⓘ button): what it plays and how, the
 server's state of its stream, and its last events, with a Copy button for reports.
+v0.14.0 adds a **soak report** to the Live grid: leave the grid open for 24 hours, then
+it says whether live view held up (reconnects, sessions to the cameras, go2rtc, battery
+cameras asleep), from samples the server takes every 5 minutes.
 
 Requires Home Assistant 2026.10 or newer with the Reolink integration set up.
 

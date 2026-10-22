@@ -113,6 +113,18 @@ async function run({ origin, token }) {
   }
   tile?.shadowRoot?.querySelector(".corner-button.info")?.click();
 
+  // The soak report: the server's samples (and one now) with the tiles' counts.
+  [...grid.shadowRoot.querySelectorAll("button")].find((b) => b.textContent.trim() === "Soak report")?.click();
+  const soakAt = performance.now();
+  while (performance.now() < soakAt + 5000) {
+    const text = grid.shadowRoot?.querySelector(".soak pre")?.textContent ?? "";
+    if (text.includes("Verdict:")) {
+      result.soak = text.split("\n");
+      break;
+    }
+    await sleep(100);
+  }
+
   // Full screen: HD (the main stream, H.264 here) starts next to the sub stream.
   const holding = (now, kind) => Object.entries(now.running).some(([name, holds]) => name.endsWith(`_${kind}`) && holds > 0);
   tile?.shadowRoot?.querySelector(".corner-button.full")?.click();

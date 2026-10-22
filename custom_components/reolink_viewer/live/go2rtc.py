@@ -234,6 +234,26 @@ class Go2rtcServer:
 
         return remove
 
+    def memory_kb(self) -> int | None:
+        """Return go2rtc's resident memory (kB) from /proc (Linux), if it runs.
+
+        Blocking (a file read): call it in the executor.
+        """
+        process = self._process
+        if process is None or process.returncode is not None:
+            return None
+        try:
+            status = Path(f"/proc/{process.pid}/status").read_text(encoding="ascii")
+        except OSError:
+            return None
+        for line in status.splitlines():
+            if line.startswith("VmRSS:"):
+                fields = line.split()
+                return (
+                    int(fields[1]) if len(fields) > 1 and fields[1].isdigit() else None
+                )
+        return None
+
     def status(self, *, log: bool = False) -> dict[str, Any]:
         """Return the state for the panel (no secret, no address)."""
         result: dict[str, Any] = {

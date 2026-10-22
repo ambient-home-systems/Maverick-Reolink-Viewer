@@ -7,6 +7,7 @@ import type {
   LiveSignal,
   LiveStatus,
   LiveStreamKind,
+  LiveSoak,
   LiveStreamState,
   Catalog,
   MediaInfoResponse,
@@ -274,6 +275,10 @@ export const fetchLiveFramePath = (hass: HomeAssistant, ref: LiveRef): Promise<{
 
 export const fetchLiveState = (hass: HomeAssistant, ref: LiveRef): Promise<LiveStreamState> =>
   hass.callWS<LiveStreamState>({ type: "reolink_viewer/live/state", ...liveRef(ref) });
+
+/** The soak report's server samples since a time (epoch ms), and one now. */
+export const fetchLiveSoak = (hass: HomeAssistant, since: number): Promise<LiveSoak> =>
+  hass.callWS<LiveSoak>({ type: "reolink_viewer/live/soak", since: Math.floor(since) });
 
 /**
  * Keep a stream warm (its feed open, its last key frame cached), or stop

@@ -9,6 +9,7 @@ import {
 } from "lit";
 
 import type { DebugPlayer, TileDebug } from "../live/debug";
+import type { TileCounts } from "../live/soak";
 import { chooseHd, type HdChoice } from "../live/hd";
 import { LivePlayer, type PlayerState } from "../live/player";
 import { sharedStyles } from "../styles";
@@ -421,6 +422,18 @@ export class RvLiveTile extends LitElement {
         ${icon(this._full ? EXIT_FULL : ENTER_FULL)}
       </button>
     </div>`;
+  }
+
+  /** What its players counted, for the soak report. */
+  soakCounts(): TileCounts {
+    const counts = { camera: this.camera?.name ?? "Camera", plays: 0, drops: 0, failures: 0 };
+    for (const player of [this._player, this._hdPlayer]) {
+      if (!player) continue;
+      counts.plays += player.counts.plays;
+      counts.drops += player.counts.drops;
+      counts.failures += player.counts.failures;
+    }
+    return counts;
   }
 
   /** What the debug view shows: the players, their state and their last events. */

@@ -514,6 +514,26 @@ export interface LiveStreamState {
   cache: LiveCacheState | null;
 }
 
+/** What live view held at one time, for the soak report (live/soak). */
+export interface SoakSample {
+  /** Epoch ms. */
+  at: number;
+  go2rtc: { state: string; restarts: number; memory_kb: number | null };
+  webrtc_sessions: number;
+  feeds: { feeds: number; warm: number; viewers: number; ends: number };
+  /** Per host: its stream slots in use (the sessions to its cameras), its limit, and its CPU as reported. */
+  hosts: { name: string; streams: number; limit: number; waiting: number; cpu: number | null }[];
+  /** Each camera on battery: whether it sleeps, and whether a stream of it is held. */
+  battery: { camera: string; sleeping: boolean | null; watched: boolean }[];
+}
+
+/** live/soak: the samples since a time, and one taken now. */
+export interface LiveSoak {
+  sample_s: number;
+  samples: SoakSample[];
+  now: SoakSample;
+}
+
 /** A camera's last picture (live/images): a signed URL, and when it was taken (epoch ms). */
 export interface LiveImage {
   url: string;
