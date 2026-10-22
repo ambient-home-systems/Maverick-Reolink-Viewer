@@ -32,9 +32,10 @@ custom_components/reolink_viewer/
     go2rtc.py        #   our go2rtc: config (no secrets), supervision, its API
     streams.py       #   camera streams registered at runtime, held against the stream budget
     relay.py         #   the key-frame cache: one shared MSE feed per stream; keep warm
+    images.py        #   each camera's last picture, taken while a live page watches
     service.py       #   the above per entry; WebRTC sessions
-    views.py         #   signed MSE websocket (from the cache) and frames
-    websocket.py     #   live/* commands (WebRTC signaling, keep warm, capacity test)
+    views.py         #   signed MSE websocket (from the cache), frames and pictures
+    websocket.py     #   live/* commands (WebRTC signaling, pictures, keep warm, capacity test)
     capacity.py      #   how many streams a host serves at once
   models.py          # runtime data of the config entry
   translations/en.json

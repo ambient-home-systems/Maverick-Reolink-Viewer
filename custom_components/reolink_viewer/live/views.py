@@ -11,9 +11,12 @@
 - ``/api/reolink_viewer/live/frame/{token}`` returns a JPEG of a stream from
   go2rtc (from the running stream at once; a stream that is not running
   starts and waits for a key frame).
+- ``/api/reolink_viewer/live/image/{token}`` returns a camera's last picture
+  from memory (``images.py``); it never reaches the camera.
 
-No camera URL, address or credential is in either: the grant names a stream,
-and go2rtc is reached on 127.0.0.1 with its own credentials.
+No camera URL, address or credential is in any of them: the grant names a
+stream or a camera, and go2rtc is reached on 127.0.0.1 with its own
+credentials.
 """
 
 import asyncio
@@ -23,7 +26,11 @@ import logging
 
 from aiohttp import WSMsgType, web
 
-from custom_components.reolink_viewer.views import LiveGrant, loaded_data
+from custom_components.reolink_viewer.views import (
+    LiveGrant,
+    LiveImageGrant,
+    loaded_data,
+)
 from homeassistant.components.http import HomeAssistantView
 from homeassistant.core import HomeAssistant
 
@@ -35,6 +42,7 @@ _LOGGER = logging.getLogger(__name__)
 
 LIVE_MSE_PATH = "/api/reolink_viewer/live/mse"
 LIVE_FRAME_PATH = "/api/reolink_viewer/live/frame"
+LIVE_IMAGE_PATH = "/api/reolink_viewer/live/image"
 FRAME_TIMEOUT = 20.0
 # The browser's MSE request: {"type": "mse", "value": "<codecs>"}.
 MAX_REQUEST = 2048
@@ -159,4 +167,33 @@ class LiveFrameView(HomeAssistantView):
             body=body,
             content_type="image/jpeg",
             headers={"Cache-Control": "private, no-store"},
+        )
+
+
+class LiveImageView(HomeAssistantView):
+    """A camera's last picture, from memory."""
+
+    url = LIVE_IMAGE_PATH + "/{token}"
+    name = "api:reolink_viewer:live_image"
+    requires_auth = True
+
+    async def get(self, request: web.Request, token: str) -> web.Response:
+        """Return the picture."""
+        hass: HomeAssistant = request.app["hass"]
+        data = loaded_data(hass)
+        grant = data.grants.get(token, LiveImageGrant) if data is not None else None
+        image = (
+            data.live.images.get(grant.camera_id)
+            if data is not None and data.live is not None and grant is not None
+            else None
+        )
+        if image is None:
+            return web.Response(
+                status=HTTPStatus.NOT_FOUND, text="Not found or expired"
+            )
+        return web.Response(
+            body=image.data,
+            content_type="image/jpeg",
+            # Each new picture gets a new URL.
+            headers={"Cache-Control": "private, max-age=600"},
         )

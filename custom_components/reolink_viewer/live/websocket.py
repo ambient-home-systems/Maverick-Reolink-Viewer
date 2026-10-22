@@ -10,6 +10,9 @@
   (trickle ICE). Unsubscribing ends the session.
 - ``live/mse`` and ``live/frame``: signed URLs of the MSE websocket and of a
   frame (see live/views).
+- ``live/images``: the cameras' last pictures (``images.py``), as a
+  subscription: an event with every camera's signed picture URL, then one
+  per new picture. While anyone subscribes, pictures are taken.
 - ``live/state``: whether a stream is running in go2rtc (no source URL), and
   its key-frame cache.
 - ``live/preload`` (admin): keep a stream warm (its feed open, a key frame
@@ -29,7 +32,7 @@ import probatio
 from custom_components.reolink_viewer import devices
 from custom_components.reolink_viewer.const import DOMAIN
 from custom_components.reolink_viewer.models import ReolinkViewerConfigEntry
-from custom_components.reolink_viewer.views import LiveGrant, sign
+from custom_components.reolink_viewer.views import LiveGrant, LiveImageGrant, sign
 from homeassistant.components import websocket_api
 from homeassistant.components.web_rtc import async_get_ice_servers
 from homeassistant.core import HomeAssistant, callback
@@ -38,9 +41,10 @@ from homeassistant.util.ssl import SSLCipherList
 
 from .capacity import CapacityError, CapacityTest
 from .go2rtc import Go2rtcError, redact
+from .images import CameraImage
 from .service import MAX_EARLY_CANDIDATES, LiveService, WebRtcSession
 from .streams import LiveError, LiveStream
-from .views import LIVE_FRAME_PATH, LIVE_MSE_PATH
+from .views import LIVE_FRAME_PATH, LIVE_IMAGE_PATH, LIVE_MSE_PATH
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -49,6 +53,8 @@ ERR_LIVE = "live_failed"
 STREAM = probatio.In(list(devices.LIVE_STREAMS))
 # A signed live URL only has to last until the browser opens it.
 LIVE_URL_TTL = timedelta(minutes=2)
+# A picture's URL lasts while a page may show it (a new picture, a new URL).
+LIVE_IMAGE_TTL = timedelta(minutes=10)
 
 
 @callback
@@ -61,6 +67,7 @@ def async_register_live_commands(hass: HomeAssistant) -> None:
         ws_live_candidate,
         ws_live_mse,
         ws_live_frame,
+        ws_live_images,
         ws_live_state,
         ws_live_preload,
         ws_live_capacity,
@@ -317,6 +324,57 @@ def ws_live_frame(
         return
     connection.send_result(
         msg["id"], {"path": _signed(hass, resolved[0], LIVE_FRAME_PATH, stream)}
+    )
+
+
+@callback
+@websocket_api.websocket_command({probatio.Required("type"): f"{DOMAIN}/live/images"})
+def ws_live_images(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Watch the cameras' last pictures (signed URLs), as a subscription."""
+    if (resolved := _live(hass, connection, msg["id"])) is None:
+        return
+    live_entry, live = resolved
+    # Later events are sent from a background task: sign for this user.
+    refresh_token_id = connection.refresh_token_id
+
+    def describe(camera_id: str, image: CameraImage) -> dict[str, Any]:
+        token = live_entry.runtime_data.grants.issue(
+            LiveImageGrant(camera_id), LIVE_IMAGE_TTL
+        )
+        url = sign(
+            hass,
+            LIVE_IMAGE_PATH,
+            token,
+            LIVE_IMAGE_TTL,
+            refresh_token_id=refresh_token_id,
+        )
+        return {"url": url, "taken": round(image.taken * 1000)}
+
+    @callback
+    def new_image(camera_id: str, image: CameraImage) -> None:
+        connection.send_message(
+            websocket_api.event_message(
+                msg["id"], {"images": {camera_id: describe(camera_id, image)}}
+            )
+        )
+
+    watch = live.images.watch(new_image)
+    connection.subscriptions[msg["id"]] = watch.close
+    connection.send_result(msg["id"])
+    connection.send_message(
+        websocket_api.event_message(
+            msg["id"],
+            {
+                "images": {
+                    camera_id: describe(camera_id, image)
+                    for camera_id, image in live.images.images().items()
+                }
+            },
+        )
     )
 
 

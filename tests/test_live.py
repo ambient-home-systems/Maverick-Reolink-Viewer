@@ -8,13 +8,16 @@ from pathlib import Path
 import shutil
 import stat
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from aiohttp import ClientSession, web
 from aiohttp.test_utils import TestServer
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
-from pytest_homeassistant_custom_component.typing import WebSocketGenerator
+from pytest_homeassistant_custom_component.typing import (
+    ClientSessionGenerator,
+    WebSocketGenerator,
+)
 
 from custom_components.reolink_viewer import devices
 from custom_components.reolink_viewer.bridge import CameraUrl, LiveProtocol
@@ -378,11 +381,14 @@ async def test_a_running_stream_holds_one_slot(
 ) -> None:
     """However many watch it, a stream is one slot; registered from idle."""
     reg, server, host, scheduler = registry
+    started: list[LiveStream] = []
+    reg.on_start = started.append
     sub = LiveStream(SOURCE, "sub")
     ext = LiveStream(SOURCE, "ext")
     budget = scheduler.host("entry1").streams
     first = await reg.async_hold(sub)
     second = await reg.async_hold(sub)
+    assert started == [sub]  # told once, when it starts from idle
     assert budget.stats()["streams"] == 1
     assert host.calls == [(0, LiveProtocol.RTSP, "sub")]
     assert server.streams[sub.name].endswith("/sub#backchannel=0")
@@ -397,6 +403,7 @@ async def test_a_running_stream_holds_one_slot(
     # From idle again: registered again (a reload may have changed the URL).
     hold = await reg.async_hold(sub)
     assert len(host.calls) == 2
+    assert started == [sub, sub]
     # ext is read over HTTP-FLV, without the RTSP option.
     flv = await reg.async_hold(ext)
     assert host.calls[-1] == (0, LiveProtocol.FLV, "ext")
@@ -408,6 +415,11 @@ async def test_a_running_stream_holds_one_slot(
     assert budget.stats()["streams_waiting"] == 0
     hold.release()
     flv.release()
+    # What it is told cannot stop a stream from starting.
+    reg.on_start = MagicMock(side_effect=RuntimeError("boom"))
+    held = await reg.async_hold(sub)
+    assert reg.running() == {sub.name: 1}
+    held.release()
     with pytest.raises(LiveError, match="no none stream"):
         await reg.async_hold(LiveStream(SOURCE, "none"))
     assert budget.stats()["streams"] == 0
@@ -555,6 +567,58 @@ async def test_live_commands_when_go2rtc_cannot_run(
     assert msg["error"]["code"] == "not_loaded"
 
 
+async def test_live_images(
+    hass: HomeAssistant,
+    hass_ws_client: WebSocketGenerator,
+    hass_client: ClientSessionGenerator,
+    hass_client_no_auth: ClientSessionGenerator,
+    hass_read_only_access_token: str,
+    reolink_host: MagicMock,
+    loaded_with_entities: MockConfigEntry,
+    viewer_entry: MockConfigEntry,
+) -> None:
+    """Subscribers get each camera's picture as a signed URL; the view serves it."""
+    service = viewer_entry.runtime_data.live
+    assert service is not None
+    reolink_host.get_snapshot = AsyncMock(return_value=b"\xff\xd8picture")
+    cameras = {c["id"] for c in devices.async_live_cameras(hass)}
+    client = await hass_ws_client(hass)
+    msg = await _ws(client, {"type": "reolink_viewer/live/images"})
+    assert msg["success"]
+    watching = msg["id"]
+    kept = await client.receive_json()  # what is kept: nothing yet
+    assert kept["event"] == {"images": {}}
+    taken: dict[str, Any] = {}
+    while set(taken) != cameras:
+        taken.update((await client.receive_json())["event"]["images"])
+    reolink_host.get_snapshot.assert_awaited_with(0, "sub")
+    camera_id, image = next(iter(taken.items()))
+    assert image["taken"] > 0
+    assert camera_id not in image["url"]
+    # Signed: no other credential needed, and it never reaches the camera.
+    calls = reolink_host.get_snapshot.await_count
+    response = await (await hass_client_no_auth()).get(image["url"])
+    assert response.status == 200
+    assert response.content_type == "image/jpeg"
+    assert await response.read() == b"\xff\xd8picture"
+    assert reolink_host.get_snapshot.await_count == calls
+    response = await (await hass_client()).get("/api/reolink_viewer/live/image/nope")
+    assert response.status == 404
+    # A read-only user may watch too, and gets what is kept at once.
+    reader = await hass_ws_client(hass, hass_read_only_access_token)
+    msg = await _ws(reader, {"type": "reolink_viewer/live/images"})
+    assert msg["success"]
+    reading = msg["id"]
+    assert set((await reader.receive_json())["event"]["images"]) == cameras
+    assert service.images.stats()["watches"] == 2
+    msg = await _ws(client, {"type": "unsubscribe_events", "subscription": watching})
+    assert msg["success"]
+    assert service.images.stats()["watches"] == 1
+    msg = await _ws(reader, {"type": "unsubscribe_events", "subscription": reading})
+    assert msg["success"]
+    assert service.images.stats()["watches"] == 0
+
+
 async def test_live_sources_of_a_host(
     hass: HomeAssistant,
     direct_camera: MagicMock,
@@ -577,6 +641,10 @@ async def test_live_sources_of_a_host(
     assert devices.async_host_live_sources(hass, "nope") == []
     with pytest.raises(devices.DeviceNotFoundError):
         devices.async_live_source(hass, "nope")
+    # Pictures are taken through the NVR where a camera has both.
+    images = devices.async_image_sources(hass)
+    assert images[merged["id"]].via == "nvr"
+    assert set(images) == {c["id"] for c in cameras}
 
 
 async def test_no_ext_stream_without_flv(

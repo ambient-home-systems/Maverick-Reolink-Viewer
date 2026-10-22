@@ -3,6 +3,7 @@ import type {
   CapacityEvent,
   IceServer,
   LiveCamera,
+  LiveImagesEvent,
   LiveSignal,
   LiveStatus,
   LiveStreamKind,
@@ -304,6 +305,16 @@ export const subscribeLiveWebRtc = (
 
 export const sendLiveCandidate = (hass: HomeAssistant, sessionId: string, candidate: string): Promise<unknown> =>
   hass.callWS({ type: "reolink_viewer/live/candidate", session_id: sessionId, candidate });
+
+/**
+ * Watch the cameras' last pictures: every camera's at once, then each new one.
+ * Pictures are taken while anyone watches. Resolves with the unsubscribe.
+ */
+export const subscribeLiveImages = (
+  hass: HomeAssistant,
+  onEvent: (event: LiveImagesEvent) => void,
+): Promise<() => Promise<void>> =>
+  hass.connection.subscribeMessage<LiveImagesEvent>(onEvent, { type: "reolink_viewer/live/images" });
 
 /** Run the capacity test of a host (admin). Resolves with the unsubscribe. */
 export const subscribeCapacity = (

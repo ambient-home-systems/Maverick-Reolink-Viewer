@@ -19,7 +19,7 @@ put on it:
 | 0 | Foundations, CI, adapter layer, hardware discovery | High | 1–2 wk | Done (2026-10-17) |
 | 1 | Device details and every setting, with explanations | Standard (catalog) / High (panel shell) | 2–3 wk | Done (2026-10-17) |
 | 2 | Event timeline, thumbnails, smooth playback | High (backend) / Very high (player) | 3–5 wk | Done (2026-10-21, v0.3.2). 2A (2026-10-20, v0.2.7): timeline 105–287 ms, first frame 0.6–1.1 s, auto-advance 6–7 ms on hardware. 2B: MSE player; uncached deep starts are the NVR's download up to the target (6.9–13.0 s in hour-long recordings, up to 84 s before), speeds 0.5–8×, HD/SD at the same moment, one-hour sessions within the caps, the iPhone app on Wi-Fi, Tailscale and Nabu Casa |
-| 3 | Live view via go2rtc, grid, fullscreen, PTZ | High | 3–4 wk | In progress. Step 0 done (four Phase 2B fixes). Step 1 done: our own go2rtc and the live check (v0.4.0), measured on desktop Chrome on the LAN and the iPhone app at home, through Tailscale and through Nabu Casa (runs 5–13), and decided. Step 2 in progress: the key-frame cache is built (v0.5.0–v0.5.5) |
+| 3 | Live view via go2rtc, grid, fullscreen, PTZ | High | 3–4 wk | In progress. Step 0 done (four Phase 2B fixes). Step 1 done: our own go2rtc and the live check (v0.4.0), measured on desktop Chrome on the LAN and the iPhone app at home, through Tailscale and through Nabu Casa (runs 5–13), and decided. Step 2 in progress: the key-frame cache (v0.5.0–v0.5.5) and the image cache (v0.6.0) are built |
 | 4 | Performance, mobile, packaging, first release | Standard | 2–3 wk | Not started |
 | 5 | Optional R&D: Baichuan live/playback | Very high | 4–8 wk, time-boxed with gates | Not started |
 
@@ -1756,7 +1756,7 @@ gate), **2** builds live view from what step 1 decides.
 | 0. Fix four Phase 2B findings (a failing test for each first) | **Done** (v0.4.0), see "Step 0" below |
 | 1. Our own go2rtc, and a live check in the panel (gate) | **Done** (v0.4.0), see "Step 1 as built". Every setup's report is in: desktop Chrome on the LAN (run 5), the iPhone app on Wi-Fi (run 11), through Tailscale (run 12) and through Nabu Casa (run 13) |
 | 1. Record the reports here and in the hardware matrix; decide the live stream budget, WebRTC or MSE per setup, which cameras stay warm, the HD stream per camera | **Desktop Chrome on the LAN: recorded and decided** (v0.4.1), see "Step 1 results". **Done for every setup.** Desktop Chrome on the LAN (v0.4.1), see "Step 1 results"; the iPhone app on Wi-Fi, through Tailscale and through Nabu Casa (runs 11–13), see "Step 2: the iPhone on Wi-Fi", "… through Tailscale" and "… through Nabu Casa". The rules are fixed below, before seeing the reports |
-| 2. Stream registry, delivery, Live tab and grid, keep warm, debug panel | **In progress.** The key-frame cache is built (v0.5.0) and measured on the desktop (run 6), see "Step 2: the key-frame cache"; v0.5.1 rebuilds the MSE init segment and records why warm feeds end (run 7: the sizes are right). v0.5.2 measured the last two oddities (run 8); v0.5.3 fixed the late H.264 paints (run 9: warm MSE median 0.15 s); run 10 (v0.5.4) confirms it. v0.5.5 files each live check report under its device. The rest waits for the iPhone reports |
+| 2. Stream registry, delivery, Live tab and grid, keep warm, debug panel | **In progress.** The key-frame cache is built (v0.5.0) and measured on the desktop (run 6), see "Step 2: the key-frame cache"; v0.5.1 rebuilds the MSE init segment and records why warm feeds end (run 7: the sizes are right). v0.5.2 measured the last two oddities (run 8); v0.5.3 fixed the late H.264 paints (run 9: warm MSE median 0.15 s); run 10 (v0.5.4) confirms it. v0.5.5 files each live check report under its device. v0.6.0 keeps each camera's last picture for the tiles, see "Step 2: the image cache"; the live check measures it. Next: the Live tab and grid |
 
 #### Step 0: four Phase 2B findings (v0.4.0)
 
@@ -2440,6 +2440,38 @@ The exit criteria so far:
   cache).
 - The Phase 2 playback criteria still hold, and a 24-hour soak passes: at the
   end of step 2.
+
+#### Step 2: the image cache (v0.6.0)
+
+`live/images.py`. A tile has to show a picture within 0.5 s. Home Assistant's
+snapshot took a median 0.43–0.77 s and failed on some cameras in five of nine
+runs, so the integration keeps each camera's last picture and serves it from
+memory:
+
+- **The picture** is the camera's own snapshot at its sub stream's size,
+  taken through the NVR where the camera has one. It goes through the bridge
+  (`async_snapshot`) and the scheduler at thumbnail priority, de-duplicated,
+  so it never delays live view or playback.
+- **Taken while a live page watches.** `live/images` is a subscription: it
+  sends every camera's signed picture URL at once, then each new one. While
+  anyone subscribes, a mains-powered camera's picture is taken again every
+  30 s, and at once if it is older. With nobody watching, no picture is
+  taken.
+- **Battery cameras sleep.** Their picture is never taken in the background:
+  it is taken when one of their streams starts (the camera is awake then),
+  and once if there is none at all. A failure waits for their next stream.
+- **A camera that fails** is left alone for a minute. A missing picture
+  (privacy mode) or anything but a JPEG counts as a failure.
+- **Kept on disk too** (`live_images/`, named by a key that reveals no
+  identifier), so the first page after a restart has pictures.
+- **Served from memory** by `/api/reolink_viewer/live/image/{token}`, a signed
+  URL that names a camera and never reaches it. A new picture gets a new URL.
+  Later events are signed for the subscriber's own login, not for whoever
+  subscribed first.
+- **The live check measures it** ("First images (ours)"): the list, then
+  each camera's picture, as a tile would wait for it. A camera with no picture
+  kept waits for it to be taken, and the report says so. The check
+  unsubscribes before it measures the streams.
 
 ## Phase 4 — Performance, mobile, packaging, release (difficulty: Standard, 2–3 wk)
 

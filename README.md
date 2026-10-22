@@ -60,7 +60,9 @@ once. It also fixes four playback findings: a seek back into trimmed video stall
 recordings stayed held after the player moved on, and two cache edge cases.
 v0.5.0 adds a key-frame cache: every MSE viewer of a stream shares one feed that keeps
 the frames since the camera's last key frame, so a stream kept warm starts at once
-instead of waiting up to 4 s for the camera's next key frame.
+instead of waiting up to 4 s for the camera's next key frame. v0.6.0 keeps each
+camera's last picture on the server, taken while a live page is open (battery cameras
+only while awake), so a tile can show it before its video starts.
 
 Requires Home Assistant 2026.10 or newer with the Reolink integration set up.
 
