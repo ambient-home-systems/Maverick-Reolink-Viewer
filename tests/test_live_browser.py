@@ -147,7 +147,7 @@ async def test_chromium_starts_the_live_grid(
     reolink_host: MagicMock,
     grid_live: MockConfigEntry,
 ) -> None:
-    """The grid shows the camera's picture, starts it over WebRTC, and HD in full screen."""
+    """The grid shows the camera's picture, starts its stream, and HD in full screen."""
     node_path = await hass.async_add_executor_job(_node_path)
     if node_path is None:
         _missing("node with Playwright is not installed")
@@ -170,8 +170,10 @@ async def test_chromium_starts_the_live_grid(
     assert result["tiles"] >= 1, result
     # The picture from the image cache (a signed URL, from memory).
     assert result["pictureWidth"] == 64, result
-    # Cold: a WebRTC session through Home Assistant, holding the camera's sub.
-    assert result["state"] == {"kind": "starting", "transport": "WebRTC"}, result
+    # Its stream started through Home Assistant, holding the camera's sub: over
+    # MSE first, its keep-warm switch being on (or over WebRTC after it).
+    assert result["state"]["kind"] == "starting", result
+    assert result["state"]["transport"] in ("MSE", "WebRTC"), result
     assert list(result["running"].values()) == [1], result
     # Its debug view: the camera, its player, and go2rtc's state of the stream.
     assert result["debug"][0].startswith("test_reolink_cam · "), result

@@ -4,7 +4,8 @@
 // access token. In the page: a minimal `hass` over Home Assistant's websocket
 // API (what the panel gets from HA's frontend), the panel bundle as HA serves
 // it, and the live grid: the tile's picture from the image cache, then its
-// stream starting (cold: a WebRTC session through HA, seen in live/status).
+// stream starting: held through HA (live/status), over MSE as its keep-warm
+// switch is on, or over WebRTC after it.
 // Then full screen: the HD stream starts as well, the camera's controls show
 // (a PTZ arrow held and let go), and HD stops on the way back.
 // go2rtc sends only H.264 and H.265 video, which Playwright's Chromium cannot
@@ -86,7 +87,9 @@ async function run({ origin, token }) {
     }
     if (result.sessionMs === undefined && tile?._state?.kind === "starting") {
       const now = await status();
-      if (now.sessions > 0 && Object.values(now.running).some((holds) => holds > 0)) {
+      // Held by either transport: WebRTC fails at once here (this Chromium
+      // offers go2rtc no H.264), so its session is too short to wait for.
+      if (Object.values(now.running).some((holds) => holds > 0)) {
         result.sessionMs = Math.round(performance.now() - began);
         result.state = tile._state;
         result.running = now.running;
