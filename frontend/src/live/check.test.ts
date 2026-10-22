@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { CapacityEvent, HomeAssistant, LiveCamera } from "../types";
+import type { CapacityEvent, HomeAssistant, LiveCamera, LiveImagesEvent } from "../types";
 import type { SessionResult } from "./session";
 
 // Sessions that play at once (the browser parts are tested in session.test.ts).
@@ -103,6 +103,7 @@ const CAMERAS: LiveCamera[] = [
 function fakeHass(admin: boolean) {
   const calls: Record<string, unknown>[] = [];
   const saved: { setup: string; text: string; done: boolean }[] = [];
+  const unsubscribed: string[] = [];
   const hass = {
     user: { is_admin: admin },
     states: {
@@ -164,10 +165,25 @@ function fakeHass(admin: boolean) {
       }
     }),
     connection: {
-      subscribeMessage: vi.fn((callback: (event: CapacityEvent) => void) => {
+      subscribeMessage: vi.fn((callback: (event: never) => void, message: { type: string }) => {
+        if (message.type === "reolink_viewer/live/images") {
+          const send = callback as (event: LiveImagesEvent) => void;
+          // The Front Yard's picture is kept; the Doorbell's is taken a moment later.
+          setTimeout(() => {
+            send({ images: { cam1: { url: "/api/reolink_viewer/live/image/t1?authSig=x", taken: Date.now() - 3000 } } });
+          }, 0);
+          setTimeout(() => {
+            send({ images: { cam2: { url: "/api/reolink_viewer/live/image/t2?authSig=x", taken: Date.now() } } });
+          }, 80);
+          return Promise.resolve(() => {
+            unsubscribed.push(message.type);
+            return Promise.resolve();
+          });
+        }
+        const report = callback as (event: CapacityEvent) => void;
         setTimeout(() => {
-          callback({ type: "progress", message: "level 1" });
-          callback({
+          report({ type: "progress", message: "level 1" });
+          report({
             type: "result",
             report: {
               online_users_before: 2,
@@ -191,7 +207,7 @@ function fakeHass(admin: boolean) {
       }),
     },
   } as unknown as HomeAssistant;
-  return { hass, calls, saved };
+  return { hass, calls, saved, unsubscribed };
 }
 
 class FakeImage {
@@ -217,7 +233,7 @@ afterEach(() => {
 describe("LiveCheck", () => {
   it("measures every connection and stream, warm and stock, and the capacity", async () => {
     outcome.set("webrtc:main", { ok: false, error: "codecs not matched: video:H265" });
-    const { hass, calls, saved } = fakeHass(true);
+    const { hass, calls, saved, unsubscribed } = fakeHass(true);
     const stage = document.createElement("div");
     const check = new LiveCheck(
       hass,
@@ -252,6 +268,12 @@ describe("LiveCheck", () => {
     expect(text).toContain("- Front Yard Right: via NVR cold sub 0.80 s vs direct cold sub 0.80 s");
     expect(text).toContain("- capacity RLN36: kept up at every level (1)");
     expect(text).toContain("- first image, HA snapshot: median");
+    // Our pictures: listed, then loaded; the Doorbell's was waited for.
+    expect(text).toContain("First images (ours, kept on the server): listed in");
+    expect(text).toMatch(/ {2}Front Yard Right: \d+ ms \(640×360\), taken 3\.\d s before\n/);
+    expect(text).toMatch(/ {2}Doorbell: \d+ ms \(640×360\), taken 0\.\d s before \(none kept: waited \d+ ms for it\)/);
+    expect(text).toMatch(/- first image, ours: median [\d.]+ s \(2\), slowest/);
+    expect(unsubscribed).toEqual(["reolink_viewer/live/images"]);
     // Warm phases turn the preload on and off again.
     const preloads = calls.filter((c) => c.type === "reolink_viewer/live/preload");
     expect(preloads.map((c) => c.enabled)).toEqual([true, false, true, false, true, false, true, false]);

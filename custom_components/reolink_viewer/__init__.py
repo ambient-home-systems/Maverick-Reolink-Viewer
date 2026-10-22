@@ -25,6 +25,7 @@ from .const import (
     FRONTEND_DIST_DIR,
     GO2RTC_DIR,
     ISSUE_INCOMPATIBLE,
+    LIVE_IMAGES_DIR,
     NVR_HOST_CONCURRENCY,
     NVR_STREAM_BUDGET,
     PANEL_COMPONENT_NAME,
@@ -40,7 +41,7 @@ from .const import (
     VOD_CACHE_MAX_BYTES,
 )
 from .live.service import LiveService
-from .live.views import LiveFrameView, LiveMseView
+from .live.views import LiveFrameView, LiveImageView, LiveMseView
 from .live.websocket import async_register_live_commands
 from .models import ReolinkViewerConfigEntry, ReolinkViewerData
 from .scheduler import HostLimits, Scheduler
@@ -70,6 +71,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     hass.http.register_view(ThumbView())
     hass.http.register_view(LiveMseView())
     hass.http.register_view(LiveFrameView())
+    hass.http.register_view(LiveImageView())
     return True
 
 
@@ -155,7 +157,9 @@ async def async_setup_entry(
         cache_dir / GO2RTC_DIR,
         lambda: async_get_clientsession(hass),
         ffmpeg=get_ffmpeg_manager(hass).binary,
+        images_dir=cache_dir / LIVE_IMAGES_DIR,
     )
+    await live.images.async_setup()
     entry.runtime_data = ReolinkViewerData(
         scheduler=scheduler,
         timeline=TimelineService(hass, scheduler),

@@ -102,7 +102,14 @@ class LiveGrant:
     stream: LiveStream
 
 
-type Grant = VodGrant | MseGrant | ThumbGrant | LiveGrant
+@dataclass(frozen=True, slots=True)
+class LiveImageGrant:
+    """Permission to fetch one camera's last picture (live/views)."""
+
+    camera_id: str
+
+
+type Grant = VodGrant | MseGrant | ThumbGrant | LiveGrant | LiveImageGrant
 
 
 class Grants:
@@ -123,7 +130,7 @@ class Grants:
         self._items[token] = (now + ttl.total_seconds(), grant)
         return token
 
-    def get[T: (VodGrant, MseGrant, ThumbGrant, LiveGrant)](
+    def get[T: (VodGrant, MseGrant, ThumbGrant, LiveGrant, LiveImageGrant)](
         self, token: str, kind: type[T]
     ) -> T | None:
         """Return a live grant of the given kind."""
@@ -143,9 +150,22 @@ def vod_ttl(recording: Recording) -> timedelta:
     return min(VOD_TTL_MAX, VOD_TTL + length)
 
 
-def sign(hass: HomeAssistant, base: str, token: str, ttl: timedelta) -> str:
-    """Return a signed path (bound to the current websocket user)."""
-    return str(async_sign_path(hass, f"{base}/{token}", ttl))
+def sign(
+    hass: HomeAssistant,
+    base: str,
+    token: str,
+    ttl: timedelta,
+    *,
+    refresh_token_id: str | None = None,
+) -> str:
+    """Return a signed path, bound to the current websocket user or the given one.
+
+    Pass ``refresh_token_id`` when signing outside the websocket command (a
+    subscription's later events): the current connection is not known there.
+    """
+    return str(
+        async_sign_path(hass, f"{base}/{token}", ttl, refresh_token_id=refresh_token_id)
+    )
 
 
 def loaded_data(hass: HomeAssistant) -> ReolinkViewerData | None:

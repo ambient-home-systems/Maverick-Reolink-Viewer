@@ -473,6 +473,17 @@ export interface LiveStreamState {
   cache: LiveCacheState | null;
 }
 
+/** A camera's last picture (live/images): a signed URL, and when it was taken (epoch ms). */
+export interface LiveImage {
+  url: string;
+  taken: number;
+}
+
+/** live/images events: every camera's picture first, then each new one. */
+export interface LiveImagesEvent {
+  images: Record<string, LiveImage>;
+}
+
 /** HA's RTCIceServer (web_rtc/ice_servers). */
 export interface IceServer {
   urls: string | string[];

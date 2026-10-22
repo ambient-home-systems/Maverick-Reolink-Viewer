@@ -533,6 +533,26 @@ def async_host_live_sources(hass: HomeAssistant, host_id: str) -> list[LiveSourc
 
 
 @callback
+def async_image_sources(hass: HomeAssistant) -> dict[str, LiveSource]:
+    """Return, per camera id, the connection its picture is taken through.
+
+    The NVR channel where the camera has one (live view watches through it),
+    else its first connection.
+    """
+    model = _async_build(hass, degraded=False)
+    sources: dict[str, LiveSource] = {}
+    for camera in model.cameras:
+        found = [
+            source
+            for conn in camera.connections
+            if (source := _live_source(camera, conn)) is not None
+        ]
+        if found:
+            sources[camera.id] = next((s for s in found if s.via == "nvr"), found[0])
+    return sources
+
+
+@callback
 def async_live_cameras(hass: HomeAssistant) -> list[dict[str, Any]]:
     """Return every camera with its connections, streams and HA camera entities.
 

@@ -356,6 +356,12 @@ async def test_searches_and_snapshot(
     called_when = reolink_host.baichuan.snapshot_past.call_args.args[1]
     assert called_when.hour == 12  # converted to the camera's local time
 
+    reolink_host.get_snapshot = AsyncMock(return_value=b"\xff\xd8now")
+    assert await host.async_snapshot(0, "sub") == b"\xff\xd8now"
+    reolink_host.get_snapshot.assert_awaited_with(0, "sub")
+    reolink_host.get_snapshot.return_value = None  # privacy mode
+    assert await host.async_snapshot(0, "sub") is None
+
     assert await host.async_get_time() == TEST_NOW
     reolink_host.time.return_value = None
     assert await host.async_get_time() == TEST_NOW

@@ -57,6 +57,7 @@ REQUIRED_HOST_ATTRS: tuple[str, ...] = (
     "get_flv_stream_source",
     "get_rtmp_stream_source",
     "get_rtsp_stream_source",
+    "get_snapshot",
     "get_state",
     "get_vod_source",
     "hardware_version",
@@ -961,6 +962,14 @@ class ReolinkHostHandle:
         """Baichuan day search: number of days with recordings."""
         statuses = await self._api.baichuan.search_vod_days(channel, start, end)
         return sum(len(status.days) for status in statuses)
+
+    async def async_snapshot(self, channel: int, stream: str) -> bytes | None:
+        """Return the camera's current picture as a JPEG (None in privacy mode).
+
+        ``stream`` "sub" asks for the sub stream's size, "main" for the main's.
+        """
+        image = await self._api.get_snapshot(channel, stream)
+        return bytes(image) if image else None
 
     async def async_snapshot_past(
         self, channel: int, when: datetime, stream: str, ffmpeg_binary: str

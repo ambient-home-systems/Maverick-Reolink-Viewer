@@ -5,8 +5,9 @@
 // Companion app too. For each camera connection and stream it measures, on
 // this device and this network path:
 //
-// - time to the first image: Home Assistant's camera snapshot (its view's
-//   poster) and a frame from our go2rtc (warm);
+// - time to the first image: our picture kept on the server (live/images),
+//   Home Assistant's camera snapshot (its view's poster) and a frame from our
+//   go2rtc (warm);
 // - time to the first live frame over WebRTC and over MSE, cold (go2rtc not
 //   connected to the camera) and warm (kept open, its last key frame cached:
 //   MSE starts from that key frame, WebRTC still waits for the next one);
@@ -25,12 +26,13 @@ import {
   fetchLiveStatus,
   setLivePreload,
   subscribeCapacity,
+  subscribeLiveImages,
   toError,
   type LiveRef,
 } from "../api";
 import { browserLabel, classifyHost } from "../playback/check-util";
 import { mseApiName } from "../playback/mse-feeder";
-import type { CapacityReport, HomeAssistant, LiveCamera, LiveConnection, LiveStreamKind } from "../types";
+import type { CapacityReport, HomeAssistant, LiveCamera, LiveConnection, LiveImage, LiveStreamKind } from "../types";
 import {
   cacheLabel,
   capacityLines,
@@ -43,7 +45,7 @@ import {
 } from "./check-util";
 import { OurMse, OurWebRtc, StockWebRtc, type LiveSession, type SessionResult } from "./session";
 
-export const LIVE_CHECK_VERSION = "0.5.5";
+export const LIVE_CHECK_VERSION = "0.6.0";
 /** Saved reports share the playback check's store; this marks a live one. */
 export const LIVE_REPORT_PREFIX = "Live check · ";
 export const LIVE_SETUPS = [
@@ -94,6 +96,8 @@ interface Measured {
 
 class Stopped extends Error {}
 
+type PosterKind = "ours" | "HA snapshot" | "go2rtc frame";
+
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 export class LiveCheck {
@@ -110,7 +114,7 @@ export class LiveCheck {
   private _saving: Promise<void> = Promise.resolve();
   private _ice: RTCIceServer[] = [];
   private readonly _measured: Measured[] = [];
-  private readonly _posters: { kind: "HA snapshot" | "go2rtc frame"; ms: number }[] = [];
+  private readonly _posters: { kind: PosterKind; ms: number }[] = [];
   private readonly _capacity: { host: string; report: CapacityReport }[] = [];
 
   constructor(
@@ -137,6 +141,7 @@ export class LiveCheck {
     try {
       await this._header();
       const cameras = await this._cameras();
+      await this._ourImages(cameras);
       for (const camera of cameras) {
         for (const connection of camera.connections) {
           for (const stream of this.options.streams) {
@@ -244,6 +249,66 @@ export class LiveCheck {
       `Cameras: ${chosen.map((c) => `${c.name}${c.connections.length > 1 ? ` (${c.connections.map((x) => x.via).join(" + ")})` : ""}`).join(", ")}`,
     );
     return chosen;
+  }
+
+  /**
+   * Our pictures kept on the server: what a tile waits for before it shows
+   * one (the list, then the picture; a camera with none waits for it to be
+   * taken). Unsubscribed before the streams are measured.
+   */
+  private async _ourImages(cameras: LiveCamera[]): Promise<void> {
+    this._checkStopped();
+    this._status("our pictures");
+    const images = new Map<string, LiveImage>();
+    let listedMs: number | undefined;
+    let wake: () => void = () => undefined;
+    const began = performance.now();
+    let unsubscribe: (() => Promise<void>) | undefined;
+    this._log("");
+    try {
+      unsubscribe = await subscribeLiveImages(this._hass, (event) => {
+        listedMs ??= performance.now() - began;
+        for (const [id, image] of Object.entries(event.images)) images.set(id, image);
+        wake();
+      });
+    } catch (err) {
+      this._log(`First images (ours): failed (${toError(err).message})`);
+      return;
+    }
+    const changed = () =>
+      new Promise<void>((resolve) => {
+        wake = resolve;
+        setTimeout(resolve, 100);
+      });
+    try {
+      const deadline = began + IMAGE_TIMEOUT_MS;
+      while (listedMs === undefined && performance.now() < deadline) await changed();
+      if (listedMs === undefined) {
+        this._log(`First images (ours): no list in ${seconds(IMAGE_TIMEOUT_MS)}`);
+        return;
+      }
+      this._log(`First images (ours, kept on the server): listed in ${Math.round(listedMs)} ms`);
+      for (const camera of cameras) {
+        this._checkStopped();
+        const waitedFrom = performance.now();
+        while (!images.has(camera.id) && performance.now() < waitedFrom + IMAGE_TIMEOUT_MS) await changed();
+        const image = images.get(camera.id);
+        if (!image) {
+          this._log(`  ${camera.name}: none in ${seconds(IMAGE_TIMEOUT_MS)}`);
+          continue;
+        }
+        const waited = performance.now() - waitedFrom;
+        const result = await loadImage(image.url);
+        if (result.ms !== undefined) this._posters.push({ kind: "ours", ms: listedMs + waited + result.ms });
+        const age = Math.max(0, Date.now() - image.taken) / 1000;
+        this._log(
+          `  ${camera.name}: ${result.text}, taken ${age < 100 ? age.toFixed(1) : Math.round(age)} s before` +
+            (waited >= 50 ? ` (none kept: waited ${Math.round(waited)} ms for it)` : ""),
+        );
+      }
+    } finally {
+      await unsubscribe().catch(() => undefined);
+    }
   }
 
   private async _measureStream(camera: LiveCamera, connection: LiveConnection, stream: LiveStreamKind): Promise<void> {
@@ -509,9 +574,13 @@ export class LiveCheck {
           ` ours (best of cold/warm) faster on ${faster} of ${compared}`,
       );
     }
-    for (const kind of ["HA snapshot", "go2rtc frame"] as const) {
+    for (const kind of ["ours", "HA snapshot", "go2rtc frame"] as const) {
       const values = this._posters.filter((p) => p.kind === kind).map((p) => p.ms);
-      if (values.length) this._log(`- first image, ${kind}: median ${seconds(median(values))} (${values.length})`);
+      if (values.length) {
+        this._log(
+          `- first image, ${kind}: median ${seconds(median(values))} (${values.length}), slowest ${seconds(Math.max(...values))}`,
+        );
+      }
     }
     for (const camera of cameras.filter((c) => c.connections.length > 1)) {
       const parts = camera.connections.map((connection) => {

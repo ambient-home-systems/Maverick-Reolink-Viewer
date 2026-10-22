@@ -16,6 +16,7 @@ restarted since (it forgets its streams).
 """
 
 import asyncio
+from collections.abc import Callable
 from dataclasses import dataclass, field
 import logging
 
@@ -92,6 +93,8 @@ class StreamRegistry:
         self._scheduler = scheduler
         self._server = server
         self._running: dict[str, _Running] = {}
+        # Told when a stream starts from idle (the camera is awake then).
+        self.on_start: Callable[[LiveStream], None] | None = None
 
     async def async_hold(
         self, stream: LiveStream, *, slot_timeout: float = SLOT_TIMEOUT
@@ -116,6 +119,11 @@ class StreamRegistry:
                         "every stream slot of this host is in use"
                     ) from None
                 state.ticket = ticket
+                if self.on_start is not None:
+                    try:
+                        self.on_start(stream)
+                    except Exception:  # a side job: the stream starts anyway
+                        _LOGGER.exception("Error when %s started", stream.name)
             state.holds += 1
         return Hold(self, stream)
 

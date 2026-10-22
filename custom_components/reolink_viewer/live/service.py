@@ -18,6 +18,7 @@ from custom_components.reolink_viewer.scheduler import Scheduler
 from homeassistant.core import HomeAssistant
 
 from .go2rtc import Go2rtcServer
+from .images import LiveImages
 from .relay import MseRelay
 from .streams import StreamRegistry
 
@@ -49,11 +50,15 @@ class LiveService:
         session: Callable[[], ClientSession],
         *,
         ffmpeg: str | None,
+        images_dir: Path | None = None,
         server: Go2rtcServer | None = None,
     ) -> None:
         """Initialize (nothing runs until first used)."""
         self.server = server or Go2rtcServer(hass, directory, session, ffmpeg=ffmpeg)
         self.registry = StreamRegistry(hass, scheduler, self.server)
+        # Each camera's last picture (call images.async_setup before use).
+        self.images = LiveImages(hass, scheduler, images_dir or directory / "images")
+        self.registry.on_start = self.images.stream_started
         # MSE goes through the key-frame cache; it also keeps streams warm.
         self.relay = MseRelay(hass, self.registry, self.async_server)
         self.sessions: dict[str, WebRtcSession] = {}
@@ -87,6 +92,7 @@ class LiveService:
             if session.ws is not None:
                 await session.ws.close()
         self.sessions.clear()
+        await self.images.async_shutdown()
         await self.relay.async_shutdown()
         await self.registry.async_shutdown()
         await self.server.async_stop()
