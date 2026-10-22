@@ -6,6 +6,7 @@ import struct
 
 import pytest
 
+from custom_components.reolink_viewer import fmp4
 from custom_components.reolink_viewer.fmp4 import (
     FragmentError,
     FragmentIndex,
@@ -21,6 +22,7 @@ from .mp4_fixtures import (
     av_moov,
     box,
     fragmented_av,
+    go2rtc_fragment,
     mp4_file,
     mse_ready,
     nvr_shape,
@@ -218,3 +220,38 @@ def test_real_recording_round_trip(tmp_path: Path, video: str, audio: str) -> No
     assert index.mime is not None
     assert index.mime.startswith('video/mp4; codecs="')
     assert index.duration_ms == pytest.approx(8000, abs=200)
+
+
+def test_set_sample_size() -> None:
+    """go2rtc's one-sample moof: the size in the tfhd, or in the trun."""
+    fragment = go2rtc_fragment(1, 1, 0, bytes(100))
+    moof = fragment[: fragment.index(b"mdat") - 4]
+    resized = fmp4.set_sample_size(moof, 1234)
+    assert resized is not None
+    assert len(resized) == len(moof)
+    assert struct.pack(">I", 1234) in resized
+    assert struct.pack(">I", 100) not in resized[-20:]
+    # Per-sample sizes in the trun.
+    tfhd = box("tfhd", struct.pack(">II", 0x020000, 1))
+    trun = box("trun", struct.pack(">IIiI", 0x000201, 1, 0, 100))
+    sized = box("moof", box("traf", tfhd + trun))
+    resized = fmp4.set_sample_size(sized, 7)
+    assert resized is not None
+    assert resized.endswith(struct.pack(">I", 7))
+    # A trun that claims a size it lacks, or a tfhd without one: left alone.
+    short = box(
+        "moof", box("traf", tfhd + box("trun", struct.pack(">IIi", 0x000201, 1, 0)))
+    )
+    assert fmp4.set_sample_size(short, 7) is None
+    no_size = box("moof", box("traf", tfhd + box("trun", struct.pack(">IIi", 1, 1, 0))))
+    assert fmp4.set_sample_size(no_size, 7) is None
+    # Other layouts are left alone: two samples, two trafs, no moof.
+    two = moof.replace(
+        struct.pack(">IIi", 0x000001, 1, len(moof) + 8),
+        struct.pack(">IIi", 0x000001, 2, len(moof) + 8),
+    )
+    assert fmp4.set_sample_size(two, 7) is None
+    assert fmp4.set_sample_size(b"junk", 7) is None
+    nvr = fragmented_av(1)
+    nvr_moof = nvr[nvr.index(b"moof") - 4 :]
+    assert fmp4.set_sample_size(nvr_moof, 7) is None

@@ -144,6 +144,7 @@ function fakeHass(admin: boolean) {
               cached_ms: 900,
               cached_bytes: 51200,
               parameter_sets: "rebuilt",
+              frame_order: "limit added",
               age_ms: 9100,
               ends: 1,
               last_end: "go2rtc closed the stream",
@@ -239,7 +240,7 @@ describe("LiveCheck", () => {
     expect(text).toContain("Home Assistant's view (camera.fyr_fluent): snapshot");
     expect(text).toContain("warm (key frame cached in");
     expect(text).toContain(
-      "; key frames every 4.00 s; parameter sets: rebuilt; feed ended 1× (go2rtc closed the stream); feed opened 9.10 s before):",
+      "; key frames every 4.00 s; parameter sets: rebuilt; frame order: limit added; feed ended 1× (go2rtc closed the stream); feed opened 9.10 s before):",
     );
     expect(text).toContain("go2rtc log (last 1 lines):\n  WRN [rtsp] error=EOF url=<url>");
     expect(text).toContain("warm: not measured (battery camera: never kept warm)");

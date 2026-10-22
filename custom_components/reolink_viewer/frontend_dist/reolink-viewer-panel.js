@@ -5390,6 +5390,7 @@ function Li(e) {
 	let t = [
 		e.key_interval_ms === null ? void 0 : `key frames every ${$(e.key_interval_ms)}`,
 		e.parameter_sets === null ? void 0 : `parameter sets: ${e.parameter_sets}`,
+		e.frame_order ? `frame order: ${e.frame_order}` : void 0,
 		e.ends ? `feed ended ${String(e.ends)}× (${e.last_end ?? "?"})` : void 0,
 		`feed opened ${$(e.age_ms)} before`
 	].filter(Boolean);
@@ -5735,7 +5736,7 @@ var Gi = class {
 	close() {
 		this._ws?.close(), super.close(), this._url && URL.revokeObjectURL(this._url);
 	}
-}, Xi = "0.5.2", Zi = "Live check · ", Qi = [
+}, Xi = "0.5.3", Zi = "Live check · ", Qi = [
 	"Desktop Chrome, LAN",
 	"Desktop Chrome, Tailscale",
 	"Desktop Chrome, Nabu Casa",

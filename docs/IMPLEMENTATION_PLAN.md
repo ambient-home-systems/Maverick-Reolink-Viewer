@@ -1756,7 +1756,7 @@ gate), **2** builds live view from what step 1 decides.
 | 0. Fix four Phase 2B findings (a failing test for each first) | **Done** (v0.4.0), see "Step 0" below |
 | 1. Our own go2rtc, and a live check in the panel (gate) | **Built** (v0.4.0), see "Step 1 as built". Desktop report in (run 5); waiting for the three iPhone runs ("How to run the live check") |
 | 1. Record the reports here and in the hardware matrix; decide the live stream budget, WebRTC or MSE per setup, which cameras stay warm, the HD stream per camera | **Desktop Chrome on the LAN: recorded and decided** (v0.4.1), see "Step 1 results". The iPhone setups: waiting. The rules are fixed below, before seeing the reports |
-| 2. Stream registry, delivery, Live tab and grid, keep warm, debug panel | **In progress.** The key-frame cache is built (v0.5.0) and measured on the desktop (run 6), see "Step 2: the key-frame cache"; v0.5.1 rebuilds the MSE init segment and records why warm feeds end (run 7: the sizes are right). v0.5.2 measures the last two oddities. The rest waits for the iPhone reports |
+| 2. Stream registry, delivery, Live tab and grid, keep warm, debug panel | **In progress.** The key-frame cache is built (v0.5.0) and measured on the desktop (run 6), see "Step 2: the key-frame cache"; v0.5.1 rebuilds the MSE init segment and records why warm feeds end (run 7: the sizes are right). v0.5.2 measured the last two oddities (run 8); v0.5.3 fixes the late H.264 paints. The rest waits for the iPhone reports |
 
 #### Step 0: four Phase 2B findings (v0.4.0)
 
@@ -2157,6 +2157,52 @@ v0.5.2 adds to the live check:
 - **A video-only retry.** An MSE start that painted more than 1 s after its data
   arrived is tried again over video only. If that one paints at once, audio was
   holding the start back.
+
+#### Step 2: frames in decode order (run 8, v0.5.2 → v0.5.3)
+
+The report is in the hardware matrix (run 8). Both oddities run 7 left are
+explained:
+
+- **Slow warm starts** come from Home Assistant: the one slow warm start in run
+  8 waited 1.23 s for its signed URL on Home Assistant's websocket. The relay
+  answered 20–30 ms after the websocket opened, every time, and no warm feed was
+  reopened. **Step 2: a tile asks for its signed URLs as it appears, before it
+  starts**, so a start never waits on that round trip (they stay valid 2
+  minutes).
+- **Late MSE paints** are the decoder's reorder buffer. Over video only they
+  are just as late. Every H.265 stream paints within 40 ms of its data. Most
+  H.264 sub streams paint about 16 frames late (1.0 s at 15 fps, 1.5 s at 10
+  fps; the Hallway's 7 fps sub at its next key frame). Their SPS sets no reorder
+  limit, so the decoder must allow for B-frames: Chrome on macOS keeps up to 16
+  decoded frames before showing the first, and the picture stays that far
+  behind live. WebRTC is not affected.
+
+v0.5.3:
+
+- **The relay says decode order** (`live/h26x.py`, `relay.py`). An H.264 SPS
+  whose picture order count type is 0 or 1 and that has no VUI bitstream
+  restriction gets one: `max_num_reorder_frames` 0, `max_dec_frame_buffering`
+  the stream's reference frames, the spec's defaults for the rest. It is added
+  to the VUI, or a VUI is added. The patched SPS replaces the stream's in the
+  init segment and in every key frame (with the sample size in the `moof`).
+  These cameras' streams play in decode order over WebRTC, which shows frames
+  as they are decoded, so nothing is reordered.
+- **Diagnostics.** `live/state` → `frame_order`: `decode order` (POC type 2),
+  `reorder N` (the stream's own limit, kept) or `limit added`. The live check's
+  warm line shows it.
+
+Checked:
+- **The SPS parser** agrees with ffmpeg's `trace_headers` on x264 output:
+  fields and the bit positions of the VUI and restriction flags.
+- **The rewrite**, with the restriction removed from x264's SPS (VUI kept, or
+  the whole VUI removed) and then added again: ffmpeg decodes the stream
+  without an error and reads `max_num_reorder_frames = 0` and
+  `max_dec_frame_buffering = 4`.
+- **The relay** sends the patched SPS in the init segment and in every key
+  frame. Its fragments match, byte for byte, what go2rtc writes for that
+  sample.
+- **The moof sample-size rewrite**, in the tfhd or the trun; other layouts are
+  left alone.
 
 ## Phase 4 — Performance, mobile, packaging, release (difficulty: Standard, 2–3 wk)
 

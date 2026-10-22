@@ -12,8 +12,9 @@ concurrency test up to 6 streams); the findings use runs 1 and 2. Run 1 (v0.0.1,
 to 4 streams) agreed on every pass/fail result. Runs 3 (v0.1.1) and 4 (v0.1.2) are
 the Phase 2 recording playback checks, in their own tables. Run 5 (2026-10-21,
 v0.4.0) is the Phase 3 live check on desktop Chrome on the LAN, and run 6 (v0.5.0)
-repeats it with the key-frame cache, and run 7 (v0.5.1) with the init segment
-rebuilt from the stream; the iPhone runs follow.
+repeats it with the key-frame cache, run 7 (v0.5.1) with the init segment
+rebuilt from the stream, and run 8 (v0.5.2) with the MSE steps timed; the iPhone
+runs follow.
 
 ## Setup probed
 
@@ -331,6 +332,31 @@ faster on 19 of 19). HA's snapshot failed on 8 of 19 entities (median 0.59 s
 where it worked); go2rtc's frame 2.04 s. go2rtc logged nothing past its start.
 The capacity test kept up at every level again (download 401 → 420 Mbit/s).
 
+Run 8, 2026-10-21: v0.5.2 (MSE steps timed, feed ages, a video-only retry of
+late paints), same Mac on Wi-Fi. *Paint after data*: the first painted frame
+after the first appended media, cold MSE.
+
+| Stream | Codec, fps | Cold MSE paint after data | Video only | Warm MSE |
+| --- | --- | --- | --- | --- |
+| Hallway sub (E1 Pro) | H.264, 7 | 3.97 s | 3.99 s | 3.69 s (3.56 s after data) |
+| Laundry Room sub (E1 Zoom) | H.264, 10 | 1.51 s | 1.57 s | 1.28 s (1.17 s after data) |
+| Front Yard Left sub, NVR (CX810) | H.264, 15 | 1.08 s | 1.11 s | 0.78 s |
+| Front Yard Left sub, direct | H.264, 15 | 1.03 s | 1.03 s | 0.77 s |
+| Doorbell sub | H.264, 15 | 1.03 s | 1.07 s | (battery) |
+| Front Yard Right sub, NVR (CX410) | H.264, 15 | 0.94 s | | 0.70 s |
+| Back Yard sub (Duo 3) | H.264, 20 | 0.72 s | | 0.40 s |
+| Garage sub (RLC-520A) | H.264, 15 | 0.34 s | | 0.14 s |
+| H.265 mains (Garage, CX810, Duo 3, E1 Zoom, Doorbell) | H.265 | 0.01–0.04 s | | 0.22–0.38 s |
+
+Every warm MSE session got go2rtc's answer 20–30 ms after its websocket opened,
+and joined a feed opened 6–23 s before: no warm feed was reopened. The one slow
+warm start (Front Yard Right direct sub, 1.71 s) spent 1.23 s getting its
+signed URL from Home Assistant's websocket. Medians: warm MSE sub 0.77 s,
+main/ext 0.30 s (24 of 27 under 1 s); warm WebRTC sub 3.91 s, main/ext 1.80 s;
+cold WebRTC sub 2.18 s, main/ext 1.35 s; Home Assistant's view 2.49 s (ours
+faster on 18 of 19); HA's snapshot 0.60 s (19 of 19 this time). go2rtc logged
+nothing past its start; the capacity test kept up at every level.
+
 ## Findings
 
 Live view:
@@ -447,6 +473,23 @@ With the init segment rebuilt (run 7, v0.5.1):
   Right main, Garage ext) with no feed ended and nothing in go2rtc's log.
   v0.5.2 reports the steps before it (signed URL, websocket open) and the age
   of the feed it joined.
+
+With the MSE steps timed (run 8, v0.5.2):
+
+- **Slow warm starts come from Home Assistant, not the relay.** go2rtc's answer
+  came 20–30 ms after the websocket opened on every warm start, and no warm feed
+  was reopened. The one slow start waited 1.23 s for its signed URL from Home
+  Assistant's websocket. Step 2 signs a tile's URL before it is needed.
+- **Late MSE paints are the decoder holding frames back, not audio.** Over
+  video only they are as late. Every H.265 stream paints 10–40 ms after its
+  first data. Most H.264 sub streams wait about 16 frames: 1.0 s at 15 fps,
+  1.5 s at 10 fps, and the Hallway's 7 fps sub until its next key frame. An
+  H.264 SPS that sets no reorder limit (no VUI bitstream restriction, with
+  picture order count type 0 or 1) lets the decoder assume B-frames. Chrome on
+  macOS then keeps up to 16 decoded frames before showing the first, and stays
+  that far behind. WebRTC shows frames as they are decoded, so it is not
+  affected. v0.5.3 gives such streams an SPS that says frames come in decode
+  order; the live check's warm line names the frame order.
 
 Recorded video (NVR RLN36; the cameras record only to the NVR):
 

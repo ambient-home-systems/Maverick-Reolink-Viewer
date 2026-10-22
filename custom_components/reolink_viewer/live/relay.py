@@ -22,6 +22,12 @@ decodes from the key frame and shows the newest frame without waiting.
   first key frame's (``h26x.py``): over MSE, three NVR streams showed a size
   their WebRTC frames did not have, and one decoded nothing until its second
   key frame.
+- H.264 streams that do not say their frames come in decode order (no VUI
+  bitstream restriction, and picture order count type 0 or 1) get an SPS
+  that does, in the init segment and in the key frames: without it, Chrome on
+  macOS holds up to 16 frames back before showing the first over MSE (run 8:
+  1 to 4 s late on such sub streams). These cameras' streams play in decode
+  order over WebRTC.
 - Each stream's feed ends are counted, with the last reason, for the check.
 
 go2rtc writes one ``moof`` + ``mdat`` per frame, marking key frames in the
@@ -44,12 +50,23 @@ from custom_components.reolink_viewer.fmp4 import (
     Track,
     fragment_runs,
     init_tracks,
+    set_sample_size,
 )
 from custom_components.reolink_viewer.mp4 import parse_box_header
 from homeassistant.core import HomeAssistant
 
 from .go2rtc import Go2rtcError, Go2rtcServer, redact
-from .h26x import VideoConfig, compare_sets, init_config, rebuild_init, sample_sets
+from .h26x import (
+    VideoConfig,
+    compare_sets,
+    init_config,
+    limit_reorder,
+    nal_type,
+    parse_avc_sps,
+    rebuild_init,
+    replace_nals,
+    sample_sets,
+)
 from .streams import Hold, LiveError, LiveStream, StreamRegistry
 
 _LOGGER = logging.getLogger(__name__)
@@ -137,6 +154,10 @@ class Feed:
         self.viewers: set[Viewer] = set()
         self.init: bytes | None = None
         self.parameter_sets: str | None = None
+        # H.264: "decode order" (POC type 2), "reorder N" (the stream's limit)
+        # or "limit added" (this feed's SPS says decode order).
+        self.frame_order: str | None = None
+        self._sps_patch: dict[bytes, bytes] = {}
         self.key_interval_s: float | None = None
         self.started_at = time.monotonic()
         self.ended = False
@@ -241,6 +262,7 @@ class Feed:
             "cached_ms": cached_ms,
             "cached_bytes": self._gop_bytes,
             "parameter_sets": self.parameter_sets,
+            "frame_order": self.frame_order,
             "age_ms": round((now - self.started_at) * 1000),
         }
 
@@ -327,6 +349,7 @@ class Feed:
         key = video is None or (run is not None and run[2])
         if key:
             self._key(sample, run[0] if run is not None else None)
+            data = self._patched(moof, mdat, sample) or data
             self._gop = [data]
             self._gop_bytes = len(data)
         elif self._gop:
@@ -364,12 +387,54 @@ class Feed:
         """
         sets = sample_sets(sample, config)
         self.parameter_sets = compare_sets(config.sets, sets)
-        if self.parameter_sets != "differ" or sets is None or self.init is None:
+        differ = self.parameter_sets == "differ" and sets is not None
+        base = list(sets) if differ and sets is not None else list(config.sets)
+        if not config.hevc:
+            self._limit_reorder(base)
+        if (not differ and not self._sps_patch) or self.init is None:
             return
-        rebuilt = rebuild_init(self.init, sets, hevc=config.hevc)
-        if rebuilt is not None:
-            self.init = rebuilt
+        patched = [self._sps_patch.get(nal, nal) for nal in base]
+        rebuilt = rebuild_init(self.init, patched, hevc=config.hevc)
+        if rebuilt is None:
+            self._sps_patch.clear()
+            return
+        self.init = rebuilt
+        if differ:
             self.parameter_sets = "rebuilt"
+
+    def _limit_reorder(self, sets: list[bytes]) -> None:
+        """Note how the stream orders frames; patch its SPS where it must."""
+        for nal in sets:
+            if nal_type(nal, hevc=False) != 7:
+                continue
+            try:
+                info = parse_avc_sps(nal)
+            except IndexError, ValueError:
+                return
+            if info.poc_type == 2:
+                self.frame_order = "decode order"
+            elif info.reorder is not None:
+                self.frame_order = f"reorder {info.reorder}"
+            elif (limited := limit_reorder(nal)) is not None:
+                self._sps_patch[nal] = limited
+                self.frame_order = "limit added"
+
+    def _patched(self, moof: bytes, mdat: bytes, sample: bytes) -> bytes | None:
+        """Return a key frame with its SPS replaced by the patched one, if any."""
+        if not self._sps_patch or self._config is None:
+            return None
+        new = replace_nals(sample, self._config.length, self._sps_patch)
+        if new is None:
+            return None
+        resized = set_sample_size(moof, len(new))
+        if resized is None:
+            return None
+        header = len(mdat) - len(sample)
+        if header == 16:
+            box = struct.pack(">I4sQ", 1, b"mdat", 16 + len(new))
+        else:
+            box = struct.pack(">I4s", 8 + len(new), b"mdat")
+        return resized + box + new
 
     def _end(self, error: str | None) -> None:
         if self.ended:
