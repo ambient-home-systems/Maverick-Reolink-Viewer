@@ -27,6 +27,9 @@ describe("format", () => {
       "H.265 · 25 fps · 6144 kbps",
     );
     expect(encodingLabel({ codec: "h264", frame_rate: null, bit_rate: null })).toBe("H.264");
+    expect(encodingLabel({ codec: "h265", frame_rate: 20, bit_rate: null, width: 7680, height: 2160 })).toBe(
+      "H.265 · 7680×2160 · 20 fps",
+    );
     expect(encodingLabel({ codec: null, frame_rate: null, bit_rate: null })).toBe("unknown");
   });
 

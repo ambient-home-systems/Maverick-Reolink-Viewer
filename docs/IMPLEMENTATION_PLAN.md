@@ -19,7 +19,7 @@ put on it:
 | 0 | Foundations, CI, adapter layer, hardware discovery | High | 1–2 wk | Done (2026-10-17) |
 | 1 | Device details and every setting, with explanations | Standard (catalog) / High (panel shell) | 2–3 wk | Done (2026-10-17) |
 | 2 | Event timeline, thumbnails, smooth playback | High (backend) / Very high (player) | 3–5 wk | Done (2026-10-21, v0.3.2). 2A (2026-10-20, v0.2.7): timeline 105–287 ms, first frame 0.6–1.1 s, auto-advance 6–7 ms on hardware. 2B: MSE player; uncached deep starts are the NVR's download up to the target (6.9–13.0 s in hour-long recordings, up to 84 s before), speeds 0.5–8×, HD/SD at the same moment, one-hour sessions within the caps, the iPhone app on Wi-Fi, Tailscale and Nabu Casa |
-| 3 | Live view via go2rtc, grid, fullscreen, PTZ | High | 3–4 wk | In progress. Step 0 done (four Phase 2B fixes). Step 1 done: our own go2rtc and the live check (v0.4.0), measured on desktop Chrome on the LAN and the iPhone app at home, through Tailscale and through Nabu Casa (runs 5–13), and decided. Step 2 in progress: the key-frame cache (v0.5.0–v0.5.5), the image cache (v0.6.0), the Live grid and Live tab (v0.7.0), and keep warm per camera (v0.8.0) are built |
+| 3 | Live view via go2rtc, grid, fullscreen, PTZ | High | 3–4 wk | In progress. Step 0 done (four Phase 2B fixes). Step 1 done: our own go2rtc and the live check (v0.4.0), measured on desktop Chrome on the LAN and the iPhone app at home, through Tailscale and through Nabu Casa (runs 5–13), and decided. Step 2 in progress: the key-frame cache (v0.5.0–v0.5.5), the image cache (v0.6.0), the Live grid and Live tab (v0.7.0), keep warm per camera (v0.8.0) and full-screen HD (v0.9.0) are built |
 | 4 | Performance, mobile, packaging, first release | Standard | 2–3 wk | Not started |
 | 5 | Optional R&D: Baichuan live/playback | Very high | 4–8 wk, time-boxed with gates | Not started |
 
@@ -1756,7 +1756,7 @@ gate), **2** builds live view from what step 1 decides.
 | 0. Fix four Phase 2B findings (a failing test for each first) | **Done** (v0.4.0), see "Step 0" below |
 | 1. Our own go2rtc, and a live check in the panel (gate) | **Done** (v0.4.0), see "Step 1 as built". Every setup's report is in: desktop Chrome on the LAN (run 5), the iPhone app on Wi-Fi (run 11), through Tailscale (run 12) and through Nabu Casa (run 13) |
 | 1. Record the reports here and in the hardware matrix; decide the live stream budget, WebRTC or MSE per setup, which cameras stay warm, the HD stream per camera | **Desktop Chrome on the LAN: recorded and decided** (v0.4.1), see "Step 1 results". **Done for every setup.** Desktop Chrome on the LAN (v0.4.1), see "Step 1 results"; the iPhone app on Wi-Fi, through Tailscale and through Nabu Casa (runs 11–13), see "Step 2: the iPhone on Wi-Fi", "… through Tailscale" and "… through Nabu Casa". The rules are fixed below, before seeing the reports |
-| 2. Stream registry, delivery, Live tab and grid, keep warm, debug panel | **In progress.** The key-frame cache is built (v0.5.0) and measured on the desktop (run 6), see "Step 2: the key-frame cache"; v0.5.1 rebuilds the MSE init segment and records why warm feeds end (run 7: the sizes are right). v0.5.2 measured the last two oddities (run 8); v0.5.3 fixed the late H.264 paints (run 9: warm MSE median 0.15 s); run 10 (v0.5.4) confirms it. v0.5.5 files each live check report under its device. v0.6.0 keeps each camera's last picture for the tiles, see "Step 2: the image cache"; the live check measures it. v0.7.0: the Live grid and each camera's Live tab, see "Step 2: the Live grid". v0.8.0: keep warm per camera and the NVR budget of 7, see "Step 2: keep warm". Next: full-screen HD, PTZ, siren and floodlight |
+| 2. Stream registry, delivery, Live tab and grid, keep warm, debug panel | **In progress.** The key-frame cache is built (v0.5.0) and measured on the desktop (run 6), see "Step 2: the key-frame cache"; v0.5.1 rebuilds the MSE init segment and records why warm feeds end (run 7: the sizes are right). v0.5.2 measured the last two oddities (run 8); v0.5.3 fixed the late H.264 paints (run 9: warm MSE median 0.15 s); run 10 (v0.5.4) confirms it. v0.5.5 files each live check report under its device. v0.6.0 keeps each camera's last picture for the tiles, see "Step 2: the image cache"; the live check measures it. v0.7.0: the Live grid and each camera's Live tab, see "Step 2: the Live grid". v0.8.0: keep warm per camera and the NVR budget of 7, see "Step 2: keep warm". v0.9.0: full-screen HD, see "Step 2: full-screen HD". Next: PTZ, siren and floodlight |
 
 #### Step 0: four Phase 2B findings (v0.4.0)
 
@@ -2541,6 +2541,42 @@ to 4 s for the camera's next key frame.
 - **The live check** says "kept warm by its switch; turn it off to measure
   cold" for those subs, instead of waiting 10 s per transport for them to go
   cold.
+
+#### Step 2: full-screen HD (v0.9.0)
+
+Every tile, in the grid and on a camera's Live tab, has a full-screen button.
+Full screen plays HD: the sub stream keeps playing while the HD stream
+starts in the background, and HD replaces it on its first frame.
+
+- **Which stream is HD** (`live/hd.ts`), by step 1's rule: the main stream
+  where it is H.264; where it is H.265, the main only if
+  `MediaCapabilities.decodingInfo` says this browser decodes it over MSE,
+  supported and smooth, at its size and frame rate; otherwise ext (H.264 on
+  every camera). A main wider than 4096 pixels always uses ext: that is the
+  Duo 3's 7680×2160, where a first frame says nothing about decoding 20 fps.
+  With no ext stream and no usable main, full screen stays on the sub stream
+  and says why.
+- **Each stream's size** comes from the device's encoder settings, which
+  reolink-aio keeps but has no accessor for: the bridge reads its private
+  state, guarded, and an unexpected shape reads as unknown (an H.265 main
+  then uses ext). The device overview and the live check show the sizes too.
+- **The swap**: HD shows at once on its first frame, and the sub stream then
+  stops. If HD ends, the sub stream plays again while HD starts again. HD
+  starts like any stream: over MSE when it is kept warm, over WebRTC
+  otherwise, each the other's fallback. A main is never kept warm, so HD
+  starts cold: the camera's next key frame.
+- **The budget**: while one tile is full screen the grid's other tiles stop.
+  On the NVR that leaves six warm subs and one HD stream, its budget of 7.
+  Leaving full screen stops HD and plays the sub stream again.
+- **Full screen** uses the browser's Fullscreen API where it has one for any
+  element (desktop browsers, the iPad). The iPhone has it only for a video,
+  so there the tile fills the window instead. The button and Esc leave it.
+  Full screen on a battery camera wakes it.
+- **What it says**: "HD" once HD shows; until then "SD" with "HD starting…",
+  why HD cannot play (the player's error, retried with its backoff), or why
+  there is no HD.
+- **The live check** (v0.9.0) lists, for each camera, the HD stream full
+  screen plays in that browser and why.
 
 ## Phase 4 — Performance, mobile, packaging, release (difficulty: Standard, 2–3 wk)
 

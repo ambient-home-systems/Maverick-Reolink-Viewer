@@ -70,7 +70,10 @@ tile pauses when it is off screen or the page is hidden. Battery cameras wait fo
 v0.8.0 keeps cameras warm: each mains-powered camera gets a **keep live view warm** switch
 (on by default, as many per NVR or camera as its stream budget allows after one HD
 stream), so its tile starts at once from its cached key frame. Turn it off on the
-camera's Live tab, or like any switch in Home Assistant.
+camera's Live tab, or like any switch in Home Assistant. v0.9.0 adds **full-screen HD**:
+the button on each tile plays the camera full screen, starting the HD stream in the
+background and swapping it in on its first frame. HD is the main stream where this
+browser decodes it smoothly at its size, else the camera's H.264 ext stream.
 
 Requires Home Assistant 2026.10 or newer with the Reolink integration set up.
 

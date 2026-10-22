@@ -3,10 +3,12 @@ import {
   css,
   html,
   nothing,
+  svg,
   type PropertyValues,
   type TemplateResult,
 } from "lit";
 
+import { chooseHd, type HdChoice } from "../live/hd";
 import { LivePlayer, type PlayerState } from "../live/player";
 import { sharedStyles } from "../styles";
 import type {
@@ -21,12 +23,20 @@ import type {
 export const OFFSCREEN_GRACE_MS = 3000;
 /** Fired by an openable tile when it is clicked (or Enter/Space). */
 export const TILE_OPEN_EVENT = "rv-live-open";
+/** Fired when a tile goes full screen or back: `{ cameraId, full }`. */
+export const TILE_FULL_EVENT = "rv-live-full";
 
 /**
  * One camera live: its last picture at once, then the stream fading in over
  * it. It plays while it is on screen and the page is visible, and stops
  * otherwise (the stream, if kept warm, stays warm on the server). A battery
  * camera waits for a tap, so it is woken only when someone wants to watch.
+ *
+ * Full screen plays HD: the stream `chooseHd` picks starts in the background
+ * while the sub stream keeps playing, and replaces it on its first frame (the
+ * sub stream then stops). If HD ends, the sub stream plays again until HD is
+ * back. Full screen uses the Fullscreen API where the browser has it for any
+ * element, and fills the window otherwise (the iPhone has it only for video).
  */
 export class RvLiveTile extends LitElement {
   static override properties = {
@@ -38,10 +48,14 @@ export class RvLiveTile extends LitElement {
     iceServers: { attribute: false },
     warm: { attribute: false },
     openable: { type: Boolean },
+    suspended: { attribute: false },
     _state: { state: true },
     _onScreen: { state: true },
     _pageVisible: { state: true },
     _wanted: { state: true },
+    _full: { state: true },
+    _hd: { state: true },
+    _hdState: { state: true },
   };
 
   declare hass: HomeAssistant | undefined;
@@ -55,12 +69,23 @@ export class RvLiveTile extends LitElement {
   declare warm: boolean | undefined;
   /** Clicking it opens the camera (the grid); otherwise it is the camera's own view. */
   declare openable: boolean;
+  /** Another tile is full screen: stop now (it is hidden behind it). */
+  declare suspended: boolean;
   declare _state: PlayerState;
   declare _onScreen: boolean;
   declare _pageVisible: boolean;
   declare _wanted: boolean;
+  declare _full: boolean;
+  /** The HD stream for this connection, once chosen (at the first full screen). */
+  declare _hd: HdChoice | undefined;
+  declare _hdState: PlayerState;
 
   private _player: LivePlayer | undefined;
+  private _hdPlayer: LivePlayer | undefined;
+  /** The connection an HD choice is being made for. */
+  private _hdChoosing: LiveConnection | undefined;
+  /** In the browser's full screen (not just filling the window). */
+  private _native = false;
   private _observer: IntersectionObserver | undefined;
   private _offscreenTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -68,15 +93,20 @@ export class RvLiveTile extends LitElement {
     super();
     this.stream = "sub";
     this.openable = false;
+    this.suspended = false;
     this._state = { kind: "idle" };
+    this._hdState = { kind: "idle" };
     this._onScreen = typeof IntersectionObserver === "undefined";
     this._pageVisible = document.visibilityState !== "hidden";
     this._wanted = true;
+    this._full = false;
   }
 
   override connectedCallback(): void {
     super.connectedCallback();
     document.addEventListener("visibilitychange", this._onVisibility);
+    document.addEventListener("fullscreenchange", this._onFullscreenChange);
+    document.addEventListener("keydown", this._onKeydown);
     if (typeof IntersectionObserver !== "undefined") {
       this._observer = new IntersectionObserver(
         (entries) => {
@@ -93,14 +123,31 @@ export class RvLiveTile extends LitElement {
   override disconnectedCallback(): void {
     super.disconnectedCallback();
     document.removeEventListener("visibilitychange", this._onVisibility);
+    document.removeEventListener("fullscreenchange", this._onFullscreenChange);
+    document.removeEventListener("keydown", this._onKeydown);
     this._observer?.disconnect();
     this._observer = undefined;
     clearTimeout(this._offscreenTimer);
     this._player?.stop();
+    this._hdPlayer?.stop();
+    this.exitFull();
   }
 
   private readonly _onVisibility = (): void => {
     this._pageVisible = document.visibilityState !== "hidden";
+  };
+
+  private readonly _onFullscreenChange = (): void => {
+    // The browser left full screen (Esc, its own button): so does the tile.
+    if (this._native && !document.fullscreenElement) {
+      this._native = false;
+      this.exitFull();
+    }
+  };
+
+  private readonly _onKeydown = (e: KeyboardEvent): void => {
+    // Filling the window: Esc leaves (the browser's full screen handles its own).
+    if (e.key === "Escape" && this._full && !this._native) this.exitFull();
   };
 
   /** Whether the tile should be playing now. */
@@ -108,48 +155,130 @@ export class RvLiveTile extends LitElement {
     return (
       this.isConnected &&
       this._wanted &&
+      !this.suspended &&
       this._pageVisible &&
       this._onScreen &&
       this.connection?.streams[this.stream] !== undefined
     );
   }
 
+  /** Full screen, with HD showing (the sub stream is stopped). */
+  get hdShown(): boolean {
+    return this._full && this._hdState.kind === "playing";
+  }
+
+  get full(): boolean {
+    return this._full;
+  }
+
+  /** Go full screen, in HD. */
+  enterFull(): void {
+    if (this._full) return;
+    this._full = true;
+    this._wanted = true; // a battery camera: asking for it is watching it
+    if (document.fullscreenEnabled && typeof this.requestFullscreen === "function") {
+      this.requestFullscreen()
+        .then(() => {
+          this._native = true;
+          // Left again before the browser was done.
+          if (!this._full) void document.exitFullscreen().catch(() => undefined);
+        })
+        .catch(() => undefined); // it fills the window instead
+    }
+    this._fullChanged();
+  }
+
+  /** Back from full screen (to the sub stream). */
+  exitFull(): void {
+    if (!this._full) return;
+    this._full = false;
+    if (this._native && document.fullscreenElement) {
+      void document.exitFullscreen().catch(() => undefined);
+    }
+    this._native = false;
+    this._fullChanged();
+  }
+
+  private _fullChanged(): void {
+    this.dispatchEvent(
+      new CustomEvent(TILE_FULL_EVENT, {
+        detail: { cameraId: this.camera?.id, full: this._full },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  }
+
   protected override willUpdate(changed: PropertyValues<this>): void {
     if (changed.has("connection") || changed.has("stream")) {
-      // Another stream: a new player (a battery camera asks for a tap again).
+      // Another stream: new players (a battery camera asks for a tap again).
       this._player?.stop();
       this._player = undefined;
-      this._wanted = !this.connection?.is_battery;
+      this._hdPlayer?.stop();
+      this._hdPlayer = undefined;
+      this._hd = undefined;
+      this._hdChoosing = undefined;
+      this._wanted = this._full || !this.connection?.is_battery;
     }
+    this.toggleAttribute("full", this._full);
   }
 
   protected override updated(): void {
+    this._driveSub();
+    this._driveHd();
+  }
+
+  private _driveSub(): void {
     const player = this._ensurePlayer();
     if (!player) return;
     player.options.warm = this.warm ?? this.connection?.streams[this.stream]?.warm === true;
-    if (this.shouldPlay) {
+    if (this.shouldPlay && !this.hdShown) {
       clearTimeout(this._offscreenTimer);
       this._offscreenTimer = undefined;
-      // A cold start goes over WebRTC: wait for the ICE servers.
-      if (!player.running && (player.options.warm || this.iceServers)) {
-        player.options.iceServers = this.iceServers ?? [];
-        player.start();
-      }
+      this._start(player);
     } else if (player.running) {
-      if (!this._pageVisible || !this._wanted) {
+      if (!this._pageVisible || !this._wanted || this.suspended || this.hdShown) {
         player.stop();
       } else {
         this._offscreenTimer ??= setTimeout(() => {
           this._offscreenTimer = undefined;
-          if (!this.shouldPlay) this._player?.stop();
+          if (!this.shouldPlay) {
+            this._player?.stop();
+            this._hdPlayer?.stop();
+          }
         }, OFFSCREEN_GRACE_MS);
       }
     }
   }
 
+  private _driveHd(): void {
+    const connection = this.connection;
+    const wanted = this._full && this.shouldPlay;
+    if (wanted && connection && !this._hd && this._hdChoosing !== connection) {
+      this._hdChoosing = connection;
+      void chooseHd(connection).then((choice) => {
+        if (this.connection === connection) this._hd = choice;
+      });
+    }
+    const player = this._ensureHdPlayer();
+    if (!player) return;
+    if (wanted) this._start(player);
+    else if (player.running && (!this._full || !this._pageVisible || this.suspended || !this._wanted)) {
+      player.stop();
+    }
+  }
+
+  /** Start a player that is not running; a cold start (WebRTC) waits for the ICE servers. */
+  private _start(player: LivePlayer): void {
+    if (!player.running && (player.options.warm || this.iceServers)) {
+      player.options.iceServers = this.iceServers ?? [];
+      player.start();
+    }
+  }
+
   private _ensurePlayer(): LivePlayer | undefined {
     if (this._player) return this._player;
-    const video = this.renderRoot.querySelector("video");
+    const video = this.renderRoot.querySelector<HTMLVideoElement>("video.sub");
     const connection = this.connection;
     if (!this.hass || !video || !connection) return undefined;
     this._player = new LivePlayer(
@@ -164,7 +293,26 @@ export class RvLiveTile extends LitElement {
     return this._player;
   }
 
+  private _ensureHdPlayer(): LivePlayer | undefined {
+    if (this._hdPlayer) return this._hdPlayer;
+    const stream = this._hd?.stream;
+    const video = this.renderRoot.querySelector<HTMLVideoElement>("video.hd");
+    const connection = this.connection;
+    if (!this.hass || !stream || !video || !connection) return undefined;
+    this._hdPlayer = new LivePlayer(
+      this.hass,
+      video,
+      { connectionId: connection.connection_id, stream },
+      { warm: connection.streams[stream]?.warm === true, iceServers: [] },
+      (state) => {
+        this._hdState = state;
+      },
+    );
+    return this._hdPlayer;
+  }
+
   private _activate(): void {
+    if (this._full) return;
     if (!this._wanted) {
       this._wanted = true;
       return;
@@ -184,32 +332,67 @@ export class RvLiveTile extends LitElement {
     const state = this._state;
     const playing = state.kind === "playing";
     const name = this.camera?.name ?? "Camera";
-    const interactive = this.openable || !this._wanted;
-    return html`<div
-      class="tile ${playing ? "playing" : ""}"
-      role=${interactive ? "button" : nothing}
-      tabindex=${interactive ? "0" : nothing}
-      aria-label=${interactive
-        ? this._wanted
-          ? `Open ${name}`
-          : `Watch ${name}`
-        : nothing}
-      @click=${() => {
-        this._activate();
-      }}
-      @keydown=${(e: KeyboardEvent) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
+    const interactive = !this._full && (this.openable || !this._wanted);
+    return html`<div class="frame">
+      <div
+        class="tile ${playing ? "playing" : ""} ${this.hdShown ? "hd-on" : ""}"
+        role=${interactive ? "button" : nothing}
+        tabindex=${interactive ? "0" : nothing}
+        aria-label=${interactive
+          ? this._wanted
+            ? `Open ${name}`
+            : `Watch ${name}`
+          : nothing}
+        @click=${() => {
           this._activate();
-        }
-      }}
-    >
-      ${this.image
-        ? html`<img class="poster" src=${this.image.url} alt="" />`
-        : nothing}
-      <video muted playsinline aria-label=${`${name} live`}></video>
-      <div class="label">${name}</div>
-      ${this._renderStatus(state)}
+        }}
+        @keydown=${(e: KeyboardEvent) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            this._activate();
+          }
+        }}
+      >
+        ${this.image
+          ? html`<img class="poster" src=${this.image.url} alt="" />`
+          : nothing}
+        <video class="sub" muted playsinline aria-label=${`${name} live`}></video>
+        ${this._hd?.stream
+          ? html`<video class="hd" muted playsinline aria-label=${`${name} live in HD`}></video>`
+          : nothing}
+        <div class="label">${name}</div>
+        ${this.hdShown ? nothing : this._renderStatus(state)}
+        ${this._renderHd()}
+      </div>
+      <button
+        class="corner-button"
+        aria-label=${this._full ? "Exit full screen" : `${name} full screen`}
+        title=${this._full ? "Exit full screen" : "Full screen (HD)"}
+        @click=${() => {
+          if (this._full) this.exitFull();
+          else this.enterFull();
+        }}
+      >
+        ${icon(this._full ? EXIT_FULL : ENTER_FULL)}
+      </button>
+    </div>`;
+  }
+
+  /** Full screen: whether HD shows, and why not. */
+  private _renderHd(): TemplateResult | typeof nothing {
+    if (!this._full) return nothing;
+    const hd = this._hd;
+    const hdState = this._hdState;
+    let label = "SD";
+    let detail: string | undefined;
+    if (this.hdShown) label = "HD";
+    else if (!hd) detail = "Choosing the HD stream…";
+    else if (!hd.stream) detail = hd.reason;
+    else if (hdState.kind === "waiting") detail = `HD cannot play: ${hdState.error}`;
+    else detail = "HD starting…";
+    return html`<div class="hd-status" title=${hd?.reason ?? nothing}>
+      <span class="badge ${this.hdShown ? "accent" : ""}">${label}</span>
+      ${detail ? html`<span class="small">${detail}</span>` : nothing}
     </div>`;
   }
 
@@ -252,6 +435,25 @@ export class RvLiveTile extends LitElement {
       :host {
         display: block;
       }
+      /* Full screen: the browser's, or filling the window (the iPhone). */
+      :host([full]) {
+        position: fixed;
+        inset: 0;
+        z-index: 10000;
+        background: #000;
+        overscroll-behavior: contain;
+      }
+      .frame {
+        position: relative;
+      }
+      :host([full]) .frame,
+      :host([full]) .tile {
+        height: 100%;
+      }
+      :host([full]) .tile {
+        aspect-ratio: auto;
+        border-radius: 0;
+      }
       .tile {
         position: relative;
         aspect-ratio: 16 / 9;
@@ -279,8 +481,43 @@ export class RvLiveTile extends LitElement {
         opacity: 0;
         transition: opacity 0.3s;
       }
-      .playing video {
+      .playing video.sub {
         opacity: 1;
+      }
+      /* HD replaces the sub stream at once, on its first frame. */
+      video.hd {
+        transition: none;
+        background: #000;
+      }
+      .hd-on video.hd {
+        opacity: 1;
+      }
+      .hd-status {
+        position: absolute;
+        top: 8px;
+        left: 8px;
+        display: flex;
+        gap: 6px;
+        align-items: center;
+        max-width: calc(100% - 64px);
+        text-shadow: 0 0 3px #000;
+      }
+      .corner-button {
+        position: absolute;
+        right: 6px;
+        bottom: 6px;
+        width: 36px;
+        height: 36px;
+        padding: 6px;
+        border: none;
+        border-radius: 50%;
+        background: rgba(0, 0, 0, 0.45);
+        color: #fff;
+      }
+      .corner-button svg {
+        display: block;
+        width: 24px;
+        height: 24px;
       }
       .label {
         position: absolute;
@@ -333,6 +570,15 @@ export class RvLiveTile extends LitElement {
       }
     `,
   ];
+}
+
+const ENTER_FULL = "M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5";
+const EXIT_FULL = "M9 4v5H4M15 4v5h5M20 15h-5v5M4 15h5v5";
+
+function icon(path: string): TemplateResult {
+  return html`<svg viewBox="0 0 24 24" aria-hidden="true">
+    ${svg`<path d=${path} fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />`}
+  </svg>`;
 }
 
 if (!customElements.get("rv-live-tile")) {

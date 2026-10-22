@@ -270,6 +270,10 @@ describe("LiveCheck", () => {
     expect(text).toContain("- first image, HA snapshot: median");
     // Our pictures: listed, then loaded; the Doorbell's was waited for.
     expect(text).toContain("First images (ours, kept on the server): listed in");
+    expect(text).toContain(
+      "Full screen (HD), in this browser:\n  Front Yard Right: main: H.264\n" +
+        "  Doorbell: SD only: the main stream's codec is unknown, and there is no ext stream",
+    );
     expect(text).toMatch(/ {2}Front Yard Right: \d+ ms \(640×360\), taken 3\.\d s before\n/);
     expect(text).toMatch(/ {2}Doorbell: \d+ ms \(640×360\), taken 0\.\d s before \(none kept: waited \d+ ms for it\)/);
     expect(text).toMatch(/- first image, ours: median [\d.]+ s \(2\), slowest/);

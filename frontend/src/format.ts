@@ -8,10 +8,11 @@ const DEVICE_TYPE_LABELS: Record<DeviceKind, string> = {
 
 export const deviceTypeLabel = (type: DeviceKind): string => DEVICE_TYPE_LABELS[type];
 
-/** "H.264 · 25 fps · 4096 kbps", omitting unknown parts. */
+/** "H.264 · 2560×1440 · 25 fps · 4096 kbps", omitting unknown parts. */
 export function encodingLabel(enc: StreamEncoding): string {
   const parts: string[] = [];
   if (enc.codec) parts.push(codecLabel(enc.codec));
+  if (enc.width && enc.height) parts.push(`${enc.width}×${enc.height}`);
   if (enc.frame_rate) parts.push(`${enc.frame_rate} fps`);
   if (enc.bit_rate) parts.push(`${enc.bit_rate} kbps`);
   return parts.length ? parts.join(" · ") : "unknown";

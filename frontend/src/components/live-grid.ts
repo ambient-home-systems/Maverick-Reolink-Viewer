@@ -10,14 +10,17 @@ import { navigate } from "./navigation";
 /**
  * Every camera live, on its sub stream (Reolink → Live). Each tile shows the
  * camera's last picture at once and fades into video; a click opens the
- * camera's Live tab.
+ * camera's Live tab. While one tile is full screen, the others stop.
  */
 export class RvLiveGrid extends LitElement {
   static override properties = {
     hass: { attribute: false },
+    _full: { state: true },
   };
 
   declare hass: HomeAssistant | undefined;
+  /** The camera full screen, if any. */
+  declare _full: string | undefined;
 
   private readonly _data = new LiveData(this);
 
@@ -66,6 +69,10 @@ export class RvLiveGrid extends LitElement {
                   tab: "live",
                 });
               }}
+              @rv-live-full=${(e: CustomEvent<{ cameraId: string; full: boolean }>) => {
+                if (e.detail.full) this._full = e.detail.cameraId;
+                else if (this._full === e.detail.cameraId) this._full = undefined;
+              }}
             >
               ${cameras.map(
                 (camera) =>
@@ -76,6 +83,7 @@ export class RvLiveGrid extends LitElement {
                     .image=${data.images[camera.id]}
                     .iceServers=${data.iceServers}
                     .warm=${isWarm(this.hass, camera)}
+                    .suspended=${this._full !== undefined && this._full !== camera.id}
                     openable
                   ></rv-live-tile>`,
               )}

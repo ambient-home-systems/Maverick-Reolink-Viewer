@@ -131,11 +131,12 @@ export function cacheLabel(cache: LiveCacheState | null | undefined): string {
   return parts.length ? `; ${parts.join("; ")}` : "";
 }
 
-/** "sub (h264, 15 fps, 512 kbps)". */
+/** "sub (h264, 640×360, 15 fps, 512 kbps)". */
 export function streamLabel(kind: string, encoding: StreamEncoding | null | undefined): string {
   if (!encoding) return kind;
   const parts = [
     encoding.codec,
+    encoding.width && encoding.height ? `${encoding.width}×${encoding.height}` : undefined,
     encoding.frame_rate ? `${encoding.frame_rate} fps` : undefined,
     encoding.bit_rate ? `${encoding.bit_rate} kbps` : undefined,
   ].filter(Boolean);

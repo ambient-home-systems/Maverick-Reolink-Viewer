@@ -124,6 +124,13 @@ def _init_probe_mock(host_mock: MagicMock) -> None:
     host_mock.encoding.return_value = "h264"
     host_mock.bit_rate.return_value = 4096
     host_mock.frame_rate.return_value = 25
+    # The encoder settings reolink-aio keeps from GetEnc (sizes have no accessor).
+    host_mock._enc_settings = {
+        0: {
+            "mainStream": {"width": 2560, "height": 1440, "vType": "h264"},
+            "subStream": {"width": 640, "height": 360, "vType": "h264"},
+        }
+    }
     host_mock.serial.return_value = TEST_SERIAL
     host_mock.sleeping.return_value = False
     host_mock.is_doorbell.return_value = False
