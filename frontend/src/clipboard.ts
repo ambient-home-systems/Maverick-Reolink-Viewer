@@ -13,10 +13,12 @@ export async function copyText(text: string): Promise<boolean> {
   } catch {
     // Fall back below.
   }
+  // Off screen rather than invisible, read-only (no keyboard) and 12 pt (no
+  // zoom): what iOS WebKit selects and copies, as clipboard.js does it.
   const area = document.createElement("textarea");
   area.value = text;
   area.setAttribute("readonly", "");
-  area.style.cssText = "position:fixed;top:0;left:0;opacity:0";
+  area.style.cssText = `position:absolute;left:-9999px;top:${window.scrollY}px;font-size:12pt;border:0;padding:0;margin:0`;
   document.body.append(area);
   area.select();
   area.setSelectionRange(0, text.length);

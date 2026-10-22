@@ -157,7 +157,7 @@ export class RvLiveCheck extends LitElement {
     }
     this._copied = undefined;
     this._shown = which;
-    toast(this, "Copying is blocked here: select the report text and copy it", "error");
+    toast(this, "Copying is blocked here: copy it from Saved reports on a computer, or select the text", "error");
   }
 
   protected override render(): TemplateResult {

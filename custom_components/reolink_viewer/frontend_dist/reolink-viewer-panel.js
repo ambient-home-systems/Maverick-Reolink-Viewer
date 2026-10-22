@@ -1829,7 +1829,7 @@ async function Wt(e) {
 		if (window.isSecureContext && t) return await t.writeText(e), !0;
 	} catch {}
 	let n = document.createElement("textarea");
-	n.value = e, n.setAttribute("readonly", ""), n.style.cssText = "position:fixed;top:0;left:0;opacity:0", document.body.append(n), n.select(), n.setSelectionRange(0, e.length);
+	n.value = e, n.setAttribute("readonly", ""), n.style.cssText = `position:absolute;left:-9999px;top:${window.scrollY}px;font-size:12pt;border:0;padding:0;margin:0`, document.body.append(n), n.select(), n.setSelectionRange(0, e.length);
 	try {
 		return document.execCommand("copy");
 	} catch {
@@ -6158,7 +6158,7 @@ var ba = class extends A {
 		this.hass && (this._status = await Qe(this.hass).catch(() => this._status));
 	}
 	async _copy(e, t) {
-		await Wt(e) ? this._copied = t : (this._copied = void 0, this._shown = t, F(this, "Copying is blocked here: select the report text and copy it", "error"));
+		await Wt(e) ? this._copied = t : (this._copied = void 0, this._shown = t, F(this, "Copying is blocked here: copy it from Saved reports on a computer, or select the text", "error"));
 	}
 	render() {
 		let e = this._check?.running === !0;

@@ -2272,10 +2272,12 @@ which named only the setup and the time:
   device. A setup that names the other kind of device shows a warning.
 - **Saved reports show where they ran:** the setup, the check's version and
   the browser, from the report's first lines.
-- **Copy works on plain-HTTP pages** (the Companion app on the LAN often loads
-  HA over HTTP, where the Clipboard API does not exist). Copying falls back to
-  a selected text area, as the playback check's already did. Where copying is
-  blocked anyway, the page says so and shows the report's text to select.
+- **Copy works on plain-HTTP pages.** On the iPhone, v0.5.4's Copy did nothing:
+  the Companion app on the LAN often loads HA over HTTP, where the Clipboard
+  API does not exist. Copying now falls back to a selected text area, as the
+  playback check's did, placed off screen the way clipboard.js does it for iOS.
+  Where copying is blocked anyway, the page says so, shows the report's text,
+  and points to Saved reports on a computer (every run is saved on the server).
 
 ## Phase 4 — Performance, mobile, packaging, release (difficulty: Standard, 2–3 wk)
 

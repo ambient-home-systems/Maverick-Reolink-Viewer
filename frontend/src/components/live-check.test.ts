@@ -158,7 +158,7 @@ describe("rv-live-check", () => {
     copy.click();
     await flush();
     await el.updateComplete;
-    expect(toasts).toEqual(["Copying is blocked here: select the report text and copy it"]);
+    expect(toasts).toEqual(["Copying is blocked here: copy it from Saved reports on a computer, or select the text"]);
     expect(copy.textContent).toContain("Copy");
     expect(el.renderRoot.querySelector(".reports pre")?.textContent).toBe(SAVED_LIVE);
   });
