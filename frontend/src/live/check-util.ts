@@ -22,6 +22,13 @@ export function mseCodecs(isTypeSupported: (type: string) => boolean, videoOnly 
   ).join(",");
 }
 
+/** Where a saved report was made, from its first lines: "v0.5.4 · Chrome 155 (macOS)". */
+export function reportSource(text: string): string {
+  const version = /live check (v[\w.-]+)/.exec(text)?.[1];
+  const browser = /^Browser: (.+?)(?: · |$)/m.exec(text)?.[1];
+  return [version, browser].filter((part) => part !== undefined).join(" · ");
+}
+
 /** "2 STUN, 1 TURN (Nabu Casa)": kinds and providers, never addresses or credentials. */
 export function describeIceServers(servers: readonly IceServer[]): string {
   let stun = 0;

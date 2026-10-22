@@ -1756,7 +1756,7 @@ gate), **2** builds live view from what step 1 decides.
 | 0. Fix four Phase 2B findings (a failing test for each first) | **Done** (v0.4.0), see "Step 0" below |
 | 1. Our own go2rtc, and a live check in the panel (gate) | **Built** (v0.4.0), see "Step 1 as built". Desktop report in (run 5); waiting for the three iPhone runs ("How to run the live check") |
 | 1. Record the reports here and in the hardware matrix; decide the live stream budget, WebRTC or MSE per setup, which cameras stay warm, the HD stream per camera | **Desktop Chrome on the LAN: recorded and decided** (v0.4.1), see "Step 1 results". The iPhone setups: waiting. The rules are fixed below, before seeing the reports |
-| 2. Stream registry, delivery, Live tab and grid, keep warm, debug panel | **In progress.** The key-frame cache is built (v0.5.0) and measured on the desktop (run 6), see "Step 2: the key-frame cache"; v0.5.1 rebuilds the MSE init segment and records why warm feeds end (run 7: the sizes are right). v0.5.2 measured the last two oddities (run 8); v0.5.3 fixed the late H.264 paints (run 9: warm MSE median 0.15 s). The rest waits for the iPhone reports |
+| 2. Stream registry, delivery, Live tab and grid, keep warm, debug panel | **In progress.** The key-frame cache is built (v0.5.0) and measured on the desktop (run 6), see "Step 2: the key-frame cache"; v0.5.1 rebuilds the MSE init segment and records why warm feeds end (run 7: the sizes are right). v0.5.2 measured the last two oddities (run 8); v0.5.3 fixed the late H.264 paints (run 9: warm MSE median 0.15 s); run 10 (v0.5.4) confirms it. v0.5.5 files each live check report under its device. The rest waits for the iPhone reports |
 
 #### Step 0: four Phase 2B findings (v0.4.0)
 
@@ -1933,16 +1933,20 @@ capacity test need it).
    live check** → Setup *Desktop Chrome, LAN* → **Run live check**. About
    15–20 minutes for every camera and stream; leave the window in front.
 2. **iPhone Companion app on home Wi-Fi**: Reolink → **Open the live check**
-   → Setup *iPhone app, Wi-Fi (local)* → **Run live check**. Set Auto-Lock to
-   Never first and keep the app in front. The capacity test is ticked; it
-   runs on the server, so one run of it (from either the desktop or this one)
-   is enough: untick it if the desktop run had it.
+   → Setup *iPhone app, Wi-Fi (local)* (v0.5.5 starts on it on an iPhone) →
+   **Run live check**. Set Auto-Lock to Never first and keep the app in front.
+   The capacity test is ticked; it runs on the server, so one run of it (from
+   either the desktop or this one) is enough: untick it if the desktop run had
+   it.
 3. **iPhone app through Tailscale** (Wi-Fi off, Tailscale on, the app pointed
    at the Tailscale address): Setup *iPhone app, Tailscale*.
 4. **iPhone app through Nabu Casa** (Wi-Fi off, Tailscale off, the external
    URL): Setup *iPhone app, Nabu Casa*.
 5. Each report: **Copy report**, or later on the desktop: Live check →
-   **Saved reports** → Copy. Send all four.
+   **Saved reports** → Copy. Each saved report is listed with its setup, the
+   check's version and the browser it ran in (v0.5.5), so an iPhone report
+   reads "iOS …, Companion app …". Where copying is blocked, the report's
+   text shows on the page to select. Send all four.
 
 #### What the reports decide (rules fixed before seeing them)
 
@@ -2246,6 +2250,32 @@ The exit criteria, on the desktop:
 - Live is faster than the stock view: yes, 19 of 19 streams.
 - Every tile shows its snapshot in under 0.5 s: no. HA's snapshot takes a
   median 0.59 s, so this needs step 2's image cache.
+
+#### Step 2: run 10 and the iPhone reports (v0.5.4, v0.5.5)
+
+Run 10 (v0.5.4, the Mac on Wi-Fi) repeats run 9, so the desktop decisions
+stand:
+- **Warm MSE:** median 0.15 s on subs and 0.21 s on mains and ext. All 27
+  streams are under 0.7 s.
+- **Capacity:** the new verdict passes at every level. Level 1's 3.46 s first
+  frame and level 2's 3.99 s are within the key-frame wait.
+- **HA's snapshot:** median 0.43 s, but it failed on 5 of 19 entities (Dogs'
+  sub, both Laundry Room streams and both Doorbell streams). Across runs 6–10
+  it failed on 0–8 entities per run, which is one more reason for step 2's own
+  image cache.
+
+v0.5.5 makes the live check hard to file under the wrong device. A report sent
+as the iPhone Wi-Fi run was the Mac's run 8, copied from the saved reports,
+which named only the setup and the time:
+- **The setup starts on this device's**, *iPhone app, Wi-Fi (local)* on an
+  iPhone, else *Desktop Chrome, LAN*. It then remembers the last choice on that
+  device. A setup that names the other kind of device shows a warning.
+- **Saved reports show where they ran:** the setup, the check's version and
+  the browser, from the report's first lines.
+- **Copy works on plain-HTTP pages** (the Companion app on the LAN often loads
+  HA over HTTP, where the Clipboard API does not exist). Copying falls back to
+  a selected text area, as the playback check's already did. Where copying is
+  blocked anyway, the page says so and shows the report's text to select.
 
 ## Phase 4 — Performance, mobile, packaging, release (difficulty: Standard, 2–3 wk)
 

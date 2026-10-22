@@ -13,8 +13,9 @@ to 4 streams) agreed on every pass/fail result. Runs 3 (v0.1.1) and 4 (v0.1.2) a
 the Phase 2 recording playback checks, in their own tables. Run 5 (2026-10-21,
 v0.4.0) is the Phase 3 live check on desktop Chrome on the LAN, and run 6 (v0.5.0)
 repeats it with the key-frame cache, run 7 (v0.5.1) with the init segment
-rebuilt from the stream, run 8 (v0.5.2) with the MSE steps timed, and run 9
-(v0.5.3) with H.264 frames declared in decode order; the iPhone runs follow.
+rebuilt from the stream, run 8 (v0.5.2) with the MSE steps timed, run 9
+(v0.5.3) with H.264 frames declared in decode order, and run 10 (v0.5.4) once
+more; the iPhone runs follow.
 
 ## Setup probed
 
@@ -385,6 +386,24 @@ Front Yard Left's sub started in 3.47 s against level 1's 0.38 s, both within a
 4 s key-frame interval, with every stream at its frame rate (v0.5.4 no longer
 counts that). At level 5 all five streams paused 1.3–1.4 s at once and kept
 their frame rates; the download ran at 330 Mbit/s with seven streams (390 alone).
+
+Run 10, 2026-10-21: v0.5.4 (the key-frame-aware capacity verdict), same Mac on
+Wi-Fi. It repeats run 9:
+- **Warm MSE:** median 0.15 s on subs (0.12–0.68 s) and 0.21 s on mains and ext
+  (0.15–0.33 s).
+- **Warm WebRTC:** median 3.88 s on subs, 1.77 s on mains and ext.
+- **Cold WebRTC:** median 2.52 s on subs, 1.31 s on mains and ext.
+- **Cold MSE:** median 2.98 s on subs, 1.31 s on mains and ext.
+- **Home Assistant's view:** 2.58 s; ours was faster on 19 of 19.
+- **HA's snapshot:** median 0.43 s, but it failed on Dogs' sub, both Laundry
+  Room streams and both Doorbell streams (14 of 19 worked).
+- **go2rtc's frame:** 2.09 s.
+- **WebRTC:** connected in 56 of 56 sessions, all host/udp.
+
+The capacity test kept up at every level. Level 1's first frame took 3.46 s and
+level 2's 3.99 s, both within the key-frame wait. The download ran at
+397 Mbit/s alone and 416 Mbit/s with seven streams. go2rtc logged nothing past
+its start.
 
 ## Findings
 

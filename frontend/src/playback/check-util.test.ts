@@ -7,8 +7,10 @@ import {
   classifyHost,
   deepTarget,
   describeRate,
+  deviceSetup,
   longRecordings,
   mb,
+  setupMismatch,
   slope,
   smooth,
   span,
@@ -68,6 +70,26 @@ describe("browserLabel", () => {
     expect(browserLabel("Mozilla/5.0 (Windows NT 10.0) Chrome/141.0 Safari/537.36 Edg/141.0")).toBe("Edge 141 (Windows)");
     expect(browserLabel("Mozilla/5.0 (X11; Linux x86_64; rv:140.0) Gecko/20100101 Firefox/140.0")).toBe("Firefox 140 (Linux)");
     expect(browserLabel("something")).toBe("unknown browser (?)");
+  });
+});
+
+describe("setups", () => {
+  const IPHONE_APP =
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Home Assistant/2026.10.1 (io.robbie.HomeAssistant; build:2026.3213; iOS 27.0.0) Mobile/HomeAssistant, like Safari";
+  const MAC_CHROME =
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36";
+
+  it("starts on this device's setup", () => {
+    expect(deviceSetup(IPHONE_APP)).toBe("iPhone app, Wi-Fi (local)");
+    expect(deviceSetup(MAC_CHROME)).toBe("Desktop Chrome, LAN");
+  });
+
+  it("notices a setup naming another device", () => {
+    expect(setupMismatch("iPhone app, Tailscale", MAC_CHROME)).toBe(true);
+    expect(setupMismatch("Desktop Chrome, LAN", IPHONE_APP)).toBe(true);
+    expect(setupMismatch("iPhone app, Nabu Casa", IPHONE_APP)).toBe(false);
+    expect(setupMismatch("Desktop Chrome, Tailscale", MAC_CHROME)).toBe(false);
+    expect(setupMismatch("Other", IPHONE_APP)).toBe(false);
   });
 });
 

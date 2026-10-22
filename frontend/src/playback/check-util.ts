@@ -22,6 +22,20 @@ export function classifyHost(hostname: string): string {
   return "own domain";
 }
 
+const isIos = (userAgent: string): boolean => /iPhone|iPad|iPod/.test(userAgent);
+
+/** The setup a check starts on, on this device: the iPhone app on Wi-Fi, else desktop Chrome on the LAN. */
+export function deviceSetup(userAgent: string): string {
+  return isIos(userAgent) ? "iPhone app, Wi-Fi (local)" : "Desktop Chrome, LAN";
+}
+
+/** Whether a setup names another kind of device than this one (an iPhone setup on a Mac, or the reverse). */
+export function setupMismatch(setup: string, userAgent: string): boolean {
+  if (setup.startsWith("iPhone")) return !isIos(userAgent);
+  if (setup.startsWith("Desktop")) return isIos(userAgent);
+  return false;
+}
+
 /** A short name for the browser, e.g. "Chrome 141 (macOS)" or "iOS 18.1 app". */
 export function browserLabel(userAgent: string): string {
   const app = /Home ?Assistant\/([\d.]+)/i.exec(userAgent);
