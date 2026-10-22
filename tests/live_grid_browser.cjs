@@ -4,7 +4,8 @@
 // access token. In the page: a minimal `hass` over Home Assistant's websocket
 // API (what the panel gets from HA's frontend), the panel bundle as HA serves
 // it, and the live grid: the tile's picture from the image cache, then its
-// stream starting (cold: a WebRTC session through HA, seen in live/status).
+// stream starting: held through HA (live/status), over MSE as its keep-warm
+// switch is on, or over WebRTC after it.
 // Then full screen: the HD stream starts as well, the camera's controls show
 // (a PTZ arrow held and let go), and HD stops on the way back.
 // go2rtc sends only H.264 and H.265 video, which Playwright's Chromium cannot
@@ -86,7 +87,9 @@ async function run({ origin, token }) {
     }
     if (result.sessionMs === undefined && tile?._state?.kind === "starting") {
       const now = await status();
-      if (now.sessions > 0 && Object.values(now.running).some((holds) => holds > 0)) {
+      // Held by either transport: WebRTC fails at once here (this Chromium
+      // offers go2rtc no H.264), so its session is too short to wait for.
+      if (Object.values(now.running).some((holds) => holds > 0)) {
         result.sessionMs = Math.round(performance.now() - began);
         result.state = tile._state;
         result.running = now.running;
@@ -96,10 +99,23 @@ async function run({ origin, token }) {
   }
   result.tiles = grid.shadowRoot?.querySelectorAll("rv-live-tile").length ?? 0;
 
-  // Full screen: HD (the main stream, H.264 here) starts next to the sub stream.
+  // The tile's debug view: what it plays, and the server's state of its stream.
   const tile = tileOf();
+  tile?.shadowRoot?.querySelector(".corner-button.info")?.click();
+  const debugAt = performance.now();
+  while (performance.now() < debugAt + 5000) {
+    const text = tile?.shadowRoot?.querySelector("rv-live-debug")?.shadowRoot?.querySelector("pre")?.textContent ?? "";
+    if (text.includes("server: go2rtc")) {
+      result.debug = text.split("\n").slice(0, 3);
+      break;
+    }
+    await sleep(100);
+  }
+  tile?.shadowRoot?.querySelector(".corner-button.info")?.click();
+
+  // Full screen: HD (the main stream, H.264 here) starts next to the sub stream.
   const holding = (now, kind) => Object.entries(now.running).some(([name, holds]) => name.endsWith(`_${kind}`) && holds > 0);
-  tile?.shadowRoot?.querySelector(".corner-button")?.click();
+  tile?.shadowRoot?.querySelector(".corner-button.full")?.click();
   const fullAt = performance.now();
   while (performance.now() < fullAt + 20_000) {
     const now = await status();
@@ -122,7 +138,7 @@ async function run({ origin, token }) {
   result.ptzError = controls?._error ?? null;
 
   // Back: HD stops; the sub stream keeps playing.
-  tile?.shadowRoot?.querySelector(".corner-button")?.click();
+  tile?.shadowRoot?.querySelector(".corner-button.full")?.click();
   const backAt = performance.now();
   while (performance.now() < backAt + 10_000) {
     const now = await status();

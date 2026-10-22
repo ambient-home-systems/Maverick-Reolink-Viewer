@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { HomeAssistant } from "../types";
 import {
+  EVENT_LOG,
   LivePlayer,
   RETRY_S,
   STABLE_MS,
@@ -184,6 +185,38 @@ describe("LivePlayer", () => {
     expect(states.at(-1)).toEqual({ kind: "idle" });
     player.retryNow(); // only while waiting
     expect(sessions).toHaveLength(3);
+  });
+
+  it("keeps its last events for the debug view", async () => {
+    vi.setSystemTime(new Date(2026, 9, 22, 14, 0, 0));
+    const { player, last } = setup(false);
+    player.start();
+    last().failStart("ICE failed");
+    await flush();
+    last().play();
+    await flush();
+    vi.advanceTimersByTime(5000);
+    last().end("no new frame for 10 s");
+    player.stop();
+    expect(player.events.map((e) => e.text)).toEqual([
+      "WebRTC: starting",
+      "WebRTC: ICE failed",
+      "MSE: starting",
+      "MSE: playing, first frame in 0.12 s",
+      "ended after 5 s: no new frame for 10 s",
+      "next try in 1 s",
+      "stopped",
+    ]);
+    expect(player.events.at(-1)?.at).toBe(new Date(2026, 9, 22, 14, 0, 5).getTime());
+    // Stopping a stopped player says nothing; only the last EVENT_LOG are kept.
+    player.stop();
+    expect(player.events).toHaveLength(7);
+    for (let i = 0; i < EVENT_LOG; i += 1) {
+      player.start();
+      player.stop();
+    }
+    expect(player.events).toHaveLength(EVENT_LOG);
+    expect(player.events.at(0)?.text).toBe("WebRTC: starting");
   });
 
   it("reads warm at each start", async () => {

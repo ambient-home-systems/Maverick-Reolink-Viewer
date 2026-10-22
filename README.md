@@ -81,6 +81,8 @@ that records nowhere (like an E1 Zoom kept for snapshots) as its **picture first
 shows its latest picture and plays video when tapped, and it is not kept warm by default.
 v0.12.0 watches a battery camera on **wired power** (a wired doorbell) like any other: it
 plays at once and can be kept warm; unplugged, it goes back to waiting for a tap.
+v0.13.0 gives every tile a **debug view** (its ⓘ button): what it plays and how, the
+server's state of its stream, and its last events, with a Copy button for reports.
 
 Requires Home Assistant 2026.10 or newer with the Reolink integration set up.
 

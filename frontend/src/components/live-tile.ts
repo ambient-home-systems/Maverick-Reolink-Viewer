@@ -8,6 +8,7 @@ import {
   type TemplateResult,
 } from "lit";
 
+import type { DebugPlayer, TileDebug } from "../live/debug";
 import { chooseHd, type HdChoice } from "../live/hd";
 import { LivePlayer, type PlayerState } from "../live/player";
 import { sharedStyles } from "../styles";
@@ -20,6 +21,7 @@ import type {
   LiveStreamKind,
 } from "../types";
 import "./live-controls";
+import "./live-debug";
 
 /** Scrolled out of view this long, a tile stops its stream (a quick scroll back keeps it). */
 export const OFFSCREEN_GRACE_MS = 3000;
@@ -61,6 +63,7 @@ export class RvLiveTile extends LitElement {
     _full: { state: true },
     _hd: { state: true },
     _hdState: { state: true },
+    _debug: { state: true },
   };
 
   declare hass: HomeAssistant | undefined;
@@ -86,6 +89,8 @@ export class RvLiveTile extends LitElement {
   /** The HD stream for this connection, once chosen (at the first full screen). */
   declare _hd: HdChoice | undefined;
   declare _hdState: PlayerState;
+  /** Its debug view is shown. */
+  declare _debug: boolean;
 
   private _player: LivePlayer | undefined;
   private _hdPlayer: LivePlayer | undefined;
@@ -107,6 +112,7 @@ export class RvLiveTile extends LitElement {
     this._pageVisible = document.visibilityState !== "hidden";
     this._wanted = true;
     this._full = false;
+    this._debug = false;
   }
 
   override connectedCallback(): void {
@@ -376,6 +382,26 @@ export class RvLiveTile extends LitElement {
         ${this.hdShown ? nothing : this._renderStatus(state)}
         ${this._renderHd()}
       </div>
+      ${this._debug
+        ? html`<rv-live-debug
+            .hass=${this.hass}
+            .info=${this._debugInfo(name)}
+            @rv-live-debug-close=${() => {
+              this._debug = false;
+            }}
+          ></rv-live-debug>`
+        : nothing}
+      <button
+        class="corner-button info"
+        aria-label=${`${name} debug info`}
+        aria-pressed=${this._debug ? "true" : "false"}
+        title="What this tile plays, and how"
+        @click=${() => {
+          this._debug = !this._debug;
+        }}
+      >
+        ${icon(INFO)}
+      </button>
       ${this.controls && (this._full || !this.openable)
         ? html`<rv-live-controls
             .hass=${this.hass}
@@ -384,7 +410,7 @@ export class RvLiveTile extends LitElement {
           ></rv-live-controls>`
         : nothing}
       <button
-        class="corner-button"
+        class="corner-button full"
         aria-label=${this._full ? "Exit full screen" : `${name} full screen`}
         title=${this._full ? "Exit full screen" : "Full screen (HD)"}
         @click=${() => {
@@ -395,6 +421,17 @@ export class RvLiveTile extends LitElement {
         ${icon(this._full ? EXIT_FULL : ENTER_FULL)}
       </button>
     </div>`;
+  }
+
+  /** What the debug view shows: the players, their state and their last events. */
+  private _debugInfo(name: string): TileDebug {
+    const players: DebugPlayer[] = [];
+    const add = (label: string, stream: LiveStreamKind, player: LivePlayer | undefined, state: PlayerState) => {
+      if (player) players.push({ label, stream, warm: player.options.warm, state, events: [...player.events] });
+    };
+    add("SD", this.stream, this._player, this._state);
+    if (this._hd?.stream) add("HD", this._hd.stream, this._hdPlayer, this._hdState);
+    return { camera: name, connection: this.connection, players, hd: this._hd?.reason };
   }
 
   /** Full screen: whether HD shows, and why not. */
@@ -543,6 +580,22 @@ export class RvLiveTile extends LitElement {
         background: rgba(0, 0, 0, 0.45);
         color: #fff;
       }
+      .corner-button.info {
+        bottom: 46px;
+        width: 30px;
+        height: 30px;
+        right: 9px;
+        padding: 4px;
+        opacity: 0.8;
+      }
+      .corner-button.info[aria-pressed="true"] {
+        background: var(--primary-color);
+        opacity: 1;
+      }
+      .corner-button.info svg {
+        width: 22px;
+        height: 22px;
+      }
       .corner-button svg {
         display: block;
         width: 24px;
@@ -607,6 +660,7 @@ export class RvLiveTile extends LitElement {
 }
 
 const ENTER_FULL = "M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5";
+const INFO = "M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0M12 11v6M12 7.5v.5";
 const EXIT_FULL = "M9 4v5H4M15 4v5h5M20 15h-5v5M4 15h5v5";
 
 function icon(path: string): TemplateResult {

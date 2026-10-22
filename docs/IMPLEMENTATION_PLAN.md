@@ -1756,7 +1756,7 @@ gate), **2** builds live view from what step 1 decides.
 | 0. Fix four Phase 2B findings (a failing test for each first) | **Done** (v0.4.0), see "Step 0" below |
 | 1. Our own go2rtc, and a live check in the panel (gate) | **Done** (v0.4.0), see "Step 1 as built". Every setup's report is in: desktop Chrome on the LAN (run 5), the iPhone app on Wi-Fi (run 11), through Tailscale (run 12) and through Nabu Casa (run 13) |
 | 1. Record the reports here and in the hardware matrix; decide the live stream budget, WebRTC or MSE per setup, which cameras stay warm, the HD stream per camera | **Desktop Chrome on the LAN: recorded and decided** (v0.4.1), see "Step 1 results". **Done for every setup.** Desktop Chrome on the LAN (v0.4.1), see "Step 1 results"; the iPhone app on Wi-Fi, through Tailscale and through Nabu Casa (runs 11–13), see "Step 2: the iPhone on Wi-Fi", "… through Tailscale" and "… through Nabu Casa". The rules are fixed below, before seeing the reports |
-| 2. Stream registry, delivery, Live tab and grid, keep warm, debug panel | **In progress.** The key-frame cache is built (v0.5.0) and measured on the desktop (run 6), see "Step 2: the key-frame cache"; v0.5.1 rebuilds the MSE init segment and records why warm feeds end (run 7: the sizes are right). v0.5.2 measured the last two oddities (run 8); v0.5.3 fixed the late H.264 paints (run 9: warm MSE median 0.15 s); run 10 (v0.5.4) confirms it. v0.5.5 files each live check report under its device. v0.6.0 keeps each camera's last picture for the tiles, see "Step 2: the image cache"; the live check measures it. v0.7.0: the Live grid and each camera's Live tab, see "Step 2: the Live grid". v0.8.0: keep warm per camera and the NVR budget of 7, see "Step 2: keep warm". v0.9.0: full-screen HD, see "Step 2: full-screen HD". v0.10.0: the camera's controls over its live view, see "Step 2: PTZ, presets, siren and floodlight". The owner checked v0.9.0 and v0.10.0 on the hardware. v0.11.0: the E1 Zoom's picture first, see "Step 2: the picture first"; the owner checked it on the hardware. v0.12.0: a battery camera on wired power is watched like the others, see "Step 2: battery cameras on wired power"; v0.12.1 fixes the Doorbell being shown picture-first. Next: a debug view per tile |
+| 2. Stream registry, delivery, Live tab and grid, keep warm, debug panel | **Built** (v0.5.0–v0.13.0); the exit runs remain, see "What is left of Phase 3". The key-frame cache is built (v0.5.0) and measured on the desktop (run 6), see "Step 2: the key-frame cache"; v0.5.1 rebuilds the MSE init segment and records why warm feeds end (run 7: the sizes are right). v0.5.2 measured the last two oddities (run 8); v0.5.3 fixed the late H.264 paints (run 9: warm MSE median 0.15 s); run 10 (v0.5.4) confirms it. v0.5.5 files each live check report under its device. v0.6.0 keeps each camera's last picture for the tiles, see "Step 2: the image cache"; the live check measures it. v0.7.0: the Live grid and each camera's Live tab, see "Step 2: the Live grid". v0.8.0: keep warm per camera and the NVR budget of 7, see "Step 2: keep warm". v0.9.0: full-screen HD, see "Step 2: full-screen HD". v0.10.0: the camera's controls over its live view, see "Step 2: PTZ, presets, siren and floodlight". The owner checked v0.9.0 and v0.10.0 on the hardware. v0.11.0: the E1 Zoom's picture first, see "Step 2: the picture first"; the owner checked it on the hardware. v0.12.0: a battery camera on wired power is watched like the others, see "Step 2: battery cameras on wired power"; v0.12.1 fixes the Doorbell being shown picture-first; the owner checked it on the hardware. v0.13.0: a debug view per tile, see "Step 2: the debug view per tile". Next: the exit runs |
 
 #### Step 0: four Phase 2B findings (v0.4.0)
 
@@ -2672,6 +2672,48 @@ card) keeps its recordings, whether or not this integration can play them
 (`bridge.stores_recordings`). The picture first and the keep-warm default use
 that; the Playback tab still needs replay support. Playing the Doorbell's SD
 recordings (Baichuan only) is left for later.
+
+On the hardware (the owner, 2026-10-22): with v0.12.1 the Doorbell plays
+without a tap.
+
+#### Step 2: the debug view per tile (v0.13.0)
+
+Every tile has an info button (ⓘ, above its full-screen button). It shows,
+over the tile:
+
+- the camera and its connection (through the NVR or direct, on battery);
+- per player (the tile's stream, and HD in full screen): its stream,
+  whether it is kept warm, and what it does now: starting over a transport,
+  playing (the transport, the first frame's time, the picture size, the
+  codec; for WebRTC the candidate pair and its round trip), or why it waits
+  and when it tries again;
+- the server's state of that stream (`live/state`, read every 2 s while
+  shown; no camera I/O): go2rtc streaming or idle and its consumers, the
+  stream's holds, and the key-frame cache's feed (its age, viewers, the
+  last key frame and the key-frame interval, the parameter sets, feeds
+  dropped and why);
+- full screen's HD choice and why;
+- each player's last 20 events with their time: starts, failures and
+  fallbacks, first frames, ends, waits, stops.
+
+Copy puts the text on the clipboard (the plain-HTTP way on the iPhone app,
+as the live check's report). The Chromium test opens it on a playing tile
+and reads go2rtc's state there.
+
+#### What is left of Phase 3
+
+Step 2 is built. The exit criteria not yet met, to run on the hardware:
+
+- **Every tile shows its picture in under 0.5 s**, from the image cache
+  (v0.6.0): the live check's "First images (ours)" section, on the desktop
+  and the iPhone.
+- **A 24-hour soak with the grid open**: no reconnect loops and no growth
+  in device sessions; camera CPU and session counts within Phase 0's
+  limits; battery cameras sleep when not viewed.
+- **The Phase 2 playback criteria still hold** with live view running: the
+  playback check, on the desktop and the iPhone.
+
+Then Phase 3 is marked done here and in the README.
 
 ## Phase 4 — Performance, mobile, packaging, release (difficulty: Standard, 2–3 wk)
 

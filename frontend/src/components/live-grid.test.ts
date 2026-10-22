@@ -22,6 +22,7 @@ vi.mock("../live/player", () => {
     running = false;
     starts = 0;
     retries = 0;
+    events: { at: number; text: string }[] = [];
     state: PlayerState = { kind: "idle" };
     constructor(
       _hass: unknown,
@@ -134,6 +135,9 @@ function fakeHass(fail = false) {
         return fail ? Promise.reject(new Error("not loaded")) : Promise.resolve({ cameras: CAMERAS });
       }
       if (message.type === "web_rtc/ice_servers") return Promise.resolve([{ urls: ["stun:s"] }]);
+      if (message.type === "reolink_viewer/live/state") {
+        return Promise.resolve({ state: null, holds: 1, preloaded: false, cache: null });
+      }
       return Promise.resolve(null);
     }),
     connection: {
@@ -339,6 +343,38 @@ describe("rv-live-grid", () => {
     expect(player?.retries).toBe(1);
   });
 
+  it("shows what a tile plays, and how, behind its info button", async () => {
+    const { hass, sent } = fakeHass();
+    const { tiles } = await mountGrid(hass);
+    const garage = tiles().at(0);
+    if (!garage) throw new Error("no tile");
+    const info = garage.shadowRoot?.querySelector<HTMLButtonElement>(".corner-button.info");
+    if (!info) throw new Error("no info button");
+    expect(garage.shadowRoot?.querySelector("rv-live-debug")).toBeNull();
+    const routes: unknown[] = [];
+    garage.addEventListener("rv-live-open", (e) => routes.push(e));
+    info.click();
+    await garage.updateComplete;
+    await flush();
+    expect(routes).toEqual([]); // it does not open the camera
+    const debug = garage.shadowRoot?.querySelector("rv-live-debug");
+    await debug?.updateComplete;
+    const text = debug?.shadowRoot?.querySelector("pre")?.textContent ?? "";
+    expect(text).toContain("Garage · through the NVR (RLN36)");
+    expect(text).toContain("SD (sub, kept warm): starting over MSE");
+    expect(text).toContain("server: not in go2rtc, held 1×");
+    expect(sent).toContainEqual({ type: "reolink_viewer/live/state", connection_id: "nvr1", stream: "sub" });
+    // Its Close, or the info button again, hides it.
+    [...(debug?.shadowRoot?.querySelectorAll("button") ?? [])].find((b) => b.textContent.trim() === "Close")?.click();
+    await garage.updateComplete;
+    expect(garage.shadowRoot?.querySelector("rv-live-debug")).toBeNull();
+    info.click();
+    await garage.updateComplete;
+    info.click();
+    await garage.updateComplete;
+    expect(garage.shadowRoot?.querySelector("rv-live-debug")).toBeNull();
+  });
+
   it("plays again when a tile is attached again", async () => {
     const { hass } = fakeHass();
     const { tiles } = await mountGrid(hass);
@@ -379,7 +415,7 @@ describe("rv-live-grid", () => {
 describe("full screen", () => {
   type RvLiveTile = HTMLElementTagNameMap["rv-live-tile"];
   const fullButton = (tile: Element) => {
-    const button = tile.shadowRoot?.querySelector<HTMLButtonElement>(".corner-button");
+    const button = tile.shadowRoot?.querySelector<HTMLButtonElement>(".corner-button.full");
     if (!button) throw new Error("no full-screen button");
     return button;
   };
