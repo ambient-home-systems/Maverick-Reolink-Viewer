@@ -45,14 +45,16 @@ custom_components/reolink_viewer/
 frontend/            # Lit + TypeScript panel, built with Vite
   src/components/    # device list, device page, overview, settings, playback tab,
                      # live grid and Live tab (live-grid.ts) with their tiles (live-tile.ts)
-                     # and the camera's controls over them (live-controls.ts)
+                     # and the camera's controls (live-controls.ts) and debug view
+                     # (live-debug.ts) over them
   src/playback/      # timeline canvas + math, calendar, event list, player (MSE feeder in
                      # mse-feeder.ts, else a file URL), codec checks, the playback check
                      # (check.ts) and its MSE probe (mse-probe.ts, mse-sample.ts)
   src/live/          # the live sessions: WebRTC (ours and HA's), MSE over the signed
                      # websocket (session.ts); the player that keeps one playing
                      # (player.ts); what the live views share (data.ts); which stream
-                     # full screen plays in HD (hd.ts); the live check
+                     # full screen plays in HD (hd.ts); a tile's debug text
+                     # (debug.ts); the live check
 tests/               # pytest-homeassistant-custom-component; test_mse_browser.py and
                      # test_live_browser.py drive Playwright's Chromium (mse_append.cjs,
                      # live_browser.cjs, live_grid_browser.cjs: the panel's grid);

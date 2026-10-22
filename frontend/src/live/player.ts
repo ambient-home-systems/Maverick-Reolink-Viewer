@@ -44,6 +44,14 @@ export const START_TIMEOUT_MS: Record<Transport, number> = {
 export const RETRY_S = [1, 2, 5, 10, 30] as const;
 /** A session that played this long before it ended starts again at once. */
 export const STABLE_MS = 30_000;
+/** The events a player keeps for its tile's debug view. */
+export const EVENT_LOG = 20;
+
+/** Something the player did, for the debug view: when (epoch ms) and what. */
+export interface PlayerEvent {
+  at: number;
+  text: string;
+}
 
 const sessionFor: SessionFactory = (
   transport,
@@ -59,6 +67,8 @@ const sessionFor: SessionFactory = (
 
 export class LivePlayer {
   state: PlayerState = { kind: "idle" };
+  /** Its last EVENT_LOG events, oldest first. */
+  readonly events: PlayerEvent[] = [];
   private _session: LiveSession | undefined;
   private _timer: ReturnType<typeof setTimeout> | undefined;
   private _failures = 0;
@@ -97,6 +107,7 @@ export class LivePlayer {
     clearTimeout(this._timer);
     this._session?.close();
     this._session = undefined;
+    if (this.state.kind !== "idle") this._note("stopped");
     this._set({ kind: "idle" });
   }
 
@@ -106,6 +117,7 @@ export class LivePlayer {
       : ["WebRTC", "MSE"];
     let error = "failed";
     for (const transport of order) {
+      this._note(`${transport}: starting`);
       this._set({ kind: "starting", transport });
       const session = this._factory(
         transport,
@@ -123,12 +135,15 @@ export class LivePlayer {
       const result = await session.done;
       if (run !== this._run || this._session !== session) return;
       if (result.ok) {
+        const first = result.firstFrameMs;
+        this._note(`${transport}: playing${first !== undefined ? `, first frame in ${(first / 1000).toFixed(2)} s` : ""}`);
         this._set({ kind: "playing", transport, result });
         return;
       }
       session.close();
       this._session = undefined;
       error = `${transport}: ${result.error ?? "failed"}`;
+      this._note(error);
     }
     this._failures += 1;
     this._wait(run, error);
@@ -144,6 +159,7 @@ export class LivePlayer {
     if (run !== this._run || this._session !== session) return;
     session.close();
     this._session = undefined;
+    this._note(`ended after ${Math.round((Date.now() - began) / 1000)} s: ${reason}`);
     if (Date.now() - began >= STABLE_MS) {
       this._failures = 0;
       void this._attempt(run);
@@ -156,10 +172,16 @@ export class LivePlayer {
   private _wait(run: number, error: string): void {
     const delayS =
       RETRY_S[Math.min(this._failures, RETRY_S.length) - 1] ?? RETRY_S[0];
+    this._note(`next try in ${delayS} s`);
     this._set({ kind: "waiting", error, retryAt: Date.now() + delayS * 1000 });
     this._timer = setTimeout(() => {
       if (run === this._run) void this._attempt(run);
     }, delayS * 1000);
+  }
+
+  private _note(text: string): void {
+    this.events.push({ at: Date.now(), text });
+    if (this.events.length > EVENT_LOG) this.events.splice(0, this.events.length - EVENT_LOG);
   }
 
   private _set(state: PlayerState): void {

@@ -173,6 +173,10 @@ async def test_chromium_starts_the_live_grid(
     # Cold: a WebRTC session through Home Assistant, holding the camera's sub.
     assert result["state"] == {"kind": "starting", "transport": "WebRTC"}, result
     assert list(result["running"].values()) == [1], result
+    # Its debug view: the camera, its player, and go2rtc's state of the stream.
+    assert result["debug"][0].startswith("test_reolink_cam · "), result
+    assert result["debug"][1].startswith("SD (sub, kept warm): "), result
+    assert result["debug"][2].startswith("  server: go2rtc "), result
     # Full screen: the HD stream (the main, H.264 here) starts while the sub
     # stream's player keeps running, cold over WebRTC, or over MSE once WebRTC
     # has failed (this Chromium offers go2rtc no H.264); back from it, the main
