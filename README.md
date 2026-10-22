@@ -67,6 +67,10 @@ view** (Reolink → Watch live): every camera in a grid, each showing its last p
 fading into video, and a **Live** tab on each camera. A stream kept warm starts over MSE
 from its cached key frame, any other over WebRTC; each falls back to the other, and a
 tile pauses when it is off screen or the page is hidden. Battery cameras wait for a tap.
+v0.8.0 keeps cameras warm: each mains-powered camera gets a **keep live view warm** switch
+(on by default, as many per NVR or camera as its stream budget allows after one HD
+stream), so its tile starts at once from its cached key frame. Turn it off on the
+camera's Live tab, or like any switch in Home Assistant.
 
 Requires Home Assistant 2026.10 or newer with the Reolink integration set up.
 

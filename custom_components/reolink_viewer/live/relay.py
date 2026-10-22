@@ -467,6 +467,9 @@ class MseRelay:
         self._feeds: dict[str, list[Feed]] = {}
         self._locks: dict[str, asyncio.Lock] = {}
         self._warm: dict[str, LiveStream] = {}
+        # Who keeps each warm stream warm (the setting, the live check): it
+        # stays warm until the last of them lets go.
+        self._owners: dict[str, set[str]] = {}
         self._retries: dict[str, int] = {}
         self._timers: dict[str, asyncio.TimerHandle] = {}
         self._closing: set[Feed] = set()
@@ -495,15 +498,21 @@ class MseRelay:
         stream: LiveStream,
         enabled: bool,
         *,
+        owner: str = "check",
         key_frame_timeout: float = KEY_FRAME_TIMEOUT,
     ) -> bool:
-        """Keep a stream's feed open without viewers, or stop.
+        """Keep a stream's feed open without viewers, or stop, for an owner.
 
         Turning it on waits for the first key frame; returns whether one is
-        cached.
+        cached. Turning it off stops it once no other owner keeps it warm.
         """
         name = stream.name
+        owners = self._owners.setdefault(name, set())
         if not enabled:
+            owners.discard(owner)
+            if owners:
+                return False
+            del self._owners[name]
             self._warm.pop(name, None)
             self._retries.pop(name, None)
             if (timer := self._timers.pop(name, None)) is not None:
@@ -514,17 +523,25 @@ class MseRelay:
                     if not feed.viewers:
                         feed.close()
             return False
+        owners.add(owner)
         self._warm[name] = stream
         try:
             feed = await self._warm_feed(stream)
         except LiveError:
-            self._warm.pop(name, None)
+            owners.discard(owner)
+            if not owners:
+                self._owners.pop(name, None)
+                self._warm.pop(name, None)
             raise
         return await feed.async_key_frame(key_frame_timeout)
 
     def warm_streams(self) -> list[str]:
         """Return the go2rtc names of the streams kept warm."""
         return list(self._warm)
+
+    def warm_owners(self, stream: LiveStream) -> set[str]:
+        """Return who keeps a stream warm."""
+        return set(self._owners.get(stream.name, ()))
 
     def state(self, stream: LiveStream) -> dict[str, Any] | None:
         """Return the cache of a stream (its first feed), if it has one.
@@ -573,6 +590,7 @@ class MseRelay:
             timer.cancel()
         self._timers.clear()
         self._warm.clear()
+        self._owners.clear()
         feeds = [f for fs in self._feeds.values() for f in fs] + list(self._closing)
         for feed in feeds:
             feed.close()

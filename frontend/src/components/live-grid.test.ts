@@ -75,9 +75,11 @@ const CAMERAS: LiveCamera[] = [
         via: "nvr",
         entry_title: "RLN36",
         is_battery: false,
-        streams: { sub: { encoding, entity_id: null, warm: true }, main: { encoding, entity_id: null, warm: false } },
+        // Not warm yet on the server: its switch, just turned on, says it will be.
+        streams: { sub: { encoding, entity_id: null, warm: false }, main: { encoding, entity_id: null, warm: false } },
       },
     ],
+    keep_warm_entity: "switch.garage_keep_live_view_warm",
   },
   {
     id: "cam2",
@@ -98,11 +100,17 @@ const CAMERAS: LiveCamera[] = [
 
 function fakeHass(fail = false) {
   const sent: Record<string, unknown>[] = [];
+  const services: unknown[][] = [];
+  let failService = false;
   let unsubscribed = 0;
   let images: ((event: LiveImagesEvent) => void) | undefined;
   const hass = {
     user: { is_admin: false },
-    states: {},
+    states: { "switch.garage_keep_live_view_warm": { state: "on" } },
+    callService: vi.fn((...args: unknown[]) => {
+      services.push(args);
+      return failService ? Promise.reject(new Error("not allowed")) : Promise.resolve(undefined);
+    }),
     callWS: vi.fn((message: Record<string, unknown>) => {
       sent.push(message);
       if (message.type === "reolink_viewer/live/cameras") {
@@ -128,6 +136,10 @@ function fakeHass(fail = false) {
   return {
     hass,
     sent,
+    services,
+    failService: () => {
+      failService = true;
+    },
     unsubscribed: () => unsubscribed,
     image: (event: LiveImagesEvent) => images?.(event),
   };
@@ -200,7 +212,7 @@ describe("rv-live-grid", () => {
       "/api/reolink_viewer/live/image/t1?authSig=x",
     );
     expect(garage.shadowRoot?.textContent).toContain("Garage");
-    // The NVR connection, kept warm: over MSE.
+    // The NVR connection, kept warm (its switch is on): over MSE.
     const player = players.find((p) => p.ref.connectionId === "nvr1");
     expect(player?.ref).toEqual({ connectionId: "nvr1", stream: "sub" });
     expect(player?.starts).toBe(1);
@@ -318,6 +330,32 @@ describe("rv-live-grid", () => {
 });
 
 describe("rv-live-camera", () => {
+  it("turns keep warm on and off through Home Assistant's switch", async () => {
+    const fake = fakeHass();
+    const el = document.createElement("rv-live-camera");
+    el.hass = fake.hass;
+    el.deviceId = "cam1";
+    document.body.appendChild(el);
+    await flush();
+    await el.updateComplete;
+    const box = el.shadowRoot?.querySelector<HTMLInputElement>(".keep-warm input");
+    if (!box) throw new Error("no keep-warm toggle");
+    expect(box.checked).toBe(true);
+    box.checked = false;
+    box.dispatchEvent(new Event("change"));
+    expect(fake.services).toEqual([["switch", "turn_off", { entity_id: "switch.garage_keep_live_view_warm" }]]);
+    fake.failService();
+    box.checked = true;
+    box.dispatchEvent(new Event("change"));
+    await flush();
+    await el.updateComplete;
+    expect(el.shadowRoot?.textContent).toContain("Could not change it: not allowed");
+    // A battery camera has no switch.
+    el.deviceId = "cam2";
+    await el.updateComplete;
+    expect(el.shadowRoot?.querySelector(".keep-warm")).toBeNull();
+  });
+
   it("plays the camera a device id names, large", async () => {
     const { hass } = fakeHass();
     const el = document.createElement("rv-live-camera");

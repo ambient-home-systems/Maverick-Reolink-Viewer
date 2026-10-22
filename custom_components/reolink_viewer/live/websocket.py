@@ -2,7 +2,8 @@
 
 - ``live/status``: go2rtc's state (and, for admins, its last log lines).
 - ``live/cameras``: every camera's connections and streams, with the Home
-  Assistant camera entity of each (the live check compares against them).
+  Assistant camera entity of each (the live check compares against them),
+  which streams are kept warm, and each camera's keep-warm switch.
 - ``live/webrtc``: a WebRTC session, as a subscription. The browser's offer
   goes to go2rtc with Home Assistant's ICE servers (``web_rtc``, which adds
   Nabu Casa's TURN for subscribers); go2rtc's answer and ICE candidates come
@@ -36,6 +37,7 @@ from custom_components.reolink_viewer.views import LiveGrant, LiveImageGrant, si
 from homeassistant.components import websocket_api
 from homeassistant.components.web_rtc import async_get_ice_servers
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.util.ssl import SSLCipherList
 
@@ -45,6 +47,7 @@ from .images import CameraImage
 from .service import MAX_EARLY_CANDIDATES, LiveService, WebRtcSession
 from .streams import LiveError, LiveStream
 from .views import LIVE_FRAME_PATH, LIVE_IMAGE_PATH, LIVE_MSE_PATH
+from .warm import keep_warm_unique_id
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -134,14 +137,15 @@ def ws_live_cameras(
     if (resolved := _live(hass, connection, msg["id"])) is None:
         return
     warm = set(resolved[1].relay.warm_streams())
-    connection.send_result(
-        msg["id"],
-        {
-            "cameras": devices.async_live_cameras(
-                hass, warm=lambda source, kind: LiveStream(source, kind).name in warm
-            )
-        },
+    cameras = devices.async_live_cameras(
+        hass, warm=lambda source, kind: LiveStream(source, kind).name in warm
     )
+    entities = er.async_get(hass)
+    for camera in cameras:
+        camera["keep_warm_entity"] = entities.async_get_entity_id(
+            "switch", DOMAIN, keep_warm_unique_id(camera["id"])
+        )
+    connection.send_result(msg["id"], {"cameras": cameras})
 
 
 @websocket_api.websocket_command(

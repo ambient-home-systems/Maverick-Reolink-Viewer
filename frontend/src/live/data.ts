@@ -102,6 +102,16 @@ export class LiveData implements ReactiveController {
   }
 }
 
+/**
+ * Whether a camera's sub stream is (or is about to be) kept warm: its switch
+ * is on (Home Assistant's state is the truth), or the server says so.
+ */
+export function isWarm(hass: HomeAssistant | undefined, camera: LiveCamera): boolean {
+  const entity = camera.keep_warm_entity;
+  if (entity && hass?.states[entity]?.state === "on") return true;
+  return liveConnection(camera)?.streams.sub?.warm === true;
+}
+
 /** The connection live view watches a camera through: the NVR's where it has one. */
 export function liveConnection(camera: LiveCamera): LiveConnection | undefined {
   return (

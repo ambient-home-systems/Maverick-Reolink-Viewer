@@ -106,10 +106,10 @@ async def test_host_limits(
     loaded_viewer: MockConfigEntry,
     reolink_entry: MockConfigEntry,
 ) -> None:
-    """NVRs get 6 request slots and 4 streams; cameras 3 and 2; unknown 2 and 2."""
+    """NVRs get 6 request slots and 7 streams; cameras 3 and 2; unknown 2 and 2."""
     scheduler = loaded_viewer.runtime_data.scheduler
     nvr = scheduler.host(reolink_entry.entry_id)
-    assert (nvr.limit, nvr.streams.limit, nvr.streams.prefetch_limit) == (6, 4, 1)
+    assert (nvr.limit, nvr.streams.limit, nvr.streams.prefetch_limit) == (6, 7, 1)
     assert scheduler.host("unknown-entry").limit == 2
     scheduler.forget(reolink_entry.entry_id)
     reolink_host.is_nvr = False

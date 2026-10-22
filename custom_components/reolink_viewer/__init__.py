@@ -7,10 +7,11 @@ from pathlib import Path
 from homeassistant.components import frontend, panel_custom
 from homeassistant.components.ffmpeg import get_ffmpeg_manager
 from homeassistant.components.http import StaticPathConfig
-from homeassistant.const import EVENT_HOMEASSISTANT_STOP
-from homeassistant.core import Event, HomeAssistant
+from homeassistant.const import EVENT_HOMEASSISTANT_STOP, Platform
+from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers import config_validation as cv, issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.start import async_at_started
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.util.hass_dict import HassKey
 from homeassistant.util.ssl import SSLCipherList
@@ -54,6 +55,8 @@ from .websocket_api import async_register_commands
 _LOGGER = logging.getLogger(__name__)
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+# Keep-warm switches, one per mains-powered camera.
+PLATFORMS = [Platform.SWITCH]
 
 FRONTEND_DIR = Path(__file__).parent / FRONTEND_DIST_DIR
 # Static paths cannot be unregistered, so register them once per HA run.
@@ -167,6 +170,7 @@ async def async_setup_entry(
         thumbnails=thumbnails,
         check_reports=check_reports,
         live=live,
+        compat_ok=compat.ok,
     )
 
     async def stop_live(_event: Event) -> None:
@@ -176,6 +180,15 @@ async def async_setup_entry(
     entry.async_on_unload(
         hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, stop_live)
     )
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    if compat.ok:
+
+        @callback
+        def keep_warm(_hass: HomeAssistant) -> None:
+            live.warm.start()
+
+        # The cameras' streams come up once Home Assistant runs (Reolink too).
+        entry.async_on_unload(async_at_started(hass, keep_warm))
 
     if not hass.data.get(DATA_STATIC_REGISTERED):
         await hass.http.async_register_static_paths(
@@ -201,6 +214,8 @@ async def async_unload_entry(
     hass: HomeAssistant, entry: ReolinkViewerConfigEntry
 ) -> bool:
     """Unload the entry."""
+    if not await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
+        return False
     frontend.async_remove_panel(hass, PANEL_URL_PATH, warn_if_unknown=False)
     if entry.runtime_data.live is not None:
         await entry.runtime_data.live.async_shutdown()

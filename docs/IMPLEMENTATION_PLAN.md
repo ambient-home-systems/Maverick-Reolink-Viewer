@@ -19,7 +19,7 @@ put on it:
 | 0 | Foundations, CI, adapter layer, hardware discovery | High | 1–2 wk | Done (2026-10-17) |
 | 1 | Device details and every setting, with explanations | Standard (catalog) / High (panel shell) | 2–3 wk | Done (2026-10-17) |
 | 2 | Event timeline, thumbnails, smooth playback | High (backend) / Very high (player) | 3–5 wk | Done (2026-10-21, v0.3.2). 2A (2026-10-20, v0.2.7): timeline 105–287 ms, first frame 0.6–1.1 s, auto-advance 6–7 ms on hardware. 2B: MSE player; uncached deep starts are the NVR's download up to the target (6.9–13.0 s in hour-long recordings, up to 84 s before), speeds 0.5–8×, HD/SD at the same moment, one-hour sessions within the caps, the iPhone app on Wi-Fi, Tailscale and Nabu Casa |
-| 3 | Live view via go2rtc, grid, fullscreen, PTZ | High | 3–4 wk | In progress. Step 0 done (four Phase 2B fixes). Step 1 done: our own go2rtc and the live check (v0.4.0), measured on desktop Chrome on the LAN and the iPhone app at home, through Tailscale and through Nabu Casa (runs 5–13), and decided. Step 2 in progress: the key-frame cache (v0.5.0–v0.5.5), the image cache (v0.6.0), and the Live grid and Live tab (v0.7.0) are built |
+| 3 | Live view via go2rtc, grid, fullscreen, PTZ | High | 3–4 wk | In progress. Step 0 done (four Phase 2B fixes). Step 1 done: our own go2rtc and the live check (v0.4.0), measured on desktop Chrome on the LAN and the iPhone app at home, through Tailscale and through Nabu Casa (runs 5–13), and decided. Step 2 in progress: the key-frame cache (v0.5.0–v0.5.5), the image cache (v0.6.0), the Live grid and Live tab (v0.7.0), and keep warm per camera (v0.8.0) are built |
 | 4 | Performance, mobile, packaging, first release | Standard | 2–3 wk | Not started |
 | 5 | Optional R&D: Baichuan live/playback | Very high | 4–8 wk, time-boxed with gates | Not started |
 
@@ -1756,7 +1756,7 @@ gate), **2** builds live view from what step 1 decides.
 | 0. Fix four Phase 2B findings (a failing test for each first) | **Done** (v0.4.0), see "Step 0" below |
 | 1. Our own go2rtc, and a live check in the panel (gate) | **Done** (v0.4.0), see "Step 1 as built". Every setup's report is in: desktop Chrome on the LAN (run 5), the iPhone app on Wi-Fi (run 11), through Tailscale (run 12) and through Nabu Casa (run 13) |
 | 1. Record the reports here and in the hardware matrix; decide the live stream budget, WebRTC or MSE per setup, which cameras stay warm, the HD stream per camera | **Desktop Chrome on the LAN: recorded and decided** (v0.4.1), see "Step 1 results". **Done for every setup.** Desktop Chrome on the LAN (v0.4.1), see "Step 1 results"; the iPhone app on Wi-Fi, through Tailscale and through Nabu Casa (runs 11–13), see "Step 2: the iPhone on Wi-Fi", "… through Tailscale" and "… through Nabu Casa". The rules are fixed below, before seeing the reports |
-| 2. Stream registry, delivery, Live tab and grid, keep warm, debug panel | **In progress.** The key-frame cache is built (v0.5.0) and measured on the desktop (run 6), see "Step 2: the key-frame cache"; v0.5.1 rebuilds the MSE init segment and records why warm feeds end (run 7: the sizes are right). v0.5.2 measured the last two oddities (run 8); v0.5.3 fixed the late H.264 paints (run 9: warm MSE median 0.15 s); run 10 (v0.5.4) confirms it. v0.5.5 files each live check report under its device. v0.6.0 keeps each camera's last picture for the tiles, see "Step 2: the image cache"; the live check measures it. v0.7.0: the Live grid and each camera's Live tab, see "Step 2: the Live grid". Next: full-screen HD, PTZ, siren and floodlight, keep warm per camera |
+| 2. Stream registry, delivery, Live tab and grid, keep warm, debug panel | **In progress.** The key-frame cache is built (v0.5.0) and measured on the desktop (run 6), see "Step 2: the key-frame cache"; v0.5.1 rebuilds the MSE init segment and records why warm feeds end (run 7: the sizes are right). v0.5.2 measured the last two oddities (run 8); v0.5.3 fixed the late H.264 paints (run 9: warm MSE median 0.15 s); run 10 (v0.5.4) confirms it. v0.5.5 files each live check report under its device. v0.6.0 keeps each camera's last picture for the tiles, see "Step 2: the image cache"; the live check measures it. v0.7.0: the Live grid and each camera's Live tab, see "Step 2: the Live grid". v0.8.0: keep warm per camera and the NVR budget of 7, see "Step 2: keep warm". Next: full-screen HD, PTZ, siren and floodlight |
 
 #### Step 0: four Phase 2B findings (v0.4.0)
 
@@ -2505,6 +2505,42 @@ large. Full-screen HD comes next.
   sub stream, and leaving the grid leaves nothing held. go2rtc sends only
   H.264 and H.265 video, which Playwright's Chromium cannot decode, so frames
   are checked on the hardware.
+
+#### Step 2: keep warm (v0.8.0)
+
+A warm camera's sub stream stays open, with its last key frame cached, so its
+tile starts at once over MSE (0.07–0.70 s in runs 9–13) instead of waiting up
+to 4 s for the camera's next key frame.
+
+- **The NVR budget is 7**, as step 1 decided. It was still 4.
+- **A switch per mains-powered camera**, "<camera> keep live view warm"
+  (`switch.py`). It is a setting, so it lives in Home Assistant's state: the
+  camera's Live tab turns it on and off with `switch.turn_on` and
+  `switch.turn_off`, and automations can too. Its state survives restarts.
+  Battery cameras get none, so they can sleep. A camera's switch is added
+  once its Reolink entry has loaded, and is unavailable while the camera is
+  gone.
+- **On by default**, mains-powered cameras in channel order, as many per host
+  as its stream budget allows after one HD stream: six on the NVR, one on a
+  camera added directly. This general rule differs from step 1's list for the
+  owner's cameras in one place: it also keeps Front Yard Right warm, whose
+  1 s key frames start it in about 1 s cold anyway. Turning its switch off
+  matches the list and frees one of the NVR's slots for a recording download
+  while HD plays.
+- **The keeper** (`live/warm.py`) opens and closes the warm streams to match
+  the switches: when one changes, once Home Assistant has started, and every
+  minute (a Reolink entry that loaded late, a camera that was offline, a
+  connection that changed). It keeps the sub through the NVR where the camera
+  has one, as the grid plays it. go2rtc starts with Home Assistant when a
+  switch is on.
+- **Who keeps a stream warm** is recorded per stream (the setting, the live
+  check): it stays warm until the last of them lets go, so the live check
+  turning its warm streams off leaves the switches' alone.
+- **The panel**: a tile starts over MSE when its camera's switch is on (Home
+  Assistant's state, live) or the server says it is warm.
+- **The live check** says "kept warm by its switch; turn it off to measure
+  cold" for those subs, instead of waiting 10 s per transport for them to go
+  cold.
 
 ## Phase 4 — Performance, mobile, packaging, release (difficulty: Standard, 2–3 wk)
 

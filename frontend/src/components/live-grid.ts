@@ -1,8 +1,9 @@
 import { LitElement, css, html, nothing, type TemplateResult } from "lit";
 
-import { LiveData, cameraFor, liveConnection } from "../live/data";
+import { toError } from "../api";
+import { LiveData, cameraFor, isWarm, liveConnection } from "../live/data";
 import { sharedStyles } from "../styles";
-import type { HomeAssistant } from "../types";
+import type { HomeAssistant, LiveCamera } from "../types";
 import "./live-tile";
 import { navigate } from "./navigation";
 
@@ -74,6 +75,7 @@ export class RvLiveGrid extends LitElement {
                     .connection=${liveConnection(camera)}
                     .image=${data.images[camera.id]}
                     .iceServers=${data.iceServers}
+                    .warm=${isWarm(this.hass, camera)}
                     openable
                   ></rv-live-tile>`,
               )}
@@ -114,11 +116,13 @@ export class RvLiveCamera extends LitElement {
   static override properties = {
     hass: { attribute: false },
     deviceId: { attribute: false },
+    _error: { state: true },
   };
 
   declare hass: HomeAssistant | undefined;
   /** The camera's id, or the id of one of its connections. */
   declare deviceId: string;
+  declare _error: string | undefined;
 
   private readonly _data = new LiveData(this);
 
@@ -145,20 +149,67 @@ export class RvLiveCamera extends LitElement {
     if (!camera)
       return html`<p class="muted">This camera cannot be watched live.</p>`;
     return html`<rv-live-tile
-      .hass=${this.hass}
-      .camera=${camera}
-      .connection=${liveConnection(camera)}
-      .image=${data.images[camera.id]}
-      .iceServers=${data.iceServers}
-    ></rv-live-tile>`;
+        .hass=${this.hass}
+        .camera=${camera}
+        .connection=${liveConnection(camera)}
+        .image=${data.images[camera.id]}
+        .iceServers=${data.iceServers}
+        .warm=${isWarm(this.hass, camera)}
+      ></rv-live-tile>
+      ${this._renderKeepWarm(camera)}`;
+  }
+
+  /** The camera's keep-warm switch, through Home Assistant's switch actions. */
+  private _renderKeepWarm(camera: LiveCamera): TemplateResult | typeof nothing {
+    const entity = camera.keep_warm_entity;
+    if (!entity) return nothing;
+    const state = this.hass?.states[entity]?.state;
+    return html`<label class="keep-warm">
+      <input
+        type="checkbox"
+        .checked=${state === "on"}
+        ?disabled=${state !== "on" && state !== "off"}
+        @change=${(e: Event) => {
+          const on = (e.target as HTMLInputElement).checked;
+          this.hass
+            ?.callService("switch", on ? "turn_on" : "turn_off", {
+              entity_id: entity,
+            })
+            .catch((err: unknown) => {
+              this._error = toError(err).message;
+            });
+        }}
+      />
+      <span>
+        <strong>Keep warm</strong>
+        <span class="muted small"
+          >Keeps the camera connected so its live view starts at once. Uses one of
+          its NVR's or camera's stream slots all the time.</span
+        >
+      </span>
+    </label>
+    ${this._error
+      ? html`<div class="banner error" role="alert">Could not change it: ${this._error}</div>`
+      : nothing}`;
   }
 
   static override styles = [
     sharedStyles,
     css`
       :host {
-        display: block;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
         max-width: 1280px;
+      }
+      .keep-warm {
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+      }
+      .keep-warm > span {
+        display: flex;
+        flex-direction: column;
       }
     `,
   ];

@@ -26,7 +26,9 @@ ISSUE_INCOMPATIBLE: Final = "reolink_incompatible"
 DEFAULT_HOST_CONCURRENCY: Final = 2
 NVR_HOST_CONCURRENCY: Final = 6
 CAMERA_HOST_CONCURRENCY: Final = 3
-NVR_STREAM_BUDGET: Final = 4
+# Phase 3 step 1: the NVR kept up with six subs, a main and a download at once
+# (the capacity test, runs 5-10); one fewer for headroom.
+NVR_STREAM_BUDGET: Final = 7
 DEFAULT_STREAM_BUDGET: Final = 2
 PREFETCH_STREAM_BUDGET: Final = 1
 
