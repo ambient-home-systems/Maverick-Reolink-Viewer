@@ -19,6 +19,8 @@ const KEEP_BEHIND_S = 10;
 const MAX_LAG_S = 2;
 /** A start lands this far before the newest buffered frame (s). */
 const LIVE_EDGE_S = 0.5;
+/** A playing session with no new frame for this long has ended. */
+export const STALL_MS = 10_000;
 
 export interface SessionResult {
   ok: boolean;
@@ -36,6 +38,11 @@ export interface SessionResult {
 export interface LiveSession {
   /** Resolves when the first frame is painted (or the session fails). */
   readonly done: Promise<SessionResult>;
+  /**
+   * Called once if the session ends after its first frame: the server closed
+   * it, the connection failed, or no new frame came for STALL_MS.
+   */
+  onEnd?: (error: string) => void;
   close(): void;
 }
 
@@ -61,11 +68,16 @@ export function firstFrame(video: HTMLVideoElement): Promise<number> {
 /** Common to the sessions: timing, timeout, the first frame, closing. */
 abstract class BaseSession implements LiveSession {
   readonly done: Promise<SessionResult>;
+  onEnd?: (error: string) => void;
   protected readonly t0 = performance.now();
   protected readonly steps: Record<string, number> = {};
   protected closed = false;
   private _resolve!: (result: SessionResult) => void;
   private _timer: ReturnType<typeof setTimeout>;
+  private _playing = false;
+  private _ended = false;
+  private _lastFrame = 0;
+  private _stallTimer: ReturnType<typeof setInterval> | undefined;
 
   constructor(
     protected readonly video: HTMLVideoElement,
@@ -84,6 +96,8 @@ abstract class BaseSession implements LiveSession {
       async (at) => {
         if (this.closed) return;
         clearTimeout(this._timer);
+        this._playing = true;
+        this._watchFrames();
         const extra = await this.describe().catch(() => ({}));
         this._resolve({
           ok: true,
@@ -103,6 +117,14 @@ abstract class BaseSession implements LiveSession {
 
   protected fail(error: string): void {
     clearTimeout(this._timer);
+    if (this._playing) {
+      // After the first frame: an end, once (the player reconnects).
+      if (this._ended || this.closed) return;
+      this._ended = true;
+      clearInterval(this._stallTimer);
+      this.onEnd?.(error);
+      return;
+    }
     void this.describe()
       .catch(() => ({}))
       .then((extra) => {
@@ -119,9 +141,33 @@ abstract class BaseSession implements LiveSession {
     this.video.play().catch(() => undefined);
   }
 
+  /** While playing, note each new frame; none for STALL_MS ends the session. */
+  private _watchFrames(): void {
+    const video = this.video;
+    this._lastFrame = performance.now();
+    const seen = () => {
+      this._lastFrame = performance.now();
+    };
+    if (typeof video.requestVideoFrameCallback === "function") {
+      const tick = () => {
+        seen();
+        if (!this.closed && !this._ended) video.requestVideoFrameCallback(tick);
+      };
+      video.requestVideoFrameCallback(tick);
+    } else {
+      video.addEventListener("timeupdate", seen);
+    }
+    this._stallTimer = setInterval(() => {
+      if (performance.now() - this._lastFrame > STALL_MS) {
+        this.fail(`no new frame for ${Math.round(STALL_MS / 1000)} s`);
+      }
+    }, 1000);
+  }
+
   close(): void {
     this.closed = true;
     clearTimeout(this._timer);
+    clearInterval(this._stallTimer);
     const video = this.video;
     video.pause();
     video.srcObject = null;

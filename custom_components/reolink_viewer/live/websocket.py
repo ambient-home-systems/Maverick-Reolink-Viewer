@@ -130,10 +130,18 @@ def ws_live_cameras(
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    """Return every camera's connections and live streams."""
-    if _live(hass, connection, msg["id"]) is None:
+    """Return every camera's connections and live streams (and which are warm)."""
+    if (resolved := _live(hass, connection, msg["id"])) is None:
         return
-    connection.send_result(msg["id"], {"cameras": devices.async_live_cameras(hass)})
+    warm = set(resolved[1].relay.warm_streams())
+    connection.send_result(
+        msg["id"],
+        {
+            "cameras": devices.async_live_cameras(
+                hass, warm=lambda source, kind: LiveStream(source, kind).name in warm
+            )
+        },
+    )
 
 
 @websocket_api.websocket_command(

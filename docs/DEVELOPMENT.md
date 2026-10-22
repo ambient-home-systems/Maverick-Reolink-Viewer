@@ -41,15 +41,18 @@ custom_components/reolink_viewer/
   translations/en.json
   frontend_dist/     # built panel bundle (committed; CI checks it matches the source)
 frontend/            # Lit + TypeScript panel, built with Vite
-  src/components/    # device list, device page, overview, settings, playback tab
+  src/components/    # device list, device page, overview, settings, playback tab,
+                     # live grid and Live tab (live-grid.ts) with their tiles (live-tile.ts)
   src/playback/      # timeline canvas + math, calendar, event list, player (MSE feeder in
                      # mse-feeder.ts, else a file URL), codec checks, the playback check
                      # (check.ts) and its MSE probe (mse-probe.ts, mse-sample.ts)
-  src/live/          # the live check (check.ts) and its sessions: WebRTC (ours and HA's),
-                     # MSE over the signed websocket (session.ts)
+  src/live/          # the live sessions: WebRTC (ours and HA's), MSE over the signed
+                     # websocket (session.ts); the player that keeps one playing
+                     # (player.ts); what the live views share (data.ts); the live check
 tests/               # pytest-homeassistant-custom-component; test_mse_browser.py and
                      # test_live_browser.py drive Playwright's Chromium (mse_append.cjs,
-                     # live_browser.cjs); go2rtc_fixtures.py runs go2rtc and a fake camera
+                     # live_browser.cjs, live_grid_browser.cjs: the panel's grid);
+                     # go2rtc_fixtures.py runs go2rtc and a fake camera
 scripts/             # setup_dev.sh, probe_to_matrix.py, make_mse_sample.py (writes mse-sample.ts),
                      # fetch_go2rtc.py (the pinned go2rtc for the tests);
                      # playback_check.js and inspect_recording.js (paste into the browser console);

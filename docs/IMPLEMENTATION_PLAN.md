@@ -19,7 +19,7 @@ put on it:
 | 0 | Foundations, CI, adapter layer, hardware discovery | High | 1–2 wk | Done (2026-10-17) |
 | 1 | Device details and every setting, with explanations | Standard (catalog) / High (panel shell) | 2–3 wk | Done (2026-10-17) |
 | 2 | Event timeline, thumbnails, smooth playback | High (backend) / Very high (player) | 3–5 wk | Done (2026-10-21, v0.3.2). 2A (2026-10-20, v0.2.7): timeline 105–287 ms, first frame 0.6–1.1 s, auto-advance 6–7 ms on hardware. 2B: MSE player; uncached deep starts are the NVR's download up to the target (6.9–13.0 s in hour-long recordings, up to 84 s before), speeds 0.5–8×, HD/SD at the same moment, one-hour sessions within the caps, the iPhone app on Wi-Fi, Tailscale and Nabu Casa |
-| 3 | Live view via go2rtc, grid, fullscreen, PTZ | High | 3–4 wk | In progress. Step 0 done (four Phase 2B fixes). Step 1 done: our own go2rtc and the live check (v0.4.0), measured on desktop Chrome on the LAN and the iPhone app at home, through Tailscale and through Nabu Casa (runs 5–13), and decided. Step 2 in progress: the key-frame cache (v0.5.0–v0.5.5) and the image cache (v0.6.0) are built |
+| 3 | Live view via go2rtc, grid, fullscreen, PTZ | High | 3–4 wk | In progress. Step 0 done (four Phase 2B fixes). Step 1 done: our own go2rtc and the live check (v0.4.0), measured on desktop Chrome on the LAN and the iPhone app at home, through Tailscale and through Nabu Casa (runs 5–13), and decided. Step 2 in progress: the key-frame cache (v0.5.0–v0.5.5), the image cache (v0.6.0), and the Live grid and Live tab (v0.7.0) are built |
 | 4 | Performance, mobile, packaging, first release | Standard | 2–3 wk | Not started |
 | 5 | Optional R&D: Baichuan live/playback | Very high | 4–8 wk, time-boxed with gates | Not started |
 
@@ -1756,7 +1756,7 @@ gate), **2** builds live view from what step 1 decides.
 | 0. Fix four Phase 2B findings (a failing test for each first) | **Done** (v0.4.0), see "Step 0" below |
 | 1. Our own go2rtc, and a live check in the panel (gate) | **Done** (v0.4.0), see "Step 1 as built". Every setup's report is in: desktop Chrome on the LAN (run 5), the iPhone app on Wi-Fi (run 11), through Tailscale (run 12) and through Nabu Casa (run 13) |
 | 1. Record the reports here and in the hardware matrix; decide the live stream budget, WebRTC or MSE per setup, which cameras stay warm, the HD stream per camera | **Desktop Chrome on the LAN: recorded and decided** (v0.4.1), see "Step 1 results". **Done for every setup.** Desktop Chrome on the LAN (v0.4.1), see "Step 1 results"; the iPhone app on Wi-Fi, through Tailscale and through Nabu Casa (runs 11–13), see "Step 2: the iPhone on Wi-Fi", "… through Tailscale" and "… through Nabu Casa". The rules are fixed below, before seeing the reports |
-| 2. Stream registry, delivery, Live tab and grid, keep warm, debug panel | **In progress.** The key-frame cache is built (v0.5.0) and measured on the desktop (run 6), see "Step 2: the key-frame cache"; v0.5.1 rebuilds the MSE init segment and records why warm feeds end (run 7: the sizes are right). v0.5.2 measured the last two oddities (run 8); v0.5.3 fixed the late H.264 paints (run 9: warm MSE median 0.15 s); run 10 (v0.5.4) confirms it. v0.5.5 files each live check report under its device. v0.6.0 keeps each camera's last picture for the tiles, see "Step 2: the image cache"; the live check measures it. Next: the Live tab and grid |
+| 2. Stream registry, delivery, Live tab and grid, keep warm, debug panel | **In progress.** The key-frame cache is built (v0.5.0) and measured on the desktop (run 6), see "Step 2: the key-frame cache"; v0.5.1 rebuilds the MSE init segment and records why warm feeds end (run 7: the sizes are right). v0.5.2 measured the last two oddities (run 8); v0.5.3 fixed the late H.264 paints (run 9: warm MSE median 0.15 s); run 10 (v0.5.4) confirms it. v0.5.5 files each live check report under its device. v0.6.0 keeps each camera's last picture for the tiles, see "Step 2: the image cache"; the live check measures it. v0.7.0: the Live grid and each camera's Live tab, see "Step 2: the Live grid". Next: full-screen HD, PTZ, siren and floodlight, keep warm per camera |
 
 #### Step 0: four Phase 2B findings (v0.4.0)
 
@@ -2472,6 +2472,39 @@ memory:
   each camera's picture, as a tile would wait for it. A camera with no picture
   kept waits for it to be taken, and the report says so. The check
   unsubscribes before it measures the streams.
+
+#### Step 2: the Live grid (v0.7.0)
+
+Reolink → **Watch live** opens every camera in a grid (`#live`), on its sub
+stream, through the NVR where the camera has one. Clicking a tile opens the
+camera's new **Live** tab (`#device/<id>/live`), which shows the same tile
+large. Full-screen HD comes next.
+
+- **A tile** (`live-tile.ts`) shows the camera's last picture at once (the
+  image cache), then fades into its video on the first frame.
+- **How it starts** (`live/player.ts`), by step 1's decision for every setup:
+  - over MSE if the stream is kept warm (`live/cameras` now says which are),
+    so it starts from the cached key frame; over WebRTC otherwise;
+  - the other transport is the fallback;
+  - a failed start waits 1, 2, 5, 10, then 30 s, and the tile says why, with
+    a Retry button.
+- **When a playing stream ends**, the tile starts it again: at once if it had
+  played 30 s, else after the same waits. A session ends when the server
+  closes it, ICE fails, or no new frame comes for 10 s (`session.ts`).
+- **It plays only when someone can see it.** Hidden pages stop at once.
+  Scrolling a tile off screen stops it after 3 s, so a quick scroll back keeps
+  it. A warm stream stays warm on the server.
+- **Battery cameras** wait for a tap ("Tap to watch"), so they are woken only
+  when someone wants to watch.
+- **One picture subscription** and one fetch of the cameras and ICE servers
+  per view (`live/data.ts`). Leaving the view closes every session, and the
+  pictures stop being taken unless another page watches.
+- **Tested in Chromium** (`test_live_browser.py`, `live_grid_browser.cjs`) with
+  the bundle Home Assistant serves: the picture comes from the image view, the
+  tile opens a WebRTC session through Home Assistant that holds the camera's
+  sub stream, and leaving the grid leaves nothing held. go2rtc sends only
+  H.264 and H.265 video, which Playwright's Chromium cannot decode, so frames
+  are checked on the hardware.
 
 ## Phase 4 — Performance, mobile, packaging, release (difficulty: Standard, 2–3 wk)
 

@@ -352,6 +352,20 @@ async def test_live_commands_and_views(
         },
     )
     assert len(msg["result"]["preloaded"]) == 1
+
+    async def warm_flags() -> dict[str, bool]:
+        msg = await _ws(client, {"type": "reolink_viewer/live/cameras"})
+        (conn,) = [
+            c
+            for camera in msg["result"]["cameras"]
+            for c in camera["connections"]
+            if c["connection_id"] == ref["connection_id"]
+        ]
+        return {kind: s["warm"] for kind, s in conn["streams"].items()}
+
+    # The panel learns which streams are warm (it plays those over MSE).
+    assert (await warm_flags())["sub"] is True
+    assert (await warm_flags())["main"] is False
     msg = await _ws(client, {"type": "reolink_viewer/live/status"})
     status = msg["result"]
     assert status["go2rtc"]["state"] == "running"
@@ -369,6 +383,7 @@ async def test_live_commands_and_views(
         },
     )
     assert msg["result"]["preloaded"] == []
+    assert (await warm_flags())["sub"] is False
 
     msg = await _ws(
         client,

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { HomeAssistant, LiveSignal, StockSignal } from "../types";
-import { OurMse, OurWebRtc, StockWebRtc } from "./session";
+import { OurMse, OurWebRtc, STALL_MS, StockWebRtc } from "./session";
 
 const flush = async (rounds = 10) => {
   for (let i = 0; i < rounds; i += 1) await new Promise((r) => setTimeout(r, 0));
@@ -383,6 +383,51 @@ describe("OurMse", () => {
     await flush();
     expect(time).toBe(3);
     session.close();
+  });
+
+  it("reports an end once playing: the stream closed, or no new frame", async () => {
+    const { hass } = fakeHass();
+    const start = async () => {
+      const video = fakeVideo();
+      const session = new OurMse(hass, video, { connectionId: "c1", stream: "sub" }, 5000, "http://ha/");
+      const ended: string[] = [];
+      session.onEnd = (error) => ended.push(error);
+      await flush();
+      const ws = FakeSocket.last;
+      if (!ws) throw new Error("no socket");
+      ws.open();
+      ws.message(JSON.stringify({ type: "mse", value: 'video/mp4; codecs="avc1.640029"' }));
+      await flush();
+      video.dispatchEvent(new Event("playing"));
+      expect((await session.done).ok).toBe(true);
+      return { session, video, ws, ended };
+    };
+
+    const closed = await start();
+    closed.ws.drop();
+    closed.ws.drop();
+    expect(closed.ended).toEqual(["the server closed the stream"]); // once
+    closed.session.close();
+
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "performance"] });
+    try {
+      const stalled = await start();
+      vi.advanceTimersByTime(STALL_MS - 2000);
+      stalled.video.dispatchEvent(new Event("timeupdate")); // a frame: still playing
+      vi.advanceTimersByTime(STALL_MS - 2000);
+      expect(stalled.ended).toEqual([]);
+      vi.advanceTimersByTime(3000);
+      expect(stalled.ended).toEqual(["no new frame for 10 s"]);
+      stalled.session.close();
+      // Closed by its owner: no end is reported.
+      const owned = await start();
+      owned.session.close();
+      vi.advanceTimersByTime(STALL_MS * 2);
+      owned.ws.drop();
+      expect(owned.ended).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("fails on go2rtc's error, a closed stream or a refused codec", async () => {
