@@ -241,6 +241,7 @@ class Feed:
             "cached_ms": cached_ms,
             "cached_bytes": self._gop_bytes,
             "parameter_sets": self.parameter_sets,
+            "age_ms": round((now - self.started_at) * 1000),
         }
 
     # ---- Reading go2rtc ----

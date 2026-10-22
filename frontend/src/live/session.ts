@@ -351,6 +351,8 @@ export class OurMse extends BaseSession {
     ref: LiveRef,
     timeoutMs: number,
     private readonly _base: string = location.href,
+    /** Ask for video only (the check's test of whether audio holds a start back). */
+    private readonly _videoOnly = false,
   ) {
     super(video, timeoutMs);
     void this._start(ref);
@@ -373,7 +375,8 @@ export class OurMse extends BaseSession {
       this._ws = ws;
       ws.addEventListener("open", () => {
         this.step("open");
-        ws.send(JSON.stringify({ type: "mse", value: mseCodecs((type) => Ctor.isTypeSupported(type)) }));
+        const codecs = mseCodecs((type) => Ctor.isTypeSupported(type), this._videoOnly);
+        ws.send(JSON.stringify({ type: "mse", value: codecs }));
       });
       ws.addEventListener("message", (event: MessageEvent<string | ArrayBuffer>) => {
         if (typeof event.data === "string") this._text(event.data, Ctor);

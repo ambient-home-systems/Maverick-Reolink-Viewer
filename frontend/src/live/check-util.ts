@@ -16,8 +16,10 @@ export const MSE_CODECS = [
 ] as const;
 
 /** go2rtc's MSE request: the codecs this browser's MSE accepts, comma-separated. */
-export function mseCodecs(isTypeSupported: (type: string) => boolean): string {
-  return MSE_CODECS.filter((codec) => isTypeSupported(`video/mp4; codecs="${codec}"`)).join(",");
+export function mseCodecs(isTypeSupported: (type: string) => boolean, videoOnly = false): string {
+  return MSE_CODECS.filter(
+    (codec) => (!videoOnly || /^(avc1|hvc1)\./.test(codec)) && isTypeSupported(`video/mp4; codecs="${codec}"`),
+  ).join(",");
 }
 
 /** "2 STUN, 1 TURN (Nabu Casa)": kinds and providers, never addresses or credentials. */
@@ -109,13 +111,14 @@ export function median(values: readonly number[]): number | undefined {
   return sorted.length % 2 ? sorted[mid] : ((sorted[mid - 1] ?? 0) + (sorted[mid] ?? 0)) / 2;
 }
 
-/** "; key frames every 4.00 s; parameter sets: same; feed ended 1× (why)" (what is known). */
+/** "; key frames every 4.00 s; parameter sets: same; feed ended 1× (why); feed opened 9.10 s before". */
 export function cacheLabel(cache: LiveCacheState | null | undefined): string {
   if (!cache) return "";
   const parts = [
     cache.key_interval_ms !== null ? `key frames every ${seconds(cache.key_interval_ms)}` : undefined,
     cache.parameter_sets !== null ? `parameter sets: ${cache.parameter_sets}` : undefined,
     cache.ends ? `feed ended ${String(cache.ends)}× (${cache.last_end ?? "?"})` : undefined,
+    `feed opened ${seconds(cache.age_ms)} before`,
   ].filter(Boolean);
   return parts.length ? `; ${parts.join("; ")}` : "";
 }

@@ -1756,7 +1756,7 @@ gate), **2** builds live view from what step 1 decides.
 | 0. Fix four Phase 2B findings (a failing test for each first) | **Done** (v0.4.0), see "Step 0" below |
 | 1. Our own go2rtc, and a live check in the panel (gate) | **Built** (v0.4.0), see "Step 1 as built". Desktop report in (run 5); waiting for the three iPhone runs ("How to run the live check") |
 | 1. Record the reports here and in the hardware matrix; decide the live stream budget, WebRTC or MSE per setup, which cameras stay warm, the HD stream per camera | **Desktop Chrome on the LAN: recorded and decided** (v0.4.1), see "Step 1 results". The iPhone setups: waiting. The rules are fixed below, before seeing the reports |
-| 2. Stream registry, delivery, Live tab and grid, keep warm, debug panel | **In progress.** The key-frame cache is built (v0.5.0) and measured on the desktop (run 6), see "Step 2: the key-frame cache"; v0.5.1 rebuilds the MSE init segment and records why warm feeds end. The rest waits for the iPhone reports |
+| 2. Stream registry, delivery, Live tab and grid, keep warm, debug panel | **In progress.** The key-frame cache is built (v0.5.0) and measured on the desktop (run 6), see "Step 2: the key-frame cache"; v0.5.1 rebuilds the MSE init segment and records why warm feeds end (run 7: the sizes are right). v0.5.2 measures the last two oddities. The rest waits for the iPhone reports |
 
 #### Step 0: four Phase 2B findings (v0.4.0)
 
@@ -2131,6 +2131,32 @@ Checked: the picture size of five real SPS from libx264 and libx265 (cropped
 360 and 432 lines included); H.264 and H.265 init rebuilds; a relay test where
 go2rtc's init carries 640×480 parameter sets and the key frame 640×360 ones
 (the viewer gets the rebuilt init segment); end counting.
+
+#### Step 2: the rebuilt init segment measured (run 7, v0.5.1)
+
+The report is in the hardware matrix (run 7).
+
+- **The rebuild works**: the three streams MSE showed at the wrong size now
+  show WebRTC's size, and ten streams reported their parameter sets rebuilt.
+  Warm MSE: median 0.71 s on subs, 0.39 s on mains and ext; 23 of 27 under 1 s.
+- **The decisions stand.** The Hallway stays off the warm list: its sub still
+  paints one key-frame interval late over MSE, and its cold WebRTC start (1.1 to
+  1.6 s in three runs) is about the 1.5 s target anyway.
+- **Not explained yet:**
+  - the Hallway sub's late MSE paint (and the Laundry sub's, 1.2 s);
+  - two warm MSE starts that waited 1.6–1.9 s for go2rtc's answer with no feed
+    ended;
+  - go2rtc logged nothing but its start.
+
+v0.5.2 adds to the live check:
+
+- **MSE steps.** The signed URL and the websocket's opening, in time order with
+  the rest.
+- **The feed's age** on the warm line ("feed opened N s before"). A feed
+  younger than the session that joined it was opened for that session.
+- **A video-only retry.** An MSE start that painted more than 1 s after its data
+  arrived is tried again over video only. If that one paints at once, audio was
+  holding the start back.
 
 ## Phase 4 — Performance, mobile, packaging, release (difficulty: Standard, 2–3 wk)
 

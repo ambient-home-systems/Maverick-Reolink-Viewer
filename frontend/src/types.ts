@@ -451,6 +451,8 @@ export interface LiveCacheState {
    * frame, or without H.264/H.265 video.
    */
   parameter_sets: "same" | "rebuilt" | "differ" | "none" | "unknown" | null;
+  /** Since this feed opened (a warm feed younger than expected was replaced). */
+  age_ms: number;
   /** The stream's feeds that ended on their own (go2rtc dropped them), and why. */
   ends: number;
   last_end: string | null;

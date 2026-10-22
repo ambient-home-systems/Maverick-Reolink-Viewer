@@ -12,7 +12,8 @@ concurrency test up to 6 streams); the findings use runs 1 and 2. Run 1 (v0.0.1,
 to 4 streams) agreed on every pass/fail result. Runs 3 (v0.1.1) and 4 (v0.1.2) are
 the Phase 2 recording playback checks, in their own tables. Run 5 (2026-10-21,
 v0.4.0) is the Phase 3 live check on desktop Chrome on the LAN, and run 6 (v0.5.0)
-repeats it with the key-frame cache; the iPhone runs follow.
+repeats it with the key-frame cache, and run 7 (v0.5.1) with the init segment
+rebuilt from the stream; the iPhone runs follow.
 
 ## Setup probed
 
@@ -303,6 +304,33 @@ on 19 of 19). First image: HA's snapshot 0.53 s (3 failed: Laundry Room,
 Doorbell), go2rtc's frame 2.09 s. The NVR's capacity test kept up at every level
 again (download 396 Mbit/s alone, 409 with seven streams).
 
+Run 7, 2026-10-21: v0.5.1 (the MSE init segment rebuilt from the key frame's
+parameter sets where they differ), same Mac on Wi-Fi. Warm MSE per stream, with
+the parameter sets:
+
+| Camera | Via | sub | main | ext |
+| --- | --- | --- | --- | --- |
+| Front Yard Right (CX410) | NVR | 0.68 s, same | 2.15 s ⁴, same | 0.46 s, same |
+| | direct | 0.71 s, rebuilt | 0.31 s, rebuilt | 0.45 s, same |
+| Garage (RLC-520A) | NVR | 0.15 s, same | 0.34 s, same | 1.63 s ⁴, same |
+| Hallway (E1 Pro) | NVR | 3.74 s ⁵, rebuilt | 0.28 s, same | 0.83 s, same |
+| Front Yard Left (CX810) | NVR | 0.78 s, same | 0.30 s, same | 0.52 s, same |
+| | direct | 0.72 s, rebuilt | 0.26 s, rebuilt | 0.68 s, same |
+| Back Yard (Duo 3 PoE) | NVR | 0.45 s, rebuilt | 0.31 s, rebuilt | 0.45 s, same |
+| Dogs (RLC-520A) | NVR | 0.32 s, rebuilt | 0.20 s, same | 0.17 s, same |
+| Laundry Room (E1 Zoom) | direct | 1.28 s ⁵, rebuilt | 0.23 s, rebuilt | 0.47 s, same |
+
+⁴ go2rtc's answer to the MSE request took 1.9 s and 1.6 s; no feed had ended.
+⁵ Painted 3.6 s and 1.2 s after the cached frames arrived.
+
+Every MSE picture now has the size WebRTC shows (Hallway sub 640×360, Back Yard
+sub 1536×432, main 7680×2160). Medians: warm MSE sub 0.71 s, main/ext 0.39 s;
+warm WebRTC sub 3.90 s, main/ext 1.78 s; cold WebRTC sub 1.54 s, main/ext
+1.76 s; cold MSE sub 3.87 s, main/ext 1.82 s; Home Assistant's view 3.47 s (ours
+faster on 19 of 19). HA's snapshot failed on 8 of 19 entities (median 0.59 s
+where it worked); go2rtc's frame 2.04 s. go2rtc logged nothing past its start.
+The capacity test kept up at every level again (download 401 → 420 Mbit/s).
+
 ## Findings
 
 Live view:
@@ -404,6 +432,21 @@ Live view with the key-frame cache (run 6, v0.5.0, desktop Chrome on Wi-Fi):
   end and its reason, and adds go2rtc's log to the report.
 - Cold starts still depend on where the camera is in its key-frame interval:
   the CX810's subs started in 3.2–4.2 s this time against 1.6–2.4 s in run 5.
+
+With the init segment rebuilt (run 7, v0.5.1):
+
+- **The wrong MSE sizes are gone**: the three streams now show the size WebRTC
+  does. Ten streams reported their parameter sets rebuilt.
+- **The Hallway sub still paints one key-frame interval late over MSE** (3.6 s
+  after the cached frames, 3.9 s after the first cold ones), and the Laundry
+  sub 1.2 s late. Their init segments were rebuilt, so the parameter sets are
+  not the cause. Over WebRTC the Hallway sub starts at its first key frame
+  (1.25 s cold). v0.5.2 tries such a start again over video only, to see
+  whether audio holds it back.
+- **Two warm MSE starts waited 1.6–1.9 s for go2rtc's answer** (Front Yard
+  Right main, Garage ext) with no feed ended and nothing in go2rtc's log.
+  v0.5.2 reports the steps before it (signed URL, websocket open) and the age
+  of the feed it joined.
 
 Recorded video (NVR RLN36; the cameras record only to the NVR):
 

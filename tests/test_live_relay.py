@@ -213,6 +213,7 @@ async def test_a_viewer_starts_at_the_cached_key_frame(
     assert state["cached_ms"] == 40  # the key frame: one frame at 25 fps
     assert state["key_interval_ms"] is not None
     assert state["cached_bytes"] == len(video(5, key=True) + audio(2))
+    assert 0 <= state["age_ms"] < 5000
 
     for viewer in (first, second, third):
         viewer.detach()
