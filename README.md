@@ -73,7 +73,10 @@ stream), so its tile starts at once from its cached key frame. Turn it off on th
 camera's Live tab, or like any switch in Home Assistant. v0.9.0 adds **full-screen HD**:
 the button on each tile plays the camera full screen, starting the HD stream in the
 background and swapping it in on its first frame. HD is the main stream where this
-browser decodes it smoothly at its size, else the camera's H.264 ext stream.
+browser decodes it smoothly at its size, else the camera's H.264 ext stream. v0.10.0 puts
+each camera's **controls** over its live view (its Live tab and full screen): PTZ moves
+while an arrow is held, presets, zoom and focus, the floodlight, and the siren (after a
+confirmation), all through Home Assistant's own entities and actions.
 
 Requires Home Assistant 2026.10 or newer with the Reolink integration set up.
 

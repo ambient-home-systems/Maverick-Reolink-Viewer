@@ -84,6 +84,7 @@ export class RvLiveGrid extends LitElement {
                     .iceServers=${data.iceServers}
                     .warm=${isWarm(this.hass, camera)}
                     .suspended=${this._full !== undefined && this._full !== camera.id}
+                    .controls=${camera.controls}
                     openable
                   ></rv-live-tile>`,
               )}
@@ -163,6 +164,7 @@ export class RvLiveCamera extends LitElement {
         .image=${data.images[camera.id]}
         .iceServers=${data.iceServers}
         .warm=${isWarm(this.hass, camera)}
+        .controls=${camera.controls}
       ></rv-live-tile>
       ${this._renderKeepWarm(camera)}`;
   }

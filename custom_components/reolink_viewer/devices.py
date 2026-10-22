@@ -52,6 +52,28 @@ LIVE_PROTOCOLS: dict[str, bridge.LiveProtocol] = {
     "main": bridge.LiveProtocol.RTSP,
     "ext": bridge.LiveProtocol.FLV,
 }
+# The Reolink integration's entities a live view controls a camera with, by
+# domain and translation key: PTZ moves (buttons "ptz_<move>": a press starts
+# one, PTZ stop ends it), presets, zoom and focus, the siren, the floodlight.
+PTZ_MOVES: tuple[str, ...] = (
+    "left",
+    "right",
+    "up",
+    "down",
+    "left_up",
+    "left_down",
+    "right_up",
+    "right_down",
+    "zoom_in",
+    "zoom_out",
+)
+LIVE_CONTROLS: dict[tuple[str, str], str] = {
+    ("select", "ptz_preset"): "preset",
+    ("number", "zoom"): "zoom",
+    ("number", "focus"): "focus",
+    ("siren", "siren"): "siren",
+    ("light", "floodlight"): "floodlight",
+}
 
 
 class DeviceNotFoundError(Exception):
@@ -560,7 +582,8 @@ def async_live_cameras(
 
     Each connection lists, per live stream it can serve, the configured
     encoding, the enabled camera entity showing it in Home Assistant's own
-    view (if any) and, given ``warm``, whether it is kept warm.
+    view (if any) and, given ``warm``, whether it is kept warm. Each camera
+    lists the entities a live view controls it with (``_live_controls``).
     """
     model = _async_build(hass, degraded=False)
     ent_reg = er.async_get(hass)
@@ -617,9 +640,37 @@ def async_live_cameras(
                     "model": camera.primary.device.model,
                     "records": any(c.playback_source for c in camera.connections),
                     "connections": connections,
+                    "controls": _live_controls(ent_reg, camera.connections),
                 }
             )
     return cameras
+
+
+def _live_controls(
+    ent_reg: er.EntityRegistry, connections: Iterable[_Connection]
+) -> dict[str, Any]:
+    """Return the enabled entities a live view controls a camera with.
+
+    Each control from the NVR's connection first (the one live view plays),
+    then a direct one's. PTZ moves all come from one connection, and only
+    with its PTZ stop, which ends them.
+    """
+    controls: dict[str, Any] = {}
+    for conn in sorted(connections, key=lambda c: c.via != "nvr"):
+        ptz: dict[str, str] = {}
+        # The camera's own entities, not its sub-devices' (chimes).
+        for entity in _reolink_entities(ent_reg, [conn.device.id]):
+            key = entity.translation_key
+            if entity.disabled_by is not None or key is None:
+                continue
+            move = key.removeprefix("ptz_")
+            if entity.domain == "button" and move in (*PTZ_MOVES, "stop"):
+                ptz[move] = entity.entity_id
+            elif (name := LIVE_CONTROLS.get((entity.domain, key))) is not None:
+                controls.setdefault(name, entity.entity_id)
+        if "ptz" not in controls and "stop" in ptz and len(ptz) > 1:
+            controls["ptz"] = ptz
+    return controls
 
 
 @callback
