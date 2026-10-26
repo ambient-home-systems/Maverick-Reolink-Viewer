@@ -69,8 +69,10 @@ export class RvLiveSoak extends LitElement {
           now: Date.now(),
           sampleS: soak.sample_s,
           keepS: soak.keep_s,
+          warmupS: soak.warmup_s,
+          startedAt: soak.started_at,
           run: soak.run,
-          samples: [...soak.samples, soak.now],
+          samples: soak.now ? [...soak.samples, soak.now] : soak.samples,
         }),
       };
     } catch (err) {

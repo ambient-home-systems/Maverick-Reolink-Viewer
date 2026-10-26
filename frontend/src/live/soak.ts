@@ -5,7 +5,8 @@
 // cameras, the cameras within their limits, battery cameras asleep when nobody
 // watches them. It reads the soak run the server keeps (what the grids
 // counted, sent every SOAK_REPORT_MS) and the server's samples (every 5
-// minutes) since the run started, or every sample kept before a grid has
+// minutes, from 5 minutes after Home Assistant started, once live view is
+// up) since the run started, or every sample kept before a grid has
 // reported, and says, for each criterion, whether it held. Any device can
 // read it.
 import type { SoakRun, SoakSample } from "../types";
@@ -17,6 +18,9 @@ export interface SoakInput {
   /** The server's sampling interval (s), and how long it keeps samples (s). */
   sampleS: number;
   keepS: number;
+  /** When sampling started (epoch ms), or null; the first sample comes warmupS later. */
+  startedAt: number | null;
+  warmupS: number;
   /** The soak run, or null before a grid has reported. */
   run: SoakRun | null;
   /** The server's samples since the run started (all kept, with no run), the last one taken now. */
@@ -53,7 +57,13 @@ export function soakReport(input: SoakInput): string {
   const first = samples.at(0);
   const last = samples.at(-1);
   if (!first || !last) {
-    lines.push("", "No server samples: is Reolink Viewer loaded?");
+    const minutes = Math.round(input.warmupS / 60);
+    lines.push(
+      "",
+      input.startedAt === null
+        ? `No samples yet: Home Assistant is still starting. The first comes ${minutes} minutes after it has, once live view is up.`
+        : `No samples yet: Home Assistant started at ${new Date(input.startedAt).toLocaleString()}. The first comes ${minutes} minutes after, once live view is up (go2rtc and the kept-warm feeds).`,
+    );
     return lines.join("\n");
   }
   const spanMs = last.at - first.at;
@@ -194,9 +204,9 @@ export function soakReport(input: SoakInput): string {
         ? ["✓", `The grid was visible ${visibleHours.toFixed(1)} h (${GRID_HOURS} needed), opened ${run.opens} time${run.opens === 1 ? "" : "s"}`]
         : ["✗", `The grid has been visible ${visibleHours.toFixed(1)} h of ${GRID_HOURS}: open it whenever it suits; the hours add up across sittings and devices`],
   );
-  // The samples start after the run did, and not because only the last keepS are kept.
-  if (run && first.at > run.started_at + 2 * sampleMs && first.at > input.now - input.keepS * 1000 + 2 * sampleMs) {
-    verdicts.push(["–", `Home Assistant started again at ${new Date(first.at).toLocaleString()}, after the soak began: its samples start then; the grid's hours carry on`]);
+  // Sampling started after the run did: Home Assistant (or Reolink Viewer) started again.
+  if (run && input.startedAt !== null && input.startedAt > run.started_at + sampleMs) {
+    verdicts.push(["–", `Home Assistant started again at ${new Date(input.startedAt).toLocaleString()}, after the soak began: its samples start then; the grid's hours carry on`]);
   }
   const expected = Math.floor(spanMs / sampleMs) + 1;
   if (samples.length < 0.9 * expected) {

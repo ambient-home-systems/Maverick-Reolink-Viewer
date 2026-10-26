@@ -134,6 +134,8 @@ describe("reolink-viewer-panel", () => {
     hass.responses["reolink_viewer/live/soak"] = {
       sample_s: 300,
       keep_s: 129_600,
+      warmup_s: 300,
+      started_at: 0,
       run: null,
       samples: [],
       now: {

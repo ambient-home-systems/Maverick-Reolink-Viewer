@@ -91,6 +91,9 @@ starts it over. Before, Home Assistant unloading a panel whose page had been hid
 5 minutes reset the soak. The soak now has two halves: Home Assistant runs live view
 for 24 hours, with no page open, and the grid is visible for 8 hours in all, across any
 sittings and devices. Any device can read the report under Reolink → **Soak report**.
+v0.15.1 takes the soak's first sample 5 minutes after Home Assistant starts, once live
+view is up. Before, a sample taken at start counted go2rtc and the kept-warm feeds as
+missing.
 
 Requires Home Assistant 2026.10 or newer with the Reolink integration set up.
 

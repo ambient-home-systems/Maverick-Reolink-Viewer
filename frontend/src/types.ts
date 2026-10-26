@@ -556,9 +556,14 @@ export interface LiveSoak {
   sample_s: number;
   /** How long the server keeps samples (s). */
   keep_s: number;
+  /** How long after Home Assistant started the first sample is taken (s): live view comes up first. */
+  warmup_s: number;
+  /** When sampling started (epoch ms; Home Assistant had started), or null before it has. */
+  started_at: number | null;
   run: SoakRun | null;
   samples: SoakSample[];
-  now: SoakSample;
+  /** Taken now; null while live view may still be coming up. */
+  now: SoakSample | null;
 }
 
 /** A camera's last picture (live/images): a signed URL, and when it was taken (epoch ms). */

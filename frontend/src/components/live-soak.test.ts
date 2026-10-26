@@ -50,7 +50,7 @@ function fakeHass(initial: SoakRun | null) {
         hosts: [],
         battery: [],
       };
-      return Promise.resolve({ sample_s: 300, keep_s: 129_600, run, samples: [], now });
+      return Promise.resolve({ sample_s: 300, keep_s: 129_600, warmup_s: 300, started_at: 0, run, samples: [], now });
     }),
   } as unknown as HomeAssistant;
   return {
