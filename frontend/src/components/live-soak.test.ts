@@ -80,12 +80,13 @@ async function mount(hass: HomeAssistant | undefined, closable = false) {
 }
 
 describe("rv-live-soak", () => {
-  it("says there is no soak yet, and starts one over on request", async () => {
+  it("reports Home Assistant's half before a grid has, and starts the run over on request", async () => {
     const fake = fakeHass(null);
     const { el, text, button, labels } = await mount(fake.hass);
-    expect(text()).toContain("No soak yet. Open Watch live");
-    // On its own page: no Close, nothing to copy.
-    expect(labels()).toEqual(["Refresh", "Start over…"]);
+    expect(text()).toContain("No grid has reported yet: open Reolink → Watch live");
+    expect(text()).toContain("Home Assistant's samples: 1 over 0.0 h");
+    // On its own page: no Close.
+    expect(labels()).toEqual(["Copy", "Refresh", "Start over…"]);
     button("Start over…").click();
     await el.updateComplete;
     expect(text()).toContain("Start the soak over? What was counted is dropped.");

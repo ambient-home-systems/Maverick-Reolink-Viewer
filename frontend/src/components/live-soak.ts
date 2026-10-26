@@ -3,7 +3,7 @@ import { LitElement, css, html, nothing, type TemplateResult } from "lit";
 import { fetchLiveSoak, startSoakOver, toError } from "../api";
 import { copyText } from "../clipboard";
 import { LIVE_CHECK_VERSION } from "../live/check";
-import { SOAK_HOURS, soakReport } from "../live/soak";
+import { soakReport } from "../live/soak";
 import { deviceLabel, soakTally } from "../live/soak-tally";
 import { sharedStyles } from "../styles";
 import type { HomeAssistant } from "../types";
@@ -11,17 +11,14 @@ import type { HomeAssistant } from "../types";
 /** Fired when the report's Close is pressed. */
 export const SOAK_CLOSE_EVENT = "rv-live-soak-close";
 
-type SoakState =
-  | "loading"
-  | { text: string; copied?: boolean }
-  | { none: true }
-  | { error: string };
+type SoakState = "loading" | { text: string; copied?: boolean } | { error: string };
 
 /**
  * The soak report: the soak run the server keeps and its samples since the
- * run started (live/soak), as text with a verdict per criterion. Shown over
- * the grid, or on its own page (#soak) on any device: the run outlives the
- * page that counted it. Start over begins a new run.
+ * run started (every sample kept, before a grid has reported; live/soak), as
+ * text with a verdict per criterion. Shown over the grid, or on its own page
+ * (#soak) on any device: the run outlives the page that counted it. Start
+ * over begins a new run.
  */
 export class RvLiveSoak extends LitElement {
   static override properties = {
@@ -66,19 +63,16 @@ export class RvLiveSoak extends LitElement {
     try {
       await soakTally.flush(hass);
       const soak = await fetchLiveSoak(hass);
-      const run = soak.run;
-      this._state = run
-        ? {
-            text: soakReport({
-              version: LIVE_CHECK_VERSION,
-              now: Date.now(),
-              sampleS: soak.sample_s,
-              keepS: soak.keep_s,
-              run,
-              samples: [...soak.samples, soak.now],
-            }),
-          }
-        : { none: true };
+      this._state = {
+        text: soakReport({
+          version: LIVE_CHECK_VERSION,
+          now: Date.now(),
+          sampleS: soak.sample_s,
+          keepS: soak.keep_s,
+          run: soak.run,
+          samples: [...soak.samples, soak.now],
+        }),
+      };
     } catch (err) {
       this._state = { error: toError(err).message };
     }
@@ -106,12 +100,7 @@ export class RvLiveSoak extends LitElement {
         ? html`<p class="muted">Reading the soak run…</p>`
         : "error" in state
           ? html`<div class="banner error" role="alert">Could not make the soak report: ${state.error}</div>`
-          : "none" in state
-            ? html`<p class="muted">
-                No soak yet. Open Watch live and leave the grid open and showing for ${SOAK_HOURS} hours;
-                it reports what its tiles counted every minute, and this report reads it on any device.
-              </p>`
-            : html`<pre>${state.text}</pre>`}
+          : html`<pre>${state.text}</pre>`}
       <div class="actions">
         ${text
           ? html`<button

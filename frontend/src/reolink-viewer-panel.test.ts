@@ -136,7 +136,14 @@ describe("reolink-viewer-panel", () => {
       keep_s: 129_600,
       run: null,
       samples: [],
-      now: { at: 0, go2rtc: { state: "running", restarts: 0, memory_kb: null } },
+      now: {
+        at: 0,
+        go2rtc: { state: "running", restarts: 0, memory_kb: null },
+        webrtc_sessions: 0,
+        feeds: { feeds: 0, warm: 0, viewers: 0, ends: 0 },
+        hosts: [],
+        battery: [],
+      },
     };
     const el = await mount(hass);
     button(el, "Soak report")?.click();
@@ -149,7 +156,7 @@ describe("reolink-viewer-panel", () => {
     await flush();
     await soak?.updateComplete;
     expect(hass.sent).toContainEqual({ type: "reolink_viewer/live/soak" });
-    expect(text(el)).toContain("No soak yet");
+    expect(text(el)).toContain("No grid has reported yet");
     button(el, "← Devices")?.click();
     await flush();
     await el.updateComplete;

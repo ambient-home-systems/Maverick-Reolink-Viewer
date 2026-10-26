@@ -163,6 +163,7 @@ async def async_setup_entry(
         images_dir=cache_dir / LIVE_IMAGES_DIR,
     )
     await live.images.async_setup()
+    await live.soak.async_load()
     entry.runtime_data = ReolinkViewerData(
         scheduler=scheduler,
         timeline=TimelineService(hass, scheduler),

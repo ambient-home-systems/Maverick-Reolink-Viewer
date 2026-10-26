@@ -19,8 +19,8 @@
 - ``live/preload`` (admin): keep a stream warm (its feed open, a key frame
   cached), or stop.
 - ``live/capacity`` (admin): the capacity test of a host, as a subscription.
-- ``live/soak``: the soak run, the samples since it started (or a time),
-  and one taken now (``soak.py``).
+- ``live/soak``: the soak run, the samples since it started (or a time;
+  with no run, every sample kept), and one taken now (``soak.py``).
 - ``live/soak/count``: what a grid counted since it last reported, added to
   the soak run (which it starts if there is none).
 - ``live/soak/start``: start the soak run over.
@@ -417,7 +417,8 @@ async def ws_live_soak(
     soak = resolved[1].soak
     now = await soak.async_sample()
     run = soak.run
-    since = msg.get("since", run["started_at"] if run else now["at"])
+    # Since the run started; with no run yet, every sample kept.
+    since = msg.get("since", run["started_at"] if run else 0)
     connection.send_result(
         msg["id"],
         {

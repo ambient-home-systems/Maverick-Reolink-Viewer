@@ -5,16 +5,18 @@ import { soakReport, type SoakInput } from "./soak";
 
 const OPENED = new Date(2026, 9, 22, 16, 30).getTime();
 const HOUR = 3_600_000;
+const at = (minutes: number) => new Date(OPENED + minutes * 60_000).toLocaleString();
 
+/** A sample with nobody watching: only the six streams kept warm hold a slot. */
 function sample(minutes: number, change: Partial<SoakSample> = {}): SoakSample {
   return {
     at: OPENED + minutes * 60_000,
     go2rtc: { state: "running", restarts: 0, memory_kb: 40_960 },
     webrtc_sessions: 0,
-    feeds: { feeds: 6, warm: 6, viewers: 6, ends: 0 },
+    feeds: { feeds: 6, warm: 6, viewers: 0, ends: 0 },
     hosts: [
       { name: "RLN36", streams: 6, limit: 7, waiting: 0, cpu: 23 },
-      { name: "Laundry Room", streams: 0, limit: 2, waiting: 0, cpu: null },
+      { name: "Doorbell", streams: 0, limit: 2, waiting: 0, cpu: null },
     ],
     battery: [],
     ...change,
@@ -29,14 +31,14 @@ function day(change: (minutes: number) => Partial<SoakSample> = () => ({})): Soa
 function run(change: Partial<SoakRun> = {}): SoakRun {
   return {
     started_at: OPENED,
-    opens: 1,
-    open_ms: 24 * HOUR,
-    visible_ms: 24 * HOUR,
+    opens: 3,
+    open_ms: 10 * HOUR,
+    visible_ms: 8 * HOUR,
     tiles: {
-      Garage: { plays: 1, drops: 0, failures: 0 },
-      Doorbell: { plays: 3, drops: 2, failures: 1 },
+      Garage: { plays: 3, drops: 0, failures: 0 },
+      Doorbell: { plays: 5, drops: 2, failures: 1 },
     },
-    devices: { "Mac · Chrome": OPENED + 24 * HOUR - 30_000 },
+    devices: { "Mac · Chrome": OPENED + 24 * HOUR - 30_000, "iPhone · Safari": OPENED + 2 * HOUR },
     ...change,
   };
 }
@@ -56,110 +58,150 @@ function input(change: Partial<SoakInput> = {}): SoakInput {
 const verdicts = (text: string) => text.slice(text.indexOf("Verdict:")).split("\n").slice(1);
 
 describe("soakReport", () => {
-  it("passes a steady day", () => {
+  it("passes when Home Assistant ran 24 h and the grid was visible 8 h in all", () => {
     const text = soakReport(input());
-    expect(text).toContain(
-      `Soak started ${new Date(OPENED).toLocaleString()} (24.0 h ago) · grid open 24.0 h, visible 24.0 h · opened 1 time`,
-    );
-    expect(text).toContain("Reported by: Mac · Chrome (now)");
-    expect(text).toContain("Server samples: 289 (every 5 min; the last 36 h are kept)");
+    expect(text.split("\n").slice(1, 4)).toEqual([
+      `Soak started ${at(0)} (24.0 h ago) · grid open 10.0 h, visible 8.0 h · opened 3 times`,
+      "Reported by: Mac · Chrome (now), iPhone · Safari (22.0 h ago)",
+      `Home Assistant's samples: 289 over 24.0 h, since ${at(0)} (every 5 min; the last 36 h are kept)`,
+    ]);
     expect(text).toContain("go2rtc: running · restarts 0 → 0 · memory 40.0 → 40.0 MB (peak 40.0 MB)");
     expect(text).toContain("  RLN36: 6 → 6 of 7 (peak 6) · CPU 23% → 23% (peak 23%)");
-    expect(text).toContain("  Laundry Room: 0 → 0 of 2 (peak 0) · CPU not reported");
-    expect(text).toContain("  Doorbell: 3 · 2 · 1");
+    expect(text).toContain("  Doorbell: 0 → 0 of 2 (peak 0) · CPU not reported");
+    expect(text).toContain(`While nobody watched (289 samples, ${at(0)} → ${at(1440)}): RLN36 6 → 6, Doorbell 0 → 0`);
+    expect(text).toContain("  Doorbell: 5 · 2 · 1");
     expect(verdicts(text)).toEqual([
       "✓ No reconnect loops: no tile dropped or failed to start more than once an hour",
       "✓ go2rtc ran throughout: no restart",
       "✓ go2rtc's memory steady: 40.0 → 40.0 MB",
-      "✓ No growth in camera sessions: each host ends with no more stream slots in use than it started with",
+      "✓ No growth in camera sessions: while nobody watched, no host held more stream slots at the end than at the start",
       "✓ Within the stream limits: no host above its limit",
       "– Camera CPU (Phase 0 set no CPU limit): RLN36 peak 23%",
       "– Battery cameras: none on battery",
-      "✓ Live 24.0 h: the grid was visible 24.0 h of the 24.0 h since the soak started",
+      "✓ Home Assistant ran live view 24.0 h (24 needed)",
+      "✓ The grid was visible 8.0 h (8 needed), opened 3 times",
       "",
       "Passed.",
     ]);
   });
 
-  it("says what did not hold", () => {
-    const samples = day((m) => ({
-      go2rtc: { state: m === 600 ? "restarting" : "running", restarts: m >= 600 ? 1 : 0, memory_kb: 40_960 + m * 100 },
-      hosts: [{ name: "RLN36", streams: m >= 1430 ? 8 : 6, limit: 7, waiting: m === 700 ? 1 : 0, cpu: 40 }],
-      battery: [{ camera: "Doorbell", sleeping: false, watched: m < 60 }],
-    }));
-    const text = soakReport(
+  it("judges growth while nobody watched, not where a grid was open", () => {
+    // A grid watches the Doorbell (cold, over WebRTC) for the last two hours.
+    const watched = (m: number): Partial<SoakSample> =>
+      m >= 1320
+        ? {
+            webrtc_sessions: 1,
+            hosts: [
+              { name: "RLN36", streams: 6, limit: 7, waiting: 0, cpu: null },
+              { name: "Doorbell", streams: 1, limit: 2, waiting: 0, cpu: null },
+            ],
+          }
+        : {};
+    const text = soakReport(input({ samples: day(watched) }));
+    expect(text).toContain("  Doorbell: 0 → 1 of 2 (peak 1)");
+    expect(text).toContain(`While nobody watched (264 samples, ${at(0)} → ${at(1315)}): RLN36 6 → 6, Doorbell 0 → 0`);
+    expect(verdicts(text)).toContain(
+      "✓ No growth in camera sessions: while nobody watched, no host held more stream slots at the end than at the start",
+    );
+
+    // A slot still held once nobody watches: a leak.
+    const leaked = soakReport(
       input({
-        now: OPENED + 2 * HOUR,
-        run: run({
-          opens: 3,
-          open_ms: 2 * HOUR,
-          visible_ms: HOUR,
-          tiles: { Garage: { plays: 9, drops: 8, failures: 1 } },
-          devices: { "Mac · Chrome": OPENED + HOUR, "iPhone · Safari": OPENED + 90 * 60_000 },
-        }),
-        samples: samples.slice(0, 10),
+        samples: day((m) => ({
+          ...watched(m),
+          ...(m >= 1400 ? { webrtc_sessions: 0, hosts: [{ name: "Doorbell", streams: 1, limit: 2, waiting: 0, cpu: null }] } : {}),
+        })),
       }),
     );
-    expect(text).toContain("grid open 2.0 h, visible 1.0 h · opened 3 times");
-    expect(text).toContain("Reported by: iPhone · Safari (30 min ago), Mac · Chrome (1.0 h ago)");
-    expect(text).toContain("  RLN36: 6 → 6 of 7 (peak 6)");
-    expect(text).toContain("Battery camera Doorbell: asleep in 0 of 0 samples while not watched");
-    expect(verdicts(text)).toContain("✗ Reconnect loops: Garage (9 in 1.0 h)");
-    expect(verdicts(text)).toContain("– Doorbell: watched in every sample");
-    expect(verdicts(text)).toContain(
-      "✗ Not 24 h live yet: the grid has been visible 1.0 h of the 2.0 h since the soak started (tiles pause while the page is hidden)",
-    );
-    expect(verdicts(text)).toContain(
-      "⚠ The grid opened 3 times: its page reloaded, or Home Assistant unloaded it after 5 minutes hidden (its tiles started again)",
-    );
-    expect(verdicts(text)).toContain("⚠ No grid has reported for 30 min: is the grid open, and its page showing?");
+    expect(verdicts(leaked)).toContain("✗ Camera sessions grew while nobody watched: Doorbell 0 → 1");
 
-    // The whole day: a restart, memory growth, sessions grown past the limit, no sleep.
-    const all = soakReport(input({ samples }));
-    expect(all).toContain("  RLN36: 6 → 8 of 7 (peak 8, up to 1 waiting)");
-    expect(verdicts(all)).toEqual(
-      expect.arrayContaining([
-        "✗ go2rtc restarted 1 time, and was not running in 1 sample",
-        "⚠ go2rtc's memory grew: 40.0 → 180.6 MB",
-        "✗ Camera sessions grew: RLN36 6 → 8 (close full screen before the report)",
-        "✗ Above the stream limit: RLN36",
-        "✗ Doorbell never slept while not watched",
-        "Not passed: 4 criteria not met.",
-      ]),
+    // Somebody watched throughout: the window's ends.
+    const always = soakReport(input({ samples: day(() => ({ feeds: { feeds: 6, warm: 6, viewers: 6, ends: 0 } })) }));
+    expect(always).not.toContain("While nobody watched");
+    expect(verdicts(always)).toContain(
+      "✓ No growth in camera sessions: each host ends with no more stream slots in use than it started with",
     );
   });
 
-  it("notes missing samples, a host that came later, and battery cameras that slept", () => {
+  it("says what did not hold", () => {
+    const samples = day((m) => ({
+      go2rtc: { state: m === 60 ? "restarting" : "running", restarts: m >= 60 ? 1 : 0, memory_kb: 40_960 + m * 1000 },
+      webrtc_sessions: 1,
+      hosts: [{ name: "RLN36", streams: m >= 110 ? 8 : 6, limit: 7, waiting: m === 70 ? 1 : 0, cpu: 40 }],
+      battery: [{ camera: "Doorbell", sleeping: false, watched: m < 60 }],
+    })).slice(0, 25);
+    const text = soakReport(
+      input({
+        now: OPENED + 2 * HOUR,
+        run: run({ visible_ms: HOUR, tiles: { Garage: { plays: 9, drops: 8, failures: 1 } } }),
+        samples,
+      }),
+    );
+    expect(text).toContain("  RLN36: 6 → 8 of 7 (peak 8, up to 1 waiting)");
+    expect(text).toContain("Battery camera Doorbell: asleep in 0 of 13 samples while not watched");
+    expect(verdicts(text)).toEqual([
+      "✗ Reconnect loops: Garage (9 in 1.0 h)",
+      "✗ go2rtc restarted 1 time, and was not running in 1 sample",
+      "⚠ go2rtc's memory grew: 40.0 → 157.2 MB",
+      "✗ Camera sessions grew: RLN36 6 → 8 (close full screen before the report)",
+      "✗ Above the stream limit: RLN36",
+      "– Camera CPU (Phase 0 set no CPU limit): RLN36 peak 40%",
+      "✗ Doorbell never slept while not watched",
+      "✗ Home Assistant's samples cover 2.0 h of 24: it has to run that long without restarting (no page needs to be open)",
+      "✗ The grid has been visible 1.0 h of 8: open it whenever it suits; the hours add up across sittings and devices",
+      "",
+      "Not passed: 7 criteria not met.",
+    ]);
+  });
+
+  it("reports Home Assistant's half before any grid has", () => {
+    const text = soakReport(input({ run: null }));
+    expect(text.split("\n")[1]).toBe(
+      "No grid has reported yet: open Reolink → Watch live and leave it showing; its hours add up.",
+    );
+    expect(text).toContain("Tiles (plays · drops · failed starts):\n  no grid yet");
+    expect(verdicts(text)).toEqual(
+      expect.arrayContaining([
+        "– Reconnect loops: no grid has reported yet",
+        "✓ Home Assistant ran live view 24.0 h (24 needed)",
+        "✗ The grid has been visible 0.0 h of 8: no grid has reported yet",
+        "Not passed: 1 criterion not met.",
+      ]),
+    );
+    expect(soakReport(input({ run: null, samples: [] }))).toContain("No server samples");
+  });
+
+  it("notes missing samples, a restart of Home Assistant, and battery cameras that slept", () => {
     const samples = day((m) => ({
       hosts: m < 60 ? [] : [{ name: "Laundry Room", streams: 1, limit: 2, waiting: 0, cpu: null }],
       battery: [{ camera: "Doorbell", sleeping: m % 10 === 0, watched: false }],
       go2rtc: { state: "running", restarts: 0, memory_kb: null },
     })).filter((_, i) => i % 3 === 0);
-    const text = soakReport(input({ samples }));
+    // The soak began 10 h before Home Assistant last started.
+    const text = soakReport(
+      input({ run: run({ started_at: OPENED - 10 * HOUR, tiles: {}, devices: {} }), samples }),
+    );
     expect(text).toContain("go2rtc: running · restarts 0 → 0 · memory not known");
     expect(text).toContain("  Laundry Room: 0 → 1 of 2 (peak 1)");
-    expect(verdicts(text)).toContain("✓ Doorbell slept while not watched");
-    expect(verdicts(text)).toContain("⚠ 97 server samples of about 288: was sampling stopped?");
-    expect(soakReport(input({ samples: [] }))).toContain("No server samples");
-  });
-
-  it("counts what the grid saw, for as long as the server keeps samples", () => {
-    // Three days since the soak started: the server keeps the last 36 h of samples.
-    const samples = Array.from({ length: 433 }, (_, i) => sample(36 * 60 + i * 5));
-    const text = soakReport(
-      input({
-        now: OPENED + 72 * HOUR,
-        run: run({ opens: 0, open_ms: 0, visible_ms: 0, tiles: {}, devices: {} }),
-        samples,
-      }),
-    );
-    expect(text).toContain("opened 0 times");
     expect(text).toContain("Reported by: no grid yet");
     expect(text).toContain("  none counted yet");
-    expect(verdicts(text)).toContain("⚠ No grid has reported for the whole soak: is the grid open, and its page showing?");
-    expect(verdicts(text).some((v) => v.includes("server samples of about"))).toBe(false);
-    // Visible longer than the soak (two devices): no more than the soak.
-    const twice = soakReport(input({ run: run({ visible_ms: 48 * HOUR }) }));
-    expect(twice).toContain("visible 24.0 h");
+    expect(verdicts(text)).toContain("✓ Doorbell slept while not watched");
+    expect(verdicts(text)).toContain(
+      `– Home Assistant started again at ${at(0)}, after the soak began: its samples start then; the grid's hours carry on`,
+    );
+    expect(verdicts(text)).toContain("⚠ 97 samples of about 289 in 24.0 h: sampling stopped for a while");
+
+    // Only the last 36 h of samples are kept: a longer soak is not a restart.
+    const long = soakReport(
+      input({
+        now: OPENED + 72 * HOUR,
+        run: run({ started_at: OPENED }),
+        samples: Array.from({ length: 433 }, (_, i) => sample(36 * 60 + i * 5)),
+      }),
+    );
+    expect(long).toContain("Home Assistant's samples: 433 over 36.0 h");
+    expect(verdicts(long).some((v) => v.includes("started again") || v.includes("samples of about"))).toBe(false);
+    // Visible longer than the soak (two devices at once): no more than the soak.
+    expect(soakReport(input({ run: run({ visible_ms: 48 * HOUR }) }))).toContain("visible 24.0 h");
   });
 });

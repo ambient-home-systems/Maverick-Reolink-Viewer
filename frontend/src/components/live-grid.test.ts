@@ -674,7 +674,7 @@ describe("soak run", () => {
     expect(text).toContain("grid open 4.0 h, visible 3.0 h · opened 2 times");
     expect(text).toContain("  RLN36: 1 → 1 of 7 (peak 1)");
     expect(text).toContain("  Garage: 2 · 0 · 0");
-    expect(text).toContain("✗ Not 24 h live yet: the grid has been visible 3.0 h of the 4.0 h");
+    expect(text).toContain("✗ The grid has been visible 3.0 h of 8: open it whenever it suits");
     const close = [...(soak.shadowRoot?.querySelectorAll("button") ?? [])].find((b) => b.textContent.trim() === "Close");
     close?.click();
     await el.updateComplete;
