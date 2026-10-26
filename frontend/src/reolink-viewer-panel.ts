@@ -5,6 +5,7 @@ import "./components/device-list";
 import "./components/device-page";
 import "./components/live-check";
 import "./components/live-grid";
+import "./components/live-soak";
 import {
   NAVIGATE_EVENT,
   TOAST_EVENT,
@@ -182,6 +183,14 @@ export class ReolinkViewerPanel extends LitElement {
                   }}>← Devices</button>
                 </div>
                 <rv-live-check .hass=${this.hass}></rv-live-check>`
+          : route.view === "soak"
+            ? html`<div>
+                  <button class="text" @click=${() => {
+                    this.navigate({ view: "list" });
+                  }}>← Devices</button>
+                </div>
+                <h2>Soak report</h2>
+                <rv-live-soak .hass=${this.hass}></rv-live-soak>`
             : html`${this._renderBanner()}
                 ${this._loadError
                   ? nothing
@@ -225,7 +234,8 @@ export class ReolinkViewerPanel extends LitElement {
       <p class="muted">
         Every camera live, each showing its last picture until its video starts. The live check
         measures how fast each camera starts on this device and compares it with Home Assistant's
-        own camera view.
+        own camera view. The soak report says how live view held up with the grid open, from any
+        device.
       </p>
       <div class="actions">
         <button class="primary" @click=${() => {
@@ -237,6 +247,11 @@ export class ReolinkViewerPanel extends LitElement {
           this.navigate({ view: "live-check" });
         }}>
           Open the live check
+        </button>
+        <button @click=${() => {
+          this.navigate({ view: "soak" });
+        }}>
+          Soak report
         </button>
       </div>
     </section>`;

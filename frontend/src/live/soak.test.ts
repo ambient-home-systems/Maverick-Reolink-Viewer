@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { SoakSample } from "../types";
+import type { SoakRun, SoakSample } from "../types";
 import { soakReport, type SoakInput } from "./soak";
 
 const OPENED = new Date(2026, 9, 22, 16, 30).getTime();
@@ -26,18 +26,29 @@ function day(change: (minutes: number) => Partial<SoakSample> = () => ({})): Soa
   return Array.from({ length: 289 }, (_, i) => sample(i * 5, change(i * 5)));
 }
 
+function run(change: Partial<SoakRun> = {}): SoakRun {
+  return {
+    started_at: OPENED,
+    opens: 1,
+    open_ms: 24 * HOUR,
+    visible_ms: 24 * HOUR,
+    tiles: {
+      Garage: { plays: 1, drops: 0, failures: 0 },
+      Doorbell: { plays: 3, drops: 2, failures: 1 },
+    },
+    devices: { "Mac · Chrome": OPENED + 24 * HOUR - 30_000 },
+    ...change,
+  };
+}
+
 function input(change: Partial<SoakInput> = {}): SoakInput {
   return {
-    version: "0.14.0",
-    openedAt: OPENED,
+    version: "0.15.0",
     now: OPENED + 24 * HOUR,
-    visibleMs: 24 * HOUR,
     sampleS: 300,
+    keepS: 36 * 3600,
+    run: run(),
     samples: day(),
-    tiles: [
-      { camera: "Garage", plays: 1, drops: 0, failures: 0 },
-      { camera: "Doorbell", plays: 3, drops: 2, failures: 1 },
-    ],
     ...change,
   };
 }
@@ -47,9 +58,11 @@ const verdicts = (text: string) => text.slice(text.indexOf("Verdict:")).split("\
 describe("soakReport", () => {
   it("passes a steady day", () => {
     const text = soakReport(input());
-    expect(text).toContain("Grid open 24.0 h");
-    expect(text).toContain("page visible 100%");
-    expect(text).toContain("Server samples: 289 (every 5 min)");
+    expect(text).toContain(
+      `Soak started ${new Date(OPENED).toLocaleString()} (24.0 h ago) · grid open 24.0 h, visible 24.0 h · opened 1 time`,
+    );
+    expect(text).toContain("Reported by: Mac · Chrome (now)");
+    expect(text).toContain("Server samples: 289 (every 5 min; the last 36 h are kept)");
     expect(text).toContain("go2rtc: running · restarts 0 → 0 · memory 40.0 → 40.0 MB (peak 40.0 MB)");
     expect(text).toContain("  RLN36: 6 → 6 of 7 (peak 6) · CPU 23% → 23% (peak 23%)");
     expect(text).toContain("  Laundry Room: 0 → 0 of 2 (peak 0) · CPU not reported");
@@ -62,8 +75,7 @@ describe("soakReport", () => {
       "✓ Within the stream limits: no host above its limit",
       "– Camera CPU (Phase 0 set no CPU limit): RLN36 peak 23%",
       "– Battery cameras: none on battery",
-      "✓ Ran 24.0 h",
-      "✓ The page was visible 100% of the time",
+      "✓ Live 24.0 h: the grid was visible 24.0 h of the 24.0 h since the soak started",
       "",
       "Passed.",
     ]);
@@ -78,17 +90,29 @@ describe("soakReport", () => {
     const text = soakReport(
       input({
         now: OPENED + 2 * HOUR,
-        visibleMs: HOUR,
+        run: run({
+          opens: 3,
+          open_ms: 2 * HOUR,
+          visible_ms: HOUR,
+          tiles: { Garage: { plays: 9, drops: 8, failures: 1 } },
+          devices: { "Mac · Chrome": OPENED + HOUR, "iPhone · Safari": OPENED + 90 * 60_000 },
+        }),
         samples: samples.slice(0, 10),
-        tiles: [{ camera: "Garage", plays: 9, drops: 8, failures: 1 }],
       }),
     );
+    expect(text).toContain("grid open 2.0 h, visible 1.0 h · opened 3 times");
+    expect(text).toContain("Reported by: iPhone · Safari (30 min ago), Mac · Chrome (1.0 h ago)");
     expect(text).toContain("  RLN36: 6 → 6 of 7 (peak 6)");
     expect(text).toContain("Battery camera Doorbell: asleep in 0 of 0 samples while not watched");
-    expect(verdicts(text)).toContain("✗ Reconnect loops: Garage (9 in 2.0 h)");
+    expect(verdicts(text)).toContain("✗ Reconnect loops: Garage (9 in 1.0 h)");
     expect(verdicts(text)).toContain("– Doorbell: watched in every sample");
-    expect(verdicts(text)).toContain("✗ Not 24 h yet: the grid has been open 2.0 h");
-    expect(verdicts(text)).toContain("⚠ The page was visible only 50% of the time: tiles pause while it is hidden");
+    expect(verdicts(text)).toContain(
+      "✗ Not 24 h live yet: the grid has been visible 1.0 h of the 2.0 h since the soak started (tiles pause while the page is hidden)",
+    );
+    expect(verdicts(text)).toContain(
+      "⚠ The grid opened 3 times: its page reloaded, or Home Assistant unloaded it after 5 minutes hidden (its tiles started again)",
+    );
+    expect(verdicts(text)).toContain("⚠ No grid has reported for 30 min: is the grid open, and its page showing?");
 
     // The whole day: a restart, memory growth, sessions grown past the limit, no sleep.
     const all = soakReport(input({ samples }));
@@ -115,7 +139,27 @@ describe("soakReport", () => {
     expect(text).toContain("go2rtc: running · restarts 0 → 0 · memory not known");
     expect(text).toContain("  Laundry Room: 0 → 1 of 2 (peak 1)");
     expect(verdicts(text)).toContain("✓ Doorbell slept while not watched");
-    expect(verdicts(text)).toContain("⚠ 97 server samples of about 288: Home Assistant may have restarted");
+    expect(verdicts(text)).toContain("⚠ 97 server samples of about 288: was sampling stopped?");
     expect(soakReport(input({ samples: [] }))).toContain("No server samples");
+  });
+
+  it("counts what the grid saw, for as long as the server keeps samples", () => {
+    // Three days since the soak started: the server keeps the last 36 h of samples.
+    const samples = Array.from({ length: 433 }, (_, i) => sample(36 * 60 + i * 5));
+    const text = soakReport(
+      input({
+        now: OPENED + 72 * HOUR,
+        run: run({ opens: 0, open_ms: 0, visible_ms: 0, tiles: {}, devices: {} }),
+        samples,
+      }),
+    );
+    expect(text).toContain("opened 0 times");
+    expect(text).toContain("Reported by: no grid yet");
+    expect(text).toContain("  none counted yet");
+    expect(verdicts(text)).toContain("⚠ No grid has reported for the whole soak: is the grid open, and its page showing?");
+    expect(verdicts(text).some((v) => v.includes("server samples of about"))).toBe(false);
+    // Visible longer than the soak (two devices): no more than the soak.
+    const twice = soakReport(input({ run: run({ visible_ms: 48 * HOUR }) }));
+    expect(twice).toContain("visible 24.0 h");
   });
 });

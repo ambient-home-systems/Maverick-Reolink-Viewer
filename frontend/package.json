@@ -1,6 +1,6 @@
 {
   "name": "reolink-viewer-panel",
-  "version": "0.14.0",
+  "version": "0.15.0",
   "private": true,
   "description": "Sidebar panel for the Reolink Viewer Home Assistant integration",
   "license": "MIT",

@@ -167,6 +167,8 @@ async def test_samples_are_kept_and_read_back(
     assert msg["success"], msg
     result = msg["result"]
     assert result["sample_s"] == soak.SAMPLE_S
+    assert result["keep_s"] == 36 * 3600
+    assert result["run"] is None
     assert [s["at"] for s in result["samples"]] == [
         s["at"] for s in recorder.samples(3000)
     ]
@@ -178,3 +180,127 @@ async def test_samples_are_kept_and_read_back(
         "hosts",
         "battery",
     }
+
+
+async def test_the_soak_run_outlives_the_page(
+    hass: HomeAssistant,
+    hass_ws_client: WebSocketGenerator,
+    loaded_with_entities: MockConfigEntry,
+    viewer_entry: MockConfigEntry,
+) -> None:
+    """Grids add what they counted to one run; Start over starts a new one."""
+    recorder = _live(viewer_entry).soak
+    recorder._samples.extend({"at": at} for at in (1000, 2000))
+    client = await hass_ws_client(hass)
+
+    async def call(**message: Any) -> dict[str, Any]:
+        await client.send_json_auto_id(message)
+        msg = await client.receive_json()
+        assert msg["success"], msg
+        result: dict[str, Any] = msg["result"]
+        return result
+
+    # No grid has reported yet: no run, no samples.
+    result = await call(type="reolink_viewer/live/soak")
+    assert result["run"] is None
+    assert result["samples"] == []
+
+    # The first report starts the run, when its grid opened.
+    with patch.object(soak, "_now_ms", return_value=100_000):
+        result = await call(
+            type="reolink_viewer/live/soak/count",
+            device="Mac · Chrome",
+            opens=1,
+            open_ms=60_000,
+            visible_ms=60_000,
+            tiles=[{"camera": "Garage", "plays": 2}, {"camera": "Door"}],
+        )
+    assert result == {"started_at": 40_000}
+    # The page reloaded, and another device opened the grid.
+    with patch.object(soak, "_now_ms", return_value=200_000):
+        await call(
+            type="reolink_viewer/live/soak/count",
+            device="Mac · Chrome",
+            opens=1,
+            open_ms=30_000,
+            visible_ms=10_000,
+            tiles=[{"camera": "Garage", "plays": 1, "drops": 1, "failures": 2}],
+        )
+        await call(type="reolink_viewer/live/soak/count", device="iPhone · Safari")
+    recorder._samples.append({"at": 150_000})
+    result = await call(type="reolink_viewer/live/soak")
+    assert result["run"] == {
+        "started_at": 40_000,
+        "opens": 2,
+        "open_ms": 90_000,
+        "visible_ms": 70_000,
+        "tiles": {
+            "Garage": {"plays": 3, "drops": 1, "failures": 2},
+            "Door": {"plays": 0, "drops": 0, "failures": 0},
+        },
+        "devices": {"Mac · Chrome": 200_000, "iPhone · Safari": 200_000},
+    }
+    # The samples since the run started.
+    assert [s["at"] for s in result["samples"]] == [150_000]
+
+    # Start over, from the grid.
+    with patch.object(soak, "_now_ms", return_value=300_000):
+        result = await call(
+            type="reolink_viewer/live/soak/start",
+            device="iPhone · Safari",
+            grid_open=True,
+        )
+    assert result["run"] == {
+        "started_at": 300_000,
+        "opens": 1,
+        "open_ms": 0,
+        "visible_ms": 0,
+        "tiles": {},
+        "devices": {"iPhone · Safari": 300_000},
+    }
+    assert recorder.start_over("Mac · Chrome", grid_open=False)["opens"] == 0
+
+    # What a page sends is bounded.
+    for message in (
+        {"device": ""},
+        {"device": "x" * 65},
+        {"device": "Mac", "open_ms": -1},
+        {"device": "Mac", "tiles": [{"camera": "Garage", "drops": -1}]},
+        {"device": "Mac", "tiles": [{"plays": 1}]},
+    ):
+        await client.send_json_auto_id(
+            {"type": "reolink_viewer/live/soak/count", **message}
+        )
+        msg = await client.receive_json()
+        assert not msg["success"], message
+
+
+async def test_the_soak_run_is_bounded(
+    hass: HomeAssistant,
+    loaded_with_entities: MockConfigEntry,
+    viewer_entry: MockConfigEntry,
+) -> None:
+    """At most MAX_CAMERAS cameras and the MAX_DEVICES last devices; a copy out."""
+    recorder = _live(viewer_entry).soak
+    tiles = [
+        {"camera": f"Camera {n}", "plays": 1, "drops": 0, "failures": 0}
+        for n in range(soak.MAX_CAMERAS + 1)
+    ]
+    run = recorder.count("Mac", opens=1, open_ms=0, visible_ms=0, tiles=tiles)
+    assert len(run["tiles"]) == soak.MAX_CAMERAS
+    assert f"Camera {soak.MAX_CAMERAS}" not in run["tiles"]
+    for n in range(soak.MAX_DEVICES + 1):
+        run = recorder.count(f"Device {n}", opens=0, open_ms=0, visible_ms=0, tiles=[])
+    assert list(run["devices"]) == [
+        f"Device {n}" for n in range(1, soak.MAX_DEVICES + 1)
+    ]
+    # Reporting again moves a device to the end.
+    run = recorder.count("Device 1", opens=0, open_ms=0, visible_ms=0, tiles=[])
+    assert list(run["devices"])[-1] == "Device 1"
+    # What is returned is a copy.
+    run["tiles"]["Camera 0"]["plays"] = 99
+    run["devices"].clear()
+    current = recorder.run
+    assert current is not None
+    assert current["tiles"]["Camera 0"]["plays"] == 1
+    assert len(current["devices"]) == soak.MAX_DEVICES

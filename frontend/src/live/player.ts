@@ -4,7 +4,7 @@
 // every setup, docs/IMPLEMENTATION_PLAN.md). When a playing session ends it
 // starts again at once; after a failed start it waits 1, 2, 5, 10, then 30 s.
 import type { LiveRef } from "../api";
-import type { HomeAssistant } from "../types";
+import type { HomeAssistant, SoakCounts } from "../types";
 import {
   OurMse,
   OurWebRtc,
@@ -69,8 +69,8 @@ export class LivePlayer {
   state: PlayerState = { kind: "idle" };
   /** Its last EVENT_LOG events, oldest first. */
   readonly events: PlayerEvent[] = [];
-  /** Since it was made, for the soak report: first frames, ends after one, failed starts. */
-  readonly counts = { plays: 0, drops: 0, failures: 0 };
+  /** Told of each first frame, end after one and failed start (the soak run counts them). */
+  onCount: (kind: keyof SoakCounts) => void = () => undefined;
   private _session: LiveSession | undefined;
   private _timer: ReturnType<typeof setTimeout> | undefined;
   private _failures = 0;
@@ -139,7 +139,7 @@ export class LivePlayer {
       if (result.ok) {
         const first = result.firstFrameMs;
         this._note(`${transport}: playing${first !== undefined ? `, first frame in ${(first / 1000).toFixed(2)} s` : ""}`);
-        this.counts.plays += 1;
+        this.onCount("plays");
         this._set({ kind: "playing", transport, result });
         return;
       }
@@ -147,7 +147,7 @@ export class LivePlayer {
       this._session = undefined;
       error = `${transport}: ${result.error ?? "failed"}`;
       this._note(error);
-      this.counts.failures += 1;
+      this.onCount("failures");
     }
     this._failures += 1;
     this._wait(run, error);
@@ -164,7 +164,7 @@ export class LivePlayer {
     session.close();
     this._session = undefined;
     this._note(`ended after ${Math.round((Date.now() - began) / 1000)} s: ${reason}`);
-    this.counts.drops += 1;
+    this.onCount("drops");
     if (Date.now() - began >= STABLE_MS) {
       this._failures = 0;
       void this._attempt(run);

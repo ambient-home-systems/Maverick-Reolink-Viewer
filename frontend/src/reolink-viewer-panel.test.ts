@@ -113,6 +113,49 @@ describe("reolink-viewer-panel", () => {
     expect(el.shadowRoot?.querySelector("rv-device-list")).not.toBeNull();
   });
 
+  it("defines every element its views show", () => {
+    for (const name of [
+      "rv-device-list",
+      "rv-device-page",
+      "rv-live-check",
+      "rv-live-grid",
+      "rv-live-camera",
+      "rv-live-tile",
+      "rv-live-controls",
+      "rv-live-debug",
+      "rv-live-soak",
+    ]) {
+      expect(customElements.get(name), name).toBeDefined();
+    }
+  });
+
+  it("opens the soak report on its own page, without the grid", async () => {
+    const hass = makeHass(okDevices());
+    hass.responses["reolink_viewer/live/soak"] = {
+      sample_s: 300,
+      keep_s: 129_600,
+      run: null,
+      samples: [],
+      now: { at: 0, go2rtc: { state: "running", restarts: 0, memory_kb: null } },
+    };
+    const el = await mount(hass);
+    button(el, "Soak report")?.click();
+    await flush();
+    await el.updateComplete;
+    expect(window.location.hash).toBe("#soak");
+    const soak = el.shadowRoot?.querySelector("rv-live-soak");
+    expect(soak).not.toBeNull();
+    expect(el.shadowRoot?.querySelector("rv-live-grid")).toBeNull();
+    await flush();
+    await soak?.updateComplete;
+    expect(hass.sent).toContainEqual({ type: "reolink_viewer/live/soak" });
+    expect(text(el)).toContain("No soak yet");
+    button(el, "← Devices")?.click();
+    await flush();
+    await el.updateComplete;
+    expect(el.shadowRoot?.querySelector("rv-device-list")).not.toBeNull();
+  });
+
   it("shows toasts from child elements", async () => {
     const el = await mount(makeHass(okDevices()));
     el.dispatchEvent(

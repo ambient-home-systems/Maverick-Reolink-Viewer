@@ -1,49 +1,47 @@
 // The soak report (Phase 3's exit criteria): with the grid open for 24 hours,
 // no reconnect loops, no growth in the sessions to the cameras, the cameras
 // within their limits, battery cameras asleep when nobody watches them. It
-// reads the server's samples (live/soak, every 5 minutes) since the grid
-// opened, and what each tile counted, and says, for each criterion, whether
-// it held.
-import type { SoakSample } from "../types";
-
-/** What a tile counted since the grid opened. */
-export interface TileCounts {
-  camera: string;
-  /** Streams that reached their first frame. */
-  plays: number;
-  /** Streams that ended after playing. */
-  drops: number;
-  /** Starts that failed. */
-  failures: number;
-}
+// reads the soak run the server keeps (what the grids counted, sent every
+// SOAK_REPORT_MS) and the server's samples (every 5 minutes) since the run
+// started, and says, for each criterion, whether it held. The run outlives
+// the page, so any device can read the report.
+import type { SoakRun, SoakSample } from "../types";
 
 export interface SoakInput {
   version: string;
-  /** When the grid opened, and now (epoch ms). */
-  openedAt: number;
+  /** Epoch ms. */
   now: number;
-  /** How long the page was visible since it opened (tiles pause while hidden). */
-  visibleMs: number;
-  /** The server's sampling interval (s). */
+  /** The server's sampling interval (s), and how long it keeps samples (s). */
   sampleS: number;
-  /** The server's samples since the grid opened, the last one taken now. */
+  keepS: number;
+  run: SoakRun;
+  /** The server's samples since the run started, the last one taken now. */
   samples: SoakSample[];
-  tiles: TileCounts[];
 }
 
-/** The soak's length for the exit criterion. */
+/** The soak's length for the exit criterion, counted while the grid is visible (tiles pause while it is hidden). */
 export const SOAK_HOURS = 24;
+/** How often an open grid reports what it counted. */
+export const SOAK_REPORT_MS = 60_000;
+/** A grid that has not reported for this long is closed, or its page hidden. */
+const SILENT_MS = 3 * SOAK_REPORT_MS;
 
 type Mark = "✓" | "✗" | "⚠" | "–";
 
 /** The report as text: what was measured, then a verdict per criterion. */
 export function soakReport(input: SoakInput): string {
-  const { samples, tiles } = input;
-  const hours = Math.max(0, input.now - input.openedAt) / 3_600_000;
+  const { samples, run } = input;
+  const elapsedMs = Math.max(0, input.now - run.started_at);
+  const hours = elapsedMs / 3_600_000;
+  // Tiles play only while the page is visible: the soak counts that time.
+  const visibleHours = Math.min(run.visible_ms, elapsedMs) / 3_600_000;
+  const devices = Object.entries(run.devices).sort(([, a], [, b]) => b - a);
+  const lastReport = devices.at(0)?.[1];
   const lines: string[] = [
     `Reolink Viewer soak report v${input.version} · ${new Date(input.now).toLocaleString()}`,
-    `Grid open ${hours.toFixed(1)} h (since ${new Date(input.openedAt).toLocaleString()}), page visible ${percent(input.visibleMs, input.now - input.openedAt)}`,
-    `Server samples: ${samples.length} (every ${Math.round(input.sampleS / 60)} min)`,
+    `Soak started ${new Date(run.started_at).toLocaleString()} (${hours.toFixed(1)} h ago) · grid open ${(run.open_ms / 3_600_000).toFixed(1)} h, visible ${visibleHours.toFixed(1)} h · opened ${run.opens} time${run.opens === 1 ? "" : "s"}`,
+    `Reported by: ${devices.length ? devices.map(([device, at]) => `${device} (${ago(input.now - at)})`).join(", ") : "no grid yet"}`,
+    `Server samples: ${samples.length} (every ${Math.round(input.sampleS / 60)} min; the last ${Math.round(input.keepS / 3600)} h are kept)`,
     "",
   ];
   const verdicts: [Mark, string][] = [];
@@ -141,10 +139,12 @@ export function soakReport(input: SoakInput): string {
   // Tiles
   lines.push("Tiles (plays · drops · failed starts):");
   const loops: string[] = [];
-  for (const tile of tiles) {
-    lines.push(`  ${tile.camera}: ${tile.plays} · ${tile.drops} · ${tile.failures}`);
+  const tiles = Object.entries(run.tiles);
+  if (!tiles.length) lines.push("  none counted yet");
+  for (const [camera, tile] of tiles) {
+    lines.push(`  ${camera}: ${tile.plays} · ${tile.drops} · ${tile.failures}`);
     const restartsOf = tile.drops + tile.failures;
-    if (restartsOf > Math.max(2, hours)) loops.push(`${tile.camera} (${restartsOf} in ${hours.toFixed(1)} h)`);
+    if (restartsOf > Math.max(2, visibleHours)) loops.push(`${camera} (${restartsOf} in ${visibleHours.toFixed(1)} h)`);
   }
   verdicts.unshift(
     loops.length
@@ -153,15 +153,20 @@ export function soakReport(input: SoakInput): string {
   );
 
   // Coverage
-  const expected = Math.floor((hours * 3600) / input.sampleS);
   verdicts.push(
-    hours >= SOAK_HOURS ? ["✓", `Ran ${hours.toFixed(1)} h`] : ["✗", `Not ${SOAK_HOURS} h yet: the grid has been open ${hours.toFixed(1)} h`],
-    input.visibleMs >= 0.95 * (input.now - input.openedAt)
-      ? ["✓", `The page was visible ${percent(input.visibleMs, input.now - input.openedAt)} of the time`]
-      : ["⚠", `The page was visible only ${percent(input.visibleMs, input.now - input.openedAt)} of the time: tiles pause while it is hidden`],
+    visibleHours >= SOAK_HOURS
+      ? ["✓", `Live ${visibleHours.toFixed(1)} h: the grid was visible ${visibleHours.toFixed(1)} h of the ${hours.toFixed(1)} h since the soak started`]
+      : ["✗", `Not ${SOAK_HOURS} h live yet: the grid has been visible ${visibleHours.toFixed(1)} h of the ${hours.toFixed(1)} h since the soak started (tiles pause while the page is hidden)`],
   );
+  if (run.opens > 1) {
+    verdicts.push(["⚠", `The grid opened ${run.opens} times: its page reloaded, or Home Assistant unloaded it after 5 minutes hidden (its tiles started again)`]);
+  }
+  if (lastReport === undefined || input.now - lastReport > SILENT_MS) {
+    verdicts.push(["⚠", `No grid has reported for ${lastReport === undefined ? "the whole soak" : ago(input.now - lastReport).replace(" ago", "")}: is the grid open, and its page showing?`]);
+  }
+  const expected = Math.floor(Math.min(hours * 3600, input.keepS) / input.sampleS);
   if (samples.length < 0.9 * expected) {
-    verdicts.push(["⚠", `${samples.length} server samples of about ${expected}: Home Assistant may have restarted`]);
+    verdicts.push(["⚠", `${samples.length} server samples of about ${expected}: was sampling stopped?`]);
   }
 
   const failed = verdicts.filter(([mark]) => mark === "✗").length;
@@ -174,6 +179,9 @@ function mb(kb: number): string {
   return (kb / 1024).toFixed(1);
 }
 
-function percent(part: number, whole: number): string {
-  return whole > 0 ? `${Math.round((100 * part) / whole)}%` : "100%";
+/** "now", "12 min ago", "3.2 h ago". */
+function ago(ms: number): string {
+  const minutes = Math.max(0, ms) / 60_000;
+  if (minutes < 1) return "now";
+  return minutes < 60 ? `${Math.floor(minutes)} min ago` : `${(minutes / 60).toFixed(1)} h ago`;
 }

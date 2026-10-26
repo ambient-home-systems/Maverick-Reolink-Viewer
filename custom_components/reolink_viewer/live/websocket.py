@@ -19,8 +19,11 @@
 - ``live/preload`` (admin): keep a stream warm (its feed open, a key frame
   cached), or stop.
 - ``live/capacity`` (admin): the capacity test of a host, as a subscription.
-- ``live/soak``: the soak report's samples since a time, and one taken now
-  (``soak.py``).
+- ``live/soak``: the soak run, the samples since it started (or a time),
+  and one taken now (``soak.py``).
+- ``live/soak/count``: what a grid counted since it last reported, added to
+  the soak run (which it starts if there is none).
+- ``live/soak/start``: start the soak run over.
 """
 
 import asyncio
@@ -47,7 +50,7 @@ from .capacity import CapacityError, CapacityTest
 from .go2rtc import Go2rtcError, redact
 from .images import CameraImage
 from .service import MAX_EARLY_CANDIDATES, LiveService, WebRtcSession
-from .soak import SAMPLE_S
+from .soak import KEEP, MAX_CAMERAS, SAMPLE_S
 from .streams import LiveError, LiveStream
 from .views import LIVE_FRAME_PATH, LIVE_IMAGE_PATH, LIVE_MSE_PATH
 from .warm import keep_warm_unique_id
@@ -78,6 +81,8 @@ def async_register_live_commands(hass: HomeAssistant) -> None:
         ws_live_preload,
         ws_live_capacity,
         ws_live_soak,
+        ws_live_soak_count,
+        ws_live_soak_start,
     ):
         websocket_api.async_register_command(hass, command)
 
@@ -397,7 +402,7 @@ def ws_live_images(
 @websocket_api.websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/live/soak",
-        probatio.Optional("since", default=0): int,
+        probatio.Optional("since"): int,
     }
 )
 @websocket_api.async_response
@@ -406,15 +411,90 @@ async def ws_live_soak(
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    """Return the soak report's samples since a time (epoch ms), and one now."""
+    """Return the soak run, the samples since it started (or a time), and one now."""
     if (resolved := _live(hass, connection, msg["id"])) is None:
         return
     soak = resolved[1].soak
     now = await soak.async_sample()
+    run = soak.run
+    since = msg.get("since", run["started_at"] if run else now["at"])
     connection.send_result(
         msg["id"],
-        {"sample_s": SAMPLE_S, "samples": soak.samples(msg["since"]), "now": now},
+        {
+            "sample_s": SAMPLE_S,
+            "keep_s": KEEP * SAMPLE_S,
+            "run": run,
+            "samples": soak.samples(since),
+            "now": now,
+        },
     )
+
+
+# What a page may say about itself, and what one report may add.
+_SOAK_DEVICE = probatio.All(str, probatio.Length(min=1, max=64))
+_SOAK_MS = probatio.All(int, probatio.Range(min=0, max=7 * 24 * 3_600_000))
+_SOAK_COUNT = probatio.All(int, probatio.Range(min=0, max=100_000))
+
+
+@callback
+@websocket_api.websocket_command(
+    {
+        probatio.Required("type"): f"{DOMAIN}/live/soak/count",
+        probatio.Required("device"): _SOAK_DEVICE,
+        probatio.Optional("opens", default=0): _SOAK_COUNT,
+        probatio.Optional("open_ms", default=0): _SOAK_MS,
+        probatio.Optional("visible_ms", default=0): _SOAK_MS,
+        probatio.Optional("tiles", default=list): probatio.All(
+            [
+                {
+                    probatio.Required("camera"): probatio.All(
+                        str, probatio.Length(min=1, max=128)
+                    ),
+                    probatio.Optional("plays", default=0): _SOAK_COUNT,
+                    probatio.Optional("drops", default=0): _SOAK_COUNT,
+                    probatio.Optional("failures", default=0): _SOAK_COUNT,
+                }
+            ],
+            probatio.Length(max=MAX_CAMERAS),
+        ),
+    }
+)
+def ws_live_soak_count(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Add what a grid counted since it last reported to the soak run."""
+    if (resolved := _live(hass, connection, msg["id"])) is None:
+        return
+    run = resolved[1].soak.count(
+        msg["device"],
+        opens=msg["opens"],
+        open_ms=msg["open_ms"],
+        visible_ms=msg["visible_ms"],
+        tiles=msg["tiles"],
+    )
+    connection.send_result(msg["id"], {"started_at": run["started_at"]})
+
+
+@callback
+@websocket_api.websocket_command(
+    {
+        probatio.Required("type"): f"{DOMAIN}/live/soak/start",
+        probatio.Required("device"): _SOAK_DEVICE,
+        probatio.Optional("grid_open", default=False): bool,
+    }
+)
+def ws_live_soak_start(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Start the soak run over (the grid open on the page asking, or not)."""
+    if (resolved := _live(hass, connection, msg["id"])) is None:
+        return
+    run = resolved[1].soak.start_over(msg["device"], grid_open=msg["grid_open"])
+    connection.send_result(msg["id"], {"run": run})
 
 
 @websocket_api.websocket_command(

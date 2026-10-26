@@ -1756,7 +1756,7 @@ gate), **2** builds live view from what step 1 decides.
 | 0. Fix four Phase 2B findings (a failing test for each first) | **Done** (v0.4.0), see "Step 0" below |
 | 1. Our own go2rtc, and a live check in the panel (gate) | **Done** (v0.4.0), see "Step 1 as built". Every setup's report is in: desktop Chrome on the LAN (run 5), the iPhone app on Wi-Fi (run 11), through Tailscale (run 12) and through Nabu Casa (run 13) |
 | 1. Record the reports here and in the hardware matrix; decide the live stream budget, WebRTC or MSE per setup, which cameras stay warm, the HD stream per camera | **Desktop Chrome on the LAN: recorded and decided** (v0.4.1), see "Step 1 results". **Done for every setup.** Desktop Chrome on the LAN (v0.4.1), see "Step 1 results"; the iPhone app on Wi-Fi, through Tailscale and through Nabu Casa (runs 11–13), see "Step 2: the iPhone on Wi-Fi", "… through Tailscale" and "… through Nabu Casa". The rules are fixed below, before seeing the reports |
-| 2. Stream registry, delivery, Live tab and grid, keep warm, debug panel | **Built** (v0.5.0–v0.14.0); the exit runs remain, see "What is left of Phase 3". The key-frame cache is built (v0.5.0) and measured on the desktop (run 6), see "Step 2: the key-frame cache"; v0.5.1 rebuilds the MSE init segment and records why warm feeds end (run 7: the sizes are right). v0.5.2 measured the last two oddities (run 8); v0.5.3 fixed the late H.264 paints (run 9: warm MSE median 0.15 s); run 10 (v0.5.4) confirms it. v0.5.5 files each live check report under its device. v0.6.0 keeps each camera's last picture for the tiles, see "Step 2: the image cache"; the live check measures it. v0.7.0: the Live grid and each camera's Live tab, see "Step 2: the Live grid". v0.8.0: keep warm per camera and the NVR budget of 7, see "Step 2: keep warm". v0.9.0: full-screen HD, see "Step 2: full-screen HD". v0.10.0: the camera's controls over its live view, see "Step 2: PTZ, presets, siren and floodlight". The owner checked v0.9.0 and v0.10.0 on the hardware. v0.11.0: the E1 Zoom's picture first, see "Step 2: the picture first"; the owner checked it on the hardware. v0.12.0: a battery camera on wired power is watched like the others, see "Step 2: battery cameras on wired power"; v0.12.1 fixes the Doorbell being shown picture-first; the owner checked it on the hardware. v0.13.0: a debug view per tile, see "Step 2: the debug view per tile". v0.14.0: the soak report, see "Step 2: the soak report". Next: the exit runs |
+| 2. Stream registry, delivery, Live tab and grid, keep warm, debug panel | **Built** (v0.5.0–v0.15.0); the exit runs remain, see "What is left of Phase 3". The key-frame cache is built (v0.5.0) and measured on the desktop (run 6), see "Step 2: the key-frame cache"; v0.5.1 rebuilds the MSE init segment and records why warm feeds end (run 7: the sizes are right). v0.5.2 measured the last two oddities (run 8); v0.5.3 fixed the late H.264 paints (run 9: warm MSE median 0.15 s); run 10 (v0.5.4) confirms it. v0.5.5 files each live check report under its device. v0.6.0 keeps each camera's last picture for the tiles, see "Step 2: the image cache"; the live check measures it. v0.7.0: the Live grid and each camera's Live tab, see "Step 2: the Live grid". v0.8.0: keep warm per camera and the NVR budget of 7, see "Step 2: keep warm". v0.9.0: full-screen HD, see "Step 2: full-screen HD". v0.10.0: the camera's controls over its live view, see "Step 2: PTZ, presets, siren and floodlight". The owner checked v0.9.0 and v0.10.0 on the hardware. v0.11.0: the E1 Zoom's picture first, see "Step 2: the picture first"; the owner checked it on the hardware. v0.12.0: a battery camera on wired power is watched like the others, see "Step 2: battery cameras on wired power"; v0.12.1 fixes the Doorbell being shown picture-first; the owner checked it on the hardware. v0.13.0: a debug view per tile, see "Step 2: the debug view per tile". v0.14.0: the soak report, see "Step 2: the soak report". v0.15.0 keeps the soak run on the server, so a hidden page or a reload no longer starts it over, and any device can read the report; see "Step 2: the soak run outlives the page". Next: the exit runs |
 
 #### Step 0: four Phase 2B findings (v0.4.0)
 
@@ -2731,6 +2731,50 @@ To run the soak: open Reolink → Watch live on a device that stays on with
 its screen on (the page visible), leave it 24 hours, close any full screen,
 press **Soak report**, and send the text.
 
+#### Step 2: the soak run outlives the page (v0.15.0)
+
+The owner's first soak ran for days, and its report then said the grid had
+just opened. The grid kept the soak's start, its visible time and the tiles'
+counts in the page, and reset them whenever it was attached to the page.
+Home Assistant's frontend detaches a panel whose page has been hidden for 5
+minutes (`partial-panel-resolver`: a locked screen, a sleeping display, a
+covered window) and attaches it again when the page shows. A reload has the
+same effect. So any hidden spell longer than 5 minutes started the soak over.
+v0.15.0 moves the soak to the server:
+
+- **The soak run** (`live/soak.py`) records when the soak started, how long
+  grids were open and visible, how many times a grid opened, what the tiles
+  counted per camera, and which devices reported and when. It lives in
+  memory, like the samples: restarting Home Assistant starts it over. The
+  first grid to report starts a run. Grids add to it with
+  `live/soak/count` (the time and counts since their last report, bounded:
+  64 cameras, the 8 latest devices). `live/soak/start` starts it over.
+  `live/soak` returns the run and the samples since it started.
+- **The page's tally** (`live/soak-tally.ts`) lives as long as the page,
+  not the grid. Players report each first frame, drop and failed start;
+  tiles pass these to the grid as events. The grid tells the tally when it
+  opens and closes and when the page shows or hides. The tally sends
+  what it has every minute while the grid is open, when the page hides
+  (before Home Assistant unloads the grid), and when the grid closes. If a
+  send fails, the counts go with the next one.
+- **The report** reads the run. The 24 hours count while the grid is
+  visible, since tiles pause while the page is hidden; a hidden spell no
+  longer starts over. The reconnect-loop rate counts per visible hour too.
+  Two warnings are added: when the grid opened more than once (a reload,
+  or Home Assistant unloading it), and when no grid has reported for 3
+  minutes (closed, or its page hidden). It names the devices that reported
+  and when.
+- **Any device can read it**: Reolink → Soak report, a page of its own
+  (`#soak`) that does not open the grid, so it starts no streams. It and
+  the grid's report both have Copy, Refresh and Start over (with a
+  confirmation).
+
+To run the soak: open Reolink → Watch live on the device that will hold it
+(a Mac with its display kept awake: `caffeinate -d`), press Soak report →
+Start over → Start over, close the report, and leave the grid open and
+showing. Read the report from any device under Reolink → Soak report.
+Restarting Home Assistant starts the soak over.
+
 #### What is left of Phase 3
 
 Step 2 is built. The exit criteria not yet met, to run on the hardware:
@@ -2740,8 +2784,10 @@ Step 2 is built. The exit criteria not yet met, to run on the hardware:
   and the iPhone.
 - **A 24-hour soak with the grid open**: no reconnect loops and no growth
   in device sessions; camera CPU and session counts within Phase 0's
-  limits; battery cameras sleep when not viewed. The grid's soak report
-  (v0.14.0) says whether each held.
+  limits; battery cameras sleep when not viewed. The soak report (v0.14.0;
+  kept by the server from v0.15.0, readable on any device) says whether
+  each held. The first run (v0.14.0) was lost when Home Assistant unloaded
+  the hidden grid.
 - **The Phase 2 playback criteria still hold** with live view running: the
   playback check, on the desktop and the iPhone.
 
