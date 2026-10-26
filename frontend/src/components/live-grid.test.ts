@@ -159,7 +159,7 @@ function fakeHass(fail = false) {
           tiles: { Garage: { plays: 2, drops: 0, failures: 0 } },
           devices: { "Mac · Chrome": Date.now() },
         };
-        return Promise.resolve({ sample_s: 300, keep_s: 129_600, run, samples: [], now });
+        return Promise.resolve({ sample_s: 300, keep_s: 129_600, warmup_s: 300, started_at: 0, run, samples: [], now });
       }
       if (message.type === "reolink_viewer/live/soak/count") return Promise.resolve({ started_at: 0 });
       return Promise.resolve(null);

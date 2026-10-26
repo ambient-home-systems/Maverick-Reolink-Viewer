@@ -23,6 +23,9 @@ from custom_components.reolink_viewer.scheduler import Priority
 from homeassistant.core import HomeAssistant
 from homeassistant.util.dt import utcnow
 
+# Taken before conftest stubs it.
+REAL_START = soak.SoakRecorder.start
+
 
 def _live(viewer_entry: MockConfigEntry) -> LiveService:
     live: LiveService | None = viewer_entry.runtime_data.live
@@ -147,6 +150,7 @@ async def test_samples_are_kept_and_read_back(
 
     with (
         patch.object(soak, "SAMPLE_S", 0.0),
+        patch.object(soak, "WARMUP_S", 0.0),
         patch.object(recorder, "async_sample", flaky),
     ):
         # conftest stubs start() (it would run in every test): run the loop here.
@@ -167,12 +171,16 @@ async def test_samples_are_kept_and_read_back(
     assert recorder._samples.maxlen == soak.KEEP == 432
 
     client = await hass_ws_client(hass)
+    # Sampling started long enough ago: live view is up.
+    recorder._started_at = 1000
     await client.send_json_auto_id({"type": "reolink_viewer/live/soak", "since": 3000})
     msg = await client.receive_json()
     assert msg["success"], msg
     result = msg["result"]
     assert result["sample_s"] == soak.SAMPLE_S
     assert result["keep_s"] == 36 * 3600
+    assert result["warmup_s"] == soak.WARMUP_S == 300
+    assert result["started_at"] == 1000
     assert result["run"] is None
     assert [s["at"] for s in result["samples"]] == [
         s["at"] for s in recorder.samples(3000)
@@ -365,3 +373,63 @@ async def test_the_soak_run_is_stored(
         with patch.object(recorder._store, "async_load", return_value=data):
             await recorder.async_load()
         assert recorder.run == expected, data
+
+
+async def test_no_sample_while_live_view_comes_up(
+    hass: HomeAssistant,
+    hass_ws_client: WebSocketGenerator,
+    loaded_with_entities: MockConfigEntry,
+    viewer_entry: MockConfigEntry,
+) -> None:
+    """The first sample waits WARMUP_S after Home Assistant started, and so does now."""
+    recorder = _live(viewer_entry).soak
+
+    def warming() -> bool:
+        return recorder.warming_up
+
+    assert warming()
+    client = await hass_ws_client(hass)
+
+    async def soak_now() -> dict[str, Any]:
+        await client.send_json_auto_id({"type": "reolink_viewer/live/soak"})
+        msg = await client.receive_json()
+        assert msg["success"], msg
+        result: dict[str, Any] = msg["result"]
+        return result
+
+    async def now() -> Any:
+        return (await soak_now())["now"]
+
+    # Not started yet (Home Assistant is starting): nothing now.
+    result = await soak_now()
+    assert result["started_at"] is None
+    assert result["now"] is None
+    sampled = 0
+
+    async def counting() -> dict[str, Any]:
+        nonlocal sampled
+        sampled += 1
+        return {"at": sampled}
+
+    with (
+        patch.object(soak, "_now_ms", return_value=1_000_000),
+        patch.object(recorder, "async_sample", counting),
+    ):
+        # The real start(): conftest stubs it in every test.
+        REAL_START(recorder)
+        await hass.async_block_till_done(wait_background_tasks=False)
+        assert recorder.started_at == 1_000_000
+        assert warming()
+        assert await now() is None
+        assert sampled == 0  # the loop waits first
+        await recorder.async_shutdown()
+    with patch.object(soak, "_now_ms", return_value=1_000_000 + 300_000):
+        assert not warming()
+        assert set(await now()) == {
+            "at",
+            "go2rtc",
+            "webrtc_sessions",
+            "feeds",
+            "hosts",
+            "battery",
+        }

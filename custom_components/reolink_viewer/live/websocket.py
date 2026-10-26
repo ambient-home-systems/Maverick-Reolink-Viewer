@@ -20,7 +20,8 @@
   cached), or stop.
 - ``live/capacity`` (admin): the capacity test of a host, as a subscription.
 - ``live/soak``: the soak run, the samples since it started (or a time;
-  with no run, every sample kept), and one taken now (``soak.py``).
+  with no run, every sample kept), and one taken now once live view is up
+  (``soak.py``).
 - ``live/soak/count``: what a grid counted since it last reported, added to
   the soak run (which it starts if there is none).
 - ``live/soak/start``: start the soak run over.
@@ -50,7 +51,7 @@ from .capacity import CapacityError, CapacityTest
 from .go2rtc import Go2rtcError, redact
 from .images import CameraImage
 from .service import MAX_EARLY_CANDIDATES, LiveService, WebRtcSession
-from .soak import KEEP, MAX_CAMERAS, SAMPLE_S
+from .soak import KEEP, MAX_CAMERAS, SAMPLE_S, WARMUP_S
 from .streams import LiveError, LiveStream
 from .views import LIVE_FRAME_PATH, LIVE_IMAGE_PATH, LIVE_MSE_PATH
 from .warm import keep_warm_unique_id
@@ -411,11 +412,15 @@ async def ws_live_soak(
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    """Return the soak run, the samples since it started (or a time), and one now."""
+    """Return the soak run, the samples since it started (or a time), and one now.
+
+    While live view may still be coming up after Home Assistant started, no
+    sample is taken now (``now`` is None): it would count what is not up yet.
+    """
     if (resolved := _live(hass, connection, msg["id"])) is None:
         return
     soak = resolved[1].soak
-    now = await soak.async_sample()
+    now = None if soak.warming_up else await soak.async_sample()
     run = soak.run
     # Since the run started; with no run yet, every sample kept.
     since = msg.get("since", run["started_at"] if run else 0)
@@ -424,6 +429,8 @@ async def ws_live_soak(
         {
             "sample_s": SAMPLE_S,
             "keep_s": KEEP * SAMPLE_S,
+            "warmup_s": WARMUP_S,
+            "started_at": soak.started_at,
             "run": run,
             "samples": soak.samples(since),
             "now": now,

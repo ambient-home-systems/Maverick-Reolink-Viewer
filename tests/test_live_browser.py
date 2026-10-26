@@ -113,6 +113,11 @@ async def grid_live(
     """The Opus stream as sub, and the camera's picture a real JPEG."""
     picture = await hass.async_add_executor_job(_jpeg)
     reolink_host.get_snapshot = AsyncMock(return_value=picture)
+    # The soak's sampling started long ago (conftest stubs its start): the
+    # report takes a sample now.
+    service = opus_live.runtime_data.live
+    assert service is not None
+    service.soak._started_at = 0
     return opus_live
 
 

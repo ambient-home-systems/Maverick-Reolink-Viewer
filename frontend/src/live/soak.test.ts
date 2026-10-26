@@ -49,6 +49,9 @@ function input(change: Partial<SoakInput> = {}): SoakInput {
     now: OPENED + 24 * HOUR,
     sampleS: 300,
     keepS: 36 * 3600,
+    // Sampling started 5 minutes before its first sample.
+    startedAt: OPENED - 5 * 60_000,
+    warmupS: 300,
     run: run(),
     samples: day(),
     ...change,
@@ -168,7 +171,13 @@ describe("soakReport", () => {
         "Not passed: 1 criterion not met.",
       ]),
     );
-    expect(soakReport(input({ run: null, samples: [] }))).toContain("No server samples");
+    // Right after Home Assistant started: no sample until live view is up.
+    expect(soakReport(input({ run: null, samples: [] }))).toContain(
+      `No samples yet: Home Assistant started at ${at(-5)}. The first comes 5 minutes after, once live view is up (go2rtc and the kept-warm feeds).`,
+    );
+    expect(soakReport(input({ run: null, samples: [], startedAt: null }))).toContain(
+      "No samples yet: Home Assistant is still starting. The first comes 5 minutes after it has, once live view is up.",
+    );
   });
 
   it("notes missing samples, a restart of Home Assistant, and battery cameras that slept", () => {
@@ -181,13 +190,15 @@ describe("soakReport", () => {
     const text = soakReport(
       input({ run: run({ started_at: OPENED - 10 * HOUR, tiles: {}, devices: {} }), samples }),
     );
+    // A grid that reported first, right after Home Assistant started: no restart.
+    expect(soakReport(input({ run: run({ started_at: OPENED - 4 * 60_000 }), samples }))).not.toContain("started again");
     expect(text).toContain("go2rtc: running · restarts 0 → 0 · memory not known");
     expect(text).toContain("  Laundry Room: 0 → 1 of 2 (peak 1)");
     expect(text).toContain("Reported by: no grid yet");
     expect(text).toContain("  none counted yet");
     expect(verdicts(text)).toContain("✓ Doorbell slept while not watched");
     expect(verdicts(text)).toContain(
-      `– Home Assistant started again at ${at(0)}, after the soak began: its samples start then; the grid's hours carry on`,
+      `– Home Assistant started again at ${at(-5)}, after the soak began: its samples start then; the grid's hours carry on`,
     );
     expect(verdicts(text)).toContain("⚠ 97 samples of about 289 in 24.0 h: sampling stopped for a while");
 

@@ -5,7 +5,8 @@ view for 24 hours, and the grid is visible for 8 hours in all, in as many
 sittings and on as many devices as suits. Throughout: no reconnect loops, no
 growth in the sessions to the cameras, the cameras within their limits, and
 battery cameras asleep when nobody watches them. While the integration runs,
-this keeps a sample every SAMPLE_S, the last KEEP of them (36 h):
+this keeps a sample every SAMPLE_S, the last KEEP of them (36 h), from
+WARMUP_S after Home Assistant started (once live view is up):
 
 - go2rtc: its state, its restarts and its memory;
 - the WebRTC sessions, and the MSE feeds (open, kept warm, viewers, ended);
@@ -48,6 +49,10 @@ _LOGGER = logging.getLogger(__name__)
 
 SAMPLE_S = 300.0
 KEEP = 36 * 3600 // int(SAMPLE_S)
+# Live view comes up first: go2rtc starts and the kept-warm feeds open (the
+# keeper tries again every minute). A sample taken before would count them
+# as missing, then as grown.
+WARMUP_S = 300.0
 # What a tile counts: first frames, ends after one, failed starts.
 COUNTS = ("plays", "drops", "failures")
 # Bounds on what pages may add to a run.
@@ -108,6 +113,8 @@ class SoakRecorder:
         self._service = service
         self._samples: deque[dict[str, Any]] = deque(maxlen=KEEP)
         self._task: asyncio.Task[None] | None = None
+        # When sampling started (epoch ms): Home Assistant had started.
+        self._started_at: int | None = None
         # The soak run, once a grid has reported; stored (async_load reads it).
         self._current: dict[str, Any] | None = None
         self._store: Store[dict[str, Any]] = Store(hass, 1, STORE_KEY)
@@ -121,13 +128,26 @@ class SoakRecorder:
 
     @callback
     def start(self) -> None:
-        """Start sampling (once Home Assistant has started)."""
+        """Start sampling (once Home Assistant has started), after WARMUP_S."""
         if self._task is None:
+            self._started_at = _now_ms()
             self._task = self._hass.async_create_background_task(
                 self._run(), "reolink_viewer soak samples"
             )
 
+    @property
+    def started_at(self) -> int | None:
+        """Return when sampling started (epoch ms), or None before it has."""
+        return self._started_at
+
+    @property
+    def warming_up(self) -> bool:
+        """Return whether live view may still be coming up (no sample yet)."""
+        started = self._started_at
+        return started is None or _now_ms() - started < WARMUP_S * 1000
+
     async def _run(self) -> None:
+        await asyncio.sleep(WARMUP_S)
         while True:
             try:
                 self._samples.append(await self.async_sample())

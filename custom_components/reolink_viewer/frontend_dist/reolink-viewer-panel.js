@@ -1145,7 +1145,10 @@ function Vt(e) {
 		i.push(`Soak started ${new Date(n.started_at).toLocaleString()} (${Ht(t)} h ago) · grid open ${Ht(n.open_ms)} h, visible ${a.toFixed(1)} h · opened ${n.opens} time${n.opens === 1 ? "" : "s"}`, `Reported by: ${r.length ? r.map(([t, n]) => `${t} (${Ut(e.now - n)})`).join(", ") : "no grid yet"}`);
 	} else i.push("No grid has reported yet: open Reolink → Watch live and leave it showing; its hours add up.");
 	let o = t.at(0), s = t.at(-1);
-	if (!o || !s) return i.push("", "No server samples: is Reolink Viewer loaded?"), i.join("\n");
+	if (!o || !s) {
+		let t = Math.round(e.warmupS / 60);
+		return i.push("", e.startedAt === null ? `No samples yet: Home Assistant is still starting. The first comes ${t} minutes after it has, once live view is up.` : `No samples yet: Home Assistant started at ${new Date(e.startedAt).toLocaleString()}. The first comes ${t} minutes after, once live view is up (go2rtc and the kept-warm feeds).`), i.join("\n");
+	}
 	let c = s.at - o.at;
 	i.push(`Home Assistant's samples: ${t.length} over ${Ht(c)} h, since ${new Date(o.at).toLocaleString()} (every ${Math.round(e.sampleS / 60)} min; the last ${Math.round(e.keepS / 3600)} h are kept)`, "");
 	let l = [], u = t.map((e) => e.go2rtc.memory_kb).filter((e) => e !== null), d = s.go2rtc.restarts - o.go2rtc.restarts, f = t.filter((e) => e.go2rtc.state !== "running").length;
@@ -1176,7 +1179,7 @@ function Vt(e) {
 	}
 	l.unshift(n ? C.length ? ["✗", `Reconnect loops: ${C.join(", ")}`] : ["✓", "No reconnect loops: no tile dropped or failed to start more than once an hour"] : ["–", "Reconnect loops: no grid has reported yet"]);
 	let w = c / 36e5;
-	l.push(w >= 24 ? ["✓", `Home Assistant ran live view ${w.toFixed(1)} h (24 needed)`] : ["✗", `Home Assistant's samples cover ${w.toFixed(1)} h of 24: it has to run that long without restarting (no page needs to be open)`], n ? a >= 8 ? ["✓", `The grid was visible ${a.toFixed(1)} h (8 needed), opened ${n.opens} time${n.opens === 1 ? "" : "s"}`] : ["✗", `The grid has been visible ${a.toFixed(1)} h of 8: open it whenever it suits; the hours add up across sittings and devices`] : ["✗", "The grid has been visible 0.0 h of 8: no grid has reported yet"]), n && o.at > n.started_at + 2 * r && o.at > e.now - e.keepS * 1e3 + 2 * r && l.push(["–", `Home Assistant started again at ${new Date(o.at).toLocaleString()}, after the soak began: its samples start then; the grid's hours carry on`]);
+	l.push(w >= 24 ? ["✓", `Home Assistant ran live view ${w.toFixed(1)} h (24 needed)`] : ["✗", `Home Assistant's samples cover ${w.toFixed(1)} h of 24: it has to run that long without restarting (no page needs to be open)`], n ? a >= 8 ? ["✓", `The grid was visible ${a.toFixed(1)} h (8 needed), opened ${n.opens} time${n.opens === 1 ? "" : "s"}`] : ["✗", `The grid has been visible ${a.toFixed(1)} h of 8: open it whenever it suits; the hours add up across sittings and devices`] : ["✗", "The grid has been visible 0.0 h of 8: no grid has reported yet"]), n && e.startedAt !== null && e.startedAt > n.started_at + r && l.push(["–", `Home Assistant started again at ${new Date(e.startedAt).toLocaleString()}, after the soak began: its samples start then; the grid's hours carry on`]);
 	let oe = Math.floor(c / r) + 1;
 	t.length < .9 * oe && l.push(["⚠", `${t.length} samples of about ${oe} in ${w.toFixed(1)} h: sampling stopped for a while`]);
 	let T = l.filter(([e]) => e === "✗").length;
@@ -2080,7 +2083,7 @@ var jn = class {
 	close() {
 		this._ws?.close(), super.close(), this._url && URL.revokeObjectURL(this._url);
 	}
-}, In = "0.15.0", Ln = "Live check · ", Rn = [
+}, In = "0.15.1", Ln = "Live check · ", Rn = [
 	"Desktop Chrome, LAN",
 	"Desktop Chrome, Tailscale",
 	"Desktop Chrome, Nabu Casa",
@@ -2492,8 +2495,10 @@ var $n = "rv-live-soak-close", er = class extends M {
 					now: Date.now(),
 					sampleS: t.sample_s,
 					keepS: t.keep_s,
+					warmupS: t.warmup_s,
+					startedAt: t.started_at,
 					run: t.run,
-					samples: [...t.samples, t.now]
+					samples: t.now ? [...t.samples, t.now] : t.samples
 				}) };
 			} catch (e) {
 				this._state = { error: N(e).message };
