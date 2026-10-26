@@ -16,7 +16,8 @@ repeats it with the key-frame cache, run 7 (v0.5.1) with the init segment
 rebuilt from the stream, run 8 (v0.5.2) with the MSE steps timed, run 9
 (v0.5.3) with H.264 frames declared in decode order, and run 10 (v0.5.4) once
 more. Runs 11–13 (v0.5.5) are the iPhone in the Companion app, on home
-Wi-Fi, through Tailscale and through Nabu Casa.
+Wi-Fi, through Tailscale and through Nabu Casa. Run 14 (2026-10-26, v0.14.0)
+is Home Assistant's half of the Phase 3 soak.
 
 ## Setup probed
 
@@ -526,6 +527,27 @@ Medians:
   yet when its first frame painted.
 
 go2rtc logged nothing past its start.
+
+Run 14, 2026-10-26: Home Assistant's half of the Phase 3 soak (v0.14.0). It
+used the soak samples Home Assistant took every 5 minutes, read in the
+browser's console with `live/soak` since 0. These were the last 36 hours,
+with no restart. The keep-warm feeds ran throughout: 6 NVR cameras over
+MSE. A page was open for at least part of the time (one or two WebRTC
+sessions).
+
+| Measure | Start → end (peak) |
+| --- | --- |
+| Samples | 433 over 35.9 h, from 2026-10-25 02:25 (local), none missed |
+| go2rtc | running in every sample; restarts 0 → 0; memory 49.8 → 45.8 MB (peak 49.8) |
+| WebRTC sessions | 2 → 1 |
+| MSE feeds | 6 → 6, kept warm 6 → 6, feeds dropped 0 → 0 |
+| NVR stream slots | 6 → 6 of 7 (peak 6, none waiting) |
+| Doorbell stream slots | 1 → 1 of 2 (peak 1, none waiting) |
+| Laundry Room stream slots | 1 → 0 of 2 (peak 1, none waiting) |
+
+No restart, no feed dropped, no growth in stream slots, every host within
+its limit. Camera CPU was not summarized. The Doorbell is on wired power,
+so no camera was on battery.
 
 ## Findings
 

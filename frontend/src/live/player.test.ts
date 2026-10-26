@@ -187,9 +187,11 @@ describe("LivePlayer", () => {
     expect(sessions).toHaveLength(3);
   });
 
-  it("keeps its last events for the debug view", async () => {
+  it("keeps its last events for the debug view, and counts them for the soak run", async () => {
     vi.setSystemTime(new Date(2026, 9, 22, 14, 0, 0));
     const { player, last } = setup(false);
+    const counted: string[] = [];
+    player.onCount = (kind) => counted.push(kind);
     player.start();
     last().failStart("ICE failed");
     await flush();
@@ -207,6 +209,8 @@ describe("LivePlayer", () => {
       "next try in 1 s",
       "stopped",
     ]);
+    // Stopping is not a drop.
+    expect(counted).toEqual(["failures", "plays", "drops"]);
     expect(player.events.at(-1)?.at).toBe(new Date(2026, 9, 22, 14, 0, 5).getTime());
     // Stopping a stopped player says nothing; only the last EVENT_LOG are kept.
     player.stop();

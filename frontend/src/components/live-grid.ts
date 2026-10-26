@@ -1,13 +1,13 @@
 import { LitElement, css, html, nothing, type TemplateResult } from "lit";
 
-import { fetchLiveSoak, toError } from "../api";
-import { copyText } from "../clipboard";
-import { LIVE_CHECK_VERSION } from "../live/check";
+import { toError } from "../api";
 import { LiveData, cameraFor, isWarm, liveConnection } from "../live/data";
-import { soakReport } from "../live/soak";
+import { soakTally } from "../live/soak-tally";
 import { sharedStyles } from "../styles";
 import type { HomeAssistant, LiveCamera } from "../types";
+import "./live-soak";
 import "./live-tile";
+import type { LiveCountDetail } from "./live-tile";
 import { navigate } from "./navigation";
 
 /**
@@ -15,10 +15,11 @@ import { navigate } from "./navigation";
  * camera's last picture at once and fades into video; a click opens the
  * camera's Live tab. While one tile is full screen, the others stop.
  *
- * Its soak report (Phase 3's 24-hour soak) reads the server's samples since
- * the grid opened (live/soak) and what each tile counted, and says whether
- * each exit criterion held. The grid counts how long the page was visible
- * (tiles pause while it is hidden).
+ * For Phase 3's 24-hour soak, the grid counts how long it is open and
+ * visible (tiles pause while the page is hidden) and what its tiles count,
+ * and sends it to the server's soak run every minute (soakTally): the run
+ * outlives the grid, which Home Assistant unloads when its page has been
+ * hidden for 5 minutes. Its soak report reads the run.
  */
 export class RvLiveGrid extends LitElement {
   static override properties = {
@@ -30,95 +31,39 @@ export class RvLiveGrid extends LitElement {
   declare hass: HomeAssistant | undefined;
   /** The camera full screen, if any. */
   declare _full: string | undefined;
-  /** The soak report shown: its text, why it failed, or still loading. */
-  declare _soak: { text: string; copied?: boolean } | { error: string } | "loading" | undefined;
+  /** The soak report is shown. */
+  declare _soak: boolean;
 
   private readonly _data = new LiveData(this);
-  private _openedAt = Date.now();
-  private _visibleMs = 0;
-  /** Since when the page has been visible (undefined while hidden). */
-  private _visibleSince: number | undefined;
+
+  constructor() {
+    super();
+    this._soak = false;
+  }
 
   override connectedCallback(): void {
     super.connectedCallback();
-    this._openedAt = Date.now();
-    this._visibleMs = 0;
-    this._visibleSince = document.visibilityState === "hidden" ? undefined : this._openedAt;
+    soakTally.opened(() => this.hass, document.visibilityState !== "hidden");
     document.addEventListener("visibilitychange", this._onVisibility);
+    this._flush();
   }
 
   override disconnectedCallback(): void {
     super.disconnectedCallback();
     document.removeEventListener("visibilitychange", this._onVisibility);
+    soakTally.closed();
+    this._flush();
   }
 
   private readonly _onVisibility = (): void => {
-    const now = Date.now();
-    if (this._visibleSince !== undefined) this._visibleMs += now - this._visibleSince;
-    this._visibleSince = document.visibilityState === "hidden" ? undefined : now;
+    const visible = document.visibilityState !== "hidden";
+    soakTally.visibility(visible);
+    // Hidden for 5 minutes, the grid is unloaded: send what it counted now.
+    if (!visible) this._flush();
   };
 
-  private async _openSoak(): Promise<void> {
-    const hass = this.hass;
-    if (!hass) return;
-    this._soak = "loading";
-    try {
-      const soak = await fetchLiveSoak(hass, this._openedAt);
-      const now = Date.now();
-      const tiles = [...(this.shadowRoot?.querySelectorAll("rv-live-tile") ?? [])].map((tile) => tile.soakCounts());
-      const text = soakReport({
-        version: LIVE_CHECK_VERSION,
-        openedAt: this._openedAt,
-        now,
-        visibleMs: this._visibleMs + (this._visibleSince !== undefined ? now - this._visibleSince : 0),
-        sampleS: soak.sample_s,
-        samples: [...soak.samples, soak.now],
-        tiles,
-      });
-      this._soak = { text };
-    } catch (err) {
-      this._soak = { error: toError(err).message };
-    }
-  }
-
-  private _renderSoak(): TemplateResult | typeof nothing {
-    const soak = this._soak;
-    if (!soak) return nothing;
-    const close = html`<button
-      @click=${() => {
-        this._soak = undefined;
-      }}
-    >
-      Close
-    </button>`;
-    if (soak === "loading") return html`<div class="card soak"><p class="muted">Reading the samples…</p></div>`;
-    if ("error" in soak) {
-      return html`<div class="banner error soak" role="alert">
-        Could not make the soak report: ${soak.error} ${close}
-      </div>`;
-    }
-    return html`<div class="card soak" role="region" aria-label="Soak report">
-      <pre>${soak.text}</pre>
-      <div class="actions">
-        <button
-          @click=${() => {
-            void copyText(soak.text).then((ok) => {
-              this._soak = { ...soak, copied: ok };
-            });
-          }}
-        >
-          ${soak.copied === undefined ? "Copy" : soak.copied ? "Copied" : "Could not copy"}
-        </button>
-        <button
-          @click=${() => {
-            void this._openSoak();
-          }}
-        >
-          Refresh
-        </button>
-        ${close}
-      </div>
-    </div>`;
+  private _flush(): void {
+    if (this.hass) void soakTally.flush(this.hass);
   }
 
   protected override willUpdate(): void {
@@ -142,13 +87,22 @@ export class RvLiveGrid extends LitElement {
           class="text soak-button"
           title="After 24 hours with the grid open: did live view hold up?"
           @click=${() => {
-            void this._openSoak();
+            this._soak = true;
           }}
         >
           Soak report
         </button>
       </div>
-      ${this._renderSoak()}
+      ${this._soak
+        ? html`<rv-live-soak
+            class="soak"
+            closable
+            .hass=${this.hass}
+            @rv-live-soak-close=${() => {
+              this._soak = false;
+            }}
+          ></rv-live-soak>`
+        : nothing}
       ${data.error
         ? html`<div class="banner error" role="alert">
             Could not load live view: ${data.error}
@@ -179,6 +133,9 @@ export class RvLiveGrid extends LitElement {
               @rv-live-full=${(e: CustomEvent<{ cameraId: string; full: boolean }>) => {
                 if (e.detail.full) this._full = e.detail.cameraId;
                 else if (this._full === e.detail.cameraId) this._full = undefined;
+              }}
+              @rv-live-count=${(e: CustomEvent<LiveCountDetail>) => {
+                soakTally.count(e.detail.camera, e.detail.kind);
               }}
             >
               ${cameras.map(
@@ -221,17 +178,6 @@ export class RvLiveGrid extends LitElement {
       .soak-button {
         margin-left: auto;
         color: var(--primary-color);
-      }
-      .soak pre {
-        margin: 0 0 8px;
-        font-size: 12px;
-        white-space: pre-wrap;
-        overflow-wrap: anywhere;
-      }
-      .soak .actions {
-        display: flex;
-        gap: 8px;
-        justify-content: flex-end;
       }
       .grid {
         display: grid;

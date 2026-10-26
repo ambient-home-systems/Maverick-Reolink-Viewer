@@ -113,11 +113,11 @@ async function run({ origin, token }) {
   }
   tile?.shadowRoot?.querySelector(".corner-button.info")?.click();
 
-  // The soak report: the server's samples (and one now) with the tiles' counts.
+  // The soak report: the run the grid reports to, and the server's samples (and one now).
   [...grid.shadowRoot.querySelectorAll("button")].find((b) => b.textContent.trim() === "Soak report")?.click();
   const soakAt = performance.now();
   while (performance.now() < soakAt + 5000) {
-    const text = grid.shadowRoot?.querySelector(".soak pre")?.textContent ?? "";
+    const text = grid.shadowRoot?.querySelector("rv-live-soak")?.shadowRoot?.querySelector("pre")?.textContent ?? "";
     if (text.includes("Verdict:")) {
       result.soak = text.split("\n");
       break;

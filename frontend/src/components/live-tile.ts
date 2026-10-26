@@ -9,7 +9,6 @@ import {
 } from "lit";
 
 import type { DebugPlayer, TileDebug } from "../live/debug";
-import type { TileCounts } from "../live/soak";
 import { chooseHd, type HdChoice } from "../live/hd";
 import { LivePlayer, type PlayerState } from "../live/player";
 import { sharedStyles } from "../styles";
@@ -20,6 +19,7 @@ import type {
   LiveControls,
   LiveImage,
   LiveStreamKind,
+  SoakCounts,
 } from "../types";
 import "./live-controls";
 import "./live-debug";
@@ -30,6 +30,13 @@ export const OFFSCREEN_GRACE_MS = 3000;
 export const TILE_OPEN_EVENT = "rv-live-open";
 /** Fired when a tile goes full screen or back: `{ cameraId, full }`. */
 export const TILE_FULL_EVENT = "rv-live-full";
+/** Fired (bubbling) on each first frame, end after one and failed start of its players. */
+export const TILE_COUNT_EVENT = "rv-live-count";
+
+export interface LiveCountDetail {
+  camera: string;
+  kind: keyof SoakCounts;
+}
 
 /**
  * One camera live: its last picture at once, then the stream fading in over
@@ -149,6 +156,16 @@ export class RvLiveTile extends LitElement {
 
   private readonly _onVisibility = (): void => {
     this._pageVisible = document.visibilityState !== "hidden";
+  };
+
+  /** Tell the grid what a player counted (its soak run adds it up). */
+  private readonly _count = (kind: keyof SoakCounts): void => {
+    this.dispatchEvent(
+      new CustomEvent<LiveCountDetail>(TILE_COUNT_EVENT, {
+        detail: { camera: this.camera?.name ?? "Camera", kind },
+        bubbles: true,
+      }),
+    );
   };
 
   private readonly _onFullscreenChange = (): void => {
@@ -309,6 +326,7 @@ export class RvLiveTile extends LitElement {
         this._state = state;
       },
     );
+    this._player.onCount = this._count;
     return this._player;
   }
 
@@ -327,6 +345,7 @@ export class RvLiveTile extends LitElement {
         this._hdState = state;
       },
     );
+    this._hdPlayer.onCount = this._count;
     return this._hdPlayer;
   }
 
@@ -422,18 +441,6 @@ export class RvLiveTile extends LitElement {
         ${icon(this._full ? EXIT_FULL : ENTER_FULL)}
       </button>
     </div>`;
-  }
-
-  /** What its players counted, for the soak report. */
-  soakCounts(): TileCounts {
-    const counts = { camera: this.camera?.name ?? "Camera", plays: 0, drops: 0, failures: 0 };
-    for (const player of [this._player, this._hdPlayer]) {
-      if (!player) continue;
-      counts.plays += player.counts.plays;
-      counts.drops += player.counts.drops;
-      counts.failures += player.counts.failures;
-    }
-    return counts;
   }
 
   /** What the debug view shows: the players, their state and their last events. */

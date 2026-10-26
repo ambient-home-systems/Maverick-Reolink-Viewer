@@ -1,10 +1,11 @@
 """The soak report's server side: what live view holds, sampled every SAMPLE_S.
 
-Phase 3's exit criteria ask for 24 hours with the grid open: no reconnect
-loops, no growth in the sessions to the cameras, the cameras within their
-limits, and battery cameras asleep when nobody watches them. While the
-integration runs, this keeps a sample every SAMPLE_S, the last KEEP of them
-(36 h):
+Phase 3's soak (as the owner set it on 2026-10-26): Home Assistant runs live
+view for 24 hours, and the grid is visible for 8 hours in all, in as many
+sittings and on as many devices as suits. Throughout: no reconnect loops, no
+growth in the sessions to the cameras, the cameras within their limits, and
+battery cameras asleep when nobody watches them. While the integration runs,
+this keeps a sample every SAMPLE_S, the last KEEP of them (36 h):
 
 - go2rtc: its state, its restarts and its memory;
 - the WebRTC sessions, and the MSE feeds (open, kept warm, viewers, ended);
@@ -13,9 +14,18 @@ integration runs, this keeps a sample every SAMPLE_S, the last KEEP of them
 - each camera on battery: whether it sleeps, and whether a stream of it is
   held (watched).
 
-The panel's soak report reads them (``live/soak``) with what its tiles
-counted. Sampling reads only what is in memory, and go2rtc's memory from
-/proc: no camera I/O.
+It also keeps the soak run: when it started, how long grids were open and
+visible, how many times one opened, what their tiles counted, and which
+devices reported. Grids send what they counted every minute
+(``live/soak/count``), so a run outlives the page: Home Assistant unloads a
+panel whose page was hidden for 5 minutes, and a page may reload. The first
+grid to report starts a run; Start over starts a new one. The run is stored,
+so the grid's hours add up across Home Assistant restarts; the samples are
+kept in memory, so they start again with Home Assistant.
+
+The panel's soak report (``live/soak``) reads the run and the samples since
+it started, on any device. Sampling reads only what is in memory, and
+go2rtc's memory from /proc: no camera I/O.
 """
 
 import asyncio
@@ -27,6 +37,7 @@ from typing import TYPE_CHECKING, Any
 
 from custom_components.reolink_viewer import bridge, devices
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.storage import Store
 
 from .streams import LiveStream
 
@@ -37,6 +48,55 @@ _LOGGER = logging.getLogger(__name__)
 
 SAMPLE_S = 300.0
 KEEP = 36 * 3600 // int(SAMPLE_S)
+# What a tile counts: first frames, ends after one, failed starts.
+COUNTS = ("plays", "drops", "failures")
+# Bounds on what pages may add to a run.
+MAX_CAMERAS = 64
+MAX_DEVICES = 8
+STORE_KEY = "reolink_viewer.soak"
+# Grids report every minute: the run is written at most this often.
+SAVE_DELAY = 60.0
+
+
+def _now_ms() -> int:
+    return round(time.time() * 1000)
+
+
+def _copy(run: dict[str, Any]) -> dict[str, Any]:
+    return {
+        **run,
+        "tiles": {camera: dict(c) for camera, c in run["tiles"].items()},
+        "devices": dict(run["devices"]),
+    }
+
+
+def _count(value: Any) -> int:
+    return value if isinstance(value, int) and value >= 0 else 0
+
+
+def _stored_run(data: Any) -> dict[str, Any] | None:
+    """Return the stored run, checked; None if there is none or it is not one."""
+    run = data.get("run") if isinstance(data, dict) else None
+    if not isinstance(run, dict) or not isinstance(run.get("started_at"), int):
+        return None
+    tiles = run.get("tiles")
+    devices_seen = run.get("devices")
+    return {
+        "started_at": run["started_at"],
+        **{key: _count(run.get(key)) for key in ("opens", "open_ms", "visible_ms")},
+        "tiles": {
+            str(camera): {kind: _count(counts.get(kind)) for kind in COUNTS}
+            for camera, counts in (tiles.items() if isinstance(tiles, dict) else ())
+            if isinstance(counts, dict)
+        },
+        "devices": {
+            str(device): at
+            for device, at in (
+                devices_seen.items() if isinstance(devices_seen, dict) else ()
+            )
+            if isinstance(at, int)
+        },
+    }
 
 
 class SoakRecorder:
@@ -48,6 +108,16 @@ class SoakRecorder:
         self._service = service
         self._samples: deque[dict[str, Any]] = deque(maxlen=KEEP)
         self._task: asyncio.Task[None] | None = None
+        # The soak run, once a grid has reported; stored (async_load reads it).
+        self._current: dict[str, Any] | None = None
+        self._store: Store[dict[str, Any]] = Store(hass, 1, STORE_KEY)
+
+    async def async_load(self) -> None:
+        """Read the stored run, if any (before grids report)."""
+        self._current = _stored_run(await self._store.async_load())
+
+    def _save(self) -> None:
+        self._store.async_delay_save(lambda: {"run": self._current}, SAVE_DELAY)
 
     @callback
     def start(self) -> None:
@@ -69,6 +139,67 @@ class SoakRecorder:
         """Return the samples taken since then (epoch ms), oldest first."""
         return [s for s in self._samples if s["at"] >= since_ms]
 
+    @property
+    def run(self) -> dict[str, Any] | None:
+        """Return the soak run (a copy), or None before a grid has reported."""
+        return None if self._current is None else _copy(self._current)
+
+    def start_over(self, device: str, *, grid_open: bool) -> dict[str, Any]:
+        """Start a new run now (the grid open on the page asking, or not)."""
+        now = _now_ms()
+        run = self._current = {
+            "started_at": now,
+            "opens": 1 if grid_open else 0,
+            "open_ms": 0,
+            "visible_ms": 0,
+            "tiles": {},
+            "devices": {device: now},
+        }
+        self._save()
+        return _copy(run)
+
+    def count(
+        self,
+        device: str,
+        *,
+        opens: int,
+        open_ms: int,
+        visible_ms: int,
+        tiles: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Add what a grid counted since it last reported; start a run if none."""
+        now = _now_ms()
+        run = self._current
+        if run is None:
+            # The first grid to report starts the run, when it opened.
+            run = self._current = {
+                "started_at": now - open_ms,
+                "opens": 0,
+                "open_ms": 0,
+                "visible_ms": 0,
+                "tiles": {},
+                "devices": {},
+            }
+        run["opens"] += opens
+        run["open_ms"] += open_ms
+        run["visible_ms"] += visible_ms
+        counted: dict[str, dict[str, int]] = run["tiles"]
+        for tile in tiles:
+            camera = tile["camera"]
+            if camera not in counted:
+                if len(counted) >= MAX_CAMERAS:
+                    continue
+                counted[camera] = dict.fromkeys(COUNTS, 0)
+            for kind in COUNTS:
+                counted[camera][kind] += tile[kind]
+        seen: dict[str, int] = run["devices"]
+        seen.pop(device, None)
+        seen[device] = now
+        while len(seen) > MAX_DEVICES:
+            del seen[next(iter(seen))]
+        self._save()
+        return _copy(run)
+
     async def async_sample(self) -> dict[str, Any]:
         """Return what live view holds now."""
         service = self._service
@@ -76,7 +207,7 @@ class SoakRecorder:
         memory = await self._hass.async_add_executor_job(service.server.memory_kb)
         running = service.registry.running()
         return {
-            "at": round(time.time() * 1000),
+            "at": _now_ms(),
             "go2rtc": {
                 "state": status["state"],
                 "restarts": status["restarts"],

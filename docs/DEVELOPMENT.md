@@ -34,7 +34,7 @@ custom_components/reolink_viewer/
     relay.py         #   the key-frame cache: one shared MSE feed per stream; keep warm
     images.py        #   each camera's last picture, taken while a live page watches
     warm.py          #   keeps warm what the cameras' keep-warm switches ask for
-    soak.py          #   samples of what live view holds, for the soak report
+    soak.py          #   the soak run and samples of what live view holds, for the soak report
     service.py       #   the above per entry; WebRTC sessions
     views.py         #   signed MSE websocket (from the cache), frames and pictures
     websocket.py     #   live/* commands (WebRTC signaling, pictures, keep warm, capacity test)
@@ -47,7 +47,7 @@ frontend/            # Lit + TypeScript panel, built with Vite
   src/components/    # device list, device page, overview, settings, playback tab,
                      # live grid and Live tab (live-grid.ts) with their tiles (live-tile.ts)
                      # and the camera's controls (live-controls.ts) and debug view
-                     # (live-debug.ts) over them
+                     # (live-debug.ts) over them; the soak report (live-soak.ts)
   src/playback/      # timeline canvas + math, calendar, event list, player (MSE feeder in
                      # mse-feeder.ts, else a file URL), codec checks, the playback check
                      # (check.ts) and its MSE probe (mse-probe.ts, mse-sample.ts)
@@ -55,7 +55,8 @@ frontend/            # Lit + TypeScript panel, built with Vite
                      # websocket (session.ts); the player that keeps one playing
                      # (player.ts); what the live views share (data.ts); which stream
                      # full screen plays in HD (hd.ts); a tile's debug text
-                     # (debug.ts); the soak report (soak.ts); the live check
+                     # (debug.ts); the soak report's text (soak.ts) and what a page
+                     # counts for the soak run (soak-tally.ts); the live check
 tests/               # pytest-homeassistant-custom-component; test_mse_browser.py and
                      # test_live_browser.py drive Playwright's Chromium (mse_append.cjs,
                      # live_browser.cjs, live_grid_browser.cjs: the panel's grid);

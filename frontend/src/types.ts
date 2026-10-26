@@ -527,9 +527,36 @@ export interface SoakSample {
   battery: { camera: string; sleeping: boolean | null; watched: boolean }[];
 }
 
-/** live/soak: the samples since a time, and one taken now. */
+/** What a grid's tiles counted for one camera: first frames, ends after one, failed starts. */
+export interface SoakCounts {
+  plays: number;
+  drops: number;
+  failures: number;
+}
+
+/**
+ * The soak run, kept by the server so that it outlives the page: since when,
+ * how long a grid was open and visible, how many times one opened, and what
+ * the tiles counted. Grids add to it every minute.
+ */
+export interface SoakRun {
+  /** Epoch ms. */
+  started_at: number;
+  /** Times a grid opened (a reload, or Home Assistant unloading the panel while hidden, opens it again). */
+  opens: number;
+  open_ms: number;
+  visible_ms: number;
+  tiles: Record<string, SoakCounts>;
+  /** The devices that reported, and when each last did (epoch ms). */
+  devices: Record<string, number>;
+}
+
+/** live/soak: the soak run, the samples since it started, and one taken now. */
 export interface LiveSoak {
   sample_s: number;
+  /** How long the server keeps samples (s). */
+  keep_s: number;
+  run: SoakRun | null;
   samples: SoakSample[];
   now: SoakSample;
 }

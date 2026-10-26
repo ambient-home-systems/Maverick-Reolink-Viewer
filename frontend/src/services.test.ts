@@ -31,6 +31,7 @@ describe("navigation hash", () => {
     const route = { view: "device", id: "a/b", tab: "settings" } as const;
     expect(routeFromHash(routeToHash(route))).toEqual(route);
     expect(routeToHash({ view: "list" })).toBe("");
+    expect(routeFromHash(routeToHash({ view: "soak" }))).toEqual({ view: "soak" });
     expect(routeFromHash("#device/x")).toEqual({ view: "device", id: "x", tab: "overview" });
     expect(routeFromHash("#nonsense")).toEqual({ view: "list" });
     expect(routeFromHash("#device/x/playback")).toEqual({ view: "device", id: "x", tab: "playback" });

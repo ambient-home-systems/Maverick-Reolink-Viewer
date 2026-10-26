@@ -9,6 +9,8 @@ import type {
   LiveStreamKind,
   LiveSoak,
   LiveStreamState,
+  SoakCounts,
+  SoakRun,
   Catalog,
   MediaInfoResponse,
   PlaybackUrl,
@@ -277,8 +279,28 @@ export const fetchLiveState = (hass: HomeAssistant, ref: LiveRef): Promise<LiveS
   hass.callWS<LiveStreamState>({ type: "reolink_viewer/live/state", ...liveRef(ref) });
 
 /** The soak report's server samples since a time (epoch ms), and one now. */
-export const fetchLiveSoak = (hass: HomeAssistant, since: number): Promise<LiveSoak> =>
-  hass.callWS<LiveSoak>({ type: "reolink_viewer/live/soak", since: Math.floor(since) });
+export const fetchLiveSoak = (hass: HomeAssistant): Promise<LiveSoak> =>
+  hass.callWS<LiveSoak>({ type: "reolink_viewer/live/soak" });
+
+/** What a grid counted since it last reported, for the soak run. */
+export interface SoakDelta {
+  opens: number;
+  open_ms: number;
+  visible_ms: number;
+  tiles: ({ camera: string } & SoakCounts)[];
+}
+
+/** Add what a grid counted to the soak run (the first report starts one). */
+export const sendSoakCounts = (
+  hass: HomeAssistant,
+  device: string,
+  delta: SoakDelta,
+): Promise<{ started_at: number }> =>
+  hass.callWS({ type: "reolink_viewer/live/soak/count", device, ...delta });
+
+/** Start the soak run over (with the grid open on this page, or not). */
+export const startSoakOver = (hass: HomeAssistant, device: string, gridOpen: boolean): Promise<{ run: SoakRun }> =>
+  hass.callWS({ type: "reolink_viewer/live/soak/start", device, grid_open: gridOpen });
 
 /**
  * Keep a stream warm (its feed open, its last key frame cached), or stop

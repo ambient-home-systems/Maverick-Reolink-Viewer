@@ -86,6 +86,11 @@ server's state of its stream, and its last events, with a Copy button for report
 v0.14.0 adds a **soak report** to the Live grid: leave the grid open for 24 hours, then
 it says whether live view held up (reconnects, sessions to the cameras, go2rtc, battery
 cameras asleep), from samples the server takes every 5 minutes.
+v0.15.0 keeps the soak on the server, so a hidden page, a reload or a restart no longer
+starts it over. Before, Home Assistant unloading a panel whose page had been hidden for
+5 minutes reset the soak. The soak now has two halves: Home Assistant runs live view
+for 24 hours, with no page open, and the grid is visible for 8 hours in all, across any
+sittings and devices. Any device can read the report under Reolink → **Soak report**.
 
 Requires Home Assistant 2026.10 or newer with the Reolink integration set up.
 

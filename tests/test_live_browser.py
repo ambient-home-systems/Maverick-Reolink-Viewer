@@ -179,12 +179,21 @@ async def test_chromium_starts_the_live_grid(
     assert result["debug"][0].startswith("test_reolink_cam · "), result
     assert result["debug"][1].startswith("SD (sub, kept warm): "), result
     assert result["debug"][2].startswith("  server: go2rtc "), result
-    # The soak report: the server's samples, the tile's counts, the verdicts.
+    # The soak report: the run the grid started on the server, its samples,
+    # what the tile counted (if anything yet), the verdicts.
     soak = result["soak"]
     assert soak[0].startswith("Reolink Viewer soak report v"), result
+    assert soak[1].startswith("Soak started "), soak
+    assert soak[1].endswith(" · opened 1 time"), soak
+    assert soak[2] == "Reported by: Linux · Chrome (now)", soak
+    assert soak[3].startswith("Home Assistant's samples: "), soak
     assert any(line.startswith("go2rtc: running") for line in soak), soak
-    assert any(line.startswith("  test_reolink_cam: ") for line in soak), soak
-    assert "✗ Not 24 h yet: the grid has been open 0.0 h" in soak, soak
+    tiles = soak.index("Tiles (plays · drops · failed starts):")
+    assert soak[tiles + 1].startswith(("  test_reolink_cam: ", "  none counted")), soak
+    assert (
+        "✗ The grid has been visible 0.0 h of 8: open it whenever it suits;"
+        " the hours add up across sittings and devices"
+    ) in soak, soak
     # Full screen: the HD stream (the main, H.264 here) starts while the sub
     # stream's player keeps running, cold over WebRTC, or over MSE once WebRTC
     # has failed (this Chromium offers go2rtc no H.264); back from it, the main
