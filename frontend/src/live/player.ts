@@ -10,6 +10,12 @@
 // within CUT_WINDOW_MS, every player on it starts over WebRTC first for
 // PREFER_WEBRTC_MS (CutWatch), then tries MSE first again; at once if WebRTC
 // cannot start there either.
+//
+// Other networks block WebRTC (the work PC, 2026-10-28: no frame in 15 s, then
+// MSE in 1 s), so a stream not kept warm would wait 15 s at each start. Once
+// WebRTC is answered but never connects, and MSE then plays the stream, streams
+// start over MSE first for PREFER_MSE_MS on this device and Home Assistant
+// (WebRtcWatch); WebRTC playing again forgets it.
 import type { LiveRef } from "../api";
 import type { HomeAssistant, SoakCounts } from "../types";
 import {
@@ -94,6 +100,67 @@ export class CutWatch {
 /** The page's: the network is the same for every tile on it. */
 export const pageCuts = new CutWatch();
 
+/** After WebRTC failed and MSE played, MSE goes first for this long (a week: each wrong WebRTC try costs 15 s). */
+export const PREFER_MSE_MS = 7 * 24 * 60 * 60_000;
+const BLOCKED_KEY = "reolink-viewer.webrtc-blocked";
+
+/** Whether WebRTC is known not to connect from this device to this Home Assistant, kept across page loads. */
+export class WebRtcWatch {
+  /** MSE goes first until then (epoch ms), when the device cannot remember it. */
+  private _until = 0;
+
+  constructor(
+    /** The Home Assistant address it is kept for: the network to it decides. */
+    private readonly _host: string = location.host,
+    private readonly _storage: () => Storage | undefined = () => localStorage,
+  ) {}
+
+  /** MSE goes first until then (epoch ms); 0 when WebRTC goes first. */
+  get until(): number {
+    const kept = this._read()[this._host];
+    return Math.max(this._until, typeof kept === "number" ? kept : 0);
+  }
+
+  preferMse(at: number = Date.now()): boolean {
+    return at < this.until;
+  }
+
+  /** WebRTC could not connect and MSE then played; true if it makes MSE go first. */
+  note(at: number = Date.now()): boolean {
+    if (this.preferMse(at)) return false;
+    this._keep(at + PREFER_MSE_MS);
+    return true;
+  }
+
+  /** WebRTC played: it connects from here after all. */
+  works(): void {
+    if (this.until) this._keep(0);
+  }
+
+  private _keep(until: number): void {
+    this._until = until;
+    try {
+      const kept = Object.fromEntries(Object.entries(this._read()).filter(([host]) => host !== this._host));
+      if (until) kept[this._host] = until;
+      this._storage()?.setItem(BLOCKED_KEY, JSON.stringify(kept));
+    } catch {
+      // Not remembered (private browsing): it holds until the page closes.
+    }
+  }
+
+  private _read(): Record<string, unknown> {
+    try {
+      const value: unknown = JSON.parse(this._storage()?.getItem(BLOCKED_KEY) ?? "{}");
+      return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+    } catch {
+      return {};
+    }
+  }
+}
+
+/** The page's: this device's way to this Home Assistant is the same for every tile. */
+export const pageWebRtc = new WebRtcWatch();
+
 /** Something the player did, for the debug view: when (epoch ms) and what. */
 export interface PlayerEvent {
   at: number;
@@ -123,6 +190,8 @@ export class LivePlayer {
   private _failures = 0;
   /** It said that WebRTC goes first (once per switch). */
   private _switchNoted = false;
+  /** It said that MSE goes first because WebRTC does not connect (once per switch). */
+  private _blockedNoted = false;
   /** Bumped by stop(): what an older run finds afterwards is dropped. */
   private _run = 0;
 
@@ -135,6 +204,7 @@ export class LivePlayer {
     private readonly _onState: (state: PlayerState) => void = () => undefined,
     private readonly _factory: SessionFactory = sessionFor,
     private readonly _cuts: CutWatch = pageCuts,
+    private readonly _webRtc: WebRtcWatch = pageWebRtc,
   ) {}
 
   get running(): boolean {
@@ -164,12 +234,22 @@ export class LivePlayer {
   }
 
   private async _attempt(run: number): Promise<void> {
-    const mseFirst = this.options.warm && !this._cuts.preferWebRtc();
+    const blocked = this._webRtc.preferMse();
+    const mseFirst = blocked || (this.options.warm && !this._cuts.preferWebRtc());
     const switched = this.options.warm && !mseFirst;
     if (switched && !this._switchNoted) this._note("WebRTC first: this network cuts MSE's connections");
     this._switchNoted = switched;
+    const mseInstead = blocked && !this.options.warm;
+    if (mseInstead && !this._blockedNoted) this._note("MSE first: WebRTC does not connect from here");
+    this._blockedNoted = mseInstead;
     const order: Transport[] = mseFirst ? ["MSE", "WebRTC"] : ["WebRTC", "MSE"];
     let error = "failed";
+    /**
+     * WebRTC failed though the server answered, without ever connecting: no
+     * path from here. (A camera slow to wake has no answer yet; one slow to
+     * send a frame had connected.)
+     */
+    let webRtcUnreachable = false;
     for (const transport of order) {
       this._note(`${transport}: starting`);
       this._set({ kind: "starting", transport });
@@ -192,6 +272,11 @@ export class LivePlayer {
         const first = result.firstFrameMs;
         this._note(`${transport}: playing${first !== undefined ? `, first frame in ${(first / 1000).toFixed(2)} s` : ""}`);
         this.onCount("plays");
+        if (transport === "WebRTC") {
+          this._webRtc.works();
+        } else if (webRtcUnreachable && this._webRtc.note()) {
+          this._note(`WebRTC could not connect but MSE played: MSE goes first from here for ${PREFER_MSE_MS / 86_400_000} days`);
+        }
         this._set({ kind: "playing", transport, result });
         return;
       }
@@ -200,6 +285,9 @@ export class LivePlayer {
       error = `${transport}: ${result.error ?? "failed"}`;
       this._note(error);
       this.onCount("failures");
+      if (transport === "WebRTC" && "answer" in result.steps && !("connected" in result.steps)) {
+        webRtcUnreachable = true;
+      }
       if (switched && transport === "WebRTC" && this._cuts.preferWebRtc()) {
         // A network that blocks WebRTC too: each start would wait for it to fail.
         this._cuts.giveUp();

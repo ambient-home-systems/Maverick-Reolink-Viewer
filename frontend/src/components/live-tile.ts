@@ -5,7 +5,7 @@ import type { DebugPlayer, TileDebug } from "../live/debug";
 import { offlineSince } from "../live/data";
 import { explainLive } from "../live/explain";
 import { chooseHd, type HdChoice } from "../live/hd";
-import { LivePlayer, pageCuts, type PlayerState } from "../live/player";
+import { LivePlayer, pageCuts, pageWebRtc, type PlayerState } from "../live/player";
 import { currentLink, fullScreenHd, rememberFullScreenHd, type Link } from "../network";
 import { formatClock, formatStamp } from "../playback/time";
 import { enterPip, exitPip, inPip, pipSupported } from "../pip";
@@ -580,6 +580,7 @@ export class RvLiveTile extends LitElement {
       players,
       hd: this._hd?.reason,
       webRtcFirstUntil: pageCuts.preferWebRtc() ? pageCuts.until : undefined,
+      mseFirstUntil: pageWebRtc.preferMse() ? pageWebRtc.until : undefined,
     };
   }
 

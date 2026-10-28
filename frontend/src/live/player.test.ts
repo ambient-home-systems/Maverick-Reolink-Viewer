@@ -8,9 +8,11 @@ import {
   CutWatch,
   EVENT_LOG,
   LivePlayer,
+  PREFER_MSE_MS,
   PREFER_WEBRTC_MS,
   RETRY_S,
   STABLE_MS,
+  WebRtcWatch,
   type PlayerState,
   type SessionFactory,
   type Transport,
@@ -38,8 +40,9 @@ class FakeSession implements LiveSession {
   play(): void {
     this._resolve({ ok: true, firstFrameMs: 120, steps: {} });
   }
-  failStart(error: string): void {
-    this._resolve({ ok: false, error, steps: {} });
+  /** Fail before the first frame; `steps` says how far it got (WebRTC: "connected"). */
+  failStart(error: string, steps: Record<string, number> = {}): void {
+    this._resolve({ ok: false, error, steps });
   }
   end(error: string, cut = false): void {
     this.onEnd?.(error, cut);
@@ -49,7 +52,19 @@ class FakeSession implements LiveSession {
   }
 }
 
-function setup(warm: boolean, cuts: CutWatch = new CutWatch()) {
+/** A Storage that keeps what it is given, for WebRtcWatch. */
+function memoryStorage(): Storage {
+  const kept = new Map<string, string>();
+  return {
+    getItem: (key: string) => kept.get(key) ?? null,
+    setItem: (key: string, value: string) => void kept.set(key, value),
+  } as unknown as Storage;
+}
+
+/** A watch of its own, on a device that cannot remember (each test starts afresh). */
+const freshWatch = () => new WebRtcWatch("ha.test", () => undefined);
+
+function setup(warm: boolean, cuts: CutWatch = new CutWatch(), webRtc: WebRtcWatch = freshWatch()) {
   const sessions: FakeSession[] = [];
   const states: PlayerState[] = [];
   const factory: SessionFactory = (
@@ -72,6 +87,7 @@ function setup(warm: boolean, cuts: CutWatch = new CutWatch()) {
     (state) => states.push(state),
     factory,
     cuts,
+    webRtc,
   );
   const last = () => {
     const session = sessions.at(-1);
@@ -302,6 +318,78 @@ describe("LivePlayer", () => {
     expect(again.preferWebRtc()).toBe(true);
   });
 
+  it("starts over MSE first once WebRTC could not connect here, and forgets it when WebRTC plays", async () => {
+    const watch = freshWatch();
+    const { player, sessions, last } = setup(false, new CutWatch(), watch);
+    player.start();
+    expect(last().transport).toBe("WebRTC");
+    // The server answered; the browser never reached it.
+    last().failStart("no frame within 15 s", { offer: 5, answer: 900 });
+    await flush();
+    expect(watch.preferMse()).toBe(false); // not before MSE has shown the camera plays
+    last().play();
+    await flush();
+    expect(watch.preferMse()).toBe(true);
+    expect(watch.until).toBe(Date.now() + PREFER_MSE_MS);
+    expect(player.events.map((e) => e.text)).toContain(
+      "WebRTC could not connect but MSE played: MSE goes first from here for 7 days",
+    );
+    // Its next start, after a drop, goes MSE first: no 15 s wait.
+    last().end("no new frame for 10 s");
+    vi.advanceTimersByTime(RETRY_S[0] * 1000);
+    expect(sessions.map((s) => s.transport)).toEqual(["WebRTC", "MSE", "MSE"]);
+    expect(player.events.map((e) => e.text)).toContain("MSE first: WebRTC does not connect from here");
+    // So do the page's other cold streams (full screen's HD too), and a warm one switched by cuts.
+    const other = setup(false, new CutWatch(), watch);
+    other.player.start();
+    expect(other.last().transport).toBe("MSE");
+    const cuts = new CutWatch();
+    cuts.note(Date.now() - 60_000);
+    cuts.note(Date.now());
+    const warm = setup(true, cuts, watch);
+    warm.player.start();
+    expect(warm.last().transport).toBe("MSE");
+    // MSE fails and WebRTC plays: WebRTC connects from here after all.
+    other.last().failStart("the server closed the stream");
+    await flush();
+    expect(other.last().transport).toBe("WebRTC");
+    other.last().play();
+    await flush();
+    expect(watch.preferMse()).toBe(false);
+    other.player.stop();
+    other.player.start();
+    expect(other.last().transport).toBe("WebRTC");
+    await flush();
+  });
+
+  it("does not count a WebRTC start the camera held up (not answered yet, or connected without a frame)", async () => {
+    const watch = freshWatch();
+    for (const steps of [{ offer: 5 }, { offer: 5, answer: 900, connected: 1100 }]) {
+      const { player, last } = setup(false, new CutWatch(), watch);
+      player.start();
+      last().failStart("no frame within 15 s", steps);
+      await flush();
+      last().play();
+      await flush();
+      expect(player.state).toMatchObject({ kind: "playing", transport: "MSE" });
+      expect(watch.preferMse(), JSON.stringify(steps)).toBe(false);
+    }
+  });
+
+  it("tries WebRTC first again after a week", async () => {
+    const watch = freshWatch();
+    watch.note();
+    const { player, last } = setup(false, new CutWatch(), watch);
+    vi.advanceTimersByTime(PREFER_MSE_MS - 1);
+    player.start();
+    expect(last().transport).toBe("MSE");
+    player.stop();
+    vi.advanceTimersByTime(1);
+    player.start();
+    expect(last().transport).toBe("WebRTC");
+    await flush();
+  });
+
   it("reads warm at each start", async () => {
     const { player, last } = setup(false);
     player.start();
@@ -334,5 +422,39 @@ describe("CutWatch", () => {
     expect(cuts.note(until - 60_000)).toBe(false);
     expect(cuts.until).toBe(until);
     expect(cuts.preferWebRtc(until)).toBe(false);
+  });
+});
+
+describe("WebRtcWatch", () => {
+  it("is kept on the device for each Home Assistant address, across page loads", () => {
+    const storage = memoryStorage();
+    const t = 1_000_000;
+    const work = new WebRtcWatch("abc.ui.nabu.casa", () => storage);
+    expect(work.note(t)).toBe(true);
+    // Noting again while it holds does not extend it.
+    expect(work.note(t + 60_000)).toBe(false);
+    expect(work.until).toBe(t + PREFER_MSE_MS);
+    // The next page load, to the same address: still MSE first.
+    const reload = new WebRtcWatch("abc.ui.nabu.casa", () => storage);
+    expect(reload.preferMse(t + 1)).toBe(true);
+    // Another address (home, on the LAN) is a different way in.
+    expect(new WebRtcWatch("192.168.1.10:8123", () => storage).preferMse(t + 1)).toBe(false);
+    reload.works();
+    expect(new WebRtcWatch("abc.ui.nabu.casa", () => storage).preferMse(t + 1)).toBe(false);
+  });
+
+  it("holds for the page when the device cannot remember, or remembers nonsense", () => {
+    const broken = {
+      getItem: () => "not json",
+      setItem: () => {
+        throw new Error("quota");
+      },
+    } as unknown as Storage;
+    const watch = new WebRtcWatch("ha.test", () => broken);
+    expect(watch.preferMse()).toBe(false);
+    expect(watch.note()).toBe(true);
+    expect(watch.preferMse()).toBe(true);
+    watch.works();
+    expect(watch.preferMse()).toBe(false);
   });
 });

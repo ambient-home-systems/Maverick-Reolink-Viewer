@@ -125,4 +125,14 @@ describe("debugText", () => {
     );
     expect(debugText(info, {}, AT + 1000)).not.toContain("Network:");
   });
+
+  it("says when MSE goes first because WebRTC does not connect from here", () => {
+    const week = AT + 7 * 86_400_000;
+    const info: TileDebug = { camera: "Doorbell", connection: NVR, players: [], mseFirstUntil: week };
+    const until = new Date(week).toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit" });
+    expect(debugText(info, {}, AT)).toContain(
+      `Network: WebRTC does not connect from here, so MSE goes first until ${until}`,
+    );
+    expect(debugText(info, {}, week)).not.toContain("Network:");
+  });
 });

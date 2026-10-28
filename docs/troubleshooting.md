@@ -226,6 +226,11 @@ that is not kept warm takes 1 to 4 seconds to start, depending on when you open 
 - On models that let you set it, a shorter key-frame interval for the camera's small
   ("Fluent") stream makes it start sooner. Reolink's settings call it the I-frame or
   interframe interval. In tests, a camera at 1 second started in about a second.
+- Some networks, often at work, block the quicker of the panel's two ways of
+  streaming (WebRTC). The first time, a camera that is not kept warm then starts
+  after about 15 seconds, over the other way. The device remembers it for a week,
+  for that Home Assistant address, so its cameras start the other way at once from
+  then on; the camera's ⓘ view says "Network: WebRTC does not connect from here".
 - The [live check](user-guide.md#the-live-check) measures how fast each camera starts
   on the device you run it on, and says what is slow.
 
