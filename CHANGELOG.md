@@ -3,6 +3,20 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.33.0
+
+Choose how full screen plays on each device:
+
+- **Devices → This device** sets whether full screen starts in HD or SD at home, and
+  in HD or the lighter SD away from home or on mobile data. Until now that was only
+  what you last tapped in full screen.
+- **Remember HD or SD when I tap it in full screen** is on, as before: a tap changes
+  the setting. Turn it off and a tap lasts until you leave full screen, so full
+  screen starts as set every time.
+
+Each phone and computer keeps its own settings. Tested on Home Assistant 2026.10.1 to
+2026.10.4.
+
 ## 0.32.3
 
 Fixes from trying the panel on an iPhone:

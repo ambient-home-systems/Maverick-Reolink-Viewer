@@ -54,7 +54,7 @@ Something not working? Open an issue on the
 ## Home Assistant versions
 
 Each release is tested on every Home Assistant release from the oldest it supports to
-the newest of its day: v0.32.3 on 2026.10.1 to 2026.10.4 (2026.10.0's Reolink library
+the newest of its day: v0.33.0 on 2026.10.1 to 2026.10.4 (2026.10.0's Reolink library
 is too old for its recordings). A weekly check tries each
 new Home Assistant release. If one changes the Reolink integration in a way Reolink
 Viewer cannot read, the panel says so on every page ("Reolink Viewer needs an

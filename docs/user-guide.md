@@ -93,7 +93,8 @@ Each tile has small buttons, bottom right:
 - **Full screen** shows that camera alone, in HD. The HD video starts in the
   background and replaces the smaller picture as soon as it plays. Away from home or
   on mobile data, full screen starts in the lighter SD instead, to save data: tap
-  **HD** for full quality, and each device remembers your choice.
+  **HD** for full quality, and each device remembers your choice. To choose how it
+  starts, see [This device](#this-device).
 - **Picture in picture** keeps the camera playing in a small window over your other
   windows and apps, where your browser offers it.
 - **ⓘ** shows what the tile plays and how, for when you ask for help. Its **Copy**
@@ -157,7 +158,7 @@ board.
 
 ## Devices
 
-![The Devices tab: NVRs and their cameras, the checks and the help](images/devices.jpg)
+![The Devices tab: NVRs and their cameras, the checks, this device's settings and the help](images/devices.jpg)
 
 The **Devices** tab lists your NVRs and Home Hubs with their cameras, then the
 cameras added on their own. Each row has the camera's number on the board, its
@@ -169,11 +170,27 @@ Below the list:
 
 - **Checks**: the [live check](#the-live-check) and the
   [soak report](#the-soak-report).
+- **This device**: how full screen plays on the phone or computer you are using,
+  [below](#this-device).
 - **Help**: this guide, [Troubleshooting](troubleshooting.md) and
   [Cameras and NVRs](cameras.md), for the version you have installed (it says which).
 - **Hardware probe**, for administrators: see [below](#the-hardware-probe).
 
 **Refresh** reads your devices again, after you add or change one in Home Assistant.
+
+### This device
+
+How a camera plays in full screen on the phone or computer you are using. Each device
+keeps its own:
+
+- **At home, full screen starts in** HD (as it comes) or SD.
+- **Away from home or on mobile data, it starts in** the lighter SD (as it comes), to
+  save data, or HD. Away means through Nabu Casa or Tailscale, or from outside your
+  network; and, where the browser says so, on mobile data, a slow connection or with
+  data saver on.
+- **Remember HD or SD when I tap it in full screen**: on, tapping **HD** in full
+  screen changes the setting above for where you are. Off, a tap lasts until you
+  leave full screen, and full screen starts as set here every time.
 
 ## A camera's page
 

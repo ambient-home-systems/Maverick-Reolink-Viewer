@@ -188,6 +188,44 @@ describe("reolink-viewer-panel", () => {
     }
   });
 
+  it("sets how full screen plays on this device, at home and away", async () => {
+    localStorage.clear();
+    try {
+      const el = await mount(makeHass(okDevices()));
+      const section = () =>
+        [...(el.shadowRoot?.querySelectorAll("section.card") ?? [])].find(
+          (s) => s.querySelector("h2")?.textContent === "This device",
+        );
+      const selects = () => [...(section()?.querySelectorAll("select") ?? [])];
+      const keep = () => section()?.querySelector<HTMLInputElement>('input[type="checkbox"]');
+      // As it plays now: HD at home, the lighter SD away, taps kept.
+      expect(selects().map((s) => s.getAttribute("aria-label"))).toEqual([
+        "At home, full screen starts in",
+        "Away from home or on mobile data, it starts in",
+      ]);
+      expect(selects().map((s) => s.value)).toEqual(["hd", "sd"]);
+      expect(keep()?.checked).toBe(true);
+      // Chosen here: kept for this device, as a tap in full screen would be.
+      const [home, away] = selects() as [HTMLSelectElement, HTMLSelectElement];
+      away.value = "hd";
+      away.dispatchEvent(new Event("change"));
+      home.value = "sd";
+      home.dispatchEvent(new Event("change"));
+      await el.updateComplete;
+      expect(JSON.parse(localStorage.getItem("reolink-viewer.full-screen-hd") ?? "{}")).toEqual({ away: true, home: false });
+      expect(selects().map((s) => s.value)).toEqual(["sd", "hd"]);
+      const box = keep();
+      if (!box) throw new Error("no checkbox");
+      box.checked = false;
+      box.dispatchEvent(new Event("change"));
+      await el.updateComplete;
+      expect(localStorage.getItem("reolink-viewer.full-screen-keep-taps")).toBe("off");
+      expect(keep()?.checked).toBe(false);
+    } finally {
+      localStorage.clear();
+    }
+  });
+
   it("shows an empty state", async () => {
     const el = await mount(makeHass(okDevices([], [])));
     expect(text(el)).toContain("No Reolink devices");
@@ -385,6 +423,12 @@ describe("reolink-viewer-panel", () => {
     );
   });
 
+  /** The hardware probe's section, where its options are. */
+  const probeSection = (el: HTMLElement) =>
+    [...(el.shadowRoot?.querySelectorAll("section.card") ?? [])].find(
+      (s) => s.querySelector("h2")?.textContent === "Hardware probe",
+    );
+
   it("hides the probe from non-admins", async () => {
     const el = await mount(makeHass(okDevices(), false));
     expect(text(el)).not.toContain("Hardware probe");
@@ -393,7 +437,7 @@ describe("reolink-viewer-panel", () => {
   it("runs the probe, shows progress and downloads the report", async () => {
     const hass = makeHass(okDevices());
     const el = await mount(hass);
-    const concurrency = el.shadowRoot?.querySelectorAll<HTMLInputElement>("input[type=checkbox]")[1];
+    const concurrency = probeSection(el)?.querySelectorAll<HTMLInputElement>("input[type=checkbox]")[1];
     if (!concurrency) throw new Error("no checkbox");
     concurrency.checked = true;
     concurrency.dispatchEvent(new Event("change"));
@@ -431,7 +475,7 @@ describe("reolink-viewer-panel", () => {
     const hass = makeHass(okDevices());
     const el = await mount(hass);
     const boxes = () =>
-      Array.from(el.shadowRoot?.querySelectorAll<HTMLInputElement>("input[type=checkbox]") ?? []);
+      Array.from(probeSection(el)?.querySelectorAll<HTMLInputElement>("input[type=checkbox]") ?? []);
     const toggle = async (index: number) => {
       const box = boxes().at(index);
       if (!box) throw new Error(`no checkbox ${String(index)}`);
@@ -445,7 +489,7 @@ describe("reolink-viewer-panel", () => {
     expect(boxes()[3]?.disabled).toBe(false);
     await toggle(3);
     await toggle(4);
-    const select = el.shadowRoot?.querySelectorAll<HTMLSelectElement>("select")[1];
+    const select = probeSection(el)?.querySelectorAll<HTMLSelectElement>("select")[1];
     if (!select) throw new Error("no select");
     expect(select.disabled).toBe(false);
     select.value = "6";

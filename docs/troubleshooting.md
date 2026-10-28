@@ -247,7 +247,9 @@ to see how live view holds up over a day.
 Away from home (through Nabu Casa or Tailscale), on mobile data, or with your
 device's data saver on, full screen starts in the lighter SD, and says why: "Lighter
 SD through Nabu Casa. Tap HD for full quality." Tap **HD** for full quality: each
-device remembers your choice.
+device remembers your choice. To have full screen start in HD (or SD) every time,
+choose it under **Devices → This device**; there you can also stop it remembering
+what you tap.
 
 HD is the camera's full-resolution stream where this browser can play it smoothly,
 and otherwise the camera's middle ("ext") stream. A Reolink Duo 3's 16-megapixel

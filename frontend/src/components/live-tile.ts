@@ -6,7 +6,7 @@ import { offlineSince } from "../live/data";
 import { explainLive } from "../live/explain";
 import { chooseHd, type HdChoice } from "../live/hd";
 import { LivePlayer, pageCuts, pageWebRtc, type PlayerState } from "../live/player";
-import { currentLink, fullScreenHd, rememberFullScreenHd, type Link } from "../network";
+import { currentLink, fullScreenHd, keepsFullScreenTaps, rememberFullScreenHd, type Link } from "../network";
 import { formatClock, formatStamp } from "../playback/time";
 import { enterPip, exitPip, inPip, pipSupported } from "../pip";
 import { sharedStyles } from "../styles";
@@ -356,11 +356,11 @@ export class RvLiveTile extends LitElement {
     }
   }
 
-  /** HD on or off in full screen, remembered on this device for here (at home, or away). */
+  /** HD on or off in full screen, remembered on this device for here (at home, or away), unless it keeps no taps. */
   private _toggleHd(): void {
     this._hdWanted = !this._hdWanted;
     this._link = { ...this._link, chosen: true };
-    rememberFullScreenHd(this._link.where, this._hdWanted);
+    if (keepsFullScreenTaps()) rememberFullScreenHd(this._link.where, this._hdWanted);
   }
 
   private _driveHd(): void {
