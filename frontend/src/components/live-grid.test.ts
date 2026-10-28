@@ -56,7 +56,7 @@ vi.mock("../live/player", () => {
   return { LivePlayer: FakePlayer };
 });
 
-const { boardOrder, tileShape } = await import("./live-grid");
+const { boardOrder, tileFit, tileShape } = await import("./live-grid");
 const { OFFSCREEN_GRACE_MS } = await import("./live-tile");
 
 const encoding = { codec: "h264", frame_rate: 15, bit_rate: 512 };
@@ -686,13 +686,28 @@ describe("the board", () => {
     expect(boardOrder([yard, pano, door, unknown]).map((c) => c.id)).toEqual(["door", "yard", "pano", "unknown"]);
   });
 
+  it("crops a picture's top and bottom to fill its cell, never its sides", () => {
+    const fit = (c: LiveCamera, column: number) => tileFit(c.connections[0], tileShape(c.connections[0]), column);
+    // A square doorbell in a cell two rows tall (a little narrower than square): whole.
+    expect(fit(camera("door", 720, 720), 272)).toBe("contain");
+    expect(fit(camera("door", 720, 720), 0)).toBe("contain");
+    // 16:9 fills exactly; 4:3 loses a little top and bottom.
+    expect(fit(camera("yard", 640, 360), 272)).toBe("cover");
+    expect(fit(camera("garage", 640, 480), 272)).toBe("cover");
+    // The Duo's panorama in two columns.
+    expect(fit(camera("pano", 1536, 432), 272)).toBe("cover");
+    // Too wide for its cell (not wide enough to span two columns): whole.
+    expect(fit(camera("wide", 2304, 1080), 272)).toBe("contain");
+    expect(fit(camera("unknown"), 272)).toBe("cover");
+  });
+
   it("numbers its tiles, which fill their cells", async () => {
     const { hass } = fakeHass();
     const { tiles } = await mountGrid(hass);
     expect(tiles().map((t) => t.shadowRoot?.querySelector(".num")?.textContent)).toEqual(
       CAMERAS.map((_, i) => String(i + 1)),
     );
-    expect(tiles().every((t) => t.hasAttribute("fill"))).toBe(true);
+    expect(tiles().every((t) => t.hasAttribute("fill") && t.getAttribute("fit") === "cover")).toBe(true);
   });
 });
 

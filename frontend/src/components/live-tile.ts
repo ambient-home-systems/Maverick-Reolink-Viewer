@@ -57,6 +57,7 @@ export class RvLiveTile extends LitElement {
     warm: { attribute: false },
     openable: { type: Boolean },
     fill: { type: Boolean, reflect: true },
+    fit: { reflect: true },
     number: { attribute: false },
     suspended: { attribute: false },
     controls: { attribute: false },
@@ -83,6 +84,8 @@ export class RvLiveTile extends LitElement {
   declare openable: boolean;
   /** On the board: fill the grid cell, the picture cropped to it. */
   declare fill: boolean;
+  /** Filling its cell: crop the picture to it, or show it whole (the board says which). */
+  declare fit: "cover" | "contain";
   /** Its number on the board. */
   declare number: number | undefined;
   /** Another tile is full screen: stop now (it is hidden behind it). */
@@ -114,6 +117,7 @@ export class RvLiveTile extends LitElement {
     this.stream = "sub";
     this.openable = false;
     this.fill = false;
+    this.fit = "cover";
     this.suspended = false;
     this._state = { kind: "idle" };
     this._hdState = { kind: "idle" };
@@ -531,8 +535,8 @@ export class RvLiveTile extends LitElement {
       :host([fill]) .tile {
         aspect-ratio: auto;
       }
-      :host([fill]) .poster,
-      :host([fill]) video.sub {
+      :host([fill][fit="cover"]) .poster,
+      :host([fill][fit="cover"]) video.sub {
         object-fit: cover;
       }
       /* Full screen: the browser's, or filling the window (the iPhone). */
