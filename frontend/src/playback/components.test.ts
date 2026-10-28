@@ -263,16 +263,27 @@ describe("rv-event-list", () => {
     el.events = events;
     el.thumbs = new Map([[events[PAGE + 4]?.start ?? 0, "/thumb/x"]]);
     await el.updateComplete;
-    const cards = [...el.renderRoot.querySelectorAll<HTMLButtonElement>("button.card")];
+    const cards = [...el.renderRoot.querySelectorAll<HTMLButtonElement>("button.row")];
     expect(cards).toHaveLength(PAGE);
     expect(cards[0]?.querySelector("img")?.getAttribute("src")).toBe("/thumb/x");
+    // A timetable row: the time (seconds smaller), what was seen and how long.
+    expect(cards[0]?.querySelector(".t")?.textContent).toMatch(/^\d\d:\d\d:\d\d$/);
+    expect(cards[0]?.querySelector(".label")?.textContent).toBe("Animal");
+    expect(cards[1]?.querySelector(".label")?.textContent).toBe("Person");
+    expect(cards[0]?.querySelector(".meta")?.textContent.trim()).toBe("0:20");
     expect(needed.at(-1)?.times).toHaveLength(PAGE - 1);
     const picks = collect(el, "rv-pick") as { event: TimelineEvent }[];
     cards[0]?.click();
     expect(picks[0]?.event.start).toBe(events[PAGE + 4]?.start);
     el.renderRoot.querySelector<HTMLButtonElement>("button.more")?.click();
     await el.updateComplete;
-    expect(el.renderRoot.querySelectorAll("button.card")).toHaveLength(PAGE + 5);
+    expect(el.renderRoot.querySelectorAll("button.row")).toHaveLength(PAGE + 5);
+    // The event playing is marked.
+    el.current = (events[0]?.start ?? 0) + 5_000;
+    await el.updateComplete;
+    const playing = el.renderRoot.querySelector<HTMLButtonElement>("button.row.active");
+    expect(playing?.getAttribute("aria-current")).toBe("true");
+    expect(playing?.textContent).toContain("Playing");
     expect(el.renderRoot.textContent).toContain("time ±1 h");
     el.events = [];
     await el.updateComplete;

@@ -2889,7 +2889,7 @@ redesigned views.
 
 | Step | Status |
 | --- | --- |
-| 1. Design: the Timetable panel (home view, events, devices, device page, checks) | **In progress.** Direction chosen (2026-10-28), see "Step 1: the design". 1.1 foundations built (v0.16.0, the board's crop fixed in v0.16.1) and checked by the owner on the hardware, see "Step 1.1: foundations". 1.2 the home view's timetable built (v0.17.0), see "Step 1.2: today's timetable". 1.3 the Events view built (v0.18.0), see "Step 1.3: the Events view". 1.4a the device list and the device page's header, Overview and Settings built (v0.19.0), see "Step 1.4a: devices, Overview and Settings"; the Playback tab (1.4b) is next |
+| 1. Design: the Timetable panel (home view, events, devices, device page, checks) | **In progress.** Direction chosen (2026-10-28), see "Step 1: the design". 1.1 foundations built (v0.16.0, the board's crop fixed in v0.16.1) and checked by the owner on the hardware, see "Step 1.1: foundations". 1.2 the home view's timetable built (v0.17.0), see "Step 1.2: today's timetable". 1.3 the Events view built (v0.18.0), see "Step 1.3: the Events view". 1.4a the device list and the device page's header, Overview and Settings built (v0.19.0), see "Step 1.4a: devices, Overview and Settings". 1.4b the Playback tab built (v0.20.0), see "Step 1.4b: the Playback tab"; the checks and reports (1.5) are next |
 | 2. Performance budget | Not started |
 | 3. Mobile, and networks that cut websockets | Not started |
 | 4. Error states | Not started |
@@ -3063,6 +3063,28 @@ Step 4 of the design comes in two parts: this one, then the Playback tab (1.4b).
   toggles on a rail, restyled sliders, a drawn arrow on "About this setting", and the
   confirm dialog with a fault rule on top.
 - The preview's cameras have snapshot pictures, so Overview can be looked at.
+
+### Step 1.4b: the Playback tab (v0.20.0)
+
+- **The day's events** are timetable rows, as on the home view and in the Events
+  view: the time (its seconds smaller), a pictogram and what was seen, the length
+  and a thumbnail. The event playing is marked "Playing". The heading counts the
+  events ("4 of 13 events" when filtered).
+- **The timeline** is drawn in the Timetable's colours: recordings in rail blue
+  (lighter in the dark), events as ink ticks, the time now as a red line and the
+  playhead as an ink line under a pointer. Events are no longer coloured by type;
+  the filters and the rows say what was seen.
+- **The filters** work as the Events view's: what was seen (motion only when
+  nothing more is known), with counts; none chosen shows every event, and "Show
+  every event" clears them. Before, every type was on and a press hid one.
+- **The day line:** the day before and after around "Today" or the date, and the
+  playhead's time as a large clock.
+- **The toolbar:** square buttons; Play filled in ink; SD and HD as one switch;
+  Speed; "Download clip" with a drawn icon.
+- The player's frame is the board's ink, square; its notes are in the panel's
+  font. On a phone the day's events come before the calendar.
+- `shownTypes` moved to `timeline-math.ts`, shared by the timetable, the Events
+  view and the Playback tab; the per-type colours are gone.
 
 ### Steps 2–7
 

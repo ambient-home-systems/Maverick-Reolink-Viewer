@@ -40,7 +40,7 @@ import {
   type RvPlayer,
 } from "../playback/player";
 import { ThumbLoader } from "../playback/thumb-loader";
-import { dateIn, firstDayOfWeek, formatClock, formatDay } from "../playback/time";
+import { dateIn, firstDayOfWeek, formatClock } from "../playback/time";
 import "../playback/timeline";
 import type { HoverDetail, RvTimeline, TimeDetail } from "../playback/timeline";
 import {
@@ -55,8 +55,8 @@ import {
   presentTypes,
   previousEvent,
   segmentAt,
+  shownTypes,
   thumbBucket,
-  typeColor,
   typeLabel,
   zoomIndex,
   type View,
@@ -64,7 +64,9 @@ import {
 import { icon } from "../icons";
 import { sharedStyles } from "../styles";
 import type { CacheStatus, HomeAssistant, PlaybackUrl, Segment, Stream, TimelineDay, Timing } from "../types";
+import { dayLabel, shortDay } from "./events-view";
 import { toast } from "./navigation";
+import { pictogram } from "./timetable";
 
 /** Re-read today's timeline this often while the tab is open. */
 export const TODAY_REFRESH_MS = 60_000;
@@ -151,7 +153,7 @@ export class RvPlayback extends LitElement {
     _loading: { state: true },
     _view: { state: true },
     _cursor: { state: true },
-    _hidden: { state: true },
+    _only: { state: true },
     _month: { state: true },
     _monthDays: { state: true },
     _monthLoading: { state: true },
@@ -186,7 +188,8 @@ export class RvPlayback extends LitElement {
   declare _loading: boolean;
   declare _view: View;
   declare _cursor: number | undefined;
-  declare _hidden: ReadonlySet<string>;
+  /** Only events showing one of these types (`shownTypes`; none: all). */
+  declare _only: ReadonlySet<string>;
   declare _month: { year: number; month: number };
   declare _monthDays: ReadonlySet<number>;
   declare _monthLoading: boolean;
@@ -242,7 +245,7 @@ export class RvPlayback extends LitElement {
     this._date = "";
     this._loading = false;
     this._view = { start: 0, span: DAY };
-    this._hidden = new Set();
+    this._only = new Set();
     const now = new Date();
     this._month = { year: now.getFullYear(), month: now.getMonth() + 1 };
     this._monthDays = new Set();
@@ -277,7 +280,7 @@ export class RvPlayback extends LitElement {
   }
 
   private get _events() {
-    return filterEvents(this._day?.events ?? [], this._hidden);
+    return filterEvents(this._day?.events ?? [], this._only);
   }
 
   override connectedCallback(): void {
@@ -1026,11 +1029,12 @@ export class RvPlayback extends LitElement {
   private _renderToolbar(): TemplateResult {
     const zoom = zoomIndex(this._view.span);
     return html`<div class="toolbar">
-      <div class="group">
+      <div class="group transport">
         <button aria-label="Previous event" title="Previous event" @click=${() => {
           this._jump(-1);
         }}>${icon("previous")}</button>
         <button
+          class="play"
           aria-label=${this._player?.paused === false ? "Pause" : "Play"}
           @click=${() => {
             const player = this._player;
@@ -1045,25 +1049,25 @@ export class RvPlayback extends LitElement {
           this._jump(1);
         }}>${icon("next")}</button>
       </div>
-      <div class="group">
+      <div class="group" role="group" aria-label="Zoom">
         <button aria-label="Zoom out" ?disabled=${zoom === 0} @click=${() => this._timeline?.zoom(-1)}>${icon("minus")}</button>
-        <span class="small muted zoom">${zoomLabel(this._view.span)}</span>
+        <span class="zoom">${zoomLabel(this._view.span)}</span>
         <button
           aria-label="Zoom in"
           ?disabled=${zoom === ZOOM_LEVELS.length - 1}
           @click=${() => this._timeline?.zoom(1)}
         >${icon("plus")}</button>
       </div>
-      <div class="group">
+      <div class="group quality" role="group" aria-label="Quality">
         <button
-          class=${this._stream === "sub" ? "primary" : ""}
+          class="seg"
           aria-pressed=${this._stream === "sub" ? "true" : "false"}
           @click=${() => {
             this._setStream("sub");
           }}
         >SD</button>
         <button
-          class=${this._stream === "main" ? "primary" : ""}
+          class="seg"
           aria-pressed=${this._stream === "main" ? "true" : "false"}
           ?disabled=${!this._hd.main}
           title=${this._hd.reason}
@@ -1071,7 +1075,9 @@ export class RvPlayback extends LitElement {
             this._setStream("main");
           }}
         >HD</button>
-        <label class="small speed"
+      </div>
+      <div class="group">
+        <label class="speed"
           >Speed
           <select
             aria-label="Playback speed"
@@ -1083,33 +1089,38 @@ export class RvPlayback extends LitElement {
           </select></label
         >
         ${this._playing
-          ? html`<a class="button" href=${this._playing.clip_url} download>Download clip</a>`
+          ? html`<a class="download" href=${this._playing.clip_url} download>${icon("download")}Download clip</a>`
           : nothing}
       </div>
     </div>`;
   }
 
+  /** What was seen in the day's events, to show only some. */
   private _renderFilters(): TemplateResult | typeof nothing {
-    const types = presentTypes(this._day?.events ?? []);
+    const events = this._day?.events ?? [];
+    const types = [...new Set([...presentTypes(events), ...this._only])];
     if (!types.length) return nothing;
-    return html`<div class="chips" role="group" aria-label="Event types">
+    return html`<div class="chips" role="group" aria-label="What was seen">
       ${types.map((type) => {
-        const on = !this._hidden.has(type);
+        const on = this._only.has(type);
         return html`<button
-          class="chip ${on ? "on" : ""}"
+          class="chip"
           aria-pressed=${on ? "true" : "false"}
-          style="--chip: ${typeColor(type)}"
           @click=${() => {
-            const hidden = new Set(this._hidden);
-            if (on) hidden.add(type);
-            else hidden.delete(type);
-            this._hidden = hidden;
+            const only = new Set(this._only);
+            if (!only.delete(type)) only.add(type);
+            this._only = only;
           }}
         >
-          <span class="swatch"></span>${typeLabel(type)}
-          <span class="muted">${this._day?.events.filter((e) => e.types.includes(type)).length ?? 0}</span>
+          ${icon(pictogram([type]))}${typeLabel(type)}
+          <span class="count">${events.filter((e) => shownTypes(e.types).includes(type)).length}</span>
         </button>`;
       })}
+      ${this._only.size
+        ? html`<button class="text clear" @click=${() => {
+            this._only = new Set();
+          }}>Show every event</button>`
+        : nothing}
     </div>`;
   }
 
@@ -1127,7 +1138,7 @@ export class RvPlayback extends LitElement {
     const ms = (v: number | undefined) => (v === undefined ? "–" : `${Math.round(v)} ms`);
     const server = m.timelineServer;
     return html`<details class="debug">
-      <summary class="small muted">Debug</summary>
+      <summary class="small muted">Debug${icon("chevronDown")}</summary>
       <dl class="facts">
         <dt>Time to timeline</dt>
         <dd>
@@ -1211,21 +1222,25 @@ export class RvPlayback extends LitElement {
             }}
           ></rv-player>
           <div class="dayline">
-            <button class="text" aria-label="Previous day" @click=${() => {
-              this._changeDay(-1);
-            }}>${icon("chevronBack")}</button>
-            <strong>${day ? formatDay(day.start + 12 * 3_600_000, zone) : this._date}</strong>
-            <button
-              class="text"
-              aria-label="Next day"
-              ?disabled=${this._date >= this._today}
-              @click=${() => {
-                this._changeDay(1);
-              }}
-            >${icon("chevron")}</button>
-            <span class="muted small">
-              ${this._cursor !== undefined ? formatClock(this._cursor, zone, true) : ""}
-              ${this._loading ? " · loading…" : ""}
+            <div class="day-nav" role="group" aria-label="Day">
+              <button class="step" aria-label="Previous day" @click=${() => {
+                this._changeDay(-1);
+              }}>${icon("chevronBack")}</button>
+              <span class="day" title=${dayLabel(this._date)}>
+                ${this._date === this._today ? "Today" : shortDay(this._date)}
+              </span>
+              <button
+                class="step"
+                aria-label="Next day"
+                ?disabled=${this._date >= this._today}
+                @click=${() => {
+                  this._changeDay(1);
+                }}
+              >${icon("chevron")}</button>
+            </div>
+            ${this._loading ? html`<span class="muted small">Loading…</span>` : nothing}
+            <span class="clock">
+              ${this._cursor !== undefined ? formatClock(this._cursor, zone, true) : "--:--:--"}
             </span>
           </div>
           ${this._error
@@ -1279,7 +1294,15 @@ export class RvPlayback extends LitElement {
               void this._selectDate(e.detail.date);
             }}
           ></rv-calendar>
-          <h3>Events</h3>
+          <div class="events-head">
+            <h2>Events</h2>
+            ${day
+              ? html`<span class="muted">
+                  ${this._only.size ? `${String(this._events.length)} of ` : ""}${day.events.length}
+                  ${day.events.length === 1 ? "event" : "events"}
+                </span>`
+              : nothing}
+          </div>
           <rv-event-list
             .events=${this._events}
             .thumbs=${this._thumbs}
@@ -1302,41 +1325,81 @@ export class RvPlayback extends LitElement {
     css`
       .layout {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) 320px;
-        gap: 16px;
-      }
-      @media (max-width: 900px) {
-        .layout {
-          grid-template-columns: minmax(0, 1fr);
-        }
+        grid-template-columns: minmax(0, 1fr) 340px;
+        gap: 24px;
       }
       .main,
       .side {
         display: flex;
         flex-direction: column;
-        gap: 8px;
+        gap: 10px;
         min-width: 0;
+      }
+      .side {
+        gap: 14px;
+      }
+      @media (max-width: 900px) {
+        .layout {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        /* On one column the day's events come before the calendar. */
+        .side rv-calendar {
+          order: 2;
+        }
       }
       .dayline {
         display: flex;
         align-items: center;
-        gap: 8px;
+        flex-wrap: wrap;
+        gap: 8px 14px;
+        margin-top: 4px;
+      }
+      .day-nav {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .step {
+        width: 36px;
+        padding: 0;
+        display: grid;
+        place-items: center;
+      }
+      .day {
+        min-width: 7.5em;
+        text-align: center;
+        font-family: var(--rv-font-cond);
+        font-size: 19px;
+        font-weight: 600;
+      }
+      .clock {
+        margin-left: auto;
+        font-family: var(--rv-font-cond);
+        font-size: 30px;
+        font-weight: 600;
+        line-height: 1;
+        letter-spacing: 0.01em;
       }
       .timeline-wrap {
         position: relative;
       }
       .hover {
         position: absolute;
-        bottom: calc(100% + 4px);
+        bottom: calc(100% + 6px);
         z-index: 2;
         width: 160px;
-        background: var(--card-background-color, white);
-        border: 1px solid var(--divider-color, #ccc);
-        border-radius: 6px;
-        padding: 4px;
-        font-size: 12px;
+        background: var(--rv-board);
+        color: var(--rv-on-board);
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
+        font-family: var(--rv-font-cond);
+        font-size: 15px;
+        font-weight: 600;
         text-align: center;
         pointer-events: none;
+      }
+      .hover span {
+        display: block;
+        padding: 4px 6px 5px;
       }
       .hover img,
       .hover .noimg {
@@ -1344,58 +1407,161 @@ export class RvPlayback extends LitElement {
         width: 100%;
         aspect-ratio: 16 / 9;
         object-fit: cover;
-        background: var(--secondary-background-color, #eee);
-        border-radius: 4px;
+        background: var(--rv-board);
       }
       .toolbar {
         display: flex;
         flex-wrap: wrap;
-        justify-content: space-between;
-        gap: 8px;
+        align-items: center;
+        gap: 10px 22px;
+        padding-top: 2px;
       }
       .group {
         display: flex;
         align-items: center;
-        gap: 4px;
+        gap: 6px;
+      }
+      .group > button {
+        width: 40px;
+        padding: 0;
+        display: grid;
+        place-items: center;
+      }
+      .group > button.play {
+        width: 48px;
+        background: var(--rv-text);
+        border-color: var(--rv-text);
+        color: var(--rv-ground);
+      }
+      .group > button.play:hover {
+        background: var(--rv-text);
+        opacity: 0.88;
       }
       .zoom {
-        min-width: 44px;
+        min-width: 48px;
         text-align: center;
+        font-family: var(--rv-font-cond);
+        font-size: 17px;
+        font-weight: 600;
+      }
+      .quality {
+        gap: 0;
+      }
+      .group > button.seg {
+        width: 46px;
+        font-family: var(--rv-font-cond);
+        font-size: 16px;
+        font-weight: 600;
+      }
+      .group > button.seg + button.seg {
+        margin-left: -1px;
+      }
+      .group > button.seg[aria-pressed="true"] {
+        background: var(--rv-text);
+        border-color: var(--rv-text);
+        color: var(--rv-ground);
       }
       .speed {
         display: inline-flex;
         align-items: center;
-        gap: 4px;
+        gap: 8px;
+        color: var(--rv-muted);
+        font-size: 15px;
       }
-      a.button {
-        padding: 6px 14px;
-        border-radius: 4px;
-        border: 1px solid var(--divider-color, #ccc);
+      .speed select {
+        min-height: 36px;
+      }
+      .download {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-left: 6px;
+        font-weight: 500;
         text-decoration: none;
-        color: var(--primary-text-color);
+      }
+      .download:hover {
+        text-decoration: underline;
+      }
+      .download svg {
+        width: 18px;
+        height: 18px;
       }
       .chips {
         display: flex;
         flex-wrap: wrap;
+        align-items: center;
         gap: 6px;
       }
       .chip {
         display: inline-flex;
         align-items: center;
-        gap: 6px;
-        border-radius: 16px;
-        padding: 4px 10px;
-        opacity: 0.55;
+        gap: 7px;
+        min-height: 34px;
+        padding: 0 10px 0 9px;
+        border: 1px solid var(--rv-rule);
+        font-size: 15px;
+        font-weight: 500;
+        white-space: nowrap;
       }
-      .chip.on {
-        opacity: 1;
-        border-color: var(--chip);
+      .chip svg {
+        width: 18px;
+        height: 18px;
       }
-      .swatch {
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-        background: var(--chip);
+      .chip .count {
+        color: var(--rv-muted);
+        font-weight: 400;
+      }
+      .chip[aria-pressed="true"] {
+        background: var(--rv-text);
+        border-color: var(--rv-text);
+        color: var(--rv-ground);
+      }
+      .chip[aria-pressed="true"] .count {
+        color: inherit;
+        opacity: 0.75;
+      }
+      .chip[aria-pressed="true"]:hover {
+        background: var(--rv-text);
+      }
+      .clear {
+        padding-left: 4px;
+      }
+      .events-head {
+        display: flex;
+        align-items: baseline;
+        gap: 12px;
+      }
+      .events-head h2 {
+        margin: 0;
+      }
+      .events-head span {
+        font-size: 15px;
+      }
+      .debug summary {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        min-height: 28px;
+        cursor: pointer;
+        list-style: none;
+      }
+      .debug summary::-webkit-details-marker {
+        display: none;
+      }
+      .debug summary svg {
+        width: 16px;
+        height: 16px;
+      }
+      .debug[open] summary svg {
+        transform: rotate(180deg);
+      }
+      @media (max-width: 600px) {
+        .clock {
+          font-size: 24px;
+        }
+        .toolbar {
+          gap: 10px 14px;
+        }
       }
       .debug dl {
         font-size: 13px;

@@ -157,9 +157,10 @@ export function playTarget(
   return next ? { segment: next, offset: 0 } : undefined;
 }
 
-export function filterEvents(events: TimelineEvent[], hidden: ReadonlySet<string>): TimelineEvent[] {
-  if (hidden.size === 0) return events;
-  return events.filter((e) => e.types.some((type) => !hidden.has(type)));
+/** The events showing one of the chosen types (`shownTypes`); none chosen: all. */
+export function filterEvents(events: TimelineEvent[], only: ReadonlySet<string>): TimelineEvent[] {
+  if (only.size === 0) return events;
+  return events.filter((e) => shownTypes(e.types).some((type) => only.has(type)));
 }
 
 /** The next event starting after `t` (plus a small step, so repeats move on). */
@@ -176,23 +177,23 @@ export function previousEvent(events: TimelineEvent[], t: number): TimelineEvent
   return found;
 }
 
-/** Every Reolink VOD trigger type, most specific first, with a colour and label. */
-export const EVENT_TYPES: readonly { type: string; label: string; color: string }[] = [
-  { type: "PERSON", label: "Person", color: "#e53935" },
-  { type: "VEHICLE", label: "Vehicle", color: "#1e88e5" },
-  { type: "ANIMAL", label: "Animal", color: "#43a047" },
-  { type: "CROSSLINE", label: "Line crossing", color: "#8e24aa" },
-  { type: "INTRUSION", label: "Intrusion", color: "#d81b60" },
-  { type: "LINGER", label: "Loitering", color: "#6d4c41" },
-  { type: "FACE", label: "Face", color: "#f4511e" },
-  { type: "DOORBELL", label: "Doorbell", color: "#fdd835" },
-  { type: "PACKAGE", label: "Package", color: "#00897b" },
-  { type: "FORGOTTEN_ITEM", label: "Item left", color: "#5e35b1" },
-  { type: "TAKEN_ITEM", label: "Item taken", color: "#3949ab" },
-  { type: "CRYING", label: "Crying", color: "#c0ca33" },
-  { type: "IO", label: "Alarm input", color: "#757575" },
-  { type: "MOTION", label: "Motion", color: "#fb8c00" },
-  { type: "TIMER", label: "Scheduled", color: "#90a4ae" },
+/** Every Reolink VOD trigger type, most specific first, with its label. */
+export const EVENT_TYPES: readonly { type: string; label: string }[] = [
+  { type: "PERSON", label: "Person" },
+  { type: "VEHICLE", label: "Vehicle" },
+  { type: "ANIMAL", label: "Animal" },
+  { type: "CROSSLINE", label: "Line crossing" },
+  { type: "INTRUSION", label: "Intrusion" },
+  { type: "LINGER", label: "Loitering" },
+  { type: "FACE", label: "Face" },
+  { type: "DOORBELL", label: "Doorbell" },
+  { type: "PACKAGE", label: "Package" },
+  { type: "FORGOTTEN_ITEM", label: "Item left" },
+  { type: "TAKEN_ITEM", label: "Item taken" },
+  { type: "CRYING", label: "Crying" },
+  { type: "IO", label: "Alarm input" },
+  { type: "MOTION", label: "Motion" },
+  { type: "TIMER", label: "Scheduled" },
 ];
 
 const TYPE_INDEX = new Map(EVENT_TYPES.map((t, i) => [t.type, i]));
@@ -208,10 +209,6 @@ export function primaryType(types: readonly string[]): string {
   return best ?? "MOTION";
 }
 
-export function typeColor(type: string): string {
-  return EVENT_TYPES[TYPE_INDEX.get(type) ?? -1]?.color ?? "#9e9e9e";
-}
-
 export function typeLabel(type: string): string {
   return EVENT_TYPES[TYPE_INDEX.get(type) ?? -1]?.label ?? type.toLowerCase();
 }
@@ -221,9 +218,15 @@ export function sortTypes(types: Iterable<string>): string[] {
   return [...types].sort((a, b) => (TYPE_INDEX.get(a) ?? 99) - (TYPE_INDEX.get(b) ?? 99));
 }
 
-/** The types present in a day's events, in display order. */
-export function presentTypes(events: TimelineEvent[]): string[] {
-  return sortTypes(new Set(events.flatMap((e) => e.types)));
+/** What an event shows as having been seen: motion only when nothing more is known. */
+export function shownTypes(types: readonly string[]): string[] {
+  const specific = types.filter((t) => t !== "MOTION");
+  return sortTypes(specific.length ? specific : types.length ? types : ["MOTION"]);
+}
+
+/** The types the day's events show (`shownTypes`), in display order. */
+export function presentTypes(events: readonly { types: readonly string[] }[]): string[] {
+  return sortTypes(new Set(events.flatMap((e) => shownTypes(e.types))));
 }
 
 /** Thumbnail bucket (seconds) for a zoom level: coarser when zoomed out. */

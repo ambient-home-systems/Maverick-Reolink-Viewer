@@ -3,7 +3,7 @@ import { LitElement, css, html, nothing, type PropertyValues, type TemplateResul
 import { fetchRecentEvents, fetchThumbnailUrls, markAllEventsSeen, markEventSeen, toError } from "../api";
 import { icon, type IconName } from "../icons";
 import { dateIn, formatClock } from "../playback/time";
-import { primaryType, sortTypes, typeLabel } from "../playback/timeline-math";
+import { primaryType, shownTypes, typeLabel } from "../playback/timeline-math";
 import { sharedStyles } from "../styles";
 import type { HomeAssistant, RecentEvent, RecentEvents } from "../types";
 import type { BoardCamera } from "./live-grid";
@@ -574,12 +574,6 @@ function eventKey(event: RecentEvent): string {
 
 function platform(camera: BoardCamera | undefined): TemplateResult | typeof nothing {
   return camera ? html`<span class="plat" aria-hidden="true">${camera.number}</span>` : nothing;
-}
-
-/** What was seen: the specific types, motion only when nothing more is known. */
-export function shownTypes(types: readonly string[]): string[] {
-  const specific = types.filter((t) => t !== "MOTION");
-  return sortTypes(specific.length ? specific : types.length ? types : ["MOTION"]);
 }
 
 export function eventLabel(types: readonly string[]): string {

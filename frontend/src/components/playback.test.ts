@@ -213,17 +213,16 @@ describe("rv-playback", () => {
     expect(el._cursor).toBe(T0 + 63 * MIN);
 
     const chips = [...el.renderRoot.querySelectorAll<HTMLButtonElement>("button.chip")];
-    expect(chips.map((c) => c.textContent.replace(/\s+/g, " ").trim())).toEqual([
-      "Person 1",
-      "Animal 1",
-      "Motion 1",
-    ]);
+    // What was seen, motion only when nothing more is known; none chosen shows all.
+    expect(chips.map((c) => c.textContent.replace(/\s+/g, " ").trim())).toEqual(["Person 1", "Animal 1"]);
     chips[1]?.click();
     await el.updateComplete;
-    expect(el._hidden.has("ANIMAL")).toBe(true);
-    expect(el.renderRoot.querySelector("rv-event-list")?.events).toHaveLength(1);
-    chips[1]?.click();
-    expect(el._hidden.size).toBe(0);
+    expect(el._only).toEqual(new Set(["ANIMAL"]));
+    expect(chips[1]?.getAttribute("aria-pressed")).toBe("true");
+    expect(el.renderRoot.querySelector("rv-event-list")?.events.map((e) => e.types)).toEqual([["ANIMAL"]]);
+    expect(el.renderRoot.querySelector(".events-head")?.textContent.replace(/\s+/g, " ")).toContain("1 of 2 events");
+    [...el.renderRoot.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent.trim() === "Show every event")?.click();
+    expect(el._only.size).toBe(0);
 
     await el.playAt(T0 + 20 * 60 * MIN);
     expect(toasts).toContain("No recording after this time on this day");

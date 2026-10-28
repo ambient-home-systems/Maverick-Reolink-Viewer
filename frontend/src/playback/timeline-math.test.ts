@@ -21,11 +21,11 @@ import {
   previousEvent,
   primaryType,
   segmentAt,
+  shownTypes,
   thumbBucket,
   tickStep,
   ticks,
   timeToX,
-  typeColor,
   typeLabel,
   xToTime,
   zoomAt,
@@ -115,12 +115,12 @@ describe("recordings", () => {
 describe("events", () => {
   const events = [ev(T0, ["MOTION"]), ev(T0 + HOUR, ["MOTION", "PERSON"]), ev(T0 + 2 * HOUR, ["ANIMAL"])];
 
-  it("filters by hidden types (an event shows if any of its types is shown)", () => {
+  it("filters by what was seen (motion only when nothing more is known); none chosen: all", () => {
     expect(filterEvents(events, new Set())).toBe(events);
-    expect(filterEvents(events, new Set(["MOTION"])).map((e) => e.start)).toEqual([
-      T0 + HOUR,
-      T0 + 2 * HOUR,
-    ]);
+    expect(filterEvents(events, new Set(["MOTION"])).map((e) => e.start)).toEqual([T0]);
+    expect(filterEvents(events, new Set(["PERSON", "ANIMAL"])).map((e) => e.start)).toEqual([T0 + HOUR, T0 + 2 * HOUR]);
+    expect(shownTypes(["MOTION", "VEHICLE", "PERSON"])).toEqual(["PERSON", "VEHICLE"]);
+    expect(shownTypes([])).toEqual(["MOTION"]);
   });
 
   it("steps to the next and previous event", () => {
@@ -130,12 +130,10 @@ describe("events", () => {
     expect(previousEvent(events, T0)).toBeUndefined();
   });
 
-  it("names, colours and orders types", () => {
+  it("names and orders types", () => {
     expect(primaryType(["MOTION", "PERSON"])).toBe("PERSON");
     expect(primaryType([])).toBe("MOTION");
     expect(primaryType(["UNKNOWN", "MOTION"])).toBe("MOTION");
-    expect(typeColor("PERSON")).toMatch(/^#/);
-    expect(typeColor("NEW")).toBe("#9e9e9e");
     expect(typeLabel("CROSSLINE")).toBe("Line crossing");
     expect(typeLabel("NEW_TYPE")).toBe("new_type");
     expect(presentTypes(events)).toEqual(["PERSON", "ANIMAL", "MOTION"]);
