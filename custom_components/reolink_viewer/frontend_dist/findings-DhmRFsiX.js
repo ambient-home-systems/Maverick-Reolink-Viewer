@@ -1,24 +1,13 @@
-import { Gt as e, Kt as t, Wt as n, qt as r, rt as i } from "./home-D5-WNgzo.js";
+import { Gt as e, Jt as t, Kt as n, it as r, qt as i } from "./home-B--azFjF.js";
 //#region src/playback/check-util.ts
-function a(e) {
-	let t = e.toLowerCase();
-	if (t.endsWith(".ui.nabu.casa")) return "Nabu Casa";
-	if (t.endsWith(".ts.net")) return "Tailscale";
-	let n = /^(\d+)\.(\d+)\.(\d+)\.(\d+)$/.exec(t);
-	if (n) {
-		let [e = 0, t = 0] = n.slice(1, 3).map(Number);
-		return e === 100 && t >= 64 && t < 128 ? "Tailscale" : e === 10 || e === 127 || e === 192 && t === 168 || e === 172 && t >= 16 && t < 32 ? "local" : "remote";
-	}
-	return t === "localhost" || t.endsWith(".local") || t.endsWith(".lan") || !t.includes(".") ? "local" : "own domain";
+var a = (e) => /iPhone|iPad|iPod/.test(e);
+function o(e) {
+	return a(e) ? "iPhone app, Wi-Fi (local)" : "Desktop Chrome, LAN";
 }
-var o = (e) => /iPhone|iPad|iPod/.test(e);
-function s(e) {
-	return o(e) ? "iPhone app, Wi-Fi (local)" : "Desktop Chrome, LAN";
+function s(e, t) {
+	return e.startsWith("iPhone") ? !a(t) : e.startsWith("Desktop") ? a(t) : !1;
 }
-function c(e, t) {
-	return e.startsWith("iPhone") ? !o(t) : e.startsWith("Desktop") ? o(t) : !1;
-}
-function l(e) {
+function c(e) {
 	let t = /Home ?Assistant\/([\d.]+)/i.exec(e), n = /(?:iPhone|iPad|iPod).*? OS (\d+)[_.](\d+)/.exec(e), r = /;\s*iOS (\d+)\.(\d+)/.exec(e);
 	if (n) {
 		let i = r ? `${r[1]}.${r[2]}` : `${n[1]}.${n[2]}`;
@@ -33,34 +22,34 @@ function l(e) {
 	let c = /Version\/([\d.]+).*Safari/.exec(e);
 	return c ? `Safari ${c[1]} (${i})` : t ? `Companion app ${t[1]} (${i})` : `unknown browser (${i})`;
 }
-var u = (e) => e === void 0 ? "–" : `${Math.round(e)} ms`, d = (e) => e === void 0 ? "–" : Math.abs(e) >= 1e9 ? `${(e / 1e9).toFixed(2)} GB` : `${(e / 1e6).toFixed(1)} MB`;
-function f(e) {
+var l = (e) => e === void 0 ? "–" : `${Math.round(e)} ms`, u = (e) => e === void 0 ? "–" : Math.abs(e) >= 1e9 ? `${(e / 1e9).toFixed(2)} GB` : `${(e / 1e6).toFixed(1)} MB`;
+function d(e) {
 	return e < 6e4 ? `${Math.round(e / 1e3)} s` : `${(e / 6e4).toFixed(1)} min`;
 }
-function p(e, t, n, r, i) {
+function f(e, t, n, r, i) {
 	let a = e.end - e.start, o = e.start + a * n, s = e.start + a * r, c = t.filter((e) => e.start >= o && e.start <= s).at(-1);
 	return {
 		time: c ? c.start : Math.round(e.start + a * i),
 		event: c
 	};
 }
-function m(e, t) {
+function p(e, t) {
 	return e.filter((e) => e.end - e.start >= 12e5 && t - e.end > 6e4).sort((e, t) => t.start - e.start);
 }
-function h(e) {
+function m(e) {
 	let t = [];
 	return e.forEach((n, r) => {
 		let i = e.at(r + 1);
 		i && i.start - n.end < 2e3 && t.push([n, i]);
 	}), t.sort((e, t) => e[0].end - e[0].start - (t[0].end - t[0].start));
 }
-function g(e) {
+function h(e) {
 	return e.decoded && e.mediaS > 0 ? e.decoded / e.mediaS : void 0;
 }
-function _(e) {
+function g(e) {
 	let t = [`${(e.wallMs > 0 ? e.mediaS * 1e3 / e.wallMs : 0).toFixed(2)}× effective`];
 	e.applied !== e.rate && t.push(`browser set ${e.applied}×`);
-	let n = g(e);
+	let n = h(e);
 	if (e.painted !== void 0) {
 		let r = `${(e.painted * 1e3 / e.wallMs).toFixed(0)} fps painted`;
 		t.push(n ? `${r} of ${(n * e.rate).toFixed(0)}` : r);
@@ -69,59 +58,59 @@ function _(e) {
 		let n = e.decoded ? (e.dropped * 100 / e.decoded).toFixed(1) : "0.0";
 		t.push(`dropped ${e.dropped} of ${e.decoded} frames (${n} %)`);
 	}
-	return t.push(`${e.stalls} stalls${e.stalls ? ` (${Math.round(e.stalledMs)} ms)` : ""}`), e.ended && t.push("the file ended"), y(e) || t.push("the dropped-frame counter disagrees with the frames painted: judged by those"), e.focused || t.push("PAGE NOT IN FRONT"), `${String(e.rate).padStart(3)}×: ${t.join(", ")}`;
+	return t.push(`${e.stalls} stalls${e.stalls ? ` (${Math.round(e.stalledMs)} ms)` : ""}`), e.ended && t.push("the file ended"), v(e) || t.push("the dropped-frame counter disagrees with the frames painted: judged by those"), e.focused || t.push("PAGE NOT IN FRONT"), `${String(e.rate).padStart(3)}×: ${t.join(", ")}`;
 }
-var v = "on pace (±10 %), stalls under 100 ms, no frame gap over 2.5 frames (250 ms at least); below 50 fps to show, ≤ 2 % (or 1 frame) dropped, or 90 % painted where the dropped-frame counter disagrees with the frames painted";
-function y(e) {
+var _ = "on pace (±10 %), stalls under 100 ms, no frame gap over 2.5 frames (250 ms at least); below 50 fps to show, ≤ 2 % (or 1 frame) dropped, or 90 % painted where the dropped-frame counter disagrees with the frames painted";
+function v(e) {
 	if (e.painted === void 0 || e.decoded === void 0 || e.dropped === void 0) return !0;
 	let t = e.decoded - e.dropped;
 	return Math.abs(t - e.painted) <= Math.max(3, e.decoded * .1);
 }
-function b(e) {
+function y(e) {
 	let t = e.wallMs > 0 ? e.mediaS * 1e3 / e.wallMs : 0;
 	if (Math.abs(t - e.rate) > e.rate * .1 || e.stalledMs >= 100) return !1;
-	let n = g(e), r = n === void 0 ? void 0 : n * e.rate;
+	let n = h(e), r = n === void 0 ? void 0 : n * e.rate;
 	if (r !== void 0 && e.maxGapMs !== void 0) {
 		let t = Math.max(250, 2500 / Math.min(r, 60));
 		if (e.maxGapMs > t) return !1;
 	}
-	return r === void 0 || r > 50 ? !0 : !y(e) && e.painted !== void 0 ? e.painted * 1e3 / e.wallMs >= r * .9 : !e.decoded || (e.dropped ?? 0) <= Math.max(1, e.decoded * .02);
+	return r === void 0 || r > 50 ? !0 : !v(e) && e.painted !== void 0 ? e.painted * 1e3 / e.wallMs >= r * .9 : !e.decoded || (e.dropped ?? 0) <= Math.max(1, e.decoded * .02);
 }
-function x(e) {
+function b(e) {
 	if (e.length < 2) return;
 	let t = e.length, n = e.reduce((e, [t]) => e + t, 0) / t, r = e.reduce((e, [, t]) => e + t, 0) / t, i = 0, a = 0;
 	for (let [t, o] of e) i += (t - n) * (o - r), a += (t - n) ** 2;
 	return a ? i / a : void 0;
 }
-function S(e) {
+function x(e) {
 	let t = 0;
 	for (let n = 0; n < e.length; n += 1) t += e.end(n) - e.start(n);
 	return t;
 }
-var C = (e, t) => e === void 0 ? "not measured" : `${u(e)} ${e < t ? "✓" : "✗"}`, w = {
+var S = (e, t) => e === void 0 ? "not measured" : `${l(e)} ${e < t ? "✓" : "✗"}`, C = {
 	good: "Good",
 	fine: "Fine",
 	slow: "Slow",
 	problem: "Problem",
 	note: "Note",
 	pending: "Not yet"
-}, T = {
+}, w = {
 	good: "as it should be",
 	fine: "a little slower, nothing to do",
 	slow: "works, but worth a look",
 	problem: "something is wrong",
 	note: "for your information",
 	pending: "still to come"
-}, E = " What to do: ";
-function D(e) {
+}, T = " What to do: ";
+function E(e) {
 	if (e < 100) return "under 0.1 s";
 	let t = e / 1e3;
 	return t < 10 ? `${t.toFixed(1)} s` : `${String(Math.round(t))} s`;
 }
-function O(e, t, n) {
+function D(e, t, n) {
 	return e === void 0 ? "problem" : e < t ? "good" : e < n ? "fine" : "slow";
 }
-function k(e) {
+function O(e) {
 	return [
 		"problem",
 		"slow",
@@ -131,23 +120,23 @@ function k(e) {
 		"note"
 	].find((t) => e.includes(t)) ?? "note";
 }
-function A(e) {
+function k(e) {
 	if (e.length) return [...e].sort((e, t) => e - t)[Math.floor((e.length - 1) / 2)];
 }
-function j(e, t, n = `${t}s`) {
+function A(e, t, n = `${t}s`) {
 	return `${String(e)} ${e === 1 ? t : n}`;
 }
-function M(e) {
-	return [`In short: ${e.headline}`, ...e.findings.map((e) => `- ${w[e.grade]}: ${e.text}${e.advice ? `${E}${e.advice}` : ""}`)];
+function j(e) {
+	return [`In short: ${e.headline}`, ...e.findings.map((e) => `- ${C[e.grade]}: ${e.text}${e.advice ? `${T}${e.advice}` : ""}`)];
 }
-function N(e) {
+function M(e) {
 	let t = e.split("\n"), n = t.findIndex((e) => e.startsWith("In short: "));
 	if (n < 0) return;
-	let r = new Map(Object.entries(w).map(([e, t]) => [t, e])), i = [];
+	let r = new Map(Object.entries(C).map(([e, t]) => [t, e])), i = [];
 	for (let e of t.slice(n + 1)) {
 		let t = /^- (Good|Fine|Slow|Problem|Note|Not yet): (.*)$/.exec(e);
 		if (!t) break;
-		let [, n, a] = t, [o = "", s] = a.split(E);
+		let [, n, a] = t, [o = "", s] = a.split(T);
 		i.push({
 			grade: r.get(n) ?? "note",
 			text: o,
@@ -161,31 +150,31 @@ function N(e) {
 }
 //#endregion
 //#region src/components/findings.ts
-var P = class extends n {
+var N = class extends e {
 	static properties = { summary: { attribute: !1 } };
 	render() {
-		let n = this.summary;
-		if (!n) return e;
-		let r = [
+		let e = this.summary;
+		if (!e) return n;
+		let t = [
 			"good",
 			"fine",
 			"slow",
 			"problem",
 			"pending"
-		].filter((e) => n.findings.some((t) => t.grade === e));
-		return t`<p class="headline">${n.headline}</p>
-      ${n.findings.length ? t`<ul>
-            ${n.findings.map((n) => t`<li class=${n.grade}>
-                <span class="grade">${w[n.grade]}</span>
+		].filter((t) => e.findings.some((e) => e.grade === t));
+		return i`<p class="headline">${e.headline}</p>
+      ${e.findings.length ? i`<ul>
+            ${e.findings.map((e) => i`<li class=${e.grade}>
+                <span class="grade">${C[e.grade]}</span>
                 <span class="what">
-                  <span>${n.text}</span>
-                  ${n.advice ? t`<span class="advice">${n.advice}</span>` : e}
+                  <span>${e.text}</span>
+                  ${e.advice ? i`<span class="advice">${e.advice}</span>` : n}
                 </span>
               </li>`)}
           </ul>
-          ${r.length > 1 ? t`<p class="key">${r.map((e) => `${w[e]}: ${T[e]}`).join(" · ")}</p>` : e}` : e}`;
+          ${t.length > 1 ? i`<p class="key">${t.map((e) => `${C[e]}: ${w[e]}`).join(" · ")}</p>` : n}` : n}`;
 	}
-	static styles = [i, r`
+	static styles = [r, t`
       :host {
         display: block;
       }
@@ -263,6 +252,6 @@ var P = class extends n {
       }
     `];
 };
-customElements.get("rv-findings") || customElements.define("rv-findings", P);
+customElements.get("rv-findings") || customElements.define("rv-findings", N);
 //#endregion
-export { C, h as S, u as _, D as a, b, v as c, a as d, p as f, d as g, m as h, N as i, l, s as m, M as n, O as o, _ as p, A as r, k as s, j as t, S as u, c as v, f as x, x as y };
+export { S, s as _, E as a, d as b, _ as c, f as d, g as f, l as g, u as h, M as i, c as l, p as m, j as n, D as o, o as p, k as r, O as s, A as t, x as u, b as v, m as x, y };

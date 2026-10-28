@@ -513,7 +513,9 @@ describe("full screen", () => {
     expect(tileBox(garage).classList.contains("hd-on")).toBe(true);
     expect(garage.hdShown).toBe(true);
     expect(sub()?.running).toBe(false);
-    expect(garage.shadowRoot?.querySelector(".hd-status .badge")?.textContent).toBe("HD");
+    // At home: HD is on, and its button says so.
+    expect(garage.shadowRoot?.querySelector(".hd-status .hd-toggle")?.getAttribute("aria-pressed")).toBe("true");
+    expect(garage.shadowRoot?.querySelector(".hd-status .small")).toBeNull();
 
     // HD ends and starts again: the sub stream plays meanwhile.
     hd()?.setState({ kind: "starting", transport: "WebRTC" });
@@ -555,6 +557,55 @@ describe("full screen", () => {
     await settle(garage);
     expect(garage.full).toBe(false);
     expect(hd?.running).toBe(false);
+  });
+
+  it("stays in the lighter SD away from home, with an HD button, and remembers the choice", async () => {
+    localStorage.clear();
+    Object.defineProperty(navigator, "connection", { value: { type: "cellular" }, configurable: true });
+    try {
+      const { garage } = await garageAndBell();
+      const sub = () => players.find((p) => p.ref.connectionId === "nvr1" && p.ref.stream === "sub");
+      const hd = () => players.find((p) => p.ref.stream === "main");
+      const toggle = () => garage.shadowRoot?.querySelector<HTMLButtonElement>(".hd-toggle");
+      const text = () => garage.shadowRoot?.querySelector(".hd-status")?.textContent ?? "";
+      fullButton(garage).click();
+      await settle(garage);
+      expect(toggle()?.getAttribute("aria-pressed")).toBe("false");
+      expect(text()).toContain("Lighter SD on mobile data. Tap HD for full quality.");
+      expect(hd()?.running ?? false).toBe(false);
+      expect(sub()?.running).toBe(true);
+      // Tapped: HD starts, and is remembered for away from home.
+      toggle()?.click();
+      await settle(garage);
+      expect(toggle()?.getAttribute("aria-pressed")).toBe("true");
+      expect(hd()?.running).toBe(true);
+      expect(text()).toContain("HD starting…");
+      fullButton(garage).click();
+      await settle(garage);
+      fullButton(garage).click();
+      await settle(garage);
+      expect(hd()?.running).toBe(true);
+      // Off again: HD stops, the sub stream plays, and that is remembered.
+      hd()?.setState({ kind: "playing", transport: "WebRTC", result: { ok: true, steps: {} } });
+      await settle(garage);
+      expect(garage.hdShown).toBe(true);
+      toggle()?.click();
+      await settle(garage);
+      expect(hd()?.running).toBe(false);
+      expect(sub()?.running).toBe(true);
+      expect(text()).toContain("SD, as chosen on this device. Tap HD for full quality.");
+      expect(JSON.parse(localStorage.getItem("reolink-viewer.full-screen-hd") ?? "{}")).toEqual({ away: false });
+      fullButton(garage).click();
+      await settle(garage);
+      // At home, HD as before: the choice away is its own.
+      Reflect.deleteProperty(navigator, "connection");
+      fullButton(garage).click();
+      await settle(garage);
+      expect(toggle()?.getAttribute("aria-pressed")).toBe("true");
+    } finally {
+      Reflect.deleteProperty(navigator, "connection");
+      localStorage.clear();
+    }
   });
 
   it("uses the browser's full screen where it has one, and follows it", async () => {
