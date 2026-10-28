@@ -3,12 +3,12 @@ import { LitElement, css, html, nothing, type TemplateResult } from "lit";
 import { fetchLiveSoak, startSoakOver, toError } from "../api";
 import { copyText } from "../clipboard";
 import { icon } from "../icons";
-import { LIVE_CHECK_VERSION } from "../live/check";
 import { GRID_HOURS, SERVER_HOURS, soakReport, soakSummary, type SoakInput } from "../live/soak";
 import { deviceLabel, soakTally } from "../live/soak-tally";
 import type { InShort } from "../plain";
 import { sharedStyles } from "../styles";
 import type { HomeAssistant } from "../types";
+import { VERSION } from "../version";
 import "./findings";
 
 /** Fired when the report's Close is pressed. */
@@ -67,7 +67,7 @@ export class RvLiveSoak extends LitElement {
       await soakTally.flush(hass);
       const soak = await fetchLiveSoak(hass);
       const input: SoakInput = {
-        version: LIVE_CHECK_VERSION,
+        version: VERSION,
         now: Date.now(),
         sampleS: soak.sample_s,
         keepS: soak.keep_s,

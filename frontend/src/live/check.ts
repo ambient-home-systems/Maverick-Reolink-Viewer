@@ -34,6 +34,7 @@ import { browserLabel, classifyHost } from "../playback/check-util";
 import { mseApiName } from "../playback/mse-feeder";
 import { count, inShortLines, middle, secondsText, speed, type Finding, type InShort } from "../plain";
 import type { CapacityReport, HomeAssistant, LiveCamera, LiveConnection, LiveImage, LiveStreamKind } from "../types";
+import { VERSION } from "../version";
 import {
   LIVE_REPORT_PREFIX,
   cacheLabel,
@@ -49,7 +50,6 @@ import { liveConnection } from "./data";
 import { chooseHd } from "./hd";
 import { OurMse, OurWebRtc, StockWebRtc, type LiveSession, type SessionResult } from "./session";
 
-export const LIVE_CHECK_VERSION = "0.31.0";
 export { LIVE_REPORT_PREFIX };
 export const LIVE_SETUPS = [
   "Desktop Chrome, LAN",
@@ -235,7 +235,7 @@ export class LiveCheck {
   private async _header(): Promise<void> {
     const admin = this._hass.user?.is_admin === true;
     this._log(
-      `Reolink Viewer live check v${LIVE_CHECK_VERSION} · ${this.options.setup} · ${new Date().toLocaleString()}`,
+      `Reolink Viewer live check v${VERSION} · ${this.options.setup} · ${new Date().toLocaleString()}`,
     );
     this._log(
       `Browser: ${browserLabel(navigator.userAgent)} · page ${classifyHost(location.hostname)} over ${location.protocol.replace(":", "")}` +

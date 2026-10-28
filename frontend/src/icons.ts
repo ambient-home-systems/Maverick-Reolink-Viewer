@@ -27,6 +27,7 @@ const PATHS = {
   refresh: svg`<path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3" /><path d="M19.5 4.5v4h-4" />`,
   download: svg`<path d="M12 4v11M7 10.5l5 5 5-5M5 19.5h14" />`,
   pip: svg`<rect x="3.5" y="5.5" width="17" height="13" rx="1.5" /><rect x="11.5" y="11.5" width="6" height="4.5" fill="currentColor" />`,
+  external: svg`<path d="M13.5 4.5h6v6M19.5 4.5l-8 8" /><path d="M17.5 13.5v5a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1v-11a1 1 0 0 1 1-1h5" />`,
 } as const;
 
 export type IconName = keyof typeof PATHS;

@@ -12,6 +12,7 @@ import {
   type FakeHass,
 } from "./test-fixtures";
 import type { DevicesResponse } from "./types";
+import { VERSION } from "./version";
 import { loadView } from "./views";
 
 const download = vi.hoisted(() => vi.fn());
@@ -163,6 +164,30 @@ describe("reolink-viewer-panel", () => {
     expect(content.match(/Front Yard/g)).toHaveLength(1);
   });
 
+  it("points to the guides of the version installed", async () => {
+    const el = await mount(makeHass(okDevices()));
+    const section = [...(el.shadowRoot?.querySelectorAll("section.card") ?? [])].find(
+      (s) => s.querySelector("h2")?.textContent === "Help",
+    );
+    expect(section?.textContent).toContain(`(${VERSION})`);
+    const links = [...(section?.querySelectorAll("a") ?? [])];
+    expect(links.map((a) => a.querySelector(".name")?.textContent)).toEqual([
+      "User guide",
+      "Troubleshooting",
+      "Cameras and NVRs",
+    ]);
+    const docs = `https://github.com/ambient-home-systems/Maverick-Reolink-Viewer/blob/v${VERSION}/docs/`;
+    expect(links.map((a) => a.getAttribute("href"))).toEqual([
+      `${docs}user-guide.md`,
+      `${docs}troubleshooting.md`,
+      `${docs}cameras.md`,
+    ]);
+    for (const a of links) {
+      expect(a.target).toBe("_blank");
+      expect(a.rel).toContain("noopener");
+    }
+  });
+
   it("shows an empty state", async () => {
     const el = await mount(makeHass(okDevices([], [])));
     expect(text(el)).toContain("No Reolink devices");
@@ -182,6 +207,10 @@ describe("reolink-viewer-panel", () => {
     expect(note()?.textContent).toContain("Your cameras keep recording");
     // The technical text, for support, under Details.
     expect(note()?.querySelector("details")?.textContent).toContain("no longer has a 'host' field\nreolink-aio 0.19.0");
+    // More help: what it means, in the troubleshooting guide.
+    expect(note()?.querySelector("a.help-link")?.getAttribute("href")).toMatch(
+      /troubleshooting\.md#reolink-viewer-needs-an-update$/,
+    );
     // Devices and their settings still work.
     expect(text(el)).toContain("Garage NVR");
     expect(button(el, "Run probe")?.disabled).toBe(true);
@@ -213,11 +242,15 @@ describe("reolink-viewer-panel", () => {
     expect(note()?.textContent).toContain("it may be waiting for a camera or NVR to come back online");
     expect(note()?.classList.contains("fault")).toBe(true);
     expect(note()?.querySelector("details")).toBeNull();
+    expect(note()?.querySelector("a.help-link")?.getAttribute("href")).toMatch(
+      /#the-reolink-integration-is-not-running$/,
+    );
     document.body.innerHTML = "";
 
     el = await mount(makeHass({ ...okDevices([], []), degraded: true }));
     expect(note()?.querySelector("h2")?.textContent).toBe("No Reolink devices yet");
     expect(note()?.classList.contains("fault")).toBe(false);
+    expect(note()?.querySelector("a.help-link")?.getAttribute("href")).toMatch(/#no-reolink-devices-yet$/);
     // The device list says it there, without the note.
     window.history.replaceState(null, "", "/#devices");
     window.dispatchEvent(new HashChangeEvent("hashchange"));
@@ -347,6 +380,9 @@ describe("reolink-viewer-panel", () => {
     const el = await mount(hass);
     expect(text(el)).toContain("Your devices could not load: Reolink Viewer is not running.");
     expect(el.shadowRoot?.querySelector(".problem details")?.textContent).toContain("Reolink Viewer is not loaded");
+    expect(el.shadowRoot?.querySelector(".problem a.help-link")?.getAttribute("href")).toMatch(
+      /troubleshooting\.md#a-page-could-not-load$/,
+    );
   });
 
   it("hides the probe from non-admins", async () => {

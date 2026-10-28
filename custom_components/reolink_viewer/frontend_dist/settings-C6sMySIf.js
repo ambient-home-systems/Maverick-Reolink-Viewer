@@ -1,4 +1,4 @@
-import { I as e, Jt as t, Kt as n, Wt as r, Yt as i, bt as a, it as o, qt as s, r as c, yt as l } from "./home-CXa5vw3D.js";
+import { Gt as e, I as t, Jt as n, Xt as r, Yt as i, bt as a, it as o, qt as s, r as c, xt as l } from "./home-DUa094wl.js";
 //#region src/catalog.ts
 var u = {
 	id: "other",
@@ -122,7 +122,7 @@ var b = 1e4, x = class {
 	get size() {
 		return this._pending.size;
 	}
-}, S = 1, C = class extends n {
+}, S = 1, C = class extends s {
 	static properties = {
 		hass: { attribute: !1 },
 		device: { attribute: !1 },
@@ -175,9 +175,9 @@ var b = 1e4, x = class {
 	}
 	render() {
 		let e = this.connection;
-		if (!this.device || !e) return t`<p class="muted">No settings.</p>`;
-		let n = this._rows(e), r = e.entities.filter((e) => e.disabled_by !== null).length, i = p(this.catalog).filter((e) => n.has(e.id));
-		return t`
+		if (!this.device || !e) return i`<p class="muted">No settings.</p>`;
+		let t = this._rows(e), r = e.entities.filter((e) => e.disabled_by !== null).length, a = p(this.catalog).filter((e) => t.has(e.id));
+		return i`
       <div class="toolbar">
         <input
           class="search"
@@ -201,32 +201,32 @@ var b = 1e4, x = class {
         </label>
       </div>
       ${this._renderConnections()}
-      ${this._showDisabled ? t`<p class="banner info small">
+      ${this._showDisabled ? i`<p class="banner info small">
             Home Assistant creates some Reolink entities disabled.
             ${this.hass?.user?.is_admin ? "Enabling one makes Home Assistant reload the Reolink integration entry for this device after about 30 seconds; its entities are briefly unavailable and the new one appears then." : "An administrator can enable them."}
-          </p>` : s}
-      ${i.length ? i.map((e) => t`<section class="category">
+          </p>` : n}
+      ${a.length ? a.map((e) => i`<section class="category">
               <h2>${e.title}</h2>
               <p class="muted small">${e.description}</p>
               <ul class="rows">
-                ${(n.get(e.id) ?? []).map((e) => this._renderRow(e))}
+                ${(t.get(e.id) ?? []).map((e) => this._renderRow(e))}
               </ul>
-            </section>`) : t`<p class="muted">No settings match “${this._search}”.</p>`}
+            </section>`) : i`<p class="muted">No settings match “${this._search}”.</p>`}
       ${this._renderConfirm()}
     `;
 	}
 	_renderConnections() {
 		let e = this.device?.connections ?? [];
-		if (e.length < 2) return s;
-		let n = this.connection;
-		return t`<div class="connections" role="radiogroup" aria-label="Settings through">
+		if (e.length < 2) return n;
+		let t = this.connection;
+		return i`<div class="connections" role="radiogroup" aria-label="Settings through">
       <span class="small muted">Settings through</span>
-      ${e.map((e, r) => t`<button
+      ${e.map((e, n) => i`<button
           role="radio"
-          aria-checked=${e === n ? "true" : "false"}
-          class=${e === n ? "primary" : ""}
+          aria-checked=${e === t ? "true" : "false"}
+          class=${e === t ? "primary" : ""}
           @click=${() => {
-			this._connection = r;
+			this._connection = n;
 		}}
         >
           ${c(e)} · ${e.entities.length} settings
@@ -237,30 +237,30 @@ var b = 1e4, x = class {
     </div>`;
 	}
 	_renderRow(e) {
-		let { entity: n, entry: r, label: i } = e, a = this._open.has(n.entity_id);
-		return t`<li class="row" data-entity-id=${n.entity_id}>
+		let { entity: t, entry: r, label: o } = e, s = this._open.has(t.entity_id);
+		return i`<li class="row" data-entity-id=${t.entity_id}>
       <div class="info">
         <div class="label">
-          ${i}
-          ${n.sub_device ? t`<span class="badge">${n.sub_device}</span>` : s}
-          ${n.disabled_by === null ? s : t`<span class="badge">Turned off</span>`}
-          ${n.hidden_by === null ? s : t`<span class="badge">Hidden</span>`}
-          ${n.entity_category === "diagnostic" ? t`<span class="badge">Read only</span>` : s}
-          ${r?.impact === "disruptive" ? t`<span class="badge warning" title=${r.impact_note ?? ""}>Asks first</span>` : s}
+          ${o}
+          ${t.sub_device ? i`<span class="badge">${t.sub_device}</span>` : n}
+          ${t.disabled_by === null ? n : i`<span class="badge">Turned off</span>`}
+          ${t.hidden_by === null ? n : i`<span class="badge">Hidden</span>`}
+          ${t.entity_category === "diagnostic" ? i`<span class="badge">Read only</span>` : n}
+          ${r?.impact === "disruptive" ? i`<span class="badge warning" title=${r.impact_note ?? ""}>Asks first</span>` : n}
         </div>
-        ${r ? t`<div class="muted small">${r.summary}</div>` : s}
+        ${r ? i`<div class="muted small">${r.summary}</div>` : n}
       </div>
-      <div class="control">${this._renderControl(n, i)}</div>
-      ${r ? t`<details
+      <div class="control">${this._renderControl(t, o)}</div>
+      ${r ? i`<details
             class="about"
-            .open=${a}
+            .open=${s}
             @toggle=${(e) => {
-			this._setOpen(n.entity_id, e.target.open);
+			this._setOpen(t.entity_id, e.target.open);
 		}}
           >
-            <summary class="small" aria-label=${`About this setting: ${i}`}>About this setting${l("chevronDown")}</summary>
-            ${a ? this._renderAbout(r) : s}
-          </details>` : s}
+            <summary class="small" aria-label=${`About this setting: ${o}`}>About this setting${a("chevronDown")}</summary>
+            ${s ? this._renderAbout(r) : n}
+          </details>` : n}
     </li>`;
 	}
 	_setOpen(e, t) {
@@ -269,109 +269,109 @@ var b = 1e4, x = class {
 		t ? n.add(e) : n.delete(e), this._open = n;
 	}
 	_renderAbout(e) {
-		let n = e.related.map((e) => f(this.catalog, e)?.title).filter((e) => e !== void 0);
-		return t`<div class="about-body small">
-      ${e.verification === "unverified" ? t`<p class="unverified">
+		let t = e.related.map((e) => f(this.catalog, e)?.title).filter((e) => e !== void 0);
+		return i`<div class="about-body small">
+      ${e.verification === "unverified" ? i`<p class="unverified">
             <span class="badge warning">unverified</span> Reolink does not document exactly what
             this does; the text says only what is known.
-          </p>` : s}
+          </p>` : n}
       <p>${e.what_it_does}</p>
-      ${e.tradeoffs ? t`<p><strong>Trade-offs:</strong> ${e.tradeoffs}</p>` : s}
-      ${e.impact === "disruptive" ? t`<p><strong>Impact:</strong> ${e.impact_note}</p>` : s}
+      ${e.tradeoffs ? i`<p><strong>Trade-offs:</strong> ${e.tradeoffs}</p>` : n}
+      ${e.impact === "disruptive" ? i`<p><strong>Impact:</strong> ${e.impact_note}</p>` : n}
       <p><strong>Requires:</strong> ${e.requires}</p>
-      ${e.notes ? t`<p>${e.notes}</p>` : s}
-      ${n.length ? t`<p><strong>Related:</strong> ${n.join(", ")}</p>` : s}
+      ${e.notes ? i`<p>${e.notes}</p>` : n}
+      ${t.length ? i`<p><strong>Related:</strong> ${t.join(", ")}</p>` : n}
       <p>
         <strong>Sources:</strong>
-        ${e.sources.map((e, n) => t`${n ? ", " : ""}<a href=${e.url} target="_blank" rel="noreferrer"
+        ${e.sources.map((e, t) => i`${t ? ", " : ""}<a href=${e.url} target="_blank" rel="noreferrer"
               >${e.title}</a
             >`)}
       </p>
     </div>`;
 	}
-	_renderControl(e, n) {
+	_renderControl(e, t) {
 		if (e.disabled_by !== null) {
-			if (!this.hass?.user?.is_admin) return t`<span class="muted small">Disabled</span>`;
-			let r = this._enabling.has(e.entity_id);
-			return t`<button ?disabled=${r} @click=${() => void this._enable(e, n)}>
-        ${r ? "Enabling…" : "Enable"}
+			if (!this.hass?.user?.is_admin) return i`<span class="muted small">Disabled</span>`;
+			let n = this._enabling.has(e.entity_id);
+			return i`<button ?disabled=${n} @click=${() => void this._enable(e, t)}>
+        ${n ? "Enabling…" : "Enable"}
       </button>`;
 		}
-		let r = this.hass?.states[e.entity_id];
-		if (!r) return t`<span class="muted small">Not loaded yet</span>`;
-		let i = e.entity_id, a = this.writes.isPending(i), o = this.writes.valueFor(i), s = r.state === "unavailable" || a;
+		let n = this.hass?.states[e.entity_id];
+		if (!n) return i`<span class="muted small">Not loaded yet</span>`;
+		let r = e.entity_id, a = this.writes.isPending(r), o = this.writes.valueFor(r), s = n.state === "unavailable" || a;
 		switch (e.domain) {
 			case "switch":
-			case "siren": return this._toggle(e, n, o ?? r.state === "on", s && !a);
-			case "light": return this._light(e, n, r, o, s && !a);
-			case "number": return this._number(e, n, r, o, s);
-			case "select": return this._select(e, n, r, o, s);
-			case "time": return t`<input
+			case "siren": return this._toggle(e, t, o ?? n.state === "on", s && !a);
+			case "light": return this._light(e, t, n, o, s && !a);
+			case "number": return this._number(e, t, n, o, s);
+			case "select": return this._select(e, t, n, o, s);
+			case "time": return i`<input
           type="time"
           step="1"
-          aria-label=${n}
-          .value=${String(o ?? (/^\d\d:\d\d/.test(r.state) ? r.state : ""))}
+          aria-label=${t}
+          .value=${String(o ?? (/^\d\d:\d\d/.test(n.state) ? n.state : ""))}
           ?disabled=${s}
-          @change=${(t) => {
-				let r = t.target.value;
-				r && this._write(e, n, r, "any");
+          @change=${(n) => {
+				let r = n.target.value;
+				r && this._write(e, t, r, "any");
 			}}
         />`;
-			case "button": return t`<button
+			case "button": return i`<button
           ?disabled=${s}
-          @click=${() => void this._write(e, n, "press", "any")}
+          @click=${() => void this._write(e, t, "press", "any")}
         >
-          ${a ? "Working…" : n}
+          ${a ? "Working…" : t}
         </button>`;
-			case "update": return this._update(e, n, r, a);
-			default: return t`<span class="value">${E(r, e.domain)}</span>`;
+			case "update": return this._update(e, t, n, a);
+			default: return i`<span class="value">${E(n, e.domain)}</span>`;
 		}
 	}
-	_toggle(e, n, r, i) {
-		let a = r === !0;
-		return t`<button
+	_toggle(e, t, n, r) {
+		let a = n === !0;
+		return i`<button
       class="toggle ${a ? "on" : ""}"
       role="switch"
-      aria-label=${n}
+      aria-label=${t}
       aria-checked=${a ? "true" : "false"}
-      ?disabled=${i}
-      @click=${() => void this._write(e, n, !a, a ? "off" : "on")}
+      ?disabled=${r}
+      @click=${() => void this._write(e, t, !a, a ? "off" : "on")}
     >
       <span class="knob"></span>
     </button>`;
 	}
-	_light(e, n, r, i, a) {
-		let o = r.attributes.supported_color_modes, c = Array.isArray(o) && o.some((e) => e !== "onoff"), l = r.attributes.brightness, u = typeof l == "number" ? Math.round(l / 255 * 100) : 0, d = typeof i == "boolean" ? i : r.state === "on";
-		return t`<span class="light">
-      ${c && d ? t`<input
+	_light(e, t, r, a, o) {
+		let s = r.attributes.supported_color_modes, c = Array.isArray(s) && s.some((e) => e !== "onoff"), l = r.attributes.brightness, u = typeof l == "number" ? Math.round(l / 255 * 100) : 0, d = typeof a == "boolean" ? a : r.state === "on";
+		return i`<span class="light">
+      ${c && d ? i`<input
             type="range"
             min="1"
             max="100"
-            aria-label="${n} brightness"
-            .value=${String(typeof i == "number" ? i : u)}
-            ?disabled=${a}
-            @change=${(t) => {
-			let r = Number(t.target.value);
-			this._write(e, n, r, "on", y(r));
+            aria-label="${t} brightness"
+            .value=${String(typeof a == "number" ? a : u)}
+            ?disabled=${o}
+            @change=${(n) => {
+			let r = Number(n.target.value);
+			this._write(e, t, r, "on", y(r));
 		}}
-          />` : s}
-      ${this._toggle(e, n, d, a)}
+          />` : n}
+      ${this._toggle(e, t, d, o)}
     </span>`;
 	}
-	_number(e, n, r, i, a) {
-		let o = r.attributes, c = T(o.min, 0), l = T(o.max, 100), u = T(o.step, 1), d = typeof o.unit_of_measurement == "string" ? o.unit_of_measurement : "", f = Number(r.state), p = typeof i == "number" ? i : f, m = Number.isFinite(p) ? String(p) : "", h = (t) => {
-			let r = t.target, i = Number(r.value);
-			r.value === "" || !Number.isFinite(i) || i < c || i > l ? r.value = m : i !== p && this._write(e, n, i, "any");
+	_number(e, t, r, a, o) {
+		let s = r.attributes, c = T(s.min, 0), l = T(s.max, 100), u = T(s.step, 1), d = typeof s.unit_of_measurement == "string" ? s.unit_of_measurement : "", f = Number(r.state), p = typeof a == "number" ? a : f, m = Number.isFinite(p) ? String(p) : "", h = (n) => {
+			let r = n.target, i = Number(r.value);
+			r.value === "" || !Number.isFinite(i) || i < c || i > l ? r.value = m : i !== p && this._write(e, t, i, "any");
 		};
-		return t`<span class="number">
-      ${o.mode === "box" ? s : t`<input
+		return i`<span class="number">
+      ${s.mode === "box" ? n : i`<input
             type="range"
             min=${c}
             max=${l}
             step=${u}
-            aria-label=${n}
+            aria-label=${t}
             .value=${m}
-            ?disabled=${a}
+            ?disabled=${o}
             @input=${(e) => {
 			let t = e.target.nextElementSibling;
 			t && (t.value = e.target.value);
@@ -384,54 +384,54 @@ var b = 1e4, x = class {
         min=${c}
         max=${l}
         step=${u}
-        aria-label="${n} value"
+        aria-label="${t} value"
         .value=${m}
-        ?disabled=${a}
+        ?disabled=${o}
         @change=${h}
       />
-      ${d ? t`<span class="unit muted small">${d}</span>` : s}
+      ${d ? i`<span class="unit muted small">${d}</span>` : n}
     </span>`;
 	}
-	_select(e, n, r, i, a) {
-		let o = Array.isArray(r.attributes.options) ? r.attributes.options.map(String) : [], c = typeof i == "string" ? i : r.state;
-		return t`<select
-      aria-label=${n}
-      ?disabled=${a}
-      @change=${(t) => {
-			let r = t.target, i = r.value;
-			r.value = c, this._write(e, n, i, { option: i });
+	_select(e, t, r, a, o) {
+		let s = Array.isArray(r.attributes.options) ? r.attributes.options.map(String) : [], c = typeof a == "string" ? a : r.state;
+		return i`<select
+      aria-label=${t}
+      ?disabled=${o}
+      @change=${(n) => {
+			let r = n.target, i = r.value;
+			r.value = c, this._write(e, t, i, { option: i });
 		}}
     >
-      ${o.includes(c) ? s : t`<option value="" selected>—</option>`}
-      ${o.map((e) => t`<option value=${e} ?selected=${e === c}>${w(e)}</option>`)}
+      ${s.includes(c) ? n : i`<option value="" selected>—</option>`}
+      ${s.map((e) => i`<option value=${e} ?selected=${e === c}>${w(e)}</option>`)}
     </select>`;
 	}
-	_update(e, n, r, i) {
-		let a = r.attributes, o = typeof a.installed_version == "string" ? a.installed_version : "?", c = typeof a.latest_version == "string" ? a.latest_version : null, l = typeof a.supported_features == "number" ? a.supported_features : 0, u = a.in_progress === !0 || i, d = r.state === "on" && (l & S) !== 0;
-		return t`<span class="update small">
+	_update(e, t, r, a) {
+		let o = r.attributes, s = typeof o.installed_version == "string" ? o.installed_version : "?", c = typeof o.latest_version == "string" ? o.latest_version : null, l = typeof o.supported_features == "number" ? o.supported_features : 0, u = o.in_progress === !0 || a, d = r.state === "on" && (l & S) !== 0;
+		return i`<span class="update small">
       <span>
-        ${o}${c && c !== o ? t` → <strong>${c}</strong>` : s}
-        ${r.state === "off" ? t`<span class="muted">(up to date)</span>` : s}
+        ${s}${c && c !== s ? i` → <strong>${c}</strong>` : n}
+        ${r.state === "off" ? i`<span class="muted">(up to date)</span>` : n}
       </span>
-      ${d || u ? t`<button
+      ${d || u ? i`<button
             ?disabled=${u}
-            @click=${() => void this._write(e, n, "install", "any")}
+            @click=${() => void this._write(e, t, "install", "any")}
           >
             ${u ? "Installing…" : "Install"}
-          </button>` : s}
+          </button>` : n}
     </span>`;
 	}
-	async _write(t, n, i, a, o) {
+	async _write(n, r, i, a, o) {
 		let s = this.hass;
 		if (!s) return;
-		let c = m(d(this.catalog, t.domain, t.key), a);
-		if (c !== null && !await this.confirm(n, c)) return;
-		let l = o ?? v(t.domain, t.domain === "button" ? "press" : t.domain === "update" ? "install" : i), u = t.entity_id, f = this.writes.begin(u, i, s.states[u]);
+		let c = m(d(this.catalog, n.domain, n.key), a);
+		if (c !== null && !await this.confirm(r, c)) return;
+		let l = o ?? v(n.domain, n.domain === "button" ? "press" : n.domain === "update" ? "install" : i), u = n.entity_id, f = this.writes.begin(u, i, s.states[u]);
 		this.requestUpdate();
 		try {
 			await s.callService(l.domain, l.service, l.data, { entity_id: u }, !1), this.writes.confirm(u, f), this._scheduleSettle();
-		} catch (t) {
-			this.writes.fail(u, f) && e(this, `Could not change ${n}: ${r(t).message}`, "error");
+		} catch (n) {
+			this.writes.fail(u, f) && t(this, `Could not change ${r}: ${e(n).message}`, "error");
 		}
 		this.requestUpdate();
 	}
@@ -453,7 +453,7 @@ var b = 1e4, x = class {
 	}
 	_renderConfirm() {
 		let e = this._confirm;
-		return e ? t`<div class="scrim" @click=${() => {
+		return e ? i`<div class="scrim" @click=${() => {
 			e.resolve(!1);
 		}}>
       <div
@@ -477,27 +477,27 @@ var b = 1e4, x = class {
 		}}>Continue</button>
         </div>
       </div>
-    </div>` : s;
+    </div>` : n;
 	}
-	async _enable(t, n) {
+	async _enable(n, r) {
 		let i = this.hass;
 		if (i) {
-			this._enabling = /* @__PURE__ */ new Set([...this._enabling, t.entity_id]);
+			this._enabling = /* @__PURE__ */ new Set([...this._enabling, n.entity_id]);
 			try {
-				let r = (await a(i, t.entity_id)).reload_delay;
-				e(this, `${n} enabled. Home Assistant reloads the Reolink entry${r ? ` in about ${r} seconds` : ""}; the entity becomes available after that.`), this.dispatchEvent(new CustomEvent("rv-entity-enabled", {
+				let e = (await l(i, n.entity_id)).reload_delay;
+				t(this, `${r} enabled. Home Assistant reloads the Reolink entry${e ? ` in about ${e} seconds` : ""}; the entity becomes available after that.`), this.dispatchEvent(new CustomEvent("rv-entity-enabled", {
 					bubbles: !0,
 					composed: !0
 				}));
-			} catch (t) {
-				e(this, `Could not enable ${n}: ${r(t).message}`, "error");
+			} catch (n) {
+				t(this, `Could not enable ${r}: ${e(n).message}`, "error");
 			} finally {
 				let e = new Set(this._enabling);
-				e.delete(t.entity_id), this._enabling = e;
+				e.delete(n.entity_id), this._enabling = e;
 			}
 		}
 	}
-	static styles = [o, i`
+	static styles = [o, r`
       :host {
         display: flex;
         flex-direction: column;

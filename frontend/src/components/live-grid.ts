@@ -163,6 +163,7 @@ export class RvLiveGrid extends LitElement {
             >
               Try again
             </button>`,
+            help: "loading",
           })
         : nothing}
       ${cameras === undefined

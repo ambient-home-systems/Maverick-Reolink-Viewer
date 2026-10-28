@@ -57,7 +57,8 @@ frontend/            # Lit + TypeScript panel, built with Vite
   src/network.ts     # where the page is (home or away) and HD in full screen there
   src/integration.ts # when Reolink Viewer cannot reach the cameras, in plain words,
                      # and why a view's data could not load
-  src/problem.ts     # a problem banner: plain words, what to do, Details
+  src/problem.ts     # a problem banner: plain words, what to do, More help, Details
+  src/help.ts        # links to the user docs of this release (src/version.ts)
   scripts/bundle-budget.mjs  # the home view's size against its budget (npm run budget)
   preview/           # the design preview: the panel on a fake hass (see Design preview)
   src/components/    # device list, device page, overview, settings, playback tab,
@@ -143,6 +144,7 @@ frontend/preview/make-media.sh                     # once: the synthetic picture
 cd frontend && npx vite build -c vite.preview.config.ts
 node ../scripts/preview_capture.cjs <out-dir> [view ...]   # light and dark, desktop and phone
 node ../scripts/preview_capture.cjs <out-dir> errors       # every error state
+node ../scripts/preview_capture.cjs ../docs/images guide   # the user docs' pictures
 ```
 
 The design's direction contract is in `.impeccable/surfaces/`; `PRODUCT.md` holds
@@ -208,6 +210,23 @@ Tests set up HA's real Reolink integration on a mocked `reolink_aio.api.Host`.
 `tests/conftest.py` adds what the bridge and the probe read. Media tests run real
 ffmpeg against a generated clip when ffmpeg is installed and skip otherwise.
 
+## User docs
+
+`docs/user-guide.md`, `docs/troubleshooting.md` and `docs/cameras.md` are for the
+people who use the panel: plain words, no internals. The panel links to them for the
+release it belongs to (`src/help.ts`: **Devices → Help**, and **More help** on its
+messages). `src/help.test.ts` keeps them in step with the panel:
+
+- every section the panel links to is in the docs;
+- every message the panel can show (`live/explain.ts`, `playback/explain.ts`,
+  `integration.ts`, the tiles' words and the storage and no-recordings notes) is in
+  `troubleshooting.md`, word for word, so a user can search for the one they see;
+- every link and picture in the docs leads somewhere.
+
+So a new or reworded message needs its entry in `troubleshooting.md`. When a view
+changes, take the docs' pictures again (Design preview, `guide`): they are the
+preview with its sample cameras, at 21:30 on its day.
+
 ## Home Assistant versions
 
 CI runs the whole test suite against:
@@ -236,14 +255,15 @@ the matrix's entry together (the same test checks they agree).
 
 ## Releasing
 
-1. Set the version everywhere: `python -m scripts.bump_version 0.32.0` (the
-   manifest, `frontend/package.json` and its lockfile, the live check).
+1. Set the version everywhere: `python -m scripts.bump_version 0.33.0` (the
+   manifest, `frontend/package.json` and its lockfile, and the panel's
+   `src/version.ts`, which its reports and its help links use).
 2. Add its entry to `CHANGELOG.md`, in plain words: it becomes the release's notes.
 3. `cd frontend && npm run build`, commit, and merge to main once CI is green.
 4. On GitHub: **Actions → Release → Run workflow** (tick **Dry run** first to see
    it through without publishing). It runs CI on main, packages the integration
    (`scripts/build_release.py`: the versions agree, the changelog has the entry, the
-   built panel is whole), and makes the release `v0.32.0` with
+   built panel is whole), and makes the release `v0.33.0` with
    `reolink_viewer.zip` attached and the changelog entry as its notes. HACS offers
    it as an update from then on.
 

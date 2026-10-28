@@ -234,8 +234,26 @@ export const sharedStyles = css`
     border-color: var(--rv-on-fault);
     color: var(--rv-on-fault);
   }
+  .banner.warning a,
+  .banner.error a {
+    color: var(--rv-on-fault);
+  }
   .banner.info {
     background: var(--rv-ground-2);
+  }
+  /* More help in the docs, which open in a new tab. */
+  .help-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+  }
+  .help-link svg {
+    width: 15px;
+    height: 15px;
+  }
+  .problem .help-link {
+    margin-left: 10px;
   }
   /* A problem's technical text, for support, under its plain words. */
   .problem details {
