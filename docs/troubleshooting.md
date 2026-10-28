@@ -221,8 +221,8 @@ that is not kept warm takes 1 to 4 seconds to start, depending on when you open 
 
 - **Keep warm** (on the camera's **Live** tab) keeps its connection open and holds its
   last key frame, so its video starts in a fraction of a second. It uses one of the
-  NVR's or camera's video slots all the time. Battery cameras are never kept warm, to
-  save their battery.
+  NVR's or camera's video slots all the time. Battery cameras running on their
+  battery are never kept warm, to save it.
 - On models that let you set it, a shorter key-frame interval for the camera's small
   ("Fluent") stream makes it start sooner. Reolink's settings call it the I-frame or
   interframe interval. In tests, a camera at 1 second started in about a second.

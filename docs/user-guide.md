@@ -121,8 +121,9 @@ of Home Assistant see each change.
 **Keep warm**, on a camera's **Live** tab, keeps its connection open all the time, so
 its video starts in a fraction of a second instead of 1 to 4 seconds. It is on for
 most cameras, as many as each NVR or camera can serve while leaving room for one HD
-view. Each camera kept warm uses one of its NVR's or its own video slots all the time,
-so turn it off for cameras you rarely watch. Battery cameras are never kept warm.
+view, but not for cameras that keep no recordings. Each camera kept warm uses one of
+its NVR's or its own video slots all the time, so turn it off for cameras you rarely
+watch. Battery cameras running on their battery are never kept warm.
 
 Keep warm is also a switch in Home Assistant ("Front Door keep live view warm"), so
 you can change it from automations and dashboards.
@@ -136,7 +137,7 @@ long it lasted, and a picture.
 
 - **Tap a row** to play that recording, on the camera's **Playback** tab.
 - An event you have not opened yet is marked **New**, in red. Each Home Assistant
-  user has their own: what you have seen stays unmarked for you, not for others.
+  user has their own marks: opening an event clears it for you, not for others.
   **Mark all seen** clears them all.
 - The camera buttons above the list show only those cameras' events.
 - **All events** opens the **Events** tab.
