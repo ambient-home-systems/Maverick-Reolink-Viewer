@@ -1,6 +1,5 @@
-import { Jt as e, Kt as t, L as n, Vt as r, Wt as i, Yt as a, it as o, kt as s, ot as c, qt as l, st as u, yt as d } from "./home-CXa5vw3D.js";
-import { n as f, t as p } from "./findings-aIXAcsyr.js";
-import { t as m } from "./check-BbdQFVaI.js";
+import { At as e, Gt as t, Ht as n, Jt as r, L as i, Xt as a, Yt as o, bt as s, ct as c, it as l, ot as u, qt as d, st as f } from "./home-DUa094wl.js";
+import { n as p, t as m } from "./findings-BoYHAmIU.js";
 function h(e) {
 	return v(e).text;
 }
@@ -36,13 +35,13 @@ function v(e) {
 	}
 	let l = c.at - s.at;
 	a.push(`Home Assistant's samples: ${t.length} over ${y(l)} h, since ${new Date(s.at).toLocaleString()} (every ${Math.round(e.sampleS / 60)} min; the last ${Math.round(e.keepS / 3600)} h are kept)`, "");
-	let u = [], d = t.map((e) => e.go2rtc.memory_kb).filter((e) => e !== null), m = c.go2rtc.restarts - s.go2rtc.restarts, h = t.filter((e) => e.go2rtc.state !== "running").length;
-	a.push(`go2rtc: ${c.go2rtc.state} · restarts ${s.go2rtc.restarts} → ${c.go2rtc.restarts}` + (d.length ? ` · memory ${b(d[0] ?? 0)} → ${b(d.at(-1) ?? 0)} MB (peak ${b(Math.max(...d))} MB)` : " · memory not known")), u.push(m === 0 && h === 0 ? ["✓", "go2rtc ran throughout: no restart"] : ["✗", `go2rtc restarted ${m} time${m === 1 ? "" : "s"}${h ? `, and was not running in ${h} sample${h === 1 ? "" : "s"}` : ""}`]), r.push(m === 0 && h === 0 ? {
+	let u = [], d = t.map((e) => e.go2rtc.memory_kb).filter((e) => e !== null), f = c.go2rtc.restarts - s.go2rtc.restarts, h = t.filter((e) => e.go2rtc.state !== "running").length;
+	a.push(`go2rtc: ${c.go2rtc.state} · restarts ${s.go2rtc.restarts} → ${c.go2rtc.restarts}` + (d.length ? ` · memory ${b(d[0] ?? 0)} → ${b(d.at(-1) ?? 0)} MB (peak ${b(Math.max(...d))} MB)` : " · memory not known")), u.push(f === 0 && h === 0 ? ["✓", "go2rtc ran throughout: no restart"] : ["✗", `go2rtc restarted ${f} time${f === 1 ? "" : "s"}${h ? `, and was not running in ${h} sample${h === 1 ? "" : "s"}` : ""}`]), r.push(f === 0 && h === 0 ? {
 		grade: "good",
 		text: "The video service (go2rtc) ran the whole time without restarting."
 	} : {
 		grade: "problem",
-		text: `The video service (go2rtc) restarted ${p(m, "time")}${h ? ` and was down for about ${String(h * Math.round(e.sampleS / 60))} minutes` : ""}.`,
+		text: `The video service (go2rtc) restarted ${m(f, "time")}${h ? ` and was down for about ${String(h * Math.round(e.sampleS / 60))} minutes` : ""}.`,
 		advice: "Look for go2rtc errors in Home Assistant's log, and include the details below if you report it."
 	});
 	let g = d.at(0), v = d.at(-1);
@@ -105,7 +104,7 @@ function v(e) {
 	for (let [e, t] of R) {
 		a.push(`  ${e}: ${t.plays} · ${t.drops} · ${t.failures}`);
 		let n = t.drops + t.failures;
-		n > Math.max(2, o) && (z.push(`${e} (${n} in ${o.toFixed(1)} h)`), B.push(`${e} (${p(n, "time")} in ${o.toFixed(1)} hours)`));
+		n > Math.max(2, o) && (z.push(`${e} (${n} in ${o.toFixed(1)} h)`), B.push(`${e} (${m(n, "time")} in ${o.toFixed(1)} hours)`));
 	}
 	n && r.unshift(z.length ? {
 		grade: "problem",
@@ -125,7 +124,7 @@ function v(e) {
 		advice: "Leave Home Assistant running; no page needs to be open."
 	}, n ? o >= 8 ? {
 		grade: "good",
-		text: `The live board was on screen for ${o.toFixed(1)} hours, opened ${p(n.opens, "time")}.`
+		text: `The live board was on screen for ${o.toFixed(1)} hours, opened ${m(n.opens, "time")}.`
 	} : {
 		grade: "pending",
 		text: `The live board has been on screen for ${o.toFixed(1)} of 8 hours.`,
@@ -144,10 +143,10 @@ function v(e) {
 		text: `Some measurements are missing (${String(t.length)} of about ${String(H)}): Home Assistant was busy or stopped for a while.`
 	}));
 	let U = u.filter(([e]) => e === "✗").length, W = r.filter((e) => e.grade === "problem").length, G = r.some((e) => e.grade === "pending"), K = {
-		headline: W ? `${p(W, "problem")} found${G ? " so far" : ""}.` : G ? "Running: nothing wrong so far." : "Passed: live view held up for the whole test.",
+		headline: W ? `${m(W, "problem")} found${G ? " so far" : ""}.` : G ? "Running: nothing wrong so far." : "Passed: live view held up for the whole test.",
 		findings: r
 	};
-	return a.push("", ...f(K)), a.push("", "Verdict:", ...u.map(([e, t]) => `${e} ${t}`)), a.push("", U ? `Not passed: ${U} ${U === 1 ? "criterion" : "criteria"} not met.` : "Passed."), {
+	return a.push("", ...p(K)), a.push("", "Verdict:", ...u.map(([e, t]) => `${e} ${t}`)), a.push("", U ? `Not passed: ${U} ${U === 1 ? "criterion" : "criteria"} not met.` : "Passed."), {
 		text: a.join("\n"),
 		inShort: K
 	};
@@ -164,7 +163,7 @@ function x(e) {
 }
 //#endregion
 //#region src/components/live-soak.ts
-var S = "rv-live-soak-close", C = class extends t {
+var S = "rv-live-soak-close", C = class extends d {
 	static properties = {
 		hass: { attribute: !1 },
 		closable: { type: Boolean },
@@ -182,13 +181,13 @@ var S = "rv-live-soak-close", C = class extends t {
 		!this._read && this.hass && this.refresh();
 	}
 	async refresh() {
-		let e = this.hass;
-		if (e) {
+		let n = this.hass;
+		if (n) {
 			this._read = !0, this._state = "loading";
 			try {
-				await u.flush(e);
-				let t = await s(e), n = {
-					version: m,
+				await c.flush(n);
+				let t = await e(n), r = {
+					version: u,
 					now: Date.now(),
 					sampleS: t.sample_s,
 					keepS: t.keep_s,
@@ -198,35 +197,35 @@ var S = "rv-live-soak-close", C = class extends t {
 					samples: t.now ? [...t.samples, t.now] : t.samples
 				};
 				this._state = {
-					text: h(n),
-					summary: g(n)
+					text: h(r),
+					summary: g(r)
 				};
 			} catch (e) {
-				this._state = { error: i(e).message };
+				this._state = { error: t(e).message };
 			}
 		}
 	}
 	async _startOver() {
 		let e = this.hass;
 		if (this._confirm = !1, e) {
-			u.discard();
+			c.discard();
 			try {
-				await r(e, c(navigator.userAgent), u.open), await this.refresh();
+				await n(e, f(navigator.userAgent), c.open), await this.refresh();
 			} catch (e) {
-				this._state = { error: i(e).message };
+				this._state = { error: t(e).message };
 			}
 		}
 	}
 	render() {
-		let t = this._state, r = typeof t == "object" && "text" in t ? t : void 0;
-		return e`<div class="soak" role="region" aria-label="Soak report">
+		let e = this._state, t = typeof e == "object" && "text" in e ? e : void 0;
+		return o`<div class="soak" role="region" aria-label="Soak report">
       <p class="intro">
         A day-long test of live view. Home Assistant keeps watch for ${24} hours, and the live board
         counts what happens whenever it is on screen: ${8} hours in all, on any of your devices. It
         tells you whether live video kept playing, whether connections to your cameras piled up, and whether
         battery cameras slept when nobody watched.
       </p>
-      ${t === "loading" ? e`<p class="muted">Reading the soak run…</p>` : "error" in t ? e`<div class="banner error" role="alert">Could not make the soak report: ${t.error}</div>` : e`<rv-findings .summary=${t.summary}></rv-findings>`}
+      ${e === "loading" ? o`<p class="muted">Reading the soak run…</p>` : "error" in e ? o`<div class="banner error" role="alert">Could not make the soak report: ${e.error}</div>` : o`<rv-findings .summary=${e.summary}></rv-findings>`}
       <div class="actions">
         <button
           class="with-icon"
@@ -234,16 +233,16 @@ var S = "rv-live-soak-close", C = class extends t {
 			this.refresh();
 		}}
         >
-          ${d("refresh")}Refresh
+          ${s("refresh")}Refresh
         </button>
-        ${this._confirm ? l : e`<button
+        ${this._confirm ? r : o`<button
               @click=${() => {
 			this._confirm = !0;
 		}}
             >
               Start over…
             </button>`}
-        ${this.closable ? e`<button
+        ${this.closable ? o`<button
               @click=${() => {
 			this.dispatchEvent(new CustomEvent(S, {
 				bubbles: !0,
@@ -252,9 +251,9 @@ var S = "rv-live-soak-close", C = class extends t {
 		}}
             >
               Close
-            </button>` : l}
+            </button>` : r}
       </div>
-      ${this._confirm ? e`<div class="banner warning confirm" role="alert">
+      ${this._confirm ? o`<div class="banner warning confirm" role="alert">
             <span>Start the soak over? What was counted is dropped.</span>
             <button
               class="danger"
@@ -271,28 +270,28 @@ var S = "rv-live-soak-close", C = class extends t {
             >
               Cancel
             </button>
-          </div>` : l}
-      ${r ? e`<details class="support">
-            <summary>Details for support${d("chevronDown")}</summary>
+          </div>` : r}
+      ${t ? o`<details class="support">
+            <summary>Details for support${s("chevronDown")}</summary>
             <div class="actions">
               <button
                 @click=${() => {
-			n(r.text).then((e) => {
+			i(t.text).then((e) => {
 				this._state = {
-					...r,
+					...t,
 					copied: e
 				};
 			});
 		}}
               >
-                ${r.copied === void 0 ? "Copy report" : r.copied ? "Copied" : "Could not copy"}
+                ${t.copied === void 0 ? "Copy report" : t.copied ? "Copied" : "Could not copy"}
               </button>
             </div>
-            <pre class="report">${r.text}</pre>
-          </details>` : l}
+            <pre class="report">${t.text}</pre>
+          </details>` : r}
     </div>`;
 	}
-	static styles = [o, a`
+	static styles = [l, a`
       :host {
         display: block;
       }

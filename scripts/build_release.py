@@ -10,7 +10,8 @@ change, so a release never finds a broken package; the Release workflow
 
 Before packaging, it checks (and stops, saying what is wrong):
 - the version is the same in manifest.json, frontend/package.json and the
-  live check (which writes it into its reports);
+  panel's frontend/src/version.ts (its reports carry it, and its help opens
+  the docs of this release);
 - CHANGELOG.md has an entry for it;
 - the built panel is whole: every file its modules import, and its fonts;
 - nothing that should not ship is in the folder (Python caches).
@@ -45,14 +46,14 @@ def version() -> str:
     """Return the version, once it is the same everywhere it is written."""
     manifest = str(json.loads((PACKAGE / "manifest.json").read_text())["version"])
     package = json.loads((ROOT / "frontend" / "package.json").read_text())["version"]
-    check = re.search(
-        r'LIVE_CHECK_VERSION = "([^"]+)"',
-        (ROOT / "frontend" / "src" / "live" / "check.ts").read_text(),
+    panel = re.search(
+        r'VERSION = "([^"]+)"',
+        (ROOT / "frontend" / "src" / "version.ts").read_text(),
     )
     found = {
         "manifest.json": manifest,
         "frontend/package.json": package,
-        "frontend/src/live/check.ts": check.group(1) if check else "(none)",
+        "frontend/src/version.ts": panel.group(1) if panel else "(none)",
     }
     if len(set(found.values())) != 1:
         listed = ", ".join(f"{path} says {v}" for path, v in found.items())

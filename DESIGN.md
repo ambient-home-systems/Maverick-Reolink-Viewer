@@ -342,6 +342,7 @@ The checks open with a condensed headline that names the slow camera when there 
 - **Do** use the fixed vocabularies (tile states, grade words, plain settings words) and name buttons for their action.
 - **Do** honour reduced motion: the arrival slide, the knob slide and the video fade all switch off.
 - **Do** make every control a real button or input with a name that contains what it shows, and give each widget one Tab stop with the arrow keys inside it (timeline, calendar, tabs). A dialog takes the focus, closes on Escape and gives the focus back.
+- **Do** send people to the user docs with an underlined link and the drawn `external` icon ("More help" on a problem, the Help rows on Devices), opening this release's docs in a new tab. On amber, links take on-fault text.
 
 ### Don't:
 - **Don't** use signal red for anything except now and new, or action blue for anything that cannot be pressed.

@@ -268,6 +268,7 @@ export class RvTimetable extends LitElement {
       ${this._error
         ? problem(explainLoad(this._error, this._isToday ? "Today's events" : "This day's events"), this._error, {
             action: html`<button @click=${() => void this._load(false)}>Try again</button>`,
+            help: "loading",
           })
         : nothing}
       ${feed ? this._renderTable(feed, zone) : this._error ? nothing : html`<p class="muted">Reading ${day} events…</p>`}`;

@@ -1,11 +1,11 @@
-import { Jt as e, Kt as t, Yt as n, a as r, i, it as a, o, qt as s, r as c, yt as l } from "./home-CXa5vw3D.js";
-import "./device-list-CwkUz-9J.js";
+import { Jt as e, Xt as t, Yt as n, a as r, bt as i, i as a, it as o, o as s, qt as c, r as l } from "./home-DUa094wl.js";
+import "./device-list-Co36N4U6.js";
 //#region src/components/overview.ts
 var u = 3e4, d = {
 	people: "person",
 	dog_cat: "animal",
 	"non-motor_vehicle": "bicycle"
-}, f = class extends t {
+}, f = class extends c {
 	static properties = {
 		hass: { attribute: !1 },
 		device: { attribute: !1 },
@@ -40,19 +40,19 @@ var u = 3e4, d = {
 		return typeof t != "string" || !t ? null : this._stamp ? `${t}${t.includes("?") ? "&" : "?"}_=${this._stamp}` : t;
 	}
 	render() {
-		let t = this.device;
-		if (!t) return e``;
-		let n = t.node;
-		return e`
-      ${n.kind === "camera" ? this._renderSnapshot(n) : this._renderCameras()}
-      <div class="connections">${t.connections.map((e) => this._renderConnection(e, t))}</div>
+		let e = this.device;
+		if (!e) return n``;
+		let t = e.node;
+		return n`
+      ${t.kind === "camera" ? this._renderSnapshot(t) : this._renderCameras()}
+      <div class="connections">${e.connections.map((t) => this._renderConnection(t, e))}</div>
     `;
 	}
 	_renderSnapshot(t) {
-		let n = this.snapshotUrl(), r = t.primary_view === "snapshot";
-		return e`<figure class="snapshot ${r ? "primary" : ""}">
+		let r = this.snapshotUrl(), a = t.primary_view === "snapshot";
+		return n`<figure class="snapshot ${a ? "primary" : ""}">
       <div class="frame">
-        ${n ? e`<img src=${n} alt="Latest snapshot of ${t.name ?? "the camera"}" />` : e`<p class="none">
+        ${r ? n`<img src=${r} alt="Latest snapshot of ${t.name ?? "the camera"}" />` : n`<p class="none">
               No snapshot: enable one of this camera's stream entities (for example
               <em>Fluent</em>) in the Settings tab.
             </p>`}
@@ -61,44 +61,44 @@ var u = 3e4, d = {
         <span>Latest snapshot</span>
         <button
           class="text with-icon"
-          ?disabled=${!n}
+          ?disabled=${!r}
           @click=${() => {
 			this._stamp = Date.now();
 		}}
         >
-          ${l("refresh")}Refresh
+          ${i("refresh")}Refresh
         </button>
       </figcaption>
-      ${r ? e`<p class="muted small">
+      ${a ? n`<p class="muted small">
             This camera does not record, so snapshots are its main view. The picture refreshes
             every ${u / 1e3} seconds while this page is open.
-          </p>` : s}
+          </p>` : e}
     </figure>`;
 	}
 	_renderCameras() {
 		let t = this.device?.node;
-		if (t?.kind === "camera") return s;
-		let n = t?.camera_ids.length ?? 0;
-		return e`<section class="card">
+		if (t?.kind === "camera") return e;
+		let r = t?.camera_ids.length ?? 0;
+		return n`<section class="card">
       <h2>Cameras</h2>
-      ${this.devices && t ? e`<rv-device-list .devices=${this.devices} .cameras=${this.cameras} .hostId=${t.id}></rv-device-list>` : e`<p class="muted">
-            ${n} ${n === 1 ? "camera" : "cameras"} on this ${i(t?.kind ?? "nvr")}.
+      ${this.devices && t ? n`<rv-device-list .devices=${this.devices} .cameras=${this.cameras} .hostId=${t.id}></rv-device-list>` : n`<p class="muted">
+            ${r} ${r === 1 ? "camera" : "cameras"} on this ${a(t?.kind ?? "nvr")}.
           </p>`}
     </section>`;
 	}
-	_renderConnection(t, n) {
-		let r = t.details, i = n.node.kind === "camera", a = [t.channel !== void 0 && t.channel !== null && t.via === "nvr" ? `channel ${String(t.channel + 1)}` : void 0, t.playback_source ? "playback source" : void 0].filter((e) => e !== void 0);
-		return e`<section class="card">
+	_renderConnection(t, r) {
+		let i = t.details, a = r.node.kind === "camera", o = [t.channel !== void 0 && t.channel !== null && t.via === "nvr" ? `channel ${String(t.channel + 1)}` : void 0, t.playback_source ? "playback source" : void 0].filter((e) => e !== void 0);
+		return n`<section class="card">
       <div class="header">
-        <h2>${i ? c(t) : "Device"}</h2>
-        ${a.length ? e`<span class="muted">${a.join(" · ")}</span>` : s}
+        <h2>${a ? l(t) : "Device"}</h2>
+        ${o.length ? n`<span class="muted">${o.join(" · ")}</span>` : e}
       </div>
-      ${r === null ? e`<p class="muted">
-            ${n.degraded ? "Details are unavailable while Reolink Viewer cannot reach the Reolink integration." : "Details are unavailable."}
-          </p>` : e`
-            ${t.via === "direct" || !i ? g(r.host) : s}
-            ${r.channel ? p(r.channel) : s}
-            ${t.via === "direct" || !i ? m(r.host) : s}
+      ${i === null ? n`<p class="muted">
+            ${r.degraded ? "Details are unavailable while Reolink Viewer cannot reach the Reolink integration." : "Details are unavailable."}
+          </p>` : n`
+            ${t.via === "direct" || !a ? g(i.host) : e}
+            ${i.channel ? p(i.channel) : e}
+            ${t.via === "direct" || !a ? m(i.host) : e}
           `}
       <p class="muted small">
         ${t.entities.length} entities
@@ -106,7 +106,7 @@ var u = 3e4, d = {
       </p>
     </section>`;
 	}
-	static styles = [a, n`
+	static styles = [o, t`
       :host {
         display: flex;
         flex-direction: column;
@@ -181,39 +181,39 @@ var u = 3e4, d = {
     `];
 };
 function p(t) {
-	let n = t.online ? t.sleeping ? "Asleep" : "Online" : "Offline";
-	return e`<dl class="facts">
+	let i = t.online ? t.sleeping ? "Asleep" : "Online" : "Offline";
+	return n`<dl class="facts">
     <dt>Model</dt>
-    <dd>${t.model}${t.model_id ? e` <span class="muted">(${t.model_id})</span>` : s}</dd>
+    <dd>${t.model}${t.model_id ? n` <span class="muted">(${t.model_id})</span>` : e}</dd>
     <dt>Hardware</dt>
     <dd>${t.hardware_version}</dd>
     <dt>Firmware</dt>
     <dd>${t.firmware_version}</dd>
     <dt>Status</dt>
-    <dd>${n}</dd>
+    <dd>${i}</dd>
     <dt>Clear stream</dt>
     <dd>${r(t.encodings.main)}</dd>
     <dt>Fluent stream</dt>
     <dd>${r(t.encodings.sub)}</dd>
     <dt>Network</dt>
     <dd>${_(t.network)}</dd>
-    ${t.battery ? e`<dt>Battery</dt>
+    ${t.battery ? n`<dt>Battery</dt>
           <dd>
             ${t.battery.percent ?? "?"}%${t.battery.status ? ` · ${t.battery.status}` : ""}${t.battery.temperature_c === null ? "" : ` · ${t.battery.temperature_c} °C`}${t.wired_power ? " · on wired power" : ""}
-          </dd>` : s}
+          </dd>` : e}
     <dt>Recordings</dt>
     <dd>${t.supports_replay ? "Playback supported" : "No playback"}</dd>
-    ${t.ai_types.length ? e`<dt>AI detection</dt>
-          <dd>${t.ai_types.map((e) => d[e] ?? e).join(", ")}</dd>` : s}
-    ${t.capabilities.length ? e`<dt>Features</dt>
-          <dd class="chips">${t.capabilities.map((t) => e`<span class="badge">${t}</span>`)}</dd>` : s}
+    ${t.ai_types.length ? n`<dt>AI detection</dt>
+          <dd>${t.ai_types.map((e) => d[e] ?? e).join(", ")}</dd>` : e}
+    ${t.capabilities.length ? n`<dt>Features</dt>
+          <dd class="chips">${t.capabilities.map((e) => n`<span class="badge">${e}</span>`)}</dd>` : e}
   </dl>`;
 }
 function m(t) {
-	let n = t.ports;
-	return e`<dl class="facts">
-    ${t.device_type === "camera" ? s : e`<dt>Model</dt>
-          <dd>${t.model ?? "?"}${t.model_id ? e` <span class="muted">(${t.model_id})</span>` : s}</dd>
+	let r = t.ports;
+	return n`<dl class="facts">
+    ${t.device_type === "camera" ? e : n`<dt>Model</dt>
+          <dd>${t.model ?? "?"}${t.model_id ? n` <span class="muted">(${t.model_id})</span>` : e}</dd>
           <dt>Hardware</dt>
           <dd>${t.hardware_version ?? "?"}</dd>
           <dt>Firmware</dt>
@@ -222,27 +222,27 @@ function m(t) {
           <dd>${t.channels}</dd>`}
     <dt>Connection</dt>
     <dd>
-      ${_(t.network)} · ${n.http.https ? "HTTPS" : "HTTP"}${n.http.port ? ` port ${n.http.port}` : ""}${t.baichuan_only ? " · Baichuan only" : ""}
+      ${_(t.network)} · ${r.http.https ? "HTTPS" : "HTTP"}${r.http.port ? ` port ${r.http.port}` : ""}${t.baichuan_only ? " · Baichuan only" : ""}
     </dd>
     <dt>Protocols</dt>
     <dd>
-      RTSP ${o(n.rtsp.enabled)}${n.rtsp.port ? ` (${n.rtsp.port})` : ""} · RTMP
-      ${o(n.rtmp.enabled)}${n.rtmp.port ? ` (${n.rtmp.port})` : ""} · ONVIF
-      ${o(n.onvif.enabled)}${n.onvif.port ? ` (${n.onvif.port})` : ""}
+      RTSP ${s(r.rtsp.enabled)}${r.rtsp.port ? ` (${r.rtsp.port})` : ""} · RTMP
+      ${s(r.rtmp.enabled)}${r.rtmp.port ? ` (${r.rtmp.port})` : ""} · ONVIF
+      ${s(r.onvif.enabled)}${r.onvif.port ? ` (${r.onvif.port})` : ""}
     </dd>
     <dt>HA stream protocol</dt>
     <dd>${t.stream_protocol ?? "?"}</dd>
     <dt>Storage</dt>
     <dd>
-      ${t.storage.length ? t.storage.map((n) => e`<span class="storage ${n.available === !1 ? "fault" : ""}"
-              >${h(n, t.storage.length)}:
-              ${n.available === !1 ? "not ready (not formatted, or failed)" : n.used_percent === null ? "in use" : `${String(n.used_percent)}% used`}</span
+      ${t.storage.length ? t.storage.map((e) => n`<span class="storage ${e.available === !1 ? "fault" : ""}"
+              >${h(e, t.storage.length)}:
+              ${e.available === !1 ? "not ready (not formatted, or failed)" : e.used_percent === null ? "in use" : `${String(e.used_percent)}% used`}</span
             >`) : t.device_type === "camera" ? "None: no SD card, so it keeps no recordings of its own" : "None: no hard disk, so it keeps no recordings"}
     </dd>
-    ${t.cpu_usage === null ? s : e`<dt>CPU</dt>
+    ${t.cpu_usage === null ? e : n`<dt>CPU</dt>
           <dd>${t.cpu_usage}%</dd>`}
-    ${t.capabilities.length ? e`<dt>Host features</dt>
-          <dd class="chips">${t.capabilities.map((t) => e`<span class="badge">${t}</span>`)}</dd>` : s}
+    ${t.capabilities.length ? n`<dt>Host features</dt>
+          <dd class="chips">${t.capabilities.map((e) => n`<span class="badge">${e}</span>`)}</dd>` : e}
   </dl>`;
 }
 function h(e, t) {
@@ -250,13 +250,13 @@ function h(e, t) {
 	return t > 1 ? `${r} ${String(e.index + 1)}` : r;
 }
 function g(t) {
-	let n = t.storage.filter((e) => e.available === !1);
-	if (!n.length) return s;
-	let r = n.map((e) => h(e, t.storage.length)).join(" and ");
-	return e`<div class="banner warning" role="status">
-    <strong>${r} ${n.length === 1 ? "is" : "are"} not ready</strong>: not formatted, or failed, so
-    recordings may not be kept. Format ${n.length === 1 ? "it" : "them"} in the Reolink app, or replace
-    ${n.length === 1 ? "it" : "them"}.
+	let r = t.storage.filter((e) => e.available === !1);
+	if (!r.length) return e;
+	let i = r.map((e) => h(e, t.storage.length)).join(" and ");
+	return n`<div class="banner warning" role="status">
+    <strong>${i} ${r.length === 1 ? "is" : "are"} not ready</strong>: not formatted, or failed, so
+    recordings may not be kept. Format ${r.length === 1 ? "it" : "them"} in the Reolink app, or replace
+    ${r.length === 1 ? "it" : "them"}.
   </div>`;
 }
 function _(e) {

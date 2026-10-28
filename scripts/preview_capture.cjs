@@ -4,11 +4,13 @@
 //
 //   node scripts/preview_capture.cjs <out-dir> [view ...]
 //   node scripts/preview_capture.cjs <out-dir> errors
+//   node scripts/preview_capture.cjs docs/images guide
 //
 // A view is one of the names below, or any hash (#device/cam-fyl/live), after
 // the preview's query if any (&offline=cam-dogs#device/cam-dogs/live).
 // Views: live (home), events, devices, overview, live-tab, settings, playback, live-check, soak.
-// `errors` takes every error state instead (ERRORS below).
+// `errors` takes every error state instead (ERRORS below). `guide` takes the
+// user docs' pictures (GUIDE below): light, as JPEGs, each at its own size.
 // The pictures are synthetic (frontend/preview/make-media.sh).
 const { chromium } = require("playwright");
 const http = require("node:http");
@@ -45,6 +47,19 @@ const ERRORS = {
   "none-board": "&degraded=none",
   "devices-error": "&fail=devices#devices",
 };
+// The pictures in docs/user-guide.md and docs/troubleshooting.md: the view,
+// and the window it is seen in (the part of the page in it).
+const GUIDE_NOW = "2026-10-27T21:30:00-05:00";
+const GUIDE = {
+  "live-board": { hash: "", width: 1200, height: 760 },
+  "live-board-phone": { hash: "", width: 390, height: 844, scale: 2 },
+  events: { hash: "#events", width: 1200, height: 700 },
+  devices: { hash: "#devices", width: 1200, height: 1360 },
+  playback: { hash: "#device/cam-fyr/playback", width: 1200, height: 860 },
+  "soak-report": { hash: "#soak", width: 1200, height: 800 },
+  "needs-an-update": { hash: "&degraded=changed", width: 1200, height: 420 },
+  "sd-card-not-ready": { hash: "&disk=cam-door#device/cam-door/playback", width: 1200, height: 860 },
+};
 const VIEWPORTS = {
   desktop: { width: 1440, height: 900, deviceScaleFactor: 1 },
   mobile: { width: 390, height: 844, deviceScaleFactor: 2 },
@@ -73,8 +88,24 @@ async function main() {
   const browser = await chromium.launch();
   const errors = [];
   try {
+    if (wanted.length === 1 && wanted[0] === "guide") {
+      for (const [name, shot] of Object.entries(GUIDE)) {
+        const page = await browser.newPage({ viewport: { width: shot.width, height: shot.height }, deviceScaleFactor: shot.scale ?? 1 });
+        page.on("pageerror", (err) => errors.push(`${name}: ${err}`));
+        // The preview's day: its events end at 21:24 in Home Assistant's time zone.
+        await page.clock.setFixedTime(new Date(GUIDE_NOW));
+        await page.goto(`${origin}/index.html?theme=light${shot.hash}`);
+        await page.waitForTimeout(1500);
+        const file = path.join(out, `${name}.jpg`);
+        await page.screenshot({ path: file, type: "jpeg", quality: 82 });
+        await page.close();
+        console.log(file);
+      }
+    }
     const views =
-      wanted.length === 1 && wanted[0] === "errors"
+      wanted.length === 1 && wanted[0] === "guide"
+        ? []
+        : wanted.length === 1 && wanted[0] === "errors"
         ? Object.entries(ERRORS)
         : wanted.length
           ? wanted.map((view) => [view.replace(/^#/, "").replace(/[/&=,]/g, "-"), VIEWS[view] ?? view])

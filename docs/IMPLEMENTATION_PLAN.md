@@ -20,7 +20,7 @@ put on it:
 | 1 | Device details and every setting, with explanations | Standard (catalog) / High (panel shell) | 2–3 wk | Done (2026-10-17) |
 | 2 | Event timeline, thumbnails, smooth playback | High (backend) / Very high (player) | 3–5 wk | Done (2026-10-21, v0.3.2). 2A (2026-10-20, v0.2.7): timeline 105–287 ms, first frame 0.6–1.1 s, auto-advance 6–7 ms on hardware. 2B: MSE player; uncached deep starts are the NVR's download up to the target (6.9–13.0 s in hour-long recordings, up to 84 s before), speeds 0.5–8×, HD/SD at the same moment, one-hour sessions within the caps, the iPhone app on Wi-Fi, Tailscale and Nabu Casa |
 | 3 | Live view via go2rtc, grid, fullscreen, PTZ | High | 3–4 wk | Done (2026-10-27, v0.15.1). Our own go2rtc and the live check (v0.4.0, runs 5–13); the key-frame cache, the image cache, the Live grid and Live tab, keep warm, full-screen HD, PTZ and the camera's controls, the picture first, battery cameras on wired power, a debug view per tile and the soak report (v0.5.0–v0.15.1). Exit runs: the soak passed (run 15), every tile's first image in a median 0.02 s on the iPhone and the Mac (runs 16–17), and the Phase 2 playback criteria held with live view running (runs 18–19) |
-| 4 | Design, performance, mobile, packaging, first release | Standard | 3–4 wk | In progress. Step 1, the design (the Timetable), done in v0.16.0–v0.22.0; step 2, the performance budget, done in v0.23.0; step 3 built in v0.24.0–v0.26.0, its iPhone checklist with the owner; step 4, error states, built in v0.27.0–v0.29.0; step 5, accessibility, built in v0.30.0; step 6, packaging, built in v0.31.0, its first release and HACS install with the owner. See "Phase 4 status" |
+| 4 | Design, performance, mobile, packaging, first release | Standard | 3–4 wk | In progress. Step 1, the design (the Timetable), done in v0.16.0–v0.22.0; step 2, the performance budget, done in v0.23.0; step 3 built in v0.24.0–v0.26.0, its iPhone checklist with the owner; step 4, error states, built in v0.27.0–v0.29.0; step 5, accessibility, built in v0.30.0; step 6, packaging, built in v0.31.0, the first release (published 2026-10-28); step 7, docs, built in v0.32.0. Left: the owner's HACS install and hardware checklist, and the iPhone checklist. See "Phase 4 status" |
 | 5 | Optional R&D: Baichuan live/playback | Very high | 4–8 wk, time-boxed with gates | Not started |
 
 Phases 1 and 2 can overlap once Phase 0 is done. Phase 5 can start any time after
@@ -2894,8 +2894,8 @@ redesigned views.
 | 3. Mobile, and networks that cut websockets | In progress, in three parts (see "Step 3: mobile, and networks that cut websockets"). 3.1 built (v0.24.0): a page whose network cuts MSE's websockets switches live view to WebRTC first, and the capacity test sets the cameras kept warm aside and says plainly what else holds the slots, see "Step 3.1: live view that holds up". 3.2 built (v0.25.0): pinch and two-finger pan on the timeline, and picture-in-picture for live and playback, see "Step 3.2: touch, and picture-in-picture". 3.3 built (v0.26.0): full screen stays in the lighter SD away from home or on mobile data, with an HD button remembered per device, see "Step 3.3: away from home, and the iPhone checklist". **Waiting on the owner's iPhone checklist** (and the work-PC check from 3.1); the error states (step 4) can start meanwhile |
 | 4. Error states | **Built** (v0.27.0–v0.29.0), in three parts (see "Step 4: error states"). 4.1 (v0.27.0): offline cameras on the board from Home Assistant's state, and live errors in plain words, see "Step 4.1: live error states". 4.2 (v0.28.0): cameras with nothing to play say why, disks that are not ready are flagged, and recordings that cannot be read or played say why in plain words, see "Step 4.2: playback and storage error states". 4.3 (v0.29.0): a plain note over every view when Reolink Viewer cannot reach the cameras, plain load errors, and screenshots of every error state, see "Step 4.3: when Reolink Viewer cannot reach the cameras". |
 | 5. Accessibility | **Built** (v0.30.0): every view passes WCAG 2.1 AA (axe-core, light and dark, desktop and phone) and works from the keyboard, checked in CI; the timeline, the calendar and the device tabs are keyboard widgets; reduced motion is honoured and tested. See "Step 5: accessibility". |
-| 6. Packaging and the HA version matrix | **Built** (v0.31.0): releases from a Release workflow (CI, then the package checked and attached, notes from `CHANGELOG.md`); CI tests the oldest supported Home Assistant (2026.10.1: the matrix found 2026.10.0 cannot run it) and the pinned newest (2026.10.4), and the newest weekly. The optional go2rtc app is not built (see "Step 6: packaging"). **Waiting on the owner:** running the first release and installing it through HACS on a clean Home Assistant (the exit criterion). Step 7 (docs) is next |
-| 7. Docs | Not started |
+| 6. Packaging and the HA version matrix | **Built and released** (v0.31.0): releases from a Release workflow (CI, then the package checked and attached, notes from `CHANGELOG.md`); CI tests the oldest supported Home Assistant (2026.10.1: the matrix found 2026.10.0 cannot run it) and the pinned newest (2026.10.4), and the newest weekly. The optional go2rtc app is not built (see "Step 6: packaging"). The first release, [v0.31.0](https://github.com/ambient-home-systems/Maverick-Reolink-Viewer/releases/tag/v0.31.0), was published on 2026-10-28. **Waiting on the owner:** installing a release through HACS on a clean Home Assistant, with the hardware checklist (the exit criterion) |
+| 7. Docs | **Built** (v0.32.0): a user guide, a troubleshooting guide that has every message the panel shows (checked word for word by a test), per-model notes from the hardware matrix, and Help in the panel that opens them for the version installed. See "Step 7: docs". Phase 4's exit (the owner's HACS install and hardware checklist) is what remains |
 
 ### Step 1: the design
 
@@ -3670,11 +3670,55 @@ say): then an app with the GPU (VAAPI) could transcode them.
 
 1. Actions → **Release** → Run workflow, with **Dry run** ticked: it should end
    green with "Ready to release v0.31.0" and the notes. Then again without it.
+   **Done 2026-10-28:** the dry run (run 40716134102), then the release (run
+   40717064888) published v0.31.0 with `reolink_viewer.zip` (60 files, 401 KB), the
+   same files as a build of main.
 2. On a clean Home Assistant 2026.10 or newer, with HACS: add this repository as a
    custom repository (Integration), install Reolink Viewer **0.31.0**, restart, add
    the integration, and open the Reolink panel.
 3. With the Reolink integration set up there, run the live check and the playback
    check (the hardware-in-the-loop checklist).
+
+### Step 7: docs (v0.32.0)
+
+Three guides for the people who use the panel, in plain words (the owner asked that
+everything users read be clear to someone who is not technical), and the way to
+them from the panel:
+
+- **`docs/user-guide.md`:** install, then each part of the panel as it appears (the
+  board, full screen and HD, the controls, keep warm, today's events, the Events tab,
+  Devices, a camera's Overview, Live, Playback and Settings, the checks and the
+  probe), on a phone, from the keyboard, privacy, updating and removing. Its pictures
+  are the design preview at 21:30 on its day (`scripts/preview_capture.cjs
+  docs/images guide`), said to show sample cameras.
+- **`docs/troubleshooting.md`:** every message the panel can show, quoted as it
+  appears, with what it means and what else to try: when Reolink Viewer cannot reach
+  the cameras, pages that cannot load, each word and message on a tile, slow starts,
+  networks that cut video, SD in full screen, recordings that cannot be read or
+  played, missing events and settings, how to read the checks, and what to include
+  when asking for help.
+- **`docs/cameras.md`:** the hardware matrix in plain words: each model tested (the
+  RLN36, Duo 3, both RLC-520A, E1 Pro, CX410, CX810, E1 Zoom and the battery
+  Doorbell) with what to expect; NVRs, Home Hubs (not tested), cameras on their own
+  (SD-card playback not yet tested on a real camera), battery cameras and cameras
+  that keep no recordings; video formats and browsers; the camera settings that
+  help (a shorter key-frame interval on the Fluent stream); and how to add a model.
+
+**In the panel.** **Devices → Help** lists the three guides, with the version
+installed; the box saying Reolink Viewer cannot reach the cameras, and the banners
+for pages that cannot load and recordings that cannot be read or played, have
+**More help** to the part of troubleshooting about them. The links open the docs at
+the release's tag (`blob/v<version>/docs/…`), so they match what that version shows.
+The version now lives in `frontend/src/version.ts` (`bump_version.py` sets it,
+`build_release.py` checks it), which the reports and the links share.
+
+**Kept in step.** `src/help.test.ts` fails when a section the panel links to is
+missing, when a message the panel can show is not in troubleshooting word for word
+(the plain-words modules, the tiles' words, the storage and no-recordings notes),
+or when a link or picture in the docs leads nowhere.
+
+The README now starts with what Reolink Viewer does, how to install it and where the
+guides are; the history before the first release moved to its end.
 
 ### Steps 2–7
 
@@ -3704,6 +3748,7 @@ say): then an app with the GPU (VAAPI) could transcode them.
 
    Built in v0.31.0 (the app not built), see "Step 6: packaging".
 7. **Docs:** user guide, troubleshooting, per-model notes from the hardware matrix.
+   Built in v0.32.0, see "Step 7: docs".
 
 Exit criteria: first tagged release installs via HACS on a clean HA instance and
 passes the hardware-in-the-loop checklist.

@@ -3,6 +3,26 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.32.0
+
+Guides for everyone who uses the panel, in plain words, and the way to them from the
+panel:
+
+- **[User guide](https://github.com/ambient-home-systems/Maverick-Reolink-Viewer/blob/v0.32.0/docs/user-guide.md):**
+  what each part of the panel does and how to use it, on a computer and on a phone,
+  with pictures.
+- **[Troubleshooting](https://github.com/ambient-home-systems/Maverick-Reolink-Viewer/blob/v0.32.0/docs/troubleshooting.md):**
+  every message the panel can show, word for word, with what it means and what to
+  do, and what to include when you ask for help.
+- **[Cameras and NVRs](https://github.com/ambient-home-systems/Maverick-Reolink-Viewer/blob/v0.32.0/docs/cameras.md):**
+  what to expect from each Reolink model tested so far, and the camera settings that
+  make live view start sooner.
+- In the panel, **Devices → Help** opens them, for the version you have installed,
+  and messages about a problem have a **More help** link to the part of
+  Troubleshooting about them.
+
+Tested on Home Assistant 2026.10.1 to 2026.10.4.
+
 ## 0.31.0
 
 The first release through HACS. Reolink Viewer adds a **Reolink** panel to Home

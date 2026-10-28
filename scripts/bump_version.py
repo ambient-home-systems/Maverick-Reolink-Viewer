@@ -3,7 +3,8 @@
     python -m scripts.bump_version 0.32.0
 
 manifest.json (what Home Assistant and HACS read), frontend/package.json and its
-lockfile, and the live check (which writes it into its reports). Then add the
+lockfile, and the panel's frontend/src/version.ts (its reports carry it, and its
+help opens the docs of this release). Then add the
 version's entry to CHANGELOG.md, rebuild the panel (`npm run build` in
 frontend/) and commit; scripts/build_release.py checks they all agree.
 """
@@ -48,11 +49,7 @@ def bump(version: str, root: Path = ROOT) -> None:
         raise ValueError(
             f"{lock} has its versions elsewhere: set them with npm version"
         )
-    _set(
-        root / "frontend" / "src" / "live" / "check.ts",
-        r'(LIVE_CHECK_VERSION = ")[^"]+(")',
-        version,
-    )
+    _set(root / "frontend" / "src" / "version.ts", r'(VERSION = ")[^"]+(")', version)
 
 
 if __name__ == "__main__":

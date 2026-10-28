@@ -58,7 +58,7 @@ def copy(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     for path in (
         "frontend/package.json",
         "frontend/package-lock.json",
-        "frontend/src/live/check.ts",
+        "frontend/src/version.ts",
         "CHANGELOG.md",
         "hacs.json",
     ):

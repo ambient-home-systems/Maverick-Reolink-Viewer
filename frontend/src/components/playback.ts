@@ -1312,10 +1312,11 @@ export class RvPlayback extends LitElement {
             ? problem(
                 explainRecordings(this._error, { name: this.cameraName || "This camera", offline: this.offline }),
                 `Could not load recordings: ${this._error}`,
+                { help: "recordings" },
               )
             : nothing}
           ${this._playFailure
-            ? problem(explainPlayback(this._playFailure), `Playback failed: ${this._playFailure}`)
+            ? problem(explainPlayback(this._playFailure), `Playback failed: ${this._playFailure}`, { help: "recordings" })
             : nothing}
           <div class="timeline-wrap">
             ${this._renderHover()}

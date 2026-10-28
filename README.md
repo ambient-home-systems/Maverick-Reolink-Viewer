@@ -1,23 +1,90 @@
 # Maverick Reolink Viewer
 
 A Home Assistant companion for Reolink cameras that are already set up in the
-built-in [Reolink integration](https://www.home-assistant.io/integrations/reolink/):
+built-in [Reolink integration](https://www.home-assistant.io/integrations/reolink/).
+It adds a **Reolink** panel to Home Assistant's sidebar:
 
-- every device detail and every setting the integration exposes, with plain-language
-  explanations of what each one does
-- an event timeline for NVR / SD-card recordings with the camera's own AI detections
-  (person, vehicle, animal, face, package, visitor, ...) and recording thumbnails
-- smooth recorded-video playback and low-latency live view
+![The Reolink panel: every camera live on the board, today's events underneath](https://raw.githubusercontent.com/ambient-home-systems/Maverick-Reolink-Viewer/main/docs/images/live-board.jpg)
 
-**Status: Phase 4 (design, performance, mobile, release) in progress.** Phase 3 is done (v0.15.1): live
-view through the integration's own go2rtc, with a grid of every camera, a Live tab per
-camera, full-screen HD and the camera's controls. It was verified on the owner's
-hardware: a 24-hour soak, every tile's first image in a median 0.02 s on a Mac and an
-iPhone, and playback holding up with live view running, see the
-[plan](docs/IMPLEMENTATION_PLAN.md#phase-3-exit). Phase 2 is done (event timeline and
-recorded-video playback; v0.3.2, verified on the owner's hardware in Chrome and in the
-iPhone Companion app, at home and remotely, see the
-[plan](docs/IMPLEMENTATION_PLAN.md#phase-2-status)).
+- **Live:** every camera on one board, each starting from its last picture; full
+  screen in HD; picture-in-picture; the camera's own controls (pan and tilt, zoom,
+  presets, floodlight, siren).
+- **Events:** today's events from every camera under the board, and any day's in the
+  Events tab, filtered by camera and by what was seen (person, vehicle, animal,
+  package, a doorbell press).
+- **Recordings:** each day on a timeline with the camera's own detections and
+  thumbnails, from the NVR or the camera's SD card, in HD or SD, from half speed to 8×.
+- **Devices and settings:** every detail and setting the Reolink integration has,
+  each explained in plain words.
+- **Checks:** a live check, a playback check and a 24-hour soak report say in plain
+  words how well it works on your devices, and what to do when it does not.
+- On a computer and in the Home Assistant app on a phone, light and dark, from the
+  keyboard and with a screen reader. No accounts, passwords or cloud service of its
+  own: it works through Home Assistant's Reolink integration and Home Assistant's
+  login.
+
+Requires Home Assistant 2026.10.1 or newer with the Reolink integration set up.
+
+## Install
+
+1. HACS → ⋮ → **Custom repositories** → add this repository's URL, type
+   **Integration**.
+2. Install **Reolink Viewer**, restart Home Assistant.
+3. Settings → Devices & services → **Add integration** → **Reolink Viewer**.
+
+**Reolink** appears in the sidebar. HACS shows each new release as an update; install
+it and restart Home Assistant. Without HACS, download `reolink_viewer.zip` from the
+[latest release](https://github.com/ambient-home-systems/Maverick-Reolink-Viewer/releases/latest),
+unzip it into `config/custom_components/reolink_viewer`, and restart Home Assistant.
+
+## Help
+
+| Guide | What it covers |
+| --- | --- |
+| [User guide](docs/user-guide.md) | What each part of the panel does, and how to use it, on a computer and a phone |
+| [Troubleshooting](docs/troubleshooting.md) | Every message the panel shows: what it means, and what to do |
+| [Cameras and NVRs](docs/cameras.md) | What to expect from each Reolink model tested, and the camera settings that help |
+| [Changelog](CHANGELOG.md) | What each release brings |
+
+The panel links to them too: **Devices → Help**, and **More help** on its messages.
+Something not working? Open an issue on the
+[issues page](https://github.com/ambient-home-systems/Maverick-Reolink-Viewer/issues);
+[Troubleshooting](docs/troubleshooting.md#asking-for-help) says what to include.
+
+## Home Assistant versions
+
+Each release is tested on every Home Assistant release from the oldest it supports to
+the newest of its day: v0.32.0 on 2026.10.1 to 2026.10.4 (2026.10.0's Reolink library
+is too old for its recordings). A weekly check tries each
+new Home Assistant release. If one changes the Reolink integration in a way Reolink
+Viewer cannot read, the panel says so on every page ("Reolink Viewer needs an
+update"), and your devices and their settings keep working until an update is out.
+
+## Status
+
+Phase 4 (design, performance, mobile, release) is built: v0.31.0 was the first
+release, and v0.32.0 adds the guides above. What is left is the owner's install of a
+release through HACS on a clean Home Assistant, with the hardware checklist; see the
+[plan](docs/IMPLEMENTATION_PLAN.md#phase-4-status). Phases 1 to 3 (device details and
+settings, events and recorded-video playback, live view) are done and were verified on
+the owner's hardware: a 24-hour soak, every tile's first image in a median 0.02 s on a
+Mac and an iPhone, and playback holding up with live view running.
+
+## For developers
+
+| Document | What it covers |
+| --- | --- |
+| [docs/PLAN.md](docs/PLAN.md) | Evaluation: what the Reolink integration and `reolink-aio` already provide, the recommended architecture, live/playback design, and the Reolink-app (Baichuan) reverse-engineering assessment |
+| [DESIGN.md](DESIGN.md) | The panel's design: the Timetable world, its tokens (light and dark), type, components and rules |
+| [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) | Phased implementation plan with tasks, exit criteria, risks and the testing strategy |
+| [docs/hardware-matrix.md](docs/hardware-matrix.md) | Measured behavior per camera model, filled from the probe |
+| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Repository layout, dev environment, checks, Home Assistant versions, releasing |
+| [CHANGELOG.md](CHANGELOG.md) | What each release brings |
+
+## Before the first release
+
+What each version before v0.31.0 added. From v0.31.0 on, [CHANGELOG.md](CHANGELOG.md)
+says what each release brings.
 
 **Phase 1 (v0.1.0, done):** the **Reolink** sidebar panel lists your NVRs, Home Hubs
 and cameras (a camera that is in Home Assistant both via an NVR and directly is shown
@@ -151,38 +218,3 @@ and what to do.
 v0.30.0 works from the keyboard and with screen readers throughout: the timeline is a
 slider you move with the arrow keys, the calendar and the camera's tabs move with the
 arrows, every button says what it does, and motion stops when your device asks for less.
-
-v0.31.0 is the first release: from now on each one comes packaged, with what it brings
-in [CHANGELOG.md](CHANGELOG.md), and HACS offers it as an update.
-
-Requires Home Assistant 2026.10.1 or newer with the Reolink integration set up.
-
-### Install (HACS custom repository)
-
-1. HACS → ⋮ → **Custom repositories** → add this repository's URL, type
-   **Integration**.
-2. Install **Reolink Viewer**, restart Home Assistant.
-3. Settings → Devices & services → **Add integration** → **Reolink Viewer**.
-
-HACS shows each new release as an update; install it and restart Home Assistant.
-Without HACS, download `reolink_viewer.zip` from the
-[latest release](https://github.com/ambient-home-systems/Maverick-Reolink-Viewer/releases/latest),
-unzip it into `config/custom_components/reolink_viewer`, and restart Home Assistant.
-
-### Home Assistant versions
-
-Each release is tested on every Home Assistant release from the oldest it supports to
-the newest of its day: v0.31.0 on 2026.10.1 to 2026.10.4 (2026.10.0's Reolink library
-is too old for its recordings). A weekly check tries each
-new Home Assistant release. If one changes the Reolink integration in a way Reolink
-Viewer cannot read, the panel says so on every page ("Reolink Viewer needs an
-update"), and your devices and their settings keep working until an update is out.
-
-| Document | What it covers |
-| --- | --- |
-| [docs/PLAN.md](docs/PLAN.md) | Evaluation: what the Reolink integration and `reolink-aio` already provide, the recommended architecture, live/playback design, and the Reolink-app (Baichuan) reverse-engineering assessment |
-| [DESIGN.md](DESIGN.md) | The panel's design: the Timetable world, its tokens (light and dark), type, components and rules |
-| [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) | Phased implementation plan with tasks, exit criteria, risks and the testing strategy |
-| [docs/hardware-matrix.md](docs/hardware-matrix.md) | Measured behavior per camera model, filled from the probe |
-| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Repository layout, dev environment, checks, Home Assistant versions, releasing |
-| [CHANGELOG.md](CHANGELOG.md) | What each release brings |

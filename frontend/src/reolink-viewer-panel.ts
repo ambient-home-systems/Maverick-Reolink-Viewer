@@ -23,12 +23,14 @@ import {
 import { downloadJson } from "./download";
 import { loadFonts } from "./fonts";
 import { probeFilename } from "./format";
+import { helpUrl, type HelpTopic } from "./help";
 import { icon } from "./icons";
 import { explainLoad, integrationProblem, type IntegrationProblem } from "./integration";
 import { formatClock } from "./playback/time";
-import { problem } from "./problem";
+import { helpLink, problem } from "./problem";
 import { sharedStyles, themeTokens } from "./styles";
 import type { DevicesResponse, HomeAssistant, ProbeReport } from "./types";
+import { VERSION } from "./version";
 import { loadView } from "./views";
 
 // Scripts and the browser tests load a view's elements without opening it.
@@ -336,7 +338,7 @@ export class ReolinkViewerPanel extends LitElement {
           ${this._loadError
             ? nothing
             : html`<rv-device-list .devices=${this._devices} .cameras=${this._board}></rv-device-list>`}
-          ${this._renderChecks()} ${this._isAdmin ? this._renderProbe() : nothing}`;
+          ${this._renderChecks()} ${this._renderHelp()} ${this._isAdmin ? this._renderProbe() : nothing}`;
     }
   }
 
@@ -352,6 +354,7 @@ export class ReolinkViewerPanel extends LitElement {
     if (this._loadError) {
       return problem(explainLoad(this._loadError, "Your devices"), this._loadError, {
         action: html`<button @click=${() => void this._load()} ?disabled=${this._loading}>Try again</button>`,
+        help: "loading",
       });
     }
     const trouble = integrationProblem(this._devices);
@@ -367,9 +370,12 @@ export class ReolinkViewerPanel extends LitElement {
       <h2>${trouble.title}</h2>
       <p class="what">${trouble.text}</p>
       <p>${trouble.advice}</p>
-      <button class="check" @click=${() => void this._load()} ?disabled=${this._loading}>
-        ${icon("refresh")}${this._loading ? "Checking…" : "Check again"}
-      </button>
+      <div class="actions">
+        <button class="check" @click=${() => void this._load()} ?disabled=${this._loading}>
+          ${icon("refresh")}${this._loading ? "Checking…" : "Check again"}
+        </button>
+        ${helpLink(trouble.kind)}
+      </div>
       ${trouble.technical
         ? html`<details>
             <summary>Details</summary>
@@ -412,6 +418,29 @@ export class ReolinkViewerPanel extends LitElement {
         To check recordings, open a camera's Playback tab, then “Details and playback check” under the
         player.
       </p>
+    </section>`;
+  }
+
+  /** Where the docs are: how to use the panel, what its messages mean, and each model. */
+  private _renderHelp(): TemplateResult {
+    const doc = (name: string, about: string, topic: HelpTopic) => html`<li>
+      <a class="row" href=${helpUrl(topic)} target="_blank" rel="noopener noreferrer">
+        <span class="what"><span class="name">${name}</span><span class="muted">${about}</span></span>
+        ${icon("external")}
+      </a>
+    </li>`;
+    return html`<section class="card">
+      <h2>Help</h2>
+      <p class="muted">The guides to this version of Reolink Viewer (${VERSION}). They open in a new tab.</p>
+      <ul class="checks">
+        ${doc("User guide", "What each part of the panel does, and how to use it.", "guide")}
+        ${doc("Troubleshooting", "What a message means, and what to do about it.", "troubleshooting")}
+        ${doc(
+          "Cameras and NVRs",
+          "What to expect from each Reolink model, and the camera settings that help.",
+          "cameras",
+        )}
+      </ul>
     </section>`;
   }
 
@@ -759,11 +788,20 @@ export class ReolinkViewerPanel extends LitElement {
       .integration .what {
         font-weight: 600;
       }
+      .integration .actions {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px 20px;
+        margin-top: 4px;
+      }
       .integration .check {
         display: inline-flex;
         align-items: center;
         gap: 6px;
-        margin-top: 4px;
+      }
+      .integration.fault a {
+        color: var(--rv-on-fault);
       }
       .integration.fault .check {
         border-color: var(--rv-on-fault);
@@ -841,6 +879,9 @@ export class ReolinkViewerPanel extends LitElement {
         color: inherit;
         text-align: left;
         font-weight: 400;
+      }
+      .checks a.row {
+        text-decoration: none;
       }
       .checks .row:hover:not(:disabled) {
         background: var(--rv-ground-2);
