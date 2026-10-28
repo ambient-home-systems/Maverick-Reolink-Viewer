@@ -1,4 +1,4 @@
-import { Bt as e, F as t, Ht as n, Lt as r, Q as i, Vt as a, ft as o, gt as s, ht as c, i as l, zt as u } from "./home-CkkHTxZF.js";
+import { F as e, Gt as t, Ht as n, Kt as r, Wt as i, _t as a, bt as o, i as s, qt as c, rt as l, xt as u } from "./home-D5-WNgzo.js";
 //#region src/render-filter.ts
 function d(e, t, n) {
 	if (e === t) return !1;
@@ -9,10 +9,10 @@ function d(e, t, n) {
 //#endregion
 //#region src/components/device-page.ts
 var f = {
-	overview: () => import("./overview-sR7achzo.js"),
-	playback: () => import("./playback-BF8UJjxp.js"),
-	settings: () => import("./settings-BLfftmqa.js")
-}, p = 1e3, m = class extends u {
+	overview: () => import("./overview-CvLX-nls.js"),
+	playback: () => import("./playback-B5i3yP6R.js"),
+	settings: () => import("./settings-D6N75Svi.js")
+}, p = 1e3, m = class extends i {
 	static properties = {
 		hass: { attribute: !1 },
 		deviceId: { attribute: !1 },
@@ -50,7 +50,7 @@ var f = {
 	}
 	_loadTab(e) {
 		e !== "live" && (this._tabError = void 0, f[e]().catch((e) => {
-			this._tabError = r(e).message;
+			this._tabError = n(e).message;
 		}));
 	}
 	updated() {
@@ -62,15 +62,15 @@ var f = {
 	async _load(e = !1) {
 		let t = this.hass;
 		if (!t || !this.deviceId) return;
-		let n = ++this._loadSeq;
+		let r = ++this._loadSeq;
 		e || (this._device = void 0, this._error = void 0);
 		try {
-			let [e, r] = await Promise.all([s(t, this.deviceId), c(t)]);
-			if (n !== this._loadSeq) return;
-			this._catalog = r, this._device = e, this._error = void 0, this._watched = x(e);
+			let [e, n] = await Promise.all([u(t, this.deviceId), o(t)]);
+			if (r !== this._loadSeq) return;
+			this._catalog = n, this._device = e, this._error = void 0, this._watched = x(e);
 		} catch (e) {
-			if (n !== this._loadSeq) return;
-			this._error = r(e).message;
+			if (r !== this._loadSeq) return;
+			this._error = n(e).message;
 		}
 	}
 	_subscribeRegistry(e) {
@@ -84,40 +84,40 @@ var f = {
 	}
 	render() {
 		this.renderCount += 1;
-		let n = this._device, r = n?.node;
-		return a`
+		let n = this._device, i = n?.node;
+		return r`
       <div class="header">
         <button class="text with-icon back" @click=${() => {
-			t(this, { view: "list" });
-		}}>${o("back")}All devices</button>
+			e(this, { view: "list" });
+		}}>${a("back")}All devices</button>
       </div>
-      ${this._error ? a`<div class="banner error" role="alert">Could not load the device: ${this._error}</div>` : e}
-      ${r ? a`<div class="title">
-              ${this._number(r.id) === void 0 ? e : a`<span class="plat" aria-hidden="true">${this._number(r.id)}</span>`}
-              <h1>${r.name ?? "Reolink device"}</h1>
+      ${this._error ? r`<div class="banner error" role="alert">Could not load the device: ${this._error}</div>` : t}
+      ${i ? r`<div class="title">
+              ${this._number(i.id) === void 0 ? t : r`<span class="plat" aria-hidden="true">${this._number(i.id)}</span>`}
+              <h1>${i.name ?? "Reolink device"}</h1>
               <p class="kind muted">${g(n)}</p>
             </div>
             <div class="tabs" role="tablist">
-              ${b(n).map((e) => a`<button
+              ${b(n).map((t) => r`<button
                   role="tab"
-                  aria-selected=${this.tab === e ? "true" : "false"}
-                  class=${this.tab === e ? "active" : ""}
+                  aria-selected=${this.tab === t ? "true" : "false"}
+                  class=${this.tab === t ? "active" : ""}
                   @click=${() => {
-			t(this, {
+			e(this, {
 				view: "device",
 				id: this.deviceId,
-				tab: e
+				tab: t
 			});
 		}}
                 >
-                  ${_[e]}
+                  ${_[t]}
                 </button>`)}
             </div>
-            ${n.degraded ? a`<div class="banner warning small">
+            ${n.degraded ? r`<div class="banner warning small">
                   Degraded mode: the Reolink integration's internals changed, so device details are
                   missing. Settings still work.
-                </div>` : e}
-            ${this._tabError ? a`<div class="banner error" role="alert">
+                </div>` : t}
+            ${this._tabError ? r`<div class="banner error" role="alert">
                   Could not load this tab: ${this._tabError}.
                   <button
                     @click=${() => {
@@ -126,26 +126,26 @@ var f = {
                   >
                     Try again
                   </button>
-                </div>` : e}
-            ${h(this.tab, n) === "live" ? a`<rv-live-camera .hass=${this.hass} .deviceId=${r.id}></rv-live-camera>` : h(this.tab, n) === "playback" ? a`<rv-playback
+                </div>` : t}
+            ${h(this.tab, n) === "live" ? r`<rv-live-camera .hass=${this.hass} .deviceId=${i.id}></rv-live-camera>` : h(this.tab, n) === "playback" ? r`<rv-playback
                   .hass=${this.hass}
-                  .deviceId=${r.id}
-                  .cameraName=${r.name ?? ""}
+                  .deviceId=${i.id}
+                  .cameraName=${i.name ?? ""}
                   .at=${this.at}
-                ></rv-playback>` : h(this.tab, n) === "overview" ? a`<rv-overview
+                ></rv-playback>` : h(this.tab, n) === "overview" ? r`<rv-overview
                   .hass=${this.hass}
                   .device=${n}
                   .devices=${this.devices}
                   .cameras=${this.cameras}
-                ></rv-overview>` : a`<rv-settings
+                ></rv-overview>` : r`<rv-settings
                   .hass=${this.hass}
                   .device=${n}
                   .catalog=${this._catalog}
                   @rv-entity-enabled=${() => void this.reload()}
-                ></rv-settings>`}` : this._error ? e : a`<p class="muted">Loading…</p>`}
+                ></rv-settings>`}` : this._error ? t : r`<p class="muted">Loading…</p>`}
     `;
 	}
-	static styles = [i, n`
+	static styles = [l, c`
       :host {
         display: flex;
         flex-direction: column;
@@ -220,7 +220,7 @@ function h(e, t) {
 	return e === "live" ? y(t) ? "live" : "overview" : e === "playback" ? v(t) ? "playback" : "overview" : e;
 }
 function g(e) {
-	let t = e.node, n = [l(t.kind), t.model ?? void 0];
+	let t = e.node, n = [s(t.kind), t.model ?? void 0];
 	if (t.kind === "camera" && t.connections.length > 1) {
 		let e = new Set(t.connections.map((e) => e.via));
 		n.push(e.has("nvr") && e.has("direct") ? "on the NVR and added directly" : `${String(t.connections.length)} connections`);

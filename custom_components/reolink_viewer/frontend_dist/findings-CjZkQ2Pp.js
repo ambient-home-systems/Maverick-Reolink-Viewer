@@ -1,4 +1,4 @@
-import { Bt as e, Ht as t, Q as n, Vt as r, zt as i } from "./home-CkkHTxZF.js";
+import { Gt as e, Kt as t, Wt as n, qt as r, rt as i } from "./home-D5-WNgzo.js";
 //#region src/playback/check-util.ts
 function a(e) {
 	let t = e.toLowerCase();
@@ -161,31 +161,31 @@ function N(e) {
 }
 //#endregion
 //#region src/components/findings.ts
-var P = class extends i {
+var P = class extends n {
 	static properties = { summary: { attribute: !1 } };
 	render() {
-		let t = this.summary;
-		if (!t) return e;
-		let n = [
+		let n = this.summary;
+		if (!n) return e;
+		let r = [
 			"good",
 			"fine",
 			"slow",
 			"problem",
 			"pending"
-		].filter((e) => t.findings.some((t) => t.grade === e));
-		return r`<p class="headline">${t.headline}</p>
-      ${t.findings.length ? r`<ul>
-            ${t.findings.map((t) => r`<li class=${t.grade}>
-                <span class="grade">${w[t.grade]}</span>
+		].filter((e) => n.findings.some((t) => t.grade === e));
+		return t`<p class="headline">${n.headline}</p>
+      ${n.findings.length ? t`<ul>
+            ${n.findings.map((n) => t`<li class=${n.grade}>
+                <span class="grade">${w[n.grade]}</span>
                 <span class="what">
-                  <span>${t.text}</span>
-                  ${t.advice ? r`<span class="advice">${t.advice}</span>` : e}
+                  <span>${n.text}</span>
+                  ${n.advice ? t`<span class="advice">${n.advice}</span>` : e}
                 </span>
               </li>`)}
           </ul>
-          ${n.length > 1 ? r`<p class="key">${n.map((e) => `${w[e]}: ${T[e]}`).join(" · ")}</p>` : e}` : e}`;
+          ${r.length > 1 ? t`<p class="key">${r.map((e) => `${w[e]}: ${T[e]}`).join(" · ")}</p>` : e}` : e}`;
 	}
-	static styles = [n, t`
+	static styles = [i, r`
       :host {
         display: block;
       }

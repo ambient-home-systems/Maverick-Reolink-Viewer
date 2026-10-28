@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { PlayerOptions, PlayerState } from "../live/player";
 import { formatClock } from "../playback/time";
+import { fakePip } from "../test-fixtures";
 import type { HomeAssistant, LiveCamera, LiveImagesEvent } from "../types";
 import { routeFromHash, routeToHash, type Route } from "./navigation";
 
@@ -610,6 +611,111 @@ describe("full screen", () => {
     fullButton(doorbell).click();
     await settle(doorbell);
     expect(controls(doorbell)).toBeNull();
+  });
+
+  it("keeps watching in picture-in-picture: in HD, hidden, behind another camera, off screen", async () => {
+    const pip = fakePip();
+    try {
+      const { garage, doorbell } = await garageAndBell();
+      const sub = () => players.find((p) => p.ref.connectionId === "nvr1" && p.ref.stream === "sub");
+      const hd = () => players.find((p) => p.ref.stream === "main");
+      const pipButton = () => garage.shadowRoot?.querySelector<HTMLButtonElement>(".corner-button.pip");
+      const playing: PlayerState = { kind: "playing", transport: "MSE", result: { ok: true, steps: {} } };
+      sub()?.setState(playing);
+      await settle(garage);
+      // On the board a tile opens its camera: no button there.
+      expect(pipButton()).toBeNull();
+      fullButton(garage).click();
+      await settle(garage);
+      expect(pipButton()?.getAttribute("aria-pressed")).toBe("false");
+      pipButton()?.click();
+      await settle(garage);
+      expect(pip.element()?.classList.contains("sub")).toBe(true);
+      expect(pipButton()?.getAttribute("aria-pressed")).toBe("true");
+      // HD's first frame: the sub stream keeps playing in its window.
+      hd()?.setState({ ...playing, transport: "WebRTC" });
+      await settle(garage);
+      expect(garage.hdShown).toBe(true);
+      expect(sub()?.running).toBe(true);
+      // Back on the board, with the page hidden: still playing.
+      fullButton(garage).click();
+      await settle(garage);
+      expect(hd()?.running).toBe(false);
+      Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true });
+      document.dispatchEvent(new Event("visibilitychange"));
+      await settle(garage);
+      expect(sub()?.running).toBe(true);
+      Object.defineProperty(document, "visibilityState", { value: "visible", configurable: true });
+      document.dispatchEvent(new Event("visibilitychange"));
+      // Another camera full screen: the others stop, not this one.
+      fullButton(doorbell).click();
+      await settle(doorbell);
+      await settle(garage);
+      expect(garage.suspended).toBe(true);
+      expect(sub()?.running).toBe(true);
+      fullButton(doorbell).click();
+      await settle(doorbell);
+      await settle(garage);
+      // Scrolled away, past the grace: still playing; its window closed, it stops.
+      vi.useFakeTimers();
+      observers.find((o) => o.target === garage)?.callback([{ isIntersecting: false }]);
+      await garage.updateComplete;
+      vi.advanceTimersByTime(OFFSCREEN_GRACE_MS);
+      expect(sub()?.running).toBe(true);
+      await document.exitPictureInPicture();
+      await garage.updateComplete;
+      vi.advanceTimersByTime(OFFSCREEN_GRACE_MS);
+      expect(sub()?.running).toBe(false);
+    } finally {
+      pip.restore();
+    }
+  });
+
+  it("puts HD in picture-in-picture when it shows, and keeps it after full screen", async () => {
+    const pip = fakePip();
+    try {
+      const { garage } = await garageAndBell();
+      const hd = () => players.find((p) => p.ref.stream === "main");
+      fullButton(garage).click();
+      await settle(garage);
+      hd()?.setState({ kind: "playing", transport: "WebRTC", result: { ok: true, steps: {} } });
+      await settle(garage);
+      garage.shadowRoot?.querySelector<HTMLButtonElement>(".corner-button.pip")?.click();
+      await settle(garage);
+      expect(pip.element()?.classList.contains("hd")).toBe(true);
+      fullButton(garage).click();
+      await settle(garage);
+      expect(hd()?.running).toBe(true);
+      // The browser refuses (no click behind it): nothing changes, nothing breaks.
+      await document.exitPictureInPicture();
+      await settle(garage);
+      expect(hd()?.running).toBe(false);
+      pip.refuse(true);
+      fullButton(garage).click();
+      players.find((p) => p.ref.connectionId === "nvr1" && p.ref.stream === "sub")?.setState({
+        kind: "playing",
+        transport: "MSE",
+        result: { ok: true, steps: {} },
+      });
+      await settle(garage);
+      const button = garage.shadowRoot?.querySelector<HTMLButtonElement>(".corner-button.pip");
+      expect(button).not.toBeNull();
+      button?.click();
+      await settle(garage);
+      expect(pip.requested.at(-1)?.classList.contains("sub")).toBe(true);
+      expect(pip.element()).toBeNull();
+      expect(button?.getAttribute("aria-pressed")).toBe("false");
+      // Gone: its window closes.
+      pip.refuse(false);
+      button?.click();
+      await settle(garage);
+      expect(pip.element()).not.toBeNull();
+      garage.remove();
+      await flush();
+      expect(pip.element()).toBeNull();
+    } finally {
+      pip.restore();
+    }
   });
 
   it("stops HD when the tile goes away", async () => {

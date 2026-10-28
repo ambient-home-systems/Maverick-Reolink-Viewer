@@ -45,13 +45,16 @@ export function zoomAt(view: View, span: number, anchor: number, bounds: Bounds)
   return clampView({ start: anchor - ratio * span, span }, bounds);
 }
 
-/** Index of the zoom level closest to a span. */
-export function zoomIndex(span: number): number {
-  let best = 0;
-  ZOOM_LEVELS.forEach((level, i) => {
-    if (Math.abs(level - span) < Math.abs((ZOOM_LEVELS[best] ?? level) - span)) best = i;
-  });
-  return best;
+/**
+ * The next zoom level from any span (a pinch leaves spans between levels):
+ * in (+1), the widest level narrower than it; out (-1), the narrowest wider.
+ * Undefined at either end.
+ */
+export function stepZoom(span: number, direction: 1 | -1): number | undefined {
+  const tolerance = span * 0.01;
+  return direction > 0
+    ? ZOOM_LEVELS.find((level) => level < span - tolerance)
+    : [...ZOOM_LEVELS].reverse().find((level) => level > span + tolerance);
 }
 
 /** Centre a view on a time. */

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { fakePip } from "../test-fixtures";
 import type { TimelineDay, TimelineEvent } from "../types";
 import "./calendar";
 import "./event-list";
@@ -73,6 +74,49 @@ describe("rv-player", () => {
     b.dispatchEvent(new Event("playing"));
     expect(advanced).toHaveLength(1);
     expect((advanced[0] as { segmentId: string }).segmentId).toBe("b");
+  });
+
+  it("keeps picture-in-picture across the swap to the next file", async () => {
+    const pip = fakePip();
+    try {
+      const el = await mount("rv-player");
+      const changes = collect(el, "rv-pip");
+      await el.play(item("a"));
+      const [a, b] = videos(el);
+      await el.togglePip();
+      expect(pip.element()).toBe(a);
+      expect(el.pip).toBe(true);
+      expect(changes).toEqual([{ pip: true }]);
+      // The end of the file: the window moves to the next one.
+      await el.preload(item("b"));
+      a.dispatchEvent(new Event("ended"));
+      await el.updateComplete;
+      expect(pip.element()).toBe(b);
+      expect(el.pip).toBe(true);
+      // Playing the preloaded file swaps back: the window follows.
+      await el.preload(item("c"));
+      await el.play(item("c"));
+      expect(pip.element()).toBe(a);
+      // A browser that will not move it closes it rather than show nothing.
+      pip.refuse(true);
+      await el.preload(item("d"));
+      a.dispatchEvent(new Event("ended"));
+      await el.updateComplete;
+      await Promise.resolve();
+      expect(pip.element()).toBeNull();
+      expect(el.pip).toBe(false);
+      // Out, and in again; gone, the window closes.
+      pip.refuse(false);
+      await el.togglePip();
+      expect(pip.element()).toBe(b);
+      await el.togglePip();
+      expect(pip.element()).toBeNull();
+      await el.togglePip();
+      el.remove();
+      expect(pip.element()).toBeNull();
+    } finally {
+      pip.restore();
+    }
   });
 
   it("reports the end when nothing is preloaded, time while playing, and errors", async () => {
@@ -166,6 +210,7 @@ describe("rv-timeline", () => {
     const event = new WheelEvent("wheel", { ...init, bubbles: true, cancelable: true });
     Object.defineProperty(event, "clientX", { value: clientX });
     Object.defineProperty(event, "shiftKey", { value: init.shiftKey ?? false });
+    Object.defineProperty(event, "ctrlKey", { value: init.ctrlKey ?? false });
     return event;
   };
 
@@ -195,8 +240,11 @@ describe("rv-timeline", () => {
     expect(views[0]?.view.span).toBe(6 * HOUR);
     el.view = views[0]?.view ?? el.view;
     await el.updateComplete;
+    const before = el.view.start;
     canvas?.dispatchEvent(wheel({ deltaY: 100, shiftKey: true }, 500));
-    expect(views[1]?.view.start).toBeGreaterThan(el.view.start);
+    expect(views[1]?.view.start).toBeGreaterThan(before);
+    // Shown at once, before the owner passes the view back.
+    expect(el.view).toEqual(views[1]?.view);
     canvas?.dispatchEvent(new KeyboardEvent("keydown", { key: "-", bubbles: true }));
     expect(views.at(-1)?.view.span).toBe(DAY);
     canvas?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
@@ -206,6 +254,87 @@ describe("rv-timeline", () => {
     const count = views.length;
     el.zoom(-1);
     expect(views).toHaveLength(count);
+  });
+
+  it("pinches to zoom and slides two fingers to pan; one finger still scrubs", async () => {
+    const el = await timeline();
+    const canvas = el.renderRoot.querySelector("canvas");
+    const views = collect(el, "rv-view-change") as { view: { start: number; span: number } }[];
+    const seeks = collect(el, "rv-seek");
+    const touch = (type: string, pointerId: number, x: number) =>
+      canvas?.dispatchEvent(pointer(type, x, { pointerId, pointerType: "touch" }));
+    // Two fingers 100 px apart around 12:00 spread to 400 px: four times closer in.
+    touch("pointerdown", 1, 450);
+    touch("pointerdown", 2, 550);
+    touch("pointermove", 1, 300);
+    touch("pointermove", 2, 700);
+    expect(views.at(-1)?.view).toEqual({ start: T0 + 9 * HOUR, span: 6 * HOUR });
+    expect(el.timeAt(500)).toBe(T0 + 12 * HOUR); // still between the fingers
+    // Both fingers 100 px right: the view follows them.
+    touch("pointermove", 1, 400);
+    touch("pointermove", 2, 800);
+    expect(el.view.span).toBe(6 * HOUR);
+    expect(el.timeAt(600)).toBeCloseTo(T0 + 12 * HOUR, -1);
+    // Lifting ends it: no seek, and the finger left does not scrub.
+    const scrubs = collect(el, "rv-scrub");
+    touch("pointerup", 1, 400);
+    touch("pointermove", 2, 900);
+    touch("pointerup", 2, 900);
+    expect(seeks).toEqual([]);
+    expect(scrubs).toEqual([]);
+    // No closer than 5 minutes, no wider than the day.
+    touch("pointerdown", 1, 480);
+    touch("pointerdown", 2, 520);
+    touch("pointermove", 2, 5000);
+    expect(el.view.span).toBe(5 * MINUTE);
+    touch("pointerup", 1, 480);
+    touch("pointerup", 2, 5000);
+    // Fingers almost on top of each other only pan: their distance says too little.
+    touch("pointerdown", 1, 495);
+    touch("pointerdown", 2, 505);
+    touch("pointermove", 2, 515);
+    expect(el.view.span).toBe(5 * MINUTE);
+    touch("pointerup", 1, 495);
+    touch("pointerup", 2, 515);
+    el.view = { start: T0 + 6 * HOUR, span: 6 * HOUR };
+    touch("pointerdown", 1, 0);
+    touch("pointerdown", 2, 1000);
+    touch("pointermove", 2, 30);
+    expect(el.view).toEqual({ start: T0, span: DAY });
+    touch("pointerup", 1, 0);
+    touch("pointerup", 2, 30);
+    // One finger scrubs; a second finger ends the scrub where it was.
+    touch("pointerdown", 3, 200);
+    touch("pointermove", 3, 260);
+    expect(scrubs).toHaveLength(1);
+    touch("pointerdown", 4, 600);
+    expect(seeks).toEqual([{ time: T0 + 260 * 86_400 }]);
+    // The browser takes the gesture (a page scroll): all forgotten.
+    canvas?.dispatchEvent(pointer("pointercancel", 600, { pointerId: 4, pointerType: "touch" }));
+    canvas?.dispatchEvent(pointer("pointercancel", 260, { pointerId: 3, pointerType: "touch" }));
+    touch("pointerdown", 5, 100);
+    touch("pointerup", 5, 100);
+    expect(seeks).toHaveLength(2);
+    // A finger whose lift was never told of is forgotten when a new gesture starts.
+    touch("pointerdown", 6, 300);
+    canvas?.dispatchEvent(pointer("pointerdown", 400, { pointerId: 7, pointerType: "touch", isPrimary: true }));
+    canvas?.dispatchEvent(pointer("pointerup", 400, { pointerId: 7, pointerType: "touch", isPrimary: true }));
+    expect(seeks).toHaveLength(3); // a tap, not half of a pinch
+  });
+
+  it("zooms smoothly with a trackpad pinch, around the pointer", async () => {
+    const el = await timeline();
+    const canvas = el.renderRoot.querySelector("canvas");
+    const views = collect(el, "rv-view-change") as { view: { start: number; span: number } }[];
+    canvas?.dispatchEvent(wheel({ deltaY: -100, ctrlKey: true }, 250));
+    expect(views[0]?.view.span).toBeCloseTo(DAY * Math.exp(-1));
+    expect(el.timeAt(250)).toBeCloseTo(T0 + 6 * HOUR, -1);
+    // Each step builds on the last (the view is shown before the owner passes it back).
+    canvas?.dispatchEvent(wheel({ deltaY: -100, ctrlKey: true }, 250));
+    expect(views[1]?.view.span).toBeCloseTo(DAY * Math.exp(-2));
+    // The zoom buttons step from there to the next level.
+    el.zoom(1);
+    expect(views.at(-1)?.view.span).toBe(HOUR);
   });
 
   it("asks for a hover thumbnail after the pointer rests", async () => {

@@ -1,5 +1,6 @@
 import { LitElement, css, html, nothing, type TemplateResult } from "lit";
 
+import { enterPip, exitPip, inPip, movePip } from "../pip";
 import { MseFeeder, MseUnsupported, type FeederStats, type MseSource } from "./mse-feeder";
 
 /** One recording the player can show: a file URL, or MSE fragments. */
@@ -48,9 +49,12 @@ export const RATES = [0.5, 1, 2, 4, 8] as const;
  * end of a file is a swap rather than a new request. Each <video> plays a
  * file URL, or MSE fragments fed by an MseFeeder.
  *
+ * Picture-in-picture moves with the swap to the next file where the browser
+ * lets it (Chrome does), and closes otherwise rather than show nothing.
+ *
  * Events: `rv-time` (absolute time while playing), `rv-first-frame`,
  * `rv-advanced` (moved to the preloaded file), `rv-ended` (nothing preloaded),
- * `rv-player-error`.
+ * `rv-player-error`, `rv-pip` (in or out of picture-in-picture).
  */
 export class RvPlayer extends LitElement {
   static override properties = {
@@ -61,6 +65,7 @@ export class RvPlayer extends LitElement {
     _paused: { state: true },
     _waiting: { state: true },
     _started: { state: true },
+    _pip: { state: true },
   };
 
   declare muted: boolean;
@@ -73,6 +78,8 @@ export class RvPlayer extends LitElement {
   declare _waiting: boolean;
   /** A recording was asked for: until then, no controls on the empty board. */
   declare _started: boolean;
+  /** One of its videos is in picture-in-picture. */
+  declare _pip: boolean;
 
   private _items: [PlayItem | undefined, PlayItem | undefined] = [undefined, undefined];
   private _keys: [string | undefined, string | undefined] = [undefined, undefined];
@@ -91,6 +98,44 @@ export class RvPlayer extends LitElement {
     this._paused = true;
     this._waiting = false;
     this._started = false;
+    this._pip = false;
+  }
+
+  override disconnectedCallback(): void {
+    super.disconnectedCallback();
+    for (const slot of [0, 1] as const) void exitPip(this._video(slot)).catch(() => undefined);
+  }
+
+  /** Whether the recording plays in picture-in-picture. */
+  get pip(): boolean {
+    return this._pip;
+  }
+
+  /** Into picture-in-picture with the recording on screen, or out of it. */
+  async togglePip(): Promise<void> {
+    const video = this._video(this._active);
+    if (!video) return;
+    try {
+      if (this._pip) {
+        for (const slot of [0, 1] as const) await exitPip(this._video(slot));
+      } else {
+        await enterPip(video);
+      }
+    } catch {
+      // Refused (nothing loaded yet, or the browser said no): nothing changes.
+    }
+  }
+
+  private readonly _onPipChange = (): void => {
+    const pip = inPip(this._video(0)) || inPip(this._video(1));
+    if (pip === this._pip) return;
+    this._pip = pip;
+    this._emit("rv-pip", { pip });
+  };
+
+  /** The swap to another video: picture-in-picture goes with it. */
+  private _carryPip(from: HTMLVideoElement | null, to: HTMLVideoElement | null): void {
+    if (from && to && inPip(from)) void movePip(from, to);
   }
 
   protected override updated(changed: Map<string, unknown>): void {
@@ -150,8 +195,10 @@ export class RvPlayer extends LitElement {
     // Already preloaded? Swap to it (its source, fetched moments ago, serves).
     const swap = this.preloaded?.recording === item.recording;
     if (swap) {
-      this._video(this._active)?.pause();
+      const from = this._video(this._active);
+      from?.pause();
       this._active = this._other;
+      this._carryPip(from, this._video(this._active));
     }
     const slot = this._active;
     const video = this._video(slot);
@@ -381,11 +428,12 @@ export class RvPlayer extends LitElement {
     const next = this.preloaded;
     if (next) {
       this._setItem(slot, undefined);
-      // Free the finished recording's buffer (MSE) for the next preload.
       const done = this._video(slot);
-      if (done) this._unload(slot, done);
       this._active = this._other;
       const video = this._video(this._active);
+      this._carryPip(done, video);
+      // Free the finished recording's buffer (MSE) for the next preload.
+      if (done) this._unload(slot, done);
       if (video) this._start(video);
     } else {
       this._endedAt = undefined;
@@ -445,6 +493,9 @@ export class RvPlayer extends LitElement {
       @error=${(e: Event) => {
         this._onError(slot, e);
       }}
+      @enterpictureinpicture=${this._onPipChange}
+      @leavepictureinpicture=${this._onPipChange}
+      @webkitpresentationmodechanged=${this._onPipChange}
     ></video>`;
   }
 

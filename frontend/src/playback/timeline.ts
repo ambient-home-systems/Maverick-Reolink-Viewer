@@ -7,12 +7,12 @@ import {
   ZOOM_LEVELS,
   bars,
   clampView,
+  stepZoom,
   tickStep,
   ticks,
   timeToX,
   xToTime,
   zoomAt,
-  zoomIndex,
   type View,
 } from "./timeline-math";
 
@@ -20,6 +20,10 @@ import {
 export const HOVER_DEBOUNCE_MS = 150;
 /** Movement below this many pixels between press and release is a click. */
 const CLICK_SLOP_PX = 4;
+/** Fingers closer than this (across) pan without zooming: their distance says too little. */
+const PINCH_MIN_PX = 24;
+/** A trackpad pinch (ctrl+wheel): how much one unit of wheel zooms. */
+const PINCH_WHEEL = 0.01;
 const HEIGHT = 76;
 const TICK_ROW = 18;
 const BAR_TOP = 22;
@@ -41,9 +45,12 @@ export interface HoverDetail {
  * coloured marker per event (by its most specific type), the play position
  * and the part of today still to come.
  *
- * Wheel zooms around the pointer (shift+wheel or a horizontal wheel pans);
- * press and drag scrubs; a click seeks. Events: `rv-view-change`,
- * `rv-seek`, `rv-scrub`, `rv-hover`, `rv-hover-end`.
+ * Wheel zooms around the pointer (shift+wheel or a horizontal wheel pans; a
+ * trackpad pinch zooms smoothly); press and drag scrubs; a click seeks. On a
+ * touch screen one finger scrubs and a tap seeks, as with a mouse, and two
+ * fingers pinch to zoom and slide to pan, the time under them staying under
+ * them. Events: `rv-view-change`, `rv-seek`, `rv-scrub`, `rv-hover`,
+ * `rv-hover-end`.
  */
 export class RvTimeline extends LitElement {
   static override properties = {
@@ -63,7 +70,14 @@ export class RvTimeline extends LitElement {
 
   private _width = 0;
   private _resize: ResizeObserver | undefined;
-  private _drag: { pointerId: number; x: number; moved: boolean } | undefined;
+  /** One pointer pressed: where, whether it moved, and the time it scrubbed to. */
+  private _drag: { pointerId: number; x: number; moved: boolean; time?: number } | undefined;
+  /** The pointers down on the canvas, and their x. */
+  private readonly _pointers = new Map<number, number>();
+  /** Two fingers: the span and their distance when they landed, and the time between them. */
+  private _pinch: { span: number; dist: number; anchor: number } | undefined;
+  /** Fingers pinched: no scrub or seek until the last one is up. */
+  private _pinched = false;
   private _hoverTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor() {
@@ -113,18 +127,24 @@ export class RvTimeline extends LitElement {
   private _setView(view: View): void {
     const next = clampView(view, this._bounds);
     if (next.start === this.view.start && next.span === this.view.span) return;
+    // Shown at once (the next gesture event builds on it); the owner's view follows.
+    this.view = next;
     this._emit("rv-view-change", { view: next });
   }
 
   /** Zoom one level in (+1) or out (-1) around a time (default: the cursor). */
   zoom(direction: 1 | -1, anchor?: number): void {
-    const index = Math.min(
-      Math.max(zoomIndex(this.view.span) + direction, 0),
-      ZOOM_LEVELS.length - 1,
-    );
-    const span = ZOOM_LEVELS[index] ?? this.view.span;
+    const span = stepZoom(this.view.span, direction);
+    if (span === undefined) return;
     const at = anchor ?? this.cursor ?? this.view.start + this.view.span / 2;
     this._setView(zoomAt(this.view, span, at, this._bounds));
+  }
+
+  /** A span between the narrowest zoom level and the whole day. */
+  private _span(span: number): number {
+    const narrowest = ZOOM_LEVELS[ZOOM_LEVELS.length - 1] ?? MINUTE;
+    const { start, end } = this._bounds;
+    return Math.min(Math.max(span, narrowest), Math.max(end - start, narrowest));
   }
 
   /** Pan by a fraction of the visible span (negative: earlier). */
@@ -139,6 +159,12 @@ export class RvTimeline extends LitElement {
 
   private _onWheel(event: WheelEvent): void {
     event.preventDefault();
+    if (event.ctrlKey) {
+      // A trackpad pinch: zoom by how far it went, around the pointer.
+      const span = this._span(this.view.span * Math.exp(event.deltaY * PINCH_WHEEL));
+      this._setView(zoomAt(this.view, span, this.timeAt(this._x(event)), this._bounds));
+      return;
+    }
     if (event.shiftKey || Math.abs(event.deltaX) > Math.abs(event.deltaY)) {
       const delta = event.shiftKey ? event.deltaY : event.deltaX;
       this.pan(Math.sign(delta) * 0.25);
@@ -150,17 +176,60 @@ export class RvTimeline extends LitElement {
 
   private _onPointerDown(event: PointerEvent): void {
     if (event.button !== 0) return;
-    this._drag = { pointerId: event.pointerId, x: this._x(event), moved: false };
+    if (event.isPrimary) {
+      // A new gesture: forget fingers whose lift the browser never told of.
+      this._pointers.clear();
+      this._pinch = undefined;
+      this._pinched = false;
+    }
+    const x = this._x(event);
+    this._pointers.set(event.pointerId, x);
     capture(this._canvas, event.pointerId, true);
+    if (this._pointers.size === 2) {
+      this._startPinch();
+      return;
+    }
+    if (this._pinched || this._pointers.size > 2) return;
+    this._drag = { pointerId: event.pointerId, x, moved: false };
+  }
+
+  /** A second finger: a scrub under way ends where it is, and the pinch begins. */
+  private _startPinch(): void {
+    const drag = this._drag;
+    if (drag?.moved && drag.time !== undefined) this._emit("rv-seek", { time: drag.time } satisfies TimeDetail);
+    this._drag = undefined;
+    this._pinched = true;
+    this._endHover();
+    const [a = 0, b = 0] = this._pointers.values();
+    this._pinch = { span: this.view.span, dist: Math.abs(a - b), anchor: this.timeAt((a + b) / 2) };
+  }
+
+  /** Two fingers moved: the time that was between them stays between them. */
+  private _movePinch(): void {
+    const pinch = this._pinch;
+    const points = [...this._pointers.values()];
+    if (!pinch || points.length < 2) return;
+    const [a = 0, b = 0] = points;
+    const dist = Math.abs(a - b);
+    const span =
+      pinch.dist >= PINCH_MIN_PX && dist >= PINCH_MIN_PX ? this._span((pinch.span * pinch.dist) / dist) : this.view.span;
+    const mid = (a + b) / 2;
+    this._setView({ start: pinch.anchor - (mid / (this._width || 1)) * span, span });
   }
 
   private _onPointerMove(event: PointerEvent): void {
     const x = this._x(event);
+    if (this._pointers.has(event.pointerId)) this._pointers.set(event.pointerId, x);
+    if (this._pinch) {
+      this._movePinch();
+      return;
+    }
     const drag = this._drag;
     if (drag && drag.pointerId === event.pointerId) {
       if (Math.abs(x - drag.x) > CLICK_SLOP_PX) drag.moved = true;
       if (drag.moved) {
         const time = this.timeAt(x);
+        drag.time = time;
         this._emit("rv-scrub", { time } satisfies TimeDetail);
         this._scheduleHover(time, x);
       }
@@ -170,12 +239,28 @@ export class RvTimeline extends LitElement {
   }
 
   private _onPointerUp(event: PointerEvent): void {
+    this._pointers.delete(event.pointerId);
+    capture(this._canvas, event.pointerId, false);
+    if (this._pinched) {
+      // The pinch ends with the first finger up; the other does nothing.
+      this._pinch = undefined;
+      if (!this._pointers.size) this._pinched = false;
+      return;
+    }
     const drag = this._drag;
     if (!drag || drag.pointerId !== event.pointerId) return;
     this._drag = undefined;
-    capture(this._canvas, event.pointerId, false);
     this._emit("rv-seek", { time: this.timeAt(this._x(event)) } satisfies TimeDetail);
     if (event.pointerType !== "mouse") this._endHover();
+  }
+
+  /** The browser took the gesture (a page scroll) or lost a pointer. */
+  private _onPointerCancel(event: PointerEvent): void {
+    this._pointers.delete(event.pointerId);
+    this._drag = undefined;
+    this._pinch = undefined;
+    if (!this._pointers.size) this._pinched = false;
+    this._endHover();
   }
 
   private _scheduleHover(time: number, x: number): void {
@@ -317,9 +402,8 @@ export class RvTimeline extends LitElement {
       @pointerup=${(e: PointerEvent) => {
         this._onPointerUp(e);
       }}
-      @pointercancel=${() => {
-        this._drag = undefined;
-        this._endHover();
+      @pointercancel=${(e: PointerEvent) => {
+        this._onPointerCancel(e);
       }}
       @pointerleave=${(e: PointerEvent) => {
         if (!this._drag && e.pointerType === "mouse") this._endHover();
@@ -339,9 +423,14 @@ export class RvTimeline extends LitElement {
       display: block;
       width: 100%;
       height: ${HEIGHT}px;
+      /* One finger scrolls the page up and down; the rest is the timeline's. */
       touch-action: pan-y;
       cursor: pointer;
       border-bottom: 1px solid var(--rv-rule-strong);
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+      -webkit-tap-highlight-color: transparent;
     }
     canvas:focus-visible {
       outline: 2px solid var(--rv-action);

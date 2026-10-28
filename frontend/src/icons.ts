@@ -26,6 +26,7 @@ const PATHS = {
   minus: svg`<path d="M5 12h14" />`,
   refresh: svg`<path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3" /><path d="M19.5 4.5v4h-4" />`,
   download: svg`<path d="M12 4v11M7 10.5l5 5 5-5M5 19.5h14" />`,
+  pip: svg`<rect x="3.5" y="5.5" width="17" height="13" rx="1.5" /><rect x="11.5" y="11.5" width="6" height="4.5" fill="currentColor" />`,
 } as const;
 
 export type IconName = keyof typeof PATHS;
