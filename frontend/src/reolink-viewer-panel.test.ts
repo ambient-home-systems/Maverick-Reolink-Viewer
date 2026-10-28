@@ -152,11 +152,12 @@ describe("reolink-viewer-panel", () => {
     const content = text(el);
     expect(content).toContain("Garage NVR");
     expect(content).toContain("NVR");
-    expect(content).toContain("Ch 1 Front Yard");
-    expect(content).toContain("+ direct");
+    expect(content).toContain("Front Yard");
+    expect(content).toContain("Ch 1");
+    expect(content).toContain("Also added directly");
     expect(content).toContain("Cameras added directly");
     expect(content).toContain("Laundry");
-    expect(content).toContain("snapshots");
+    expect(content).toContain("Snapshots only");
     // The merged camera is listed once.
     expect(content.match(/Front Yard/g)).toHaveLength(1);
   });

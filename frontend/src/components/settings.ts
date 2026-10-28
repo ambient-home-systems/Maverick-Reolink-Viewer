@@ -10,6 +10,7 @@ import {
   relatedEntry,
   type Action,
 } from "../catalog";
+import { icon } from "../icons";
 import { brightnessCall, serviceFor, type ServiceCall } from "../services";
 import { sharedStyles } from "../styles";
 import type {
@@ -227,7 +228,7 @@ export class RvSettings extends LitElement {
               this._setOpen(entity.entity_id, (e.target as HTMLDetailsElement).open);
             }}
           >
-            <summary class="small">About this setting</summary>
+            <summary class="small">About this setting${icon("chevronDown")}</summary>
             ${open ? this._renderAbout(entry) : nothing}
           </details>`
         : nothing}
@@ -632,30 +633,52 @@ export class RvSettings extends LitElement {
         align-items: center;
         gap: 8px;
       }
+      .connections button {
+        min-height: 34px;
+        padding: 0 12px;
+        border: 1px solid var(--rv-rule);
+        font-size: 15px;
+      }
+      .connections button[aria-checked="true"],
+      .connections button[aria-checked="true"]:hover {
+        background: var(--rv-text);
+        border-color: var(--rv-text);
+        color: var(--rv-ground);
+      }
       .category {
-        background: var(--card-background-color, white);
-        border-radius: var(--ha-card-border-radius, 12px);
-        border: 1px solid var(--divider-color, #e0e0e0);
-        padding: 12px 16px;
+        margin-top: 16px;
+        padding-top: 14px;
+        border-top: 2px solid var(--rv-rule-strong);
+      }
+      .category h3 {
+        margin: 0 0 2px;
+        font-family: var(--rv-font-cond);
+        font-size: 21px;
+        font-weight: 600;
+      }
+      .category > p {
+        margin: 0;
       }
       ul.rows {
         list-style: none;
-        margin: 8px 0 0;
+        margin: 10px 0 0;
         padding: 0;
       }
       .row {
         display: grid;
         grid-template-columns: minmax(0, 1fr) auto;
-        gap: 4px 12px;
+        gap: 4px 16px;
         align-items: center;
-        padding: 8px 0;
-        border-top: 1px solid var(--divider-color, #e0e0e0);
+        padding: 10px 0;
+        border-top: 1px solid var(--rv-rule);
       }
       .label {
         display: flex;
         flex-wrap: wrap;
         gap: 6px;
         align-items: center;
+        font-size: 16px;
+        font-weight: 500;
       }
       .control {
         justify-self: end;
@@ -664,9 +687,23 @@ export class RvSettings extends LitElement {
         grid-column: 1 / -1;
       }
       .about summary {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        min-height: 28px;
         cursor: pointer;
-        color: var(--primary-color);
-        width: max-content;
+        color: var(--rv-action);
+        list-style: none;
+      }
+      .about summary::-webkit-details-marker {
+        display: none;
+      }
+      .about summary svg {
+        width: 16px;
+        height: 16px;
+      }
+      .about[open] summary svg {
+        transform: rotate(180deg);
       }
       .about-body p {
         margin: 6px 0;
@@ -681,36 +718,46 @@ export class RvSettings extends LitElement {
       .number input[type="range"],
       .light input[type="range"] {
         width: 160px;
-        accent-color: var(--primary-color);
+        padding: 0;
+        border: none;
+        background: transparent;
+        accent-color: var(--rv-action);
       }
       .box {
         width: 72px;
       }
+      /* A switch: a square knob on a rail, the action colour when on. */
       .toggle {
         position: relative;
-        width: 40px;
-        height: 22px;
+        width: 46px;
+        min-height: 0;
+        height: 26px;
         padding: 0;
-        border-radius: 11px;
-        border: none;
-        background: var(--switch-unchecked-track-color, var(--disabled-color, #bdbdbd));
+        border-radius: 2px;
+        border: 1px solid var(--rv-rule-strong);
+        background: transparent;
+      }
+      .toggle:hover:not(:disabled) {
+        background: var(--rv-ground-2);
       }
       .toggle .knob {
         position: absolute;
         top: 3px;
         left: 3px;
-        width: 16px;
-        height: 16px;
-        border-radius: 50%;
-        background: var(--switch-unchecked-button-color, white);
-        transition: left 0.15s;
+        width: 18px;
+        height: 18px;
+        border-radius: 1px;
+        background: var(--rv-muted);
+        transition: left 0.15s cubic-bezier(0.16, 1, 0.3, 1);
       }
-      .toggle.on {
-        background: var(--switch-checked-track-color, var(--primary-color));
+      .toggle.on,
+      .toggle.on:hover:not(:disabled) {
+        border-color: var(--rv-action);
+        background: var(--rv-action);
       }
       .toggle.on .knob {
-        left: 21px;
-        background: var(--switch-checked-button-color, white);
+        left: 23px;
+        background: var(--rv-on-action);
       }
       .value {
         font-size: 14px;
@@ -722,11 +769,19 @@ export class RvSettings extends LitElement {
         display: flex;
         align-items: center;
         justify-content: center;
-        background: rgba(0, 0, 0, 0.4);
+        background: rgba(17, 20, 24, 0.55);
       }
       .dialog {
-        max-width: 420px;
+        max-width: 440px;
         margin: 16px;
+        padding: 20px 22px;
+        border-top: 6px solid var(--rv-fault);
+        background: var(--rv-ground);
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+      }
+      .dialog h3 {
+        font-family: var(--rv-font-cond);
+        font-size: 22px;
       }
       .actions {
         display: flex;

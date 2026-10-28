@@ -258,6 +258,8 @@ export class ReolinkViewerPanel extends LitElement {
       case "device":
         return html`<rv-device-page
           .hass=${this.hass}
+          .cameras=${this._board}
+          .devices=${this._devices}
           .deviceId=${route.id}
           .tab=${route.tab}
           .at=${route.at}
@@ -278,7 +280,7 @@ export class ReolinkViewerPanel extends LitElement {
           ${this._renderBanner()}
           ${this._loadError
             ? nothing
-            : html`<rv-device-list .devices=${this._devices}></rv-device-list>`}
+            : html`<rv-device-list .devices=${this._devices} .cameras=${this._board}></rv-device-list>`}
           ${this._renderChecks()} ${this._isAdmin ? this._renderProbe() : nothing}`;
     }
   }
