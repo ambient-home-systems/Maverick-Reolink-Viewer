@@ -2894,7 +2894,7 @@ redesigned views.
 | 3. Mobile, and networks that cut websockets | **Done** (v0.24.0–v0.26.0), in three parts (see "Step 3: mobile, and networks that cut websockets"). 3.1 built (v0.24.0): a page whose network cuts MSE's websockets switches live view to WebRTC first, and the capacity test sets the cameras kept warm aside and says plainly what else holds the slots, see "Step 3.1: live view that holds up". 3.2 built (v0.25.0): pinch and two-finger pan on the timeline, and picture-in-picture for live and playback, see "Step 3.2: touch, and picture-in-picture". 3.3 built (v0.26.0): full screen stays in the lighter SD away from home or on mobile data, with an HD button remembered per device, see "Step 3.3: away from home, and the iPhone checklist". The iPhone checklist was not run: the owner closed Phase 4 on daily use (2026-10-28). At the work PC the network cut nothing this time, so 3.1's switch is still not seen there, and WebRTC could not start: v0.32.1 then starts over MSE first on that device (see "Step 3.1: live view that holds up" and "Phase 4 exit: the checklist") |
 | 4. Error states | **Done** (v0.27.0–v0.29.0), in three parts (see "Step 4: error states"). 4.1 (v0.27.0): offline cameras on the board from Home Assistant's state, and live errors in plain words, see "Step 4.1: live error states". 4.2 (v0.28.0): cameras with nothing to play say why, disks that are not ready are flagged, and recordings that cannot be read or played say why in plain words, see "Step 4.2: playback and storage error states". 4.3 (v0.29.0): a plain note over every view when Reolink Viewer cannot reach the cameras, plain load errors, and screenshots of every error state, see "Step 4.3: when Reolink Viewer cannot reach the cameras". |
 | 5. Accessibility | **Done** (v0.30.0): every view passes WCAG 2.1 AA (axe-core, light and dark, desktop and phone) and works from the keyboard, checked in CI; the timeline, the calendar and the device tabs are keyboard widgets; reduced motion is honoured and tested. See "Step 5: accessibility". |
-| 6. Packaging and the HA version matrix | **Done** (v0.31.0): releases from a Release workflow (CI, then the package checked and attached, notes from `CHANGELOG.md`); CI tests the oldest supported Home Assistant (2026.10.1: the matrix found 2026.10.0 cannot run it) and the pinned newest (2026.10.4), and the newest weekly. The optional go2rtc app is not built (see "Step 6: packaging"). The first release, [v0.31.0](https://github.com/ambient-home-systems/Maverick-Reolink-Viewer/releases/tag/v0.31.0), was published on 2026-10-28, and [v0.32.0](https://github.com/ambient-home-systems/Maverick-Reolink-Viewer/releases/tag/v0.32.0) the same day. The install through HACS on a clean Home Assistant, with the hardware checklist (the exit criterion), was not run, see "Phase 4 exit: the checklist" |
+| 6. Packaging and the HA version matrix | **Done** (v0.31.0): releases from a Release workflow (CI, then the package checked and attached, notes from `CHANGELOG.md`); CI tests the oldest supported Home Assistant (2026.10.1: the matrix found 2026.10.0 cannot run it) and the pinned newest (2026.10.4), and the newest weekly. The optional go2rtc app is not built (see "Step 6: packaging"). The first release, [v0.31.0](https://github.com/ambient-home-systems/Maverick-Reolink-Viewer/releases/tag/v0.31.0), was published on 2026-10-28, [v0.32.0](https://github.com/ambient-home-systems/Maverick-Reolink-Viewer/releases/tag/v0.32.0) and [v0.32.1](https://github.com/ambient-home-systems/Maverick-Reolink-Viewer/releases/tag/v0.32.1) the same day. HACS updated the owner's Home Assistant to v0.32.1 (Help says 0.32.1). The install through HACS on a clean Home Assistant, with the hardware checklist (the exit criterion), was not run, see "Phase 4 exit: the checklist" |
 | 7. Docs | **Done** ([v0.32.0](https://github.com/ambient-home-systems/Maverick-Reolink-Viewer/releases/tag/v0.32.0), 2026-10-28): a user guide, a troubleshooting guide that has every message the panel shows (checked word for word by a test), per-model notes from the hardware matrix, and Help in the panel that opens them for the version installed (checked against the published tag). See "Step 7: docs" |
 
 ### Step 1: the design
@@ -3334,6 +3334,17 @@ every restart after a drop. Now (`WebRtcWatch` in `live/player.ts`):
 A wrong switch costs little: cold MSE started about 0.6 s later than cold WebRTC
 (main and ext, runs 16–17). Tests: when it counts and when not, the week, the
 storage per address, a device that cannot remember (unit, fake sessions).
+
+**Released and checked 2026-10-28.** The dry run (run 40739624967), then the release
+(run 40740365165), on main at 8a02d8b, published
+[v0.32.1](https://github.com/ambient-home-systems/Maverick-Reolink-Viewer/releases/tag/v0.32.1):
+`reolink_viewer.zip` (59 files, 401 KB) is main's `custom_components/reolink_viewer`
+file for file, and its Help links open at the tag. HACS updated the owner's Home
+Assistant to it. On the work PC, the first load of the Live board found WebRTC not
+connecting (14:06), and after a reload the Doorbell, not kept warm, started over MSE
+first with no WebRTC try: first frame in 1.00 s, against about 16 s on v0.32.0. Its
+ⓘ view said "Network: WebRTC does not connect from here, so MSE goes first until Wed
+01:06 PM" (a week on; the clocks go back an hour on 2026-11-01).
 
 ### Step 3.2: touch, and picture-in-picture (v0.25.0)
 
@@ -3778,7 +3789,9 @@ view after about 13 minutes (the hardware matrix has it):
   WebRTC frame, then played over MSE in 0.98 s. A camera not kept warm always tries
   WebRTC first (`live/player.ts`), and the page remembers MSE being cut but not
   WebRTC failing, so on such a network each cold start, and each restart after a
-  drop, waits those 15 s. Fixed in v0.32.1, see "Step 3.1: live view that holds up".
+  drop, waits those 15 s. Fixed in v0.32.1 and checked there the same day: after a
+  reload the Doorbell started over MSE first in 1.00 s, see "Step 3.1: live view
+  that holds up".
 
 What only the owner's devices can do, in the order to do it: one sitting at home
 (about two and a half hours, much of it waiting), then 20 minutes at the work PC.

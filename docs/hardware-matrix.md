@@ -678,6 +678,10 @@ minutes:
   about 16 s after the tile started. In run 15, WebRTC tiles held on this network.
   v0.32.1 remembers it on the device: once WebRTC is answered but never connects
   and MSE then plays, cameras start over MSE first there for a week.
+- **v0.32.1, the same day (14:07).** After the first load found WebRTC not
+  connecting, a reload started the Doorbell over MSE first, with no WebRTC try:
+  first frame in 1.00 s (720×720, avc1.640029), its feed 23 s old, a key frame
+  every 3.97 s.
 
 ## Findings
 
