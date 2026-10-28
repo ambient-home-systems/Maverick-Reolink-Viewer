@@ -752,6 +752,17 @@ on the Mac in Chrome 155 on the LAN, through `MediaSource`, over http/1.1.
 Every part judged well, the HD switch "Fine". The deep start is within Phase 2's
 6.9–13.0 s for hour-long recordings not cached.
 
+Run 22, 2026-10-28 16:41: the live check again, on v0.32.2, the same Mac and
+Chrome, to see the capacity test's fix. Warm MSE sub 0.05 s (0.05–0.80 s), main
+and ext 0.08 s (0.06–0.31 s, 18 of 19); first images 0.02 s; Home Assistant's view
+1.80 s, ours faster on 18 of 18; WebRTC 58 of 58. The Back Yard's main still sent no
+video (no key frame in 15 s warm, and an append the browser could not decode). The
+capacity test left it out ("no frame in 15 s, on its own") and used the next
+heaviest main, the Garage's (2560×1920 H.265): first frame 1.08 s, 30/30 fps beside
+the six subs at their rates, then the download at 410.6 Mbit/s (359.2 alone), every
+stream at its rate. Verdict: kept up at every level (8); the summary said "NVR kept
+up with 7 video streams at once", and noted the Back Yard's stream left out.
+
 ## Findings
 
 Live view:

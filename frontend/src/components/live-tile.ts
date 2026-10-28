@@ -686,15 +686,21 @@ export class RvLiveTile extends LitElement {
       :host([fill]:not([full])) .tile {
         container: board-tile / size;
       }
-      :host([fill][fit="cover"]) .poster,
-      :host([fill][fit="cover"]) video.sub {
+      /* On the board, never in full screen: there the whole picture shows, SD too. */
+      :host([fill][fit="cover"]:not([full])) .poster,
+      :host([fill][fit="cover"]:not([full])) video.sub {
         object-fit: cover;
       }
-      /* Full screen: the browser's, or filling the window (the iPhone). */
+      /* Full screen: the browser's, or filling the window (the iPhone). The
+         picture and its buttons stay clear of a phone's rounded corners, notch
+         and home bar (its safe area); black fills the rest. */
       :host([full]) {
         position: fixed;
         inset: 0;
         z-index: 10000;
+        box-sizing: border-box;
+        padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px)
+          env(safe-area-inset-left, 0px);
         background: #000;
         overscroll-behavior: contain;
       }

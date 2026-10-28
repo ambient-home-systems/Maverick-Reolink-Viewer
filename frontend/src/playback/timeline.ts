@@ -212,6 +212,21 @@ export class RvTimeline extends LitElement {
     this._drag = { pointerId: event.pointerId, x, moved: false };
   }
 
+  /**
+   * Two fingers on the timeline are its pinch, not the page's: the browser may
+   * not take them for a scroll or a zoom. On the iPhone, `touch-action: pan-y`
+   * lets two fingers spreading count as a page scroll, which cancelled the pinch
+   * after its first step (the owner's iPhone, 2026-10-28). `gesturestart` is
+   * WebKit's page zoom.
+   */
+  private readonly _twoFingers = {
+    handleEvent: (event: Event): void => {
+      const touches = "targetTouches" in event ? (event as TouchEvent).targetTouches.length : 2;
+      if (touches >= 2 && event.cancelable) event.preventDefault();
+    },
+    passive: false,
+  };
+
   /** A second finger: a scrub under way ends where it is, and the pinch begins. */
   private _startPinch(): void {
     const drag = this._drag;
@@ -467,6 +482,9 @@ export class RvTimeline extends LitElement {
       @pointerleave=${(e: PointerEvent) => {
         if (!this._drag && e.pointerType === "mouse") this._endHover();
       }}
+      @touchstart=${this._twoFingers}
+      @touchmove=${this._twoFingers}
+      @gesturestart=${this._twoFingers}
       @keydown=${(e: KeyboardEvent) => {
         this._onKey(e);
       }}

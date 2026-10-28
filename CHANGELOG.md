@@ -3,6 +3,23 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.32.3
+
+Fixes from trying the panel on an iPhone:
+
+- **Full screen shows the whole picture at once.** Until HD took over, full screen
+  showed the camera's lighter stream cropped to fill the screen, as tiles on the
+  board are. Now it shows all of it, in SD as in HD. Away from home, where full
+  screen stays in SD until you tap HD, that was the whole time.
+- **Full screen keeps clear of the iPhone's corners.** The HD button, the camera's
+  name and the full-screen button no longer sit under the rounded corners or the
+  notch.
+- **Pinching the recordings timeline keeps following your fingers** on the iPhone,
+  where a pinch could stop after its first step, as if the page had started to
+  scroll.
+
+Tested on Home Assistant 2026.10.1 to 2026.10.4.
+
 ## 0.32.2
 
 The live check's NVR capacity test no longer blames the NVR for a camera stream that
