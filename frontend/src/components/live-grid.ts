@@ -147,7 +147,8 @@ export class RvLiveGrid extends LitElement {
     const width = this._width;
     const maxCols = width >= 1100 ? 5 : width >= 800 ? 4 : width >= 540 ? 3 : 2;
     const cols = Math.max(2, Math.min(maxCols, cells));
-    const row = width ? ((width - (cols - 1) * GAP) / cols) * (9 / 16) : 0;
+    const column = width ? (width - (cols - 1) * GAP) / cols : 0;
+    const row = column * (9 / 16);
     return html`<div
       class="grid"
       style=${`--cols: ${cols}; --row: ${row ? `${row.toFixed(1)}px` : "auto"}`}
@@ -171,6 +172,7 @@ export class RvLiveGrid extends LitElement {
           html`<rv-live-tile
             class=${shapes[i] ?? ""}
             fill
+            .fit=${tileFit(liveConnection(camera), shapes[i], column)}
             .number=${i + 1}
             .hass=${this.hass}
             .camera=${camera}
@@ -251,16 +253,41 @@ export function boardOrder(cameras: LiveCamera[]): LiveCamera[] {
   return [...tall, ...cameras.filter((c) => !tall.includes(c))];
 }
 
+/**
+ * How a tile shows its picture in its cell: filling it ("cover") may crop
+ * the picture's top and bottom, never its sides, so a picture wider than its
+ * cell (a square doorbell in a cell a little narrower than square) is shown
+ * whole ("contain"), with bars above and below. `column` is the column's
+ * width in pixels, 0 before the board is measured.
+ */
+export function tileFit(
+  connection: LiveConnection | undefined,
+  shape: "tall" | "wide" | undefined,
+  column: number,
+): "cover" | "contain" {
+  const picture = pictureRatio(connection);
+  if (!picture) return "cover";
+  const gap = column ? GAP / column : 0; // in columns
+  const row = 9 / 16;
+  const cell = shape === "tall" ? 1 / (2 * row + gap) : shape === "wide" ? (2 + gap) / row : 1 / row;
+  return picture > cell * 1.02 ? "contain" : "cover";
+}
+
 /** A square or portrait camera runs two rows tall; a panorama two columns wide. */
 export function tileShape(connection: LiveConnection | undefined): "tall" | "wide" | undefined {
-  const encoding = connection?.streams.sub?.encoding;
-  const width = encoding?.width;
-  const height = encoding?.height;
-  if (!width || !height) return undefined;
-  const ratio = width / height;
+  const ratio = pictureRatio(connection);
+  if (!ratio) return undefined;
   if (ratio < 1.2) return "tall";
   if (ratio > 2.4) return "wide";
   return undefined;
+}
+
+/** The sub stream's width over its height, when the camera reported its size. */
+function pictureRatio(connection: LiveConnection | undefined): number | undefined {
+  const encoding = connection?.streams.sub?.encoding;
+  const width = encoding?.width;
+  const height = encoding?.height;
+  return width && height ? width / height : undefined;
 }
 
 /** One camera live, large (the camera's Live tab). */

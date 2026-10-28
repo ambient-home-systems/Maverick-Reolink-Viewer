@@ -2889,7 +2889,7 @@ redesigned views.
 
 | Step | Status |
 | --- | --- |
-| 1. Design: the Timetable panel (home view, events, devices, device page, checks) | **In progress.** Direction chosen (2026-10-28), see "Step 1: the design". 1.1 foundations built (v0.16.0), see "Step 1.1: foundations"; the home view's timetable is next |
+| 1. Design: the Timetable panel (home view, events, devices, device page, checks) | **In progress.** Direction chosen (2026-10-28), see "Step 1: the design". 1.1 foundations built (v0.16.0, the board's crop fixed in v0.16.1) and checked by the owner on the hardware, see "Step 1.1: foundations"; the home view's timetable is next |
 | 2. Performance budget | Not started |
 | 3. Mobile, and networks that cut websockets | Not started |
 | 4. Error states | Not started |
@@ -2993,7 +2993,10 @@ iPhone and the Mac):
   in for icons (playback transport, zoom, back, dismiss).
 - **The live board**: tiles numbered, the tall ones first, packed by the sub stream's
   shape (under 1.2:1 runs two rows tall, over 2.4:1 two columns wide) on 2–5 columns
-  by width, filling their cells (cropped; full screen shows the whole picture). Each
+  by width, filling their cells. A tile may crop its picture's top and bottom, never
+  its sides: a picture wider than its cell is shown whole, with bars above and below
+  (v0.16.1, after the owner saw the square Doorbell cut off at the side in its tall
+  cell). Full screen always shows the whole picture. Each
   tile says what it is doing: Live, Starting, Picture hh:mm, Asleep, Retrying, No sub
   stream. Its buttons show on hover; a touch screen has full screen only on the board.
   The board itself can go full screen where the browser allows.
