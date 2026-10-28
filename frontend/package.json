@@ -1,6 +1,6 @@
 {
   "name": "reolink-viewer-panel",
-  "version": "0.22.0",
+  "version": "0.23.0",
   "private": true,
   "description": "Sidebar panel for the Reolink Viewer Home Assistant integration",
   "license": "MIT",
@@ -10,6 +10,7 @@
   },
   "scripts": {
     "build": "vite build",
+    "budget": "node scripts/bundle-budget.mjs",
     "dev": "vite build --watch",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",

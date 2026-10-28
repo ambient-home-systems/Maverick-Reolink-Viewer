@@ -68,13 +68,25 @@ async function run({ origin, token }) {
   const { result: states } = await send({ type: "get_states" });
   hass.states = Object.fromEntries(states.map((state) => [state.entity_id, state]));
 
-  await import(`${origin}/reolink_viewer_static/reolink-viewer-panel.js`);
+  const panel = await import(`${origin}/reolink_viewer_static/reolink-viewer-panel.js`);
+  // The views beyond the home page are their own files beside the panel's
+  // module, fetched the first time each is shown.
+  const views = {};
+  for (const view of ["events", "list", "device", "live-check", "soak"]) {
+    const at = performance.now();
+    try {
+      await panel.loadView(view);
+      views[view] = Math.round(performance.now() - at);
+    } catch (err) {
+      views[view] = String(err);
+    }
+  }
   const began = performance.now();
   const grid = document.createElement("rv-live-grid");
   grid.hass = hass;
   document.body.appendChild(grid);
 
-  const result = {};
+  const result = { views };
   const tileOf = () => grid.shadowRoot?.querySelector("rv-live-tile");
   const status = () => hass.callWS({ type: "reolink_viewer/live/status" });
   const deadline = began + 20_000;

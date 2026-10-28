@@ -3,6 +3,9 @@
 // report's arithmetic.
 import type { CapacityReport, IceServer, LiveCacheState, StreamEncoding } from "../types";
 
+/** Saved reports share the playback check's store; this marks a live one. */
+export const LIVE_REPORT_PREFIX = "Live check · ";
+
 /** The codecs go2rtc may send over MSE, if the browser takes them. */
 export const MSE_CODECS = [
   "avc1.640029",

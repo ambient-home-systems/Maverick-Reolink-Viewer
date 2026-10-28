@@ -1,6 +1,6 @@
 import { LitElement, css, html, nothing, type PropertyValues, type TemplateResult } from "lit";
 
-import { deviceTypeLabel, encodingLabel, portLabel } from "../format";
+import { connectionLabel, deviceTypeLabel, encodingLabel, portLabel } from "../format";
 import { icon } from "../icons";
 import { sharedStyles } from "../styles";
 import type {
@@ -14,7 +14,7 @@ import type {
 } from "../types";
 import "./device-list";
 import type { BoardCamera } from "./live-grid";
-import { connectionLabel } from "./settings";
+
 
 /** Snapshot-only cameras refresh their picture this often while shown. */
 export const SNAPSHOT_REFRESH_MS = 30_000;

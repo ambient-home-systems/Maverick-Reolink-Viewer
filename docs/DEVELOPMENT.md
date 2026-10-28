@@ -51,6 +51,9 @@ frontend/            # Lit + TypeScript panel, built with Vite
   src/icons.ts       # drawn icons; src/fonts.ts loads Barlow from public/fonts (OFL)
   src/plain.ts       # what a check found, in plain words ("In short"), shown by
                      # components/findings.ts and written at the top of each report
+  src/views.ts       # the views loaded on demand (the home view is the only one in
+                     # the first download; see Performance budget)
+  scripts/bundle-budget.mjs  # the home view's size against its budget (npm run budget)
   preview/           # the design preview: the panel on a fake hass (see Design preview)
   src/components/    # device list, device page, overview, settings, playback tab,
                      # live grid and Live tab (live-grid.ts) with their tiles (live-tile.ts),
@@ -74,7 +77,8 @@ tests/               # pytest-homeassistant-custom-component; test_mse_browser.p
 scripts/             # setup_dev.sh, probe_to_matrix.py, make_mse_sample.py (writes mse-sample.ts),
                      # fetch_go2rtc.py (the pinned go2rtc for the tests);
                      # playback_check.js and inspect_recording.js (paste into the browser console);
-                     # desktop-check/ runs the playback check in Chrome without clicking
+                     # desktop-check/ runs the playback check in Chrome without clicking;
+                     # scrub_check.cjs drags the preview's timeline and counts long tasks
 ```
 
 ## Environment
@@ -97,7 +101,7 @@ the frontend, camera and stream packages).
 ```bash
 ruff check . && ruff format --check . && mypy
 pytest --cov
-cd frontend && npm run lint && npm run typecheck && npm test && npm run build
+cd frontend && npm run lint && npm run typecheck && npm test && npm run build && npm run budget
 ```
 
 `npm run build` writes `custom_components/reolink_viewer/frontend_dist/`. Commit the
@@ -127,6 +131,31 @@ node ../scripts/preview_capture.cjs <out-dir> [view ...]   # light and dark, des
 
 The design's direction contract is in `.impeccable/surfaces/`; `PRODUCT.md` holds
 who the panel is for.
+
+## Performance budget
+
+Phase 4 step 2 set three limits; the first two run in CI.
+
+- **What the home view downloads stays under 200 KB gzipped.** The entry
+  (`reolink-viewer-panel.js`) imports one file holding the home view: the band, the
+  live board and today's timetable. Every other view (Events, Devices, a device page
+  and each of its tabs, the checks) is its own file, loaded the first time it is
+  shown (`src/views.ts`, `TAB_LOADERS` in `components/device-page.ts`). If one fails
+  to load, the view says so with **Try again**. `npm run budget` prints the home
+  view's size, what each other view adds, and fails over the budget.
+- **Scrubbing the timeline never blocks the page for more than 50 ms.** With the
+  design preview built:
+
+  ```bash
+  cd frontend && NODE_PATH="$(npm root -g)" node ../scripts/scrub_check.cjs
+  ```
+
+  drags along the Playback timeline and hovers over it in Chromium, and counts the
+  long tasks. It fails on any on a desktop; with the processor slowed 4× (desktop
+  and phone sizes) it reports them only, as shared CI machines vary.
+- **Time to first frame** is measured on the owner's hardware by the live check and
+  the playback check; the figures are in `docs/IMPLEMENTATION_PLAN.md` (Phase 4,
+  "Step 2: the performance budget").
 
 ## Tests
 

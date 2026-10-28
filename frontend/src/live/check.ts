@@ -35,6 +35,7 @@ import { mseApiName } from "../playback/mse-feeder";
 import { count, inShortLines, middle, secondsText, speed, type Finding, type InShort } from "../plain";
 import type { CapacityReport, HomeAssistant, LiveCamera, LiveConnection, LiveImage, LiveStreamKind } from "../types";
 import {
+  LIVE_REPORT_PREFIX,
   cacheLabel,
   capacityLines,
   describeIceServers,
@@ -48,9 +49,8 @@ import { liveConnection } from "./data";
 import { chooseHd } from "./hd";
 import { OurMse, OurWebRtc, StockWebRtc, type LiveSession, type SessionResult } from "./session";
 
-export const LIVE_CHECK_VERSION = "0.22.0";
-/** Saved reports share the playback check's store; this marks a live one. */
-export const LIVE_REPORT_PREFIX = "Live check · ";
+export const LIVE_CHECK_VERSION = "0.23.0";
+export { LIVE_REPORT_PREFIX };
 export const LIVE_SETUPS = [
   "Desktop Chrome, LAN",
   "Desktop Chrome, Tailscale",

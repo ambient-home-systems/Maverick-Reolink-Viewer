@@ -11,6 +11,9 @@ import {
   type Action,
 } from "../catalog";
 import { icon } from "../icons";
+import { connectionLabel } from "../format";
+
+export { connectionLabel };
 import { brightnessCall, serviceFor, type ServiceCall } from "../services";
 import { sharedStyles } from "../styles";
 import type {
@@ -794,9 +797,6 @@ export class RvSettings extends LitElement {
   ];
 }
 
-export function connectionLabel(conn: Pick<DeviceConnection, "via" | "host_name" | "entry_title">): string {
-  return conn.via === "nvr" ? `Through ${conn.host_name ?? conn.entry_title}` : "Added directly";
-}
 
 /** A select's raw option as words: "black&white" → "Black & white". */
 export function optionLabel(option: string): string {

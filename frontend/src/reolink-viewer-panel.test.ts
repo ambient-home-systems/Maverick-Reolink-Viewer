@@ -12,6 +12,7 @@ import {
   type FakeHass,
 } from "./test-fixtures";
 import type { DevicesResponse } from "./types";
+import { loadView } from "./views";
 
 const download = vi.hoisted(() => vi.fn());
 vi.mock("./download", () => ({ downloadJson: download }));
@@ -189,6 +190,8 @@ describe("reolink-viewer-panel", () => {
       b.textContent.includes("Front Yard"),
     );
     row?.click();
+    // The device page's file loads the first time it is shown.
+    await loadView("device");
     await flush();
     await el.updateComplete;
     expect(window.location.hash).toBe("#device/dev-cam/overview");
@@ -204,7 +207,12 @@ describe("reolink-viewer-panel", () => {
     expect(el.shadowRoot?.querySelector("rv-device-list")).not.toBeNull();
   });
 
-  it("defines every element its views show", () => {
+  it("defines every element its views show, the others' once they load", async () => {
+    // The home view's are in the panel's own file.
+    for (const name of ["rv-live-grid", "rv-live-camera", "rv-live-tile", "rv-live-controls", "rv-live-debug", "rv-timetable"]) {
+      expect(customElements.get(name), name).toBeDefined();
+    }
+    await Promise.all((["events", "list", "device", "live-check", "soak", "live"] as const).map((view) => loadView(view)));
     for (const name of [
       "rv-device-list",
       "rv-device-page",
@@ -245,6 +253,7 @@ describe("reolink-viewer-panel", () => {
     [...(el.shadowRoot?.querySelectorAll<HTMLButtonElement>(".checks button") ?? [])]
       .find((b) => b.textContent.includes("Soak report"))
       ?.click();
+    await loadView("soak");
     await flush();
     await el.updateComplete;
     expect(window.location.hash).toBe("#soak");

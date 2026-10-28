@@ -1,4 +1,4 @@
-import type { DeviceKind, StreamEncoding } from "./types";
+import type { DeviceConnection, DeviceKind, StreamEncoding } from "./types";
 
 const DEVICE_TYPE_LABELS: Record<DeviceKind, string> = {
   camera: "Camera",
@@ -39,4 +39,9 @@ export function portLabel(enabled: boolean | null): string {
 export function probeFilename(now: Date): string {
   const stamp = now.toISOString().slice(0, 19).replace(/:/g, "-");
   return `reolink-viewer-probe-${stamp}.json`;
+}
+
+/** A connection in words: "Through Garage NVR", "Added directly". */
+export function connectionLabel(conn: Pick<DeviceConnection, "via" | "host_name" | "entry_title">): string {
+  return conn.via === "nvr" ? `Through ${conn.host_name ?? conn.entry_title}` : "Added directly";
 }

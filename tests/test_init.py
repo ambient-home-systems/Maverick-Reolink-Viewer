@@ -1,5 +1,6 @@
 """Tests for setup, the panel and degraded mode."""
 
+import re
 from unittest.mock import MagicMock, patch
 
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -65,10 +66,14 @@ async def test_static_bundle_served(
     hass_client: ClientSessionGenerator,
     loaded_viewer: MockConfigEntry,
 ) -> None:
-    """The built panel bundle is served."""
+    """The built panel bundle is served: the entry and the home view it imports."""
     assert await async_setup_component(hass, "http", {})
     client = await hass_client()
     resp = await client.get(f"{STATIC_URL_PATH}/reolink-viewer-panel.js")
+    assert resp.status == 200
+    imported = re.search(r'from "\./([\w-]+\.js)"', await resp.text())
+    assert imported is not None
+    resp = await client.get(f"{STATIC_URL_PATH}/{imported[1]}")
     assert resp.status == 200
     assert PANEL_COMPONENT_NAME in await resp.text()
 

@@ -93,6 +93,12 @@ jobs:
           # Fail, not skip, if anything the tests need is missing.
           RV_BROWSER_TESTS: "1"
           RV_GO2RTC_TESTS: "1"
+      - name: Scrubbing the Playback timeline never blocks the page over 50 ms
+        working-directory: frontend
+        run: |
+          npm ci
+          npx vite build -c vite.preview.config.ts
+          NODE_PATH="$(npm root -g)" node ../scripts/scrub_check.cjs
 
   hassfest:
     name: Hassfest
@@ -130,6 +136,8 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+      - name: The home view's JavaScript stays under 200 KB gzipped
+        run: npm run budget
       - name: Committed bundle matches the source
         run: |
           changes=$(git status --porcelain -- ../custom_components/reolink_viewer/frontend_dist)
