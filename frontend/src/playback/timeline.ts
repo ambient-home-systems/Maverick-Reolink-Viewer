@@ -7,11 +7,9 @@ import {
   ZOOM_LEVELS,
   bars,
   clampView,
-  primaryType,
   tickStep,
   ticks,
   timeToX,
-  typeColor,
   xToTime,
   zoomAt,
   zoomIndex,
@@ -230,21 +228,21 @@ export class RvTimeline extends LitElement {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    // The Timetable's colours: recordings in rail blue, events in ink, the
+    // time now in signal red and the playhead in ink.
     const style = getComputedStyle(this);
     const color = (name: string, fallback: string) => style.getPropertyValue(name).trim() || fallback;
-    const text = color("--secondary-text-color", "#727272");
-    const divider = color("--divider-color", "#e0e0e0");
-    const primary = color("--primary-color", "#03a9f4");
-    const barColor = color("--rv-recording-color", primary);
+    const ink = color("--rv-text", "#111418");
+    const muted = color("--rv-muted", "#5d6370");
     ctx.clearRect(0, 0, width, HEIGHT);
 
     const view = this.view;
     const x = (t: number) => timeToX(t, view, width);
     // Ticks and labels.
-    ctx.font = "11px sans-serif";
+    ctx.font = `500 12px ${color("--rv-font", "sans-serif")}`;
     ctx.textBaseline = "top";
-    ctx.fillStyle = text;
-    ctx.strokeStyle = divider;
+    ctx.fillStyle = muted;
+    ctx.strokeStyle = color("--rv-rule", "#e0e0e0");
     ctx.lineWidth = 1;
     const zone = this.timeZone;
     const seconds = tickStep(view, width) < MINUTE;
@@ -262,34 +260,39 @@ export class RvTimeline extends LitElement {
     if (day) {
       // The part of today that has not happened yet.
       if (day.now < day.end) {
-        ctx.fillStyle = color("--secondary-background-color", "#f2f2f2");
+        ctx.fillStyle = color("--rv-ground-2", "#f2f2f2");
         const from = Math.max(0, x(day.now));
         ctx.fillRect(from, BAR_TOP, width - from, HEIGHT - BAR_TOP);
       }
-      ctx.globalAlpha = 0.85;
-      ctx.fillStyle = barColor;
+      ctx.fillStyle = color("--rv-recording", "#1b2a6e");
       for (const bar of bars(day.segments, view, width)) {
         const left = Math.max(0, x(bar.start));
         const right = Math.min(width, x(bar.end));
         ctx.fillRect(left, BAR_TOP, Math.max(1, right - left), BAR_HEIGHT);
       }
-      ctx.globalAlpha = 1;
+      ctx.fillStyle = ink;
       for (const event of this.events) {
         if (event.end < view.start || event.start > view.start + view.span) continue;
         const left = x(event.start);
         const w = Math.max(3, x(event.end) - left);
-        ctx.fillStyle = typeColor(primaryType(event.types));
         ctx.fillRect(left, EVENT_TOP, w, EVENT_HEIGHT);
+      }
+      if (day.now < day.end && day.now >= view.start && day.now <= view.start + view.span) {
+        ctx.fillStyle = color("--rv-red", "#e10600");
+        ctx.fillRect(Math.round(x(day.now)) - 1, TICK_ROW, 2, HEIGHT - TICK_ROW);
       }
     }
     if (this.cursor !== undefined) {
-      const px = Math.round(x(this.cursor)) + 0.5;
-      ctx.strokeStyle = color("--accent-color", "#ff9800");
-      ctx.lineWidth = 2;
+      // The playhead: an ink line under a small pointer on the tick row.
+      const px = Math.round(x(this.cursor));
+      ctx.fillStyle = ink;
+      ctx.fillRect(px - 1, TICK_ROW, 2, HEIGHT - TICK_ROW);
       ctx.beginPath();
-      ctx.moveTo(px, TICK_ROW);
-      ctx.lineTo(px, HEIGHT);
-      ctx.stroke();
+      ctx.moveTo(px - 6, TICK_ROW - 4);
+      ctx.lineTo(px + 6, TICK_ROW - 4);
+      ctx.lineTo(px, TICK_ROW + 3);
+      ctx.closePath();
+      ctx.fill();
     }
   }
 
@@ -338,10 +341,11 @@ export class RvTimeline extends LitElement {
       height: ${HEIGHT}px;
       touch-action: pan-y;
       cursor: pointer;
-      border-radius: 6px;
+      border-bottom: 1px solid var(--rv-rule-strong);
     }
     canvas:focus-visible {
-      outline: 2px solid var(--primary-color);
+      outline: 2px solid var(--rv-action);
+      outline-offset: 2px;
     }
   `;
 }

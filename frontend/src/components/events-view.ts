@@ -4,12 +4,12 @@ import { fetchEventDays } from "../api";
 import { icon } from "../icons";
 import "../playback/calendar";
 import { dateIn, firstDayOfWeek } from "../playback/time";
-import { sortTypes, typeLabel } from "../playback/timeline-math";
+import { shownTypes, sortTypes, typeLabel } from "../playback/timeline-math";
 import { sharedStyles } from "../styles";
 import type { HomeAssistant, RecentEvents } from "../types";
 import type { BoardCamera } from "./live-grid";
 import { navigate } from "./navigation";
-import { pictogram, shownTypes } from "./timetable";
+import { pictogram } from "./timetable";
 import "./timetable";
 
 /**

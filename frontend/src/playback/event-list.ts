@@ -1,17 +1,19 @@
 import { LitElement, css, html, nothing, type TemplateResult } from "lit";
 
+import { eventLabel, formatLength, pictogram } from "../components/timetable";
+import { icon } from "../icons";
 import { sharedStyles } from "../styles";
 import type { TimelineEvent } from "../types";
-import { formatClock, formatDuration } from "./time";
-import { primaryType, typeColor, typeLabel } from "./timeline-math";
+import { formatClock } from "./time";
 
 /** Show this many events at first; more on request. */
 export const PAGE = 60;
 
 /**
- * Event cards (newest first): thumbnail, types, time and duration. Clicking a
- * card plays it. Event: `rv-pick` ({event}); `rv-thumbs-needed` ({times})
- * asks the page for thumbnail URLs of the cards on show.
+ * The day's events as timetable rows (newest first): the time, what was seen,
+ * how long and a thumbnail; the one playing is marked. Clicking a row plays
+ * it. Event: `rv-pick` ({event}); `rv-thumbs-needed` ({times}) asks the page
+ * for thumbnail URLs of the rows on show.
  */
 export class RvEventList extends LitElement {
   static override properties = {
@@ -50,47 +52,44 @@ export class RvEventList extends LitElement {
     }
   }
 
-  private _card(event: TimelineEvent): TemplateResult {
-    const type = primaryType(event.types);
+  private _row(event: TimelineEvent): TemplateResult {
     const thumb = this.thumbs.get(event.start);
     const active = this.current !== undefined && this.current >= event.start && this.current < event.end;
+    const label = eventLabel(event.types);
+    const clock = formatClock(event.start, this.timeZone, true);
     return html`<li>
       <button
-        class="card ${active ? "active" : ""}"
-        aria-label="${event.types.map(typeLabel).join(", ")} at ${formatClock(event.start, this.timeZone, true)}"
+        class="row ${active ? "active" : ""}"
+        aria-current=${active ? "true" : "false"}
+        aria-label="${label}, ${clock}${active ? ", playing" : ""}: play"
         @click=${() => {
           this.dispatchEvent(new CustomEvent("rv-pick", { detail: { event }, bubbles: true, composed: true }));
         }}
       >
-        <span class="thumb" style="border-color: ${typeColor(type)}">
-          ${thumb ? html`<img src=${thumb} alt="" loading="lazy" decoding="async" />` : nothing}
+        <span class="t">${clock.slice(0, -3)}<small>${clock.slice(-3)}</small></span>
+        <span class="ev">
+          ${icon(pictogram(event.types))}<span class="label">${label}</span>
         </span>
         <span class="meta">
-          <span class="types">
-            ${event.types.map(
-              (t) => html`<span class="badge" style="background: ${typeColor(t)}; color: white">${typeLabel(t)}</span>`,
-            )}
-          </span>
-          <span class="when">
-            ${formatClock(event.start, this.timeZone, true)}
-            <span class="muted">· ${formatDuration(event.end - event.start)}</span>
-            ${event.ambiguous
-              ? html`<span class="muted" title="Recorded in the hour repeated when clocks went back"> · time ±1 h</span>`
-              : nothing}
-          </span>
+          ${active ? html`<span class="tag">Playing</span>` : nothing}
+          <span>${formatLength(event.end - event.start)}</span>
+          ${event.ambiguous
+            ? html`<span title="Recorded in the hour repeated when clocks went back">time ±1 h</span>`
+            : nothing}
         </span>
+        <span class="thumb">${thumb ? html`<img src=${thumb} alt="" loading="lazy" decoding="async" />` : nothing}</span>
       </button>
     </li>`;
   }
 
   protected override render(): TemplateResult {
-    if (!this.events.length) return html`<p class="muted">No events for the selected filters.</p>`;
+    if (!this.events.length) return html`<p class="muted empty">No events for the chosen kinds.</p>`;
     const rest = this.events.length - this._shown;
-    return html`<ul>
-        ${this.visible.map((e) => this._card(e))}
-      </ul>
+    return html`<ol>
+        ${this.visible.map((e) => this._row(e))}
+      </ol>
       ${rest > 0
-        ? html`<button class="more" @click=${() => {
+        ? html`<button class="text more" @click=${() => {
             this._shown += PAGE;
           }}>Show ${Math.min(rest, PAGE)} more (${rest} left)</button>`
         : nothing}`;
@@ -99,57 +98,107 @@ export class RvEventList extends LitElement {
   static override styles = [
     sharedStyles,
     css`
-      ul {
+      :host {
+        display: block;
+      }
+      ol {
         list-style: none;
         margin: 0;
         padding: 0;
+        border-top: 1px solid var(--rv-rule-strong);
+      }
+      li {
+        border-bottom: 1px solid var(--rv-rule);
+      }
+      .row {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-        gap: 8px;
-      }
-      .card {
-        display: flex;
-        gap: 8px;
-        width: 100%;
-        padding: 6px;
-        text-align: left;
+        grid-template-columns: 70px minmax(0, 1fr) 84px;
+        grid-template-areas: "t ev thumb" "t meta thumb";
+        column-gap: 12px;
         align-items: center;
+        width: 100%;
+        min-height: 62px;
+        padding: 7px 4px;
+        border: none;
+        border-radius: 0;
+        background: transparent;
+        color: inherit;
+        text-align: left;
+        font-weight: 400;
       }
-      .card.active {
-        border-color: var(--primary-color);
-        box-shadow: 0 0 0 1px var(--primary-color);
+      .row:hover:not(:disabled) {
+        background: var(--rv-ground-2);
+      }
+      .row:focus-visible {
+        outline-offset: -2px;
+      }
+      .row.active {
+        background: var(--rv-ground-2);
+      }
+      .t {
+        grid-area: t;
+        font-family: var(--rv-font-cond);
+        font-size: 24px;
+        font-weight: 600;
+        line-height: 1;
+        white-space: nowrap;
+      }
+      .t small {
+        margin-left: 1px;
+        color: var(--rv-muted);
+        font-size: 14px;
+        font-weight: 500;
+      }
+      .ev {
+        grid-area: ev;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+        font-size: 15px;
+        font-weight: 500;
+      }
+      .ev svg {
+        flex: none;
+        width: 18px;
+        height: 18px;
+      }
+      .label {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .meta {
+        grid-area: meta;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0 10px;
+        color: var(--rv-muted);
+        font-size: 14px;
+      }
+      .tag {
+        color: var(--rv-text);
+        font-weight: 600;
       }
       .thumb {
-        flex: none;
-        width: 96px;
-        height: 54px;
-        border-radius: 4px;
-        border-left: 4px solid;
-        background: var(--secondary-background-color, #eee);
+        grid-area: thumb;
+        width: 84px;
+        height: 47px;
+        background: var(--rv-ground-2);
         overflow: hidden;
       }
       .thumb img {
+        display: block;
         width: 100%;
         height: 100%;
         object-fit: cover;
-        display: block;
-      }
-      .meta {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-        min-width: 0;
-      }
-      .types {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 4px;
-      }
-      .when {
-        font-size: 13px;
       }
       .more {
         margin-top: 8px;
+        padding-left: 0;
+      }
+      .empty {
+        margin: 10px 0;
       }
     `,
   ];

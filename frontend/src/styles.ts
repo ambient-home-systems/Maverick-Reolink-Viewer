@@ -12,6 +12,7 @@ export const themeTokens = css`
     --rv-rail: #1b2a6e;
     --rv-on-rail: #f4f4f1;
     --rv-platform: #1b2a6e;
+    --rv-recording: #1b2a6e;
     --rv-on-rail-muted: #b4bbd3;
     --rv-board: #111418;
     --rv-on-board: #f4f4f1;
@@ -45,6 +46,7 @@ export const themeTokens = css`
     --rv-on-action: #0e1530;
     --rv-fault-ink: #f2b100;
     --rv-platform: #3349a8;
+    --rv-recording: #5a6cb4;
     color-scheme: dark;
   }
   :host {

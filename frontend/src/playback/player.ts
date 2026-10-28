@@ -459,8 +459,7 @@ export class RvPlayer extends LitElement {
       position: relative;
       width: 100%;
       aspect-ratio: 16 / 9;
-      background: #000;
-      border-radius: 8px;
+      background: var(--rv-board, #000);
       overflow: hidden;
     }
     video {
@@ -469,7 +468,7 @@ export class RvPlayer extends LitElement {
       width: 100%;
       height: 100%;
       object-fit: contain;
-      background: #000;
+      background: var(--rv-board, #000);
     }
     .note {
       position: absolute;
@@ -478,10 +477,11 @@ export class RvPlayer extends LitElement {
       transform: translateX(-50%);
       max-width: calc(100% - 32px);
       padding: 6px 12px;
-      border-radius: 6px;
-      background: rgba(0, 0, 0, 0.7);
-      color: #fff;
-      font-size: 13px;
+      background: rgba(17, 20, 24, 0.82);
+      color: var(--rv-on-board, #fff);
+      font-family: var(--rv-font, sans-serif);
+      font-size: 14px;
+      font-weight: 500;
       text-align: center;
       pointer-events: none;
     }

@@ -114,6 +114,9 @@ recordings, and filters by camera and by what was seen.
 v0.19.0 sets the device list out as a ruled table (each camera's number on the
 board, channel, model and state) and redraws each device's page, its Overview and
 its Settings in the same style; an NVR's page lists its cameras.
+v0.20.0 brings the Playback tab into the same style: the day's events as timetable
+rows, the timeline in the panel's colours with the time now in red, filters by what
+was seen as in the Events view, and the playhead's time as a large clock.
 
 Requires Home Assistant 2026.10 or newer with the Reolink integration set up.
 
