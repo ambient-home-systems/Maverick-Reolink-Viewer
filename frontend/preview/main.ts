@@ -1,6 +1,7 @@
 // The design preview: the real panel, mounted with a fake Home Assistant and
 // Home Assistant's default theme (light or dark). Query: ?theme=dark&admin=0;
-// the view is the URL hash, as in Home Assistant (#live, #device/cam-fyr/playback).
+// the view is the URL hash, as in Home Assistant (none for Live, #devices,
+// #device/cam-fyr/playback).
 import "../src/reolink-viewer-panel";
 import { fakeHass } from "./fake-hass";
 
@@ -48,6 +49,6 @@ document.body.style.background = "var(--primary-background-color)";
 document.body.style.fontFamily = "Roboto, Noto, 'Noto Sans', sans-serif";
 
 const panel = document.createElement("reolink-viewer-panel");
-panel.hass = fakeHass({ admin: params.get("admin") !== "0" });
+panel.hass = fakeHass({ admin: params.get("admin") !== "0", dark: params.get("theme") === "dark" });
 panel.narrow = window.innerWidth < 870;
 document.body.appendChild(panel);

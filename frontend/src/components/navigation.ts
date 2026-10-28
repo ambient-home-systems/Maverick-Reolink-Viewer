@@ -33,19 +33,20 @@ export function toast(from: HTMLElement, message: string, kind: ToastDetail["kin
   );
 }
 
+/** Live is the home view (no hash); the device list is #devices. */
 export function routeToHash(route: Route): string {
   if (route.view === "live-check") return "#live-check";
   if (route.view === "soak") return "#soak";
-  if (route.view === "live") return "#live";
-  return route.view === "list" ? "" : `#device/${encodeURIComponent(route.id)}/${route.tab}`;
+  if (route.view === "list") return "#devices";
+  return route.view === "live" ? "" : `#device/${encodeURIComponent(route.id)}/${route.tab}`;
 }
 
 export function routeFromHash(hash: string): Route {
   if (hash === "#live-check") return { view: "live-check" };
   if (hash === "#soak") return { view: "soak" };
-  if (hash === "#live") return { view: "live" };
+  if (hash === "#devices") return { view: "list" };
   const match = /^#device\/([^/]+)(?:\/(overview|live|settings|playback))?$/.exec(hash);
-  if (!match?.[1]) return { view: "list" };
+  if (!match?.[1]) return { view: "live" };
   const tab = match[2];
   return {
     view: "device",

@@ -128,7 +128,7 @@ export class RvDeviceList extends LitElement {
       }
       .row {
         display: grid;
-        grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) auto;
+        grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 160px);
         align-items: center;
         gap: 8px;
         width: 100%;

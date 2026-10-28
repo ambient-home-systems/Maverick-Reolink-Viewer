@@ -39,6 +39,11 @@ export interface HassLocale {
   language?: string;
 }
 
+export interface HassThemes {
+  /** Home Assistant is showing its dark theme. */
+  darkMode?: boolean;
+}
+
 export interface HomeAssistant {
   callWS<T>(message: Record<string, unknown>): Promise<T>;
   /** fetch with the user's access token (refreshed as needed). */
@@ -55,6 +60,7 @@ export interface HomeAssistant {
   user?: HassUser;
   config?: HassConfig;
   locale?: HassLocale;
+  themes?: HassThemes;
 }
 
 export interface CompatReport {

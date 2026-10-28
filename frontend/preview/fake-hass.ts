@@ -341,7 +341,7 @@ type Handler = (message: Record<string, unknown>) => unknown;
 
 const pending = <T>(): Promise<T> => new Promise<T>(() => undefined);
 
-export function fakeHass(options: { admin: boolean }): HomeAssistant {
+export function fakeHass(options: { admin: boolean; dark: boolean }): HomeAssistant {
   const catalog: Catalog = {
     version: settings.version,
     categories: categories.categories,
@@ -389,7 +389,8 @@ export function fakeHass(options: { admin: boolean }): HomeAssistant {
       subscribeEvents: () => Promise.resolve(() => Promise.resolve()),
     },
     states: states(),
-    user: { is_admin: options.admin, name: "Josh" },
+    user: { is_admin: options.admin, name: "Owner" },
+    themes: { darkMode: options.dark },
     config: { time_zone: "America/Chicago" },
     locale: { language: "en" },
   };

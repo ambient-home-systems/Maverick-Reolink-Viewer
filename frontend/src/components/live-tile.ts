@@ -1,16 +1,10 @@
-import {
-  LitElement,
-  css,
-  html,
-  nothing,
-  svg,
-  type PropertyValues,
-  type TemplateResult,
-} from "lit";
+import { LitElement, css, html, nothing, type PropertyValues, type TemplateResult } from "lit";
 
+import { icon } from "../icons";
 import type { DebugPlayer, TileDebug } from "../live/debug";
 import { chooseHd, type HdChoice } from "../live/hd";
 import { LivePlayer, type PlayerState } from "../live/player";
+import { formatClock } from "../playback/time";
 import { sharedStyles } from "../styles";
 import type {
   HomeAssistant,
@@ -62,6 +56,8 @@ export class RvLiveTile extends LitElement {
     iceServers: { attribute: false },
     warm: { attribute: false },
     openable: { type: Boolean },
+    fill: { type: Boolean, reflect: true },
+    number: { attribute: false },
     suspended: { attribute: false },
     controls: { attribute: false },
     _state: { state: true },
@@ -85,6 +81,10 @@ export class RvLiveTile extends LitElement {
   declare warm: boolean | undefined;
   /** Clicking it opens the camera (the grid); otherwise it is the camera's own view. */
   declare openable: boolean;
+  /** On the board: fill the grid cell, the picture cropped to it. */
+  declare fill: boolean;
+  /** Its number on the board. */
+  declare number: number | undefined;
   /** Another tile is full screen: stop now (it is hidden behind it). */
   declare suspended: boolean;
   /** The camera's controls, shown on its own view and in full screen. */
@@ -113,6 +113,7 @@ export class RvLiveTile extends LitElement {
     super();
     this.stream = "sub";
     this.openable = false;
+    this.fill = false;
     this.suspended = false;
     this._state = { kind: "idle" };
     this._hdState = { kind: "idle" };
@@ -398,7 +399,17 @@ export class RvLiveTile extends LitElement {
         ${this._hd?.stream
           ? html`<video class="hd" muted playsinline aria-label=${`${name} live in HD`}></video>`
           : nothing}
-        <div class="label">${name}</div>
+        ${this.number !== undefined && !this._full
+          ? html`<span class="num" aria-hidden="true">${this.number}</span>`
+          : nothing}
+        <div class="label">
+          <span class="name">${name}</span>
+          ${this._wanted
+            ? nothing
+            : html`<span class="hint">
+                ${this.connection?.is_battery ? "Tap to wake it and watch" : "Tap to watch live"}
+              </span>`}
+        </div>
         ${this.hdShown ? nothing : this._renderStatus(state)}
         ${this._renderHd()}
       </div>
@@ -420,7 +431,7 @@ export class RvLiveTile extends LitElement {
           this._debug = !this._debug;
         }}
       >
-        ${icon(INFO)}
+        ${icon("info")}
       </button>
       ${this.controls && (this._full || !this.openable)
         ? html`<rv-live-controls
@@ -438,7 +449,7 @@ export class RvLiveTile extends LitElement {
           else this.enterFull();
         }}
       >
-        ${icon(this._full ? EXIT_FULL : ENTER_FULL)}
+        ${icon(this._full ? "exitFull" : "enterFull")}
       </button>
     </div>`;
   }
@@ -472,47 +483,36 @@ export class RvLiveTile extends LitElement {
     </div>`;
   }
 
+  /** What the tile is doing, in a fixed set of words, top right. */
   private _renderStatus(state: PlayerState): TemplateResult | typeof nothing {
     if (!this._wanted) {
-      if (!this.connection?.is_battery) {
-        // Watched for its picture: show it as it is, with when it was taken.
-        const taken = this.image
-          ? new Date(this.image.taken).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
-          : undefined;
-        return html`<div class="status picture">
-          <span class="badge">${taken ? `Picture from ${taken}` : "No picture yet"}</span>
-          <span class="badge accent">Tap to watch live</span>
-        </div>`;
-      }
-      return html`<div class="status center">
-        <span class="badge">Tap to watch</span>
-        <span class="small">Battery camera: it wakes when you watch it</span>
-      </div>`;
+      if (this.connection?.is_battery) return stateChip("Asleep");
+      // Watched for its picture: show it as it is, with when it was taken.
+      const taken = this.image ? formatClock(this.image.taken, this.hass?.config?.time_zone) : undefined;
+      return stateChip(taken ? `Picture ${taken}` : "No picture yet", icon("picture"));
     }
-    if (!this.connection?.streams[this.stream]) {
-      return html`<div class="status center">
-        <span class="badge">No ${this.stream} stream</span>
-      </div>`;
+    if (!this.connection?.streams[this.stream]) return stateChip(`No ${this.stream} stream`);
+    switch (state.kind) {
+      case "playing":
+        return stateChip("Live", html`<i class="dot"></i>`);
+      case "starting":
+        return stateChip("Starting");
+      case "waiting":
+        return html`${stateChip("Retrying")}
+          <div class="status center" role="alert">
+            <span class="small">Cannot play: ${state.error}</span>
+            <button
+              @click=${(e: Event) => {
+                e.stopPropagation();
+                this._player?.retryNow();
+              }}
+            >
+              Retry now
+            </button>
+          </div>`;
+      default:
+        return nothing;
     }
-    if (state.kind === "starting") {
-      return html`<div class="status corner">
-        <span class="spinner" aria-label="Connecting"></span>
-      </div>`;
-    }
-    if (state.kind === "waiting") {
-      return html`<div class="status center" role="alert">
-        <span class="small">Cannot play: ${state.error}</span>
-        <button
-          @click=${(e: Event) => {
-            e.stopPropagation();
-            this._player?.retryNow();
-          }}
-        >
-          Retry now
-        </button>
-      </div>`;
-    }
-    return nothing;
   }
 
   static override styles = [
@@ -520,6 +520,20 @@ export class RvLiveTile extends LitElement {
     css`
       :host {
         display: block;
+        container-type: inline-size;
+      }
+      /* On the board: fill the cell. */
+      :host([fill]),
+      :host([fill]) .frame,
+      :host([fill]) .tile {
+        height: 100%;
+      }
+      :host([fill]) .tile {
+        aspect-ratio: auto;
+      }
+      :host([fill]) .poster,
+      :host([fill]) video.sub {
+        object-fit: cover;
       }
       /* Full screen: the browser's, or filling the window (the iPhone). */
       :host([full]) {
@@ -538,22 +552,25 @@ export class RvLiveTile extends LitElement {
       }
       :host([full]) .tile {
         aspect-ratio: auto;
-        border-radius: 0;
+      }
+      :host([full]) .poster,
+      :host([full]) video {
+        object-fit: contain;
       }
       .tile {
         position: relative;
         aspect-ratio: 16 / 9;
         background: #000;
-        border-radius: 8px;
+        border-radius: 2px;
         overflow: hidden;
-        color: #fff;
+        color: #f4f4f1;
       }
       .tile[role="button"] {
         cursor: pointer;
       }
       .tile:focus-visible {
-        outline: 2px solid var(--primary-color);
-        outline-offset: 2px;
+        outline: 2px solid #f4f4f1;
+        outline-offset: -2px;
       }
       .poster,
       video {
@@ -578,6 +595,77 @@ export class RvLiveTile extends LitElement {
       .hd-on video.hd {
         opacity: 1;
       }
+      .num {
+        position: absolute;
+        top: 8px;
+        left: 8px;
+        min-width: 26px;
+        height: 26px;
+        padding: 0 5px;
+        box-sizing: border-box;
+        display: grid;
+        place-items: center;
+        background: #f4f4f1;
+        color: #111418;
+        font-family: var(--rv-font-cond);
+        font-size: 16px;
+        font-weight: 600;
+        line-height: 1;
+      }
+      .state {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 3px 8px;
+        background: rgba(17, 20, 24, 0.74);
+        font-size: 13px;
+        font-weight: 500;
+        line-height: 18px;
+        white-space: nowrap;
+      }
+      /* A camera's own view has its controls top right, and no number. */
+      :host(:not([fill])) .state {
+        left: 8px;
+        right: auto;
+      }
+      /* Full screen says SD or HD, top left. */
+      :host([full]) .state {
+        display: none;
+      }
+      .state .dot {
+        width: 7px;
+        height: 7px;
+        background: currentColor;
+      }
+      .state svg {
+        width: 16px;
+        height: 16px;
+      }
+      .label {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        display: flex;
+        flex-direction: column;
+        padding: 26px 48px 8px 10px;
+        background: linear-gradient(to top, rgba(0, 0, 0, 0.72), rgba(0, 0, 0, 0));
+        pointer-events: none;
+      }
+      .name {
+        font-size: 15px;
+        font-weight: 500;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .hint {
+        font-size: 13px;
+        color: #c9cede;
+      }
       .hd-status {
         position: absolute;
         top: 8px;
@@ -588,105 +676,119 @@ export class RvLiveTile extends LitElement {
         max-width: calc(100% - 64px);
         text-shadow: 0 0 3px #000;
       }
+      .hd-status .badge {
+        color: #f4f4f1;
+        border-color: rgba(244, 244, 241, 0.5);
+      }
+      .hd-status .badge.accent {
+        border-color: var(--rv-action);
+      }
       .corner-button {
         position: absolute;
         right: 6px;
         bottom: 6px;
-        width: 36px;
-        height: 36px;
+        width: 34px;
+        height: 34px;
+        min-height: 0;
         padding: 6px;
         border: none;
-        border-radius: 50%;
-        background: rgba(0, 0, 0, 0.45);
-        color: #fff;
+        border-radius: 2px;
+        background: rgba(17, 20, 24, 0.6);
+        color: #f4f4f1;
+      }
+      .corner-button:hover:not(:disabled) {
+        background: rgba(17, 20, 24, 0.85);
+      }
+      .corner-button:focus-visible {
+        outline-color: #f4f4f1;
       }
       .corner-button.info {
-        bottom: 46px;
-        width: 30px;
-        height: 30px;
-        right: 9px;
-        padding: 4px;
-        opacity: 0.8;
+        bottom: 44px;
+        opacity: 0.85;
       }
       .corner-button.info[aria-pressed="true"] {
-        background: var(--primary-color);
+        background: var(--rv-action);
+        color: var(--rv-on-action);
         opacity: 1;
       }
-      .corner-button.info svg {
+      .corner-button svg {
         width: 22px;
         height: 22px;
       }
-      .corner-button svg {
-        display: block;
-        width: 24px;
-        height: 24px;
+      /* On the board, its buttons show on hover; a touch screen has full screen only. */
+      @media (hover: hover) {
+        :host([fill]:not([full])) .corner-button {
+          opacity: 0;
+          transition: opacity 0.15s;
+        }
+        :host([fill]:not([full])) .frame:hover .corner-button,
+        :host([fill]:not([full])) .corner-button:focus-visible,
+        :host([fill]:not([full])) .corner-button[aria-pressed="true"] {
+          opacity: 1;
+        }
       }
-      .label {
-        position: absolute;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        padding: 16px 8px 4px;
-        font-size: 13px;
-        background: linear-gradient(transparent, rgba(0, 0, 0, 0.6));
-        pointer-events: none;
-      }
-      .status {
-        position: absolute;
-        display: flex;
-        gap: 6px;
+      @media (hover: none) {
+        :host([fill]:not([full])) .corner-button.info {
+          display: none;
+        }
       }
       .status.center {
+        position: absolute;
         inset: 0;
+        display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
+        gap: 8px;
         text-align: center;
-        padding: 8px;
-        background: rgba(0, 0, 0, 0.45);
+        padding: 40px 12px 12px;
+        background: rgba(17, 20, 24, 0.55);
       }
-      .status.corner {
-        top: 8px;
-        right: 8px;
+      .status.center button {
+        color: #f4f4f1;
+        border-color: #f4f4f1;
       }
-      .status.picture {
-        top: 8px;
-        left: 8px;
-        flex-wrap: wrap;
+      .status.center button:hover:not(:disabled) {
+        background: rgba(244, 244, 241, 0.12);
       }
-      .spinner {
-        width: 16px;
-        height: 16px;
-        border: 2px solid rgba(255, 255, 255, 0.4);
-        border-top-color: #fff;
-        border-radius: 50%;
-        animation: spin 0.8s linear infinite;
-      }
-      @keyframes spin {
-        to {
-          transform: rotate(360deg);
+      @container (max-width: 260px) {
+        .num {
+          top: 6px;
+          left: 6px;
+          min-width: 22px;
+          height: 22px;
+          font-size: 14px;
+        }
+        .state {
+          top: 6px;
+          right: 6px;
+          padding: 2px 6px;
+          font-size: 12px;
+        }
+        .label {
+          padding: 20px 44px 6px 8px;
+        }
+        .name {
+          font-size: 13px;
+        }
+        .hint {
+          font-size: 12px;
+        }
+        .corner-button.info {
+          display: none;
         }
       }
       @media (prefers-reduced-motion: reduce) {
         video {
           transition: none;
         }
-        .spinner {
-          animation: none;
-        }
       }
     `,
   ];
 }
 
-const ENTER_FULL = "M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5";
-const INFO = "M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0M12 11v6M12 7.5v.5";
-const EXIT_FULL = "M9 4v5H4M15 4v5h5M20 15h-5v5M4 15h5v5";
-
-function icon(path: string): TemplateResult {
-  return html`<svg viewBox="0 0 24 24" aria-hidden="true">
-    ${svg`<path d=${path} fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />`}
-  </svg>`;
+function stateChip(label: string, mark?: TemplateResult): TemplateResult {
+  return html`<span class="state">${mark ?? nothing}${label}</span>`;
 }
 
 if (!customElements.get("rv-live-tile")) {

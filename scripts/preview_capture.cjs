@@ -4,7 +4,8 @@
 //
 //   node scripts/preview_capture.cjs <out-dir> [view ...]
 //
-// Views: list, live, overview, live-tab, settings, playback, live-check, soak.
+// A view is one of the names below, or any hash (#device/cam-fyl/live).
+// Views: live (home), devices, overview, live-tab, settings, playback, live-check, soak.
 // The pictures are synthetic (frontend/preview/make-media.sh).
 const { chromium } = require("playwright");
 const http = require("node:http");
@@ -13,8 +14,8 @@ const path = require("node:path");
 
 const ROOT = path.join(__dirname, "..", "frontend", ".preview");
 const VIEWS = {
-  list: "",
-  live: "#live",
+  live: "",
+  devices: "#devices",
   overview: "#device/cam-fyr/overview",
   "live-tab": "#device/cam-fyr/live",
   settings: "#device/cam-fyr/settings",
@@ -26,7 +27,7 @@ const VIEWPORTS = {
   desktop: { width: 1440, height: 900, deviceScaleFactor: 1 },
   mobile: { width: 390, height: 844, deviceScaleFactor: 2 },
 };
-const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".jpg": "image/jpeg", ".json": "application/json" };
+const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".jpg": "image/jpeg", ".json": "application/json", ".woff2": "font/woff2" };
 
 function serve() {
   const server = http.createServer((req, res) => {
@@ -50,8 +51,10 @@ async function main() {
   const browser = await chromium.launch();
   const errors = [];
   try {
-    for (const [name, hash] of Object.entries(VIEWS)) {
-      if (wanted.length && !wanted.includes(name)) continue;
+    const views = wanted.length
+      ? wanted.map((view) => [view.replace(/^#/, "").replace(/\//g, "-"), VIEWS[view] ?? view])
+      : Object.entries(VIEWS);
+    for (const [name, hash] of views) {
       for (const theme of ["light", "dark"]) {
         for (const [size, viewport] of Object.entries(VIEWPORTS)) {
           const page = await browser.newPage({ viewport: { width: viewport.width, height: viewport.height }, deviceScaleFactor: viewport.deviceScaleFactor });
