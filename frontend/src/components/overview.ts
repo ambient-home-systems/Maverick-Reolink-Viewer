@@ -1,16 +1,19 @@
 import { LitElement, css, html, nothing, type PropertyValues, type TemplateResult } from "lit";
 
 import { deviceTypeLabel, encodingLabel, portLabel } from "../format";
+import { icon } from "../icons";
 import { sharedStyles } from "../styles";
 import type {
   CameraNode,
   ChannelDetails,
   DeviceConnection,
   DeviceResponse,
+  DevicesResponse,
   HomeAssistant,
   HostDetails,
 } from "../types";
-import { navigate } from "./navigation";
+import "./device-list";
+import type { BoardCamera } from "./live-grid";
 import { connectionLabel } from "./settings";
 
 /** Snapshot-only cameras refresh their picture this often while shown. */
@@ -27,17 +30,24 @@ export class RvOverview extends LitElement {
   static override properties = {
     hass: { attribute: false },
     device: { attribute: false },
+    devices: { attribute: false },
+    cameras: { attribute: false },
     _stamp: { state: true },
   };
 
   declare hass: HomeAssistant | undefined;
   declare device: DeviceResponse | undefined;
+  /** Every device, for an NVR's or Home Hub's cameras. */
+  declare devices: DevicesResponse | undefined;
+  /** The board's cameras, numbered. */
+  declare cameras: BoardCamera[];
   declare _stamp: number;
 
   private _timer: ReturnType<typeof setInterval> | undefined;
 
   constructor() {
     super();
+    this.cameras = [];
     this._stamp = 0;
   }
 
@@ -83,62 +93,70 @@ export class RvOverview extends LitElement {
     const node = device.node;
     return html`
       ${node.kind === "camera" ? this._renderSnapshot(node) : this._renderCameras()}
-      ${device.connections.map((conn) => this._renderConnection(conn, device))}
+      <div class="connections">${device.connections.map((conn) => this._renderConnection(conn, device))}</div>
     `;
   }
 
   private _renderSnapshot(node: CameraNode): TemplateResult {
     const url = this.snapshotUrl();
     const primary = node.primary_view === "snapshot";
-    return html`<section class="card snapshot ${primary ? "primary" : ""}">
-      <div class="header">
-        <h2>Latest snapshot</h2>
+    return html`<figure class="snapshot ${primary ? "primary" : ""}">
+      <div class="frame">
+        ${url
+          ? html`<img src=${url} alt="Latest snapshot of ${node.name ?? "the camera"}" />`
+          : html`<p class="none">
+              No snapshot: enable one of this camera's stream entities (for example
+              <em>Fluent</em>) in the Settings tab.
+            </p>`}
+      </div>
+      <figcaption>
+        <span>Latest snapshot</span>
         <button
+          class="text with-icon"
           ?disabled=${!url}
           @click=${() => {
             this._stamp = Date.now();
           }}
         >
-          Refresh
+          ${icon("refresh")}Refresh
         </button>
-      </div>
+      </figcaption>
       ${primary
         ? html`<p class="muted small">
             This camera does not record, so snapshots are its main view. The picture refreshes
             every ${SNAPSHOT_REFRESH_MS / 1000} seconds while this page is open.
           </p>`
         : nothing}
-      ${url
-        ? html`<img src=${url} alt="Latest snapshot of ${node.name ?? "the camera"}" />`
-        : html`<p class="muted">
-            No snapshot: enable one of this camera's stream entities (for example
-            <em>Fluent</em>) in the Settings tab.
-          </p>`}
-    </section>`;
+    </figure>`;
   }
 
   private _renderCameras(): TemplateResult | typeof nothing {
     const node = this.device?.node;
     if (node?.kind === "camera") return nothing;
+    const count = node?.camera_ids.length ?? 0;
     return html`<section class="card">
-      <h2>${deviceTypeLabel(node?.kind ?? "nvr")}</h2>
-      <p class="muted small">${node?.camera_ids.length ?? 0} cameras; open one from the list.</p>
-      <button class="link" @click=${() => {
-        navigate(this, { view: "list" });
-      }}>All devices</button>
+      <h2>Cameras</h2>
+      ${this.devices && node
+        ? html`<rv-device-list .devices=${this.devices} .cameras=${this.cameras} .hostId=${node.id}></rv-device-list>`
+        : html`<p class="muted">
+            ${count} ${count === 1 ? "camera" : "cameras"} on this ${deviceTypeLabel(node?.kind ?? "nvr")}.
+          </p>`}
     </section>`;
   }
 
   private _renderConnection(conn: DeviceConnection, device: DeviceResponse): TemplateResult {
     const details = conn.details;
     const isCamera = device.node.kind === "camera";
+    const notes = [
+      conn.channel !== undefined && conn.channel !== null && conn.via === "nvr"
+        ? `channel ${String(conn.channel + 1)}`
+        : undefined,
+      conn.playback_source ? "playback source" : undefined,
+    ].filter((n): n is string => n !== undefined);
     return html`<section class="card">
       <div class="header">
         <h2>${isCamera ? connectionLabel(conn) : "Device"}</h2>
-        ${conn.playback_source ? html`<span class="badge accent">playback source</span>` : nothing}
-        ${conn.channel !== undefined && conn.channel !== null && conn.via === "nvr"
-          ? html`<span class="badge">channel ${conn.channel + 1}</span>`
-          : nothing}
+        ${notes.length ? html`<span class="muted">${notes.join(" · ")}</span>` : nothing}
       </div>
       ${details === null
         ? html`<p class="muted">
@@ -161,26 +179,55 @@ export class RvOverview extends LitElement {
       :host {
         display: flex;
         flex-direction: column;
-        gap: 16px;
+        gap: 28px;
       }
       .header {
         display: flex;
-        align-items: center;
-        gap: 8px;
+        align-items: baseline;
+        gap: 4px 14px;
         flex-wrap: wrap;
       }
       .header h2 {
-        flex: 1;
+        margin: 0;
       }
-      .snapshot img {
+      .snapshot {
+        margin: 0;
+        max-width: 760px;
+      }
+      .snapshot.primary {
+        max-width: none;
+      }
+      .frame {
+        aspect-ratio: 16 / 9;
+        display: grid;
+        place-items: center;
+        background: var(--rv-board);
+        color: var(--rv-on-board-muted);
+      }
+      .frame img {
         display: block;
         width: 100%;
-        max-width: 640px;
-        border-radius: 8px;
-        background: var(--secondary-background-color, #eee);
+        height: 100%;
+        object-fit: contain;
       }
-      .snapshot.primary img {
-        max-width: 100%;
+      .none {
+        max-width: 40ch;
+        padding: 16px;
+        text-align: center;
+      }
+      figcaption {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 6px 0;
+        border-bottom: 1px solid var(--rv-rule);
+        color: var(--rv-muted);
+        font-size: 14px;
+      }
+      .connections {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+        gap: 28px;
       }
       .chips {
         display: flex;
@@ -192,7 +239,7 @@ export class RvOverview extends LitElement {
 }
 
 function renderChannel(ch: ChannelDetails): TemplateResult {
-  const status = !ch.online ? "offline" : ch.sleeping ? "sleeping" : "online";
+  const status = !ch.online ? "Offline" : ch.sleeping ? "Asleep" : "Online";
   return html`<dl class="facts">
     <dt>Model</dt>
     <dd>${ch.model}${ch.model_id ? html` <span class="muted">(${ch.model_id})</span>` : nothing}</dd>
@@ -218,7 +265,7 @@ function renderChannel(ch: ChannelDetails): TemplateResult {
           </dd>`
       : nothing}
     <dt>Recordings</dt>
-    <dd>${ch.supports_replay ? "playback supported" : "no playback"}</dd>
+    <dd>${ch.supports_replay ? "Playback supported" : "No playback"}</dd>
     ${ch.ai_types.length
       ? html`<dt>AI detection</dt>
           <dd>${ch.ai_types.map((t) => AI_LABELS[t] ?? t).join(", ")}</dd>`

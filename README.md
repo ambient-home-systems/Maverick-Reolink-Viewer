@@ -111,6 +111,9 @@ recording in the camera's Playback tab) or mark everything seen.
 v0.18.0 adds an **Events** tab: any day's events from every camera as the same
 timetable, with the day before and after, a calendar marking the days with
 recordings, and filters by camera and by what was seen.
+v0.19.0 sets the device list out as a ruled table (each camera's number on the
+board, channel, model and state) and redraws each device's page, its Overview and
+its Settings in the same style; an NVR's page lists its cameras.
 
 Requires Home Assistant 2026.10 or newer with the Reolink integration set up.
 

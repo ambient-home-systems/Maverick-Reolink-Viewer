@@ -2889,7 +2889,7 @@ redesigned views.
 
 | Step | Status |
 | --- | --- |
-| 1. Design: the Timetable panel (home view, events, devices, device page, checks) | **In progress.** Direction chosen (2026-10-28), see "Step 1: the design". 1.1 foundations built (v0.16.0, the board's crop fixed in v0.16.1) and checked by the owner on the hardware, see "Step 1.1: foundations". 1.2 the home view's timetable built (v0.17.0), see "Step 1.2: today's timetable". 1.3 the Events view built (v0.18.0), see "Step 1.3: the Events view"; devices and the device page are next |
+| 1. Design: the Timetable panel (home view, events, devices, device page, checks) | **In progress.** Direction chosen (2026-10-28), see "Step 1: the design". 1.1 foundations built (v0.16.0, the board's crop fixed in v0.16.1) and checked by the owner on the hardware, see "Step 1.1: foundations". 1.2 the home view's timetable built (v0.17.0), see "Step 1.2: today's timetable". 1.3 the Events view built (v0.18.0), see "Step 1.3: the Events view". 1.4a the device list and the device page's header, Overview and Settings built (v0.19.0), see "Step 1.4a: devices, Overview and Settings"; the Playback tab (1.4b) is next |
 | 2. Performance budget | Not started |
 | 3. Mobile, and networks that cut websockets | Not started |
 | 4. Error states | Not started |
@@ -3042,6 +3042,27 @@ iPhone and the Mac):
 - The panel reads the board's numbering itself (`live/cameras`), so the Events view
   numbers the cameras as the board does without the board open.
 - The calendar's month arrows are drawn icons.
+
+### Step 1.4a: devices, Overview and Settings (v0.19.0)
+
+Step 4 of the design comes in two parts: this one, then the Playback tab (1.4b).
+
+- **The device list** is a ruled table per NVR or Home Hub, then the cameras added
+  directly: each camera's number on the board, its name, channel, model and state
+  (Online, Asleep, or Offline in the fault colour), with "Also added directly" and
+  "Snapshots only" under the state. On a phone the channel goes under the name and
+  the model is left out. The NVR's name opens its page.
+- **A device's page** has the board number beside its name, a line saying what it is
+  ("Camera · CX410 · on the NVR and added directly"), and tabs underlined as the
+  band's are. The back link reads "All devices".
+- **Overview:** the snapshot in a dark frame with its caption and Refresh under it;
+  each connection's facts as ruled rows, side by side on a desktop. An NVR's or Home
+  Hub's page lists its cameras as the device list does.
+- **Settings:** the connection picker as chips (the chosen one filled), each
+  category under a rule with its heading in the condensed face, ruled rows, square
+  toggles on a rail, restyled sliders, a drawn arrow on "About this setting", and the
+  confirm dialog with a fault rule on top.
+- The preview's cameras have snapshot pictures, so Overview can be looked at.
 
 ### Steps 2–7
 

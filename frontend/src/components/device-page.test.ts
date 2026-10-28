@@ -270,7 +270,17 @@ describe("rv-overview", () => {
       connections: [makeConnection({ via: "direct", details: { ...DETAILS, channel: null, host: { ...DETAILS.host, device_type: "nvr" } } })],
     });
     const el = await overview(makeHass(okDevices()), host);
-    expect(deepText(el)).toContain("1 cameras");
+    expect(deepText(el)).toContain("1 camera on this NVR.");
     expect(deepText(el)).toContain("Channels");
+    // With the device list: the NVR's cameras, ruled by channel, without its heading.
+    el.devices = okDevices();
+    el.cameras = [{ id: "dev-cam", name: "Front Yard", number: 3 }];
+    await el.updateComplete;
+    const list = el.shadowRoot?.querySelector("rv-device-list");
+    expect(list?.hostId).toBe("dev-nvr");
+    await list?.updateComplete;
+    expect(list?.shadowRoot?.querySelector(".plat")?.textContent).toBe("3");
+    expect(list?.shadowRoot?.querySelector(".head")).toBeNull();
+    expect(list?.shadowRoot?.querySelectorAll("button.row")).toHaveLength(1);
   });
 });

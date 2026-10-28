@@ -235,18 +235,22 @@ export const sharedStyles = css`
   .banner.info {
     background: var(--rv-ground-2);
   }
+  /* Facts as ruled rows: a label, then its value. */
   dl.facts {
     display: grid;
-    grid-template-columns: max-content 1fr;
-    gap: 6px 20px;
+    grid-template-columns: minmax(0, 10em) minmax(0, 1fr);
     margin: 8px 0;
     font-size: 15px;
   }
-  dl.facts dt {
-    color: var(--rv-muted);
-  }
+  dl.facts dt,
   dl.facts dd {
     margin: 0;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--rv-rule);
+  }
+  dl.facts dt {
+    padding-right: 20px;
+    color: var(--rv-muted);
   }
   * {
     scrollbar-width: thin;

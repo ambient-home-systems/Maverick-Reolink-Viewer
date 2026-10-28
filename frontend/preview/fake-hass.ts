@@ -187,6 +187,8 @@ function states(): HassEntities {
             : {};
       out[entityId] = { entity_id: entityId, state, attributes, last_changed: "", last_updated: "" };
     }
+    const snapshot = `camera.${prefix}_fluent`;
+    out[snapshot] = { entity_id: snapshot, state: "idle", attributes: { entity_picture: `media/${cam.media}.jpg` }, last_changed: "", last_updated: "" };
     if (cam.warm || cam.channel !== null) {
       const id = `switch.${prefix}_keep_live_view_warm`;
       out[id] = { entity_id: id, state: cam.warm ? "on" : "off", attributes: {}, last_changed: "", last_updated: "" };

@@ -5,8 +5,9 @@ import { deviceTypeLabel } from "../format";
 import { statesChanged } from "../render-filter";
 import { icon } from "../icons";
 import { sharedStyles } from "../styles";
-import type { Catalog, DeviceResponse, HassEntities, HomeAssistant, Unsubscribe } from "../types";
+import type { Catalog, DeviceResponse, DevicesResponse, HassEntities, HomeAssistant, Unsubscribe } from "../types";
 import "./live-grid";
+import type { BoardCamera } from "./live-grid";
 import { navigate, type Tab } from "./navigation";
 import "./overview";
 import "./playback";
@@ -31,6 +32,8 @@ export class RvDevicePage extends LitElement {
     deviceId: { attribute: false },
     tab: { attribute: false },
     at: { attribute: false },
+    cameras: { attribute: false },
+    devices: { attribute: false },
     _device: { state: true },
     _catalog: { state: true },
     _error: { state: true },
@@ -41,6 +44,10 @@ export class RvDevicePage extends LitElement {
   declare tab: Tab;
   /** On the Playback tab: a time to play (an event opened from the timetable). */
   declare at: number | undefined;
+  /** The board's cameras, numbered. */
+  declare cameras: BoardCamera[];
+  /** Every device, for an NVR's or Home Hub's cameras. */
+  declare devices: DevicesResponse | undefined;
   declare _device: DeviceResponse | undefined;
   declare _catalog: Catalog | undefined;
   declare _error: string | undefined;
@@ -58,6 +65,7 @@ export class RvDevicePage extends LitElement {
     super();
     this.deviceId = "";
     this.tab = "overview";
+    this.cameras = [];
   }
 
   override connectedCallback(): void {
@@ -135,6 +143,11 @@ export class RvDevicePage extends LitElement {
       .catch(() => undefined);
   }
 
+  /** The camera's number on the live board. */
+  private _number(id: string): number | undefined {
+    return this.cameras.find((c) => c.id === id)?.number;
+  }
+
   protected override render(): TemplateResult {
     this.renderCount += 1;
     const device = this._device;
@@ -150,14 +163,11 @@ export class RvDevicePage extends LitElement {
         : nothing}
       ${node
         ? html`<div class="title">
-              <h2>${node.name ?? "Reolink device"}</h2>
-              <span class="badge">${deviceTypeLabel(node.kind)}</span>
-              ${node.kind === "camera" && node.connections.length > 1
-                ? html`<span class="badge" title="In Home Assistant via the NVR and directly"
-                    >${node.connections.length} connections</span
-                  >`
+              ${this._number(node.id) !== undefined
+                ? html`<span class="plat" aria-hidden="true">${this._number(node.id)}</span>`
                 : nothing}
-              <span class="muted small">${node.model ?? ""}</span>
+              <h1>${node.name ?? "Reolink device"}</h1>
+              <p class="kind muted">${kindLine(device)}</p>
             </div>
             <div class="tabs" role="tablist">
               ${tabsFor(device).map(
@@ -189,7 +199,12 @@ export class RvDevicePage extends LitElement {
                   .at=${this.at}
                 ></rv-playback>`
               : this.tab === "overview" || this.tab === "playback" || this.tab === "live"
-              ? html`<rv-overview .hass=${this.hass} .device=${device}></rv-overview>`
+              ? html`<rv-overview
+                  .hass=${this.hass}
+                  .device=${device}
+                  .devices=${this.devices}
+                  .cameras=${this.cameras}
+                ></rv-overview>`
               : html`<rv-settings
                   .hass=${this.hass}
                   .device=${device}
@@ -208,39 +223,88 @@ export class RvDevicePage extends LitElement {
       :host {
         display: flex;
         flex-direction: column;
-        gap: 12px;
+        gap: 14px;
       }
       .back {
         padding-left: 0;
-        color: var(--primary-color);
       }
       .title {
         display: flex;
         align-items: center;
         flex-wrap: wrap;
-        gap: 8px;
+        gap: 6px 14px;
       }
-      .title h2 {
+      .title h1 {
         margin: 0;
+        font-family: var(--rv-font-cond);
+        font-size: 30px;
+        font-weight: 600;
+        line-height: 1.1;
+      }
+      .kind {
+        flex-basis: 100%;
+        margin: 0;
+        font-size: 15px;
+      }
+      .plat {
+        min-width: 30px;
+        height: 30px;
+        padding: 0 5px;
+        box-sizing: border-box;
+        display: grid;
+        place-items: center;
+        background: var(--rv-platform);
+        color: var(--rv-on-rail);
+        font-family: var(--rv-font-cond);
+        font-size: 18px;
+        font-weight: 600;
+        line-height: 1;
       }
       .tabs {
         display: flex;
         gap: 4px;
-        border-bottom: 1px solid var(--divider-color, #e0e0e0);
+        border-bottom: 1px solid var(--rv-rule-strong);
+        overflow-x: auto;
+        scrollbar-width: none;
       }
       .tabs button {
+        min-height: 44px;
+        padding: 0 14px;
         border: none;
         border-radius: 0;
         background: transparent;
-        padding: 8px 16px;
-        border-bottom: 2px solid transparent;
+        color: var(--rv-muted);
+        font-size: 16px;
+        box-shadow: inset 0 -3px 0 transparent;
+      }
+      .tabs button:hover:not(:disabled) {
+        background: transparent;
+        color: var(--rv-text);
       }
       .tabs button.active {
-        border-bottom-color: var(--primary-color);
-        color: var(--primary-color);
+        color: var(--rv-text);
+        box-shadow: inset 0 -3px 0 var(--rv-text);
+      }
+      .tabs button:focus-visible {
+        outline-offset: -4px;
       }
     `,
   ];
+}
+
+/** "Camera · CX410 · on the NVR and added directly". */
+export function kindLine(device: DeviceResponse): string {
+  const node = device.node;
+  const parts = [deviceTypeLabel(node.kind), node.model ?? undefined];
+  if (node.kind === "camera" && node.connections.length > 1) {
+    const vias = new Set(node.connections.map((c) => c.via));
+    parts.push(
+      vias.has("nvr") && vias.has("direct")
+        ? "on the NVR and added directly"
+        : `${String(node.connections.length)} connections`,
+    );
+  }
+  return parts.filter(Boolean).join(" · ");
 }
 
 const TAB_LABELS: Record<Tab, string> = {
