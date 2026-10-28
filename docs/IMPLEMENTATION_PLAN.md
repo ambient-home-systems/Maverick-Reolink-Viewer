@@ -3776,9 +3776,9 @@ connections from one address can confuse a camera.
   12, more than it was ever measured on, and the capacity test, which needs 7 slots,
   would measure that instead. So the main instance's warm feeds are paused for the
   test (2): the NVR then carries its daily load, plus the checks. The capacity test
-  opens 7 streams and downloads a recording at full speed for about a minute (run 5:
-  377 Mbit/s, every stream at its frame rate); the playback check downloads a few
-  recordings, an HD one among them.
+  opens up to 7 streams one at a time, over a minute or two, then downloads a
+  recording at full speed for a few seconds (run 5: 377 Mbit/s, every stream at its
+  frame rate); the playback check downloads a few recordings, an HD one among them.
 
 **Sitting 1, at home (the Mac and the iPhone)**
 
