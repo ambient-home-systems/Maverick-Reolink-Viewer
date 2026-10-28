@@ -3471,6 +3471,15 @@ away now started in HD at once: the HD tapped away in check 6 is remembered for
 away on that device, as designed; tapping HD in full screen turns it back to the
 lighter SD ("SD, as chosen on this device").
 
+**How full screen starts, as a setting (v0.33.0).** The owner asked, after that
+check, for the choice as a setting: Devices → **This device** sets full screen's
+start at home (HD or SD) and away (HD or the lighter SD), stored in the browser like
+the choice a tap made (`reolink-viewer.full-screen-hd`), and **Remember HD or SD when
+I tap it in full screen** (on by default, as before): off, a tap lasts until full
+screen closes (`reolink-viewer.full-screen-keep-taps`). Tests: the setting's storage
+(unit), a tap not kept (the tile), and the section reading and writing them (the
+panel).
+
 **The iPhone checklist.** What only the owner's devices can check. For each of
 three setups: the Companion app on home Wi-Fi; with Wi-Fi off, through
 Tailscale; and through Nabu Casa. Note for each line whether it worked, and

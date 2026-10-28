@@ -83,3 +83,26 @@ export function rememberFullScreenHd(where: Where, hd: boolean): void {
     // Not remembered (private browsing): it holds until the page closes.
   }
 }
+
+const KEEP_TAPS_KEY = "reolink-viewer.full-screen-keep-taps";
+
+/**
+ * Whether HD or SD tapped in full screen becomes this device's choice there
+ * (Devices → This device). On unless turned off: off, a tap lasts until full
+ * screen closes, and it starts as chosen on the Devices page every time.
+ */
+export function keepsFullScreenTaps(): boolean {
+  try {
+    return localStorage.getItem(KEEP_TAPS_KEY) !== "off";
+  } catch {
+    return true;
+  }
+}
+
+export function setKeepsFullScreenTaps(on: boolean): void {
+  try {
+    localStorage.setItem(KEEP_TAPS_KEY, on ? "on" : "off");
+  } catch {
+    // Not remembered (private browsing).
+  }
+}

@@ -26,6 +26,7 @@ import { probeFilename } from "./format";
 import { helpUrl, type HelpTopic } from "./help";
 import { icon } from "./icons";
 import { explainLoad, integrationProblem, type IntegrationProblem } from "./integration";
+import { fullScreenHd, keepsFullScreenTaps, rememberFullScreenHd, setKeepsFullScreenTaps, type Where } from "./network";
 import { formatClock } from "./playback/time";
 import { helpLink, problem } from "./problem";
 import { sharedStyles, themeTokens } from "./styles";
@@ -338,7 +339,8 @@ export class ReolinkViewerPanel extends LitElement {
           ${this._loadError
             ? nothing
             : html`<rv-device-list .devices=${this._devices} .cameras=${this._board}></rv-device-list>`}
-          ${this._renderChecks()} ${this._renderHelp()} ${this._isAdmin ? this._renderProbe() : nothing}`;
+          ${this._renderChecks()} ${this._renderThisDevice()} ${this._renderHelp()}
+          ${this._isAdmin ? this._renderProbe() : nothing}`;
     }
   }
 
@@ -418,6 +420,50 @@ export class ReolinkViewerPanel extends LitElement {
         To check recordings, open a camera's Playback tab, then “Details and playback check” under the
         player.
       </p>
+    </section>`;
+  }
+
+  /** How full screen plays on this device: HD or SD, at home and away, and whether a tap is kept. */
+  private _renderThisDevice(): TemplateResult {
+    const starts = (where: Where, label: string, choices: [string, string]) => {
+      const hd = fullScreenHd({ where, why: "" }).hd;
+      return html`<label class="option">
+        <span
+          >${label}
+          <select
+            aria-label=${label}
+            @change=${(e: Event) => {
+              rememberFullScreenHd(where, (e.target as HTMLSelectElement).value === "hd");
+              this.requestUpdate();
+            }}
+          >
+            <option value="hd" ?selected=${hd}>${choices[0]}</option>
+            <option value="sd" ?selected=${!hd}>${choices[1]}</option>
+          </select></span
+        >
+      </label>`;
+    };
+    return html`<section class="card">
+      <h2>This device</h2>
+      <p class="muted">How a camera plays in full screen here. Each phone and computer keeps its own.</p>
+      <div class="options">
+        ${starts("home", "At home, full screen starts in", ["HD", "SD"])}
+        ${starts("away", "Away from home or on mobile data, it starts in", ["HD", "the lighter SD"])}
+        <label class="option">
+          <input
+            type="checkbox"
+            .checked=${keepsFullScreenTaps()}
+            @change=${(e: Event) => {
+              setKeepsFullScreenTaps((e.target as HTMLInputElement).checked);
+              this.requestUpdate();
+            }}
+          />
+          <span
+            >Remember HD or SD when I tap it in full screen
+            <span class="muted">(off: full screen starts as set here every time)</span></span
+          >
+        </label>
+      </div>
     </section>`;
   }
 

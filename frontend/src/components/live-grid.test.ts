@@ -640,6 +640,23 @@ describe("full screen", () => {
       fullButton(garage).click();
       await settle(garage);
       expect(toggle()?.getAttribute("aria-pressed")).toBe("true");
+      // Taps not kept (Devices → This device): HD lasts this full screen only.
+      fullButton(garage).click();
+      await settle(garage);
+      localStorage.setItem("reolink-viewer.full-screen-keep-taps", "off");
+      Object.defineProperty(navigator, "connection", { value: { type: "cellular" }, configurable: true });
+      fullButton(garage).click();
+      await settle(garage);
+      expect(toggle()?.getAttribute("aria-pressed")).toBe("false");
+      toggle()?.click();
+      await settle(garage);
+      expect(toggle()?.getAttribute("aria-pressed")).toBe("true");
+      expect(JSON.parse(localStorage.getItem("reolink-viewer.full-screen-hd") ?? "{}")).toEqual({ away: false });
+      fullButton(garage).click();
+      await settle(garage);
+      fullButton(garage).click();
+      await settle(garage);
+      expect(toggle()?.getAttribute("aria-pressed")).toBe("false");
     } finally {
       Reflect.deleteProperty(navigator, "connection");
       localStorage.clear();

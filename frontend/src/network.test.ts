@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { currentLink, fullScreenHd, rememberFullScreenHd } from "./network";
+import { currentLink, fullScreenHd, keepsFullScreenTaps, rememberFullScreenHd, setKeepsFullScreenTaps } from "./network";
 
 afterEach(() => {
   localStorage.clear();
@@ -39,6 +39,16 @@ describe("HD in full screen", () => {
     rememberFullScreenHd("home", false);
     expect(fullScreenHd(home)).toEqual({ hd: false, chosen: true });
     expect(fullScreenHd(away).hd).toBe(true);
+  });
+
+  it("keeps what is tapped in full screen unless that is turned off, on this device", () => {
+    localStorage.clear();
+    expect(keepsFullScreenTaps()).toBe(true);
+    setKeepsFullScreenTaps(false);
+    expect(keepsFullScreenTaps()).toBe(false);
+    setKeepsFullScreenTaps(true);
+    expect(keepsFullScreenTaps()).toBe(true);
+    localStorage.clear();
   });
 
   it("does without the browser's storage, and ignores what it cannot read", () => {
