@@ -762,6 +762,8 @@ heaviest main, the Garage's (2560×1920 H.265): first frame 1.08 s, 30/30 fps be
 the six subs at their rates, then the download at 410.6 Mbit/s (359.2 alone), every
 stream at its rate. Verdict: kept up at every level (8); the summary said "NVR kept
 up with 7 video streams at once", and noted the Back Yard's stream left out.
+Later that evening the owner reported the Back Yard camera playing fine; whether its
+main stream sends video again through the NVR's RTSP is for the next live check.
 
 ## Findings
 
