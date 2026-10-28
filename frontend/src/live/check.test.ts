@@ -101,7 +101,7 @@ const CAMERAS: LiveCamera[] = [
   },
 ];
 
-function fakeHass(admin: boolean) {
+function fakeHass(admin: boolean, capacity?: CapacityEvent) {
   const calls: Record<string, unknown>[] = [];
   const saved: { setup: string; text: string; done: boolean }[] = [];
   const unsubscribed: string[] = [];
@@ -184,6 +184,10 @@ function fakeHass(admin: boolean) {
         const report = callback as (event: CapacityEvent) => void;
         setTimeout(() => {
           report({ type: "progress", message: "level 1" });
+          if (capacity) {
+            report(capacity);
+            return;
+          }
           report({
             type: "result",
             report: {
@@ -298,6 +302,34 @@ describe("LiveCheck", () => {
     expect(preloads.map((c) => c.enabled)).toEqual([true, false, true, false, true, false, true, false]);
     expect(saved.at(-1)?.done).toBe(true);
     expect(saved.at(-1)?.setup).toBe(`${LIVE_REPORT_PREFIX}Desktop Chrome, LAN`);
+  });
+
+  it("says plainly why a capacity test could not run, and what to do", async () => {
+    const { hass } = fakeHass(true, {
+      type: "error",
+      message: "Every stream slot of this host stayed in use for 2 minutes: live view of Garage is open.",
+      advice: "Close live view on other screens and let playback finish, then run the check again.",
+    });
+    const check = new LiveCheck(
+      hass,
+      { setup: "Other", streams: ["sub"], warm: false, stock: false, capacity: true, cameraIds: ["cam1"] },
+      document.createElement("div"),
+    );
+    const text = await check.run();
+    expect(text).toContain(
+      "- Note: RLN36's capacity test could not run. Every stream slot of this host stayed in use for 2 minutes: " +
+        "live view of Garage is open. What to do: Close live view on other screens and let playback finish, then run the check again.",
+    );
+    expect(text).toContain(
+      "  failed: Every stream slot of this host stayed in use for 2 minutes: live view of Garage is open. Close live view",
+    );
+    // Any other failure, as the server words it.
+    const other = new LiveCheck(
+      fakeHass(true, { type: "error", message: "go2rtc is not running" }).hass,
+      { setup: "Other", streams: ["sub"], warm: false, stock: false, capacity: true, cameraIds: ["cam1"] },
+      document.createElement("div"),
+    );
+    expect(await other.run()).toContain("- Note: RLN36's capacity test could not run: go2rtc is not running.");
   });
 
   it("leaves out what a non-admin cannot run, and stops when asked", async () => {

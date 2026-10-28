@@ -40,9 +40,11 @@ export interface LiveSession {
   readonly done: Promise<SessionResult>;
   /**
    * Called once if the session ends after its first frame: the server closed
-   * it, the connection failed, or no new frame came for STALL_MS.
+   * it, the connection failed, or no new frame came for STALL_MS. `cut`: its
+   * connection closed without a word from the server (a restart, or a network
+   * that cuts long-lived websockets).
    */
-  onEnd?: (error: string) => void;
+  onEnd?: (error: string, cut: boolean) => void;
   close(): void;
 }
 
@@ -68,7 +70,7 @@ export function firstFrame(video: HTMLVideoElement): Promise<number> {
 /** Common to the sessions: timing, timeout, the first frame, closing. */
 abstract class BaseSession implements LiveSession {
   readonly done: Promise<SessionResult>;
-  onEnd?: (error: string) => void;
+  onEnd?: (error: string, cut: boolean) => void;
   protected readonly t0 = performance.now();
   protected readonly steps: Record<string, number> = {};
   protected closed = false;
@@ -115,14 +117,14 @@ abstract class BaseSession implements LiveSession {
     this.steps[name] ??= Math.round(performance.now() - this.t0);
   }
 
-  protected fail(error: string): void {
+  protected fail(error: string, cut = false): void {
     clearTimeout(this._timer);
     if (this._playing) {
       // After the first frame: an end, once (the player reconnects).
       if (this._ended || this.closed) return;
       this._ended = true;
       clearInterval(this._stallTimer);
-      this.onEnd?.(error);
+      this.onEnd?.(error, cut);
       return;
     }
     void this.describe()
@@ -429,7 +431,8 @@ export class OurMse extends BaseSession {
         else this._media(event.data);
       });
       ws.addEventListener("close", () => {
-        if (!this.closed) this.fail("the server closed the stream");
+        // The server says why before it closes; nothing said: a cut.
+        if (!this.closed) this.fail("the server closed the stream", true);
       });
     } catch (err) {
       this.fail(toError(err).message);

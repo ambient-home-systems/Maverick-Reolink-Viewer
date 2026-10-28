@@ -18,6 +18,8 @@ export interface TileDebug {
   players: DebugPlayer[];
   /** Why full screen plays what it plays (once chosen). */
   hd?: string | undefined;
+  /** This page starts over WebRTC first until then (epoch ms): its network cut MSE. */
+  webRtcFirstUntil?: number | undefined;
 }
 
 /** Per player label: its stream's server state, or why it could not be read. */
@@ -42,6 +44,9 @@ export function debugText(info: TileDebug, states: DebugStates, now: number = Da
     lines.push(`  server: ${serverLine(states[player.label])}`);
   }
   if (info.hd) lines.push(`HD choice: ${info.hd}`);
+  if (info.webRtcFirstUntil !== undefined && info.webRtcFirstUntil > now) {
+    lines.push(`Network: it cut MSE's connections twice, so WebRTC goes first until ${clock(info.webRtcFirstUntil)}`);
+  }
   for (const player of info.players) {
     if (!player.events.length) continue;
     lines.push(`Events (${player.label}):`);

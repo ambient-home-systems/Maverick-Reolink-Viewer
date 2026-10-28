@@ -49,7 +49,7 @@ import { liveConnection } from "./data";
 import { chooseHd } from "./hd";
 import { OurMse, OurWebRtc, StockWebRtc, type LiveSession, type SessionResult } from "./session";
 
-export const LIVE_CHECK_VERSION = "0.23.0";
+export const LIVE_CHECK_VERSION = "0.24.0";
 export { LIVE_REPORT_PREFIX };
 export const LIVE_SETUPS = [
   "Desktop Chrome, LAN",
@@ -126,6 +126,8 @@ export class LiveCheck {
   private readonly _measured: Measured[] = [];
   private readonly _posters: { kind: PosterKind; ms: number; cameraId?: string }[] = [];
   private readonly _capacity: { host: string; report: CapacityReport }[] = [];
+  /** The capacity tests that could not run, and what to do. */
+  private readonly _capacityFailed: { host: string; message: string; advice?: string }[] = [];
   private _chosen: LiveCamera[] = [];
 
   constructor(
@@ -521,8 +523,9 @@ export class LiveCheck {
       const report = await this._capacity_(host.id, (message) => {
         this._status(`capacity test: ${name}: ${message}`);
       });
-      if (typeof report === "string") {
-        this._log(`  failed: ${report}`);
+      if ("message" in report) {
+        this._log(`  failed: ${report.message}${report.advice ? ` ${report.advice}` : ""}`);
+        this._capacityFailed.push({ host: name, ...report });
         continue;
       }
       this._capacity.push({ host: name, report });
@@ -530,11 +533,14 @@ export class LiveCheck {
     }
   }
 
-  private _capacity_(hostId: string, progress: (message: string) => void): Promise<CapacityReport | string> {
+  private _capacity_(
+    hostId: string,
+    progress: (message: string) => void,
+  ): Promise<CapacityReport | { message: string; advice?: string }> {
     return new Promise((resolve) => {
       let unsubscribe: (() => Promise<void>) | undefined;
       let settled = false;
-      const finish = (value: CapacityReport | string) => {
+      const finish = (value: CapacityReport | { message: string; advice?: string }) => {
         if (settled) return;
         settled = true;
         void unsubscribe?.().catch(() => undefined);
@@ -543,14 +549,14 @@ export class LiveCheck {
       subscribeCapacity(this._hass, hostId, (event) => {
         if (event.type === "progress") progress(event.message);
         else if (event.type === "result") finish(event.report);
-        else finish(event.message);
+        else finish(event.advice ? { message: event.message, advice: event.advice } : { message: event.message });
       })
         .then((unsub) => {
           unsubscribe = unsub;
           if (settled) void unsub().catch(() => undefined);
         })
         .catch((err: unknown) => {
-          finish(toError(err).message);
+          finish({ message: toError(err).message });
         });
     });
   }
@@ -660,6 +666,14 @@ export class LiveCheck {
           advice: "Keep fewer of its cameras warm, or watch fewer of them in full screen at the same time.",
         });
       }
+    }
+    for (const { host, message, advice } of this._capacityFailed) {
+      findings.push({
+        grade: "note",
+        // The server's words as they are: a sentence, or a phrase after a colon.
+        text: `${host}'s capacity test could not run${/^[A-Z]/.test(message) ? "." : ":"} ${message}${/[.!?]$/.test(message) ? "" : "."}`,
+        ...(advice ? { advice } : {}),
+      });
     }
 
     const typical = middle(starts);

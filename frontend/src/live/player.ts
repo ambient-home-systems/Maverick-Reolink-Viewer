@@ -3,6 +3,13 @@
 // otherwise, the other transport being the fallback (step 1's decision for
 // every setup, docs/IMPLEMENTATION_PLAN.md). When a playing session ends it
 // starts again at once; after a failed start it waits 1, 2, 5, 10, then 30 s.
+//
+// Some networks cut long-lived websockets (Phase 3's soak, run 15: a filtered
+// work network closed every MSE tile's every 5½ minutes), and MSE's video
+// crosses one; WebRTC's does not. When this page's MSE sessions are cut twice
+// within CUT_WINDOW_MS, every player on it starts over WebRTC first for
+// PREFER_WEBRTC_MS (CutWatch), then tries MSE first again; at once if WebRTC
+// cannot start there either.
 import type { LiveRef } from "../api";
 import type { HomeAssistant, SoakCounts } from "../types";
 import {
@@ -47,6 +54,46 @@ export const STABLE_MS = 30_000;
 /** The events a player keeps for its tile's debug view. */
 export const EVENT_LOG = 20;
 
+/** An MSE session that played this long and was cut counts (a short one is a failing stream). */
+export const CUT_MIN_PLAY_MS = 60_000;
+/** Cuts this close together are one: a restart or a blip cuts every tile at once. */
+export const CUT_SAME_MS = 10_000;
+/** Two cuts within this long: the network cuts long-lived websockets. */
+export const CUT_WINDOW_MS = 20 * 60_000;
+/** Then WebRTC goes first for this long (the page may have moved to another network since). */
+export const PREFER_WEBRTC_MS = 60 * 60_000;
+
+/** The cuts of this page's MSE sessions, and whether they made WebRTC go first. */
+export class CutWatch {
+  /** Epoch ms of each cut counted (a cut within CUT_SAME_MS of the last is the same one). */
+  private _cuts: number[] = [];
+  /** WebRTC goes first until then (epoch ms). */
+  until = 0;
+
+  /** Note a cut; true if it makes WebRTC go first. */
+  note(at: number = Date.now()): boolean {
+    const last = this._cuts.at(-1);
+    if (last !== undefined && at - last < CUT_SAME_MS) return false;
+    this._cuts = [...this._cuts.filter((t) => at - t < CUT_WINDOW_MS), at];
+    if (this._cuts.length < 2 || this.preferWebRtc(at)) return false;
+    this.until = at + PREFER_WEBRTC_MS;
+    this._cuts = [];
+    return true;
+  }
+
+  preferWebRtc(at: number = Date.now()): boolean {
+    return at < this.until;
+  }
+
+  /** WebRTC could not start either: MSE goes first again. */
+  giveUp(): void {
+    this.until = 0;
+  }
+}
+
+/** The page's: the network is the same for every tile on it. */
+export const pageCuts = new CutWatch();
+
 /** Something the player did, for the debug view: when (epoch ms) and what. */
 export interface PlayerEvent {
   at: number;
@@ -74,6 +121,8 @@ export class LivePlayer {
   private _session: LiveSession | undefined;
   private _timer: ReturnType<typeof setTimeout> | undefined;
   private _failures = 0;
+  /** It said that WebRTC goes first (once per switch). */
+  private _switchNoted = false;
   /** Bumped by stop(): what an older run finds afterwards is dropped. */
   private _run = 0;
 
@@ -85,6 +134,7 @@ export class LivePlayer {
     readonly options: PlayerOptions,
     private readonly _onState: (state: PlayerState) => void = () => undefined,
     private readonly _factory: SessionFactory = sessionFor,
+    private readonly _cuts: CutWatch = pageCuts,
   ) {}
 
   get running(): boolean {
@@ -114,9 +164,11 @@ export class LivePlayer {
   }
 
   private async _attempt(run: number): Promise<void> {
-    const order: Transport[] = this.options.warm
-      ? ["MSE", "WebRTC"]
-      : ["WebRTC", "MSE"];
+    const mseFirst = this.options.warm && !this._cuts.preferWebRtc();
+    const switched = this.options.warm && !mseFirst;
+    if (switched && !this._switchNoted) this._note("WebRTC first: this network cuts MSE's connections");
+    this._switchNoted = switched;
+    const order: Transport[] = mseFirst ? ["MSE", "WebRTC"] : ["WebRTC", "MSE"];
     let error = "failed";
     for (const transport of order) {
       this._note(`${transport}: starting`);
@@ -131,8 +183,8 @@ export class LivePlayer {
       );
       this._session = session;
       const began = Date.now();
-      session.onEnd = (reason) => {
-        this._ended(run, session, began, reason);
+      session.onEnd = (reason, cut) => {
+        this._ended(run, session, began, reason, transport === "MSE" && cut);
       };
       const result = await session.done;
       if (run !== this._run || this._session !== session) return;
@@ -148,6 +200,11 @@ export class LivePlayer {
       error = `${transport}: ${result.error ?? "failed"}`;
       this._note(error);
       this.onCount("failures");
+      if (switched && transport === "WebRTC" && this._cuts.preferWebRtc()) {
+        // A network that blocks WebRTC too: each start would wait for it to fail.
+        this._cuts.giveUp();
+        this._note("WebRTC could not start either: MSE goes first again");
+      }
     }
     this._failures += 1;
     this._wait(run, error);
@@ -159,13 +216,20 @@ export class LivePlayer {
     session: LiveSession,
     began: number,
     reason: string,
+    mseCut: boolean,
   ): void {
     if (run !== this._run || this._session !== session) return;
     session.close();
     this._session = undefined;
-    this._note(`ended after ${Math.round((Date.now() - began) / 1000)} s: ${reason}`);
+    const played = Date.now() - began;
+    this._note(`ended after ${Math.round(played / 1000)} s: ${reason}`);
     this.onCount("drops");
-    if (Date.now() - began >= STABLE_MS) {
+    if (mseCut && played >= CUT_MIN_PLAY_MS && this._cuts.note()) {
+      this._note(
+        `this page's MSE connections were cut twice within ${CUT_WINDOW_MS / 60_000} min: WebRTC goes first for ${PREFER_WEBRTC_MS / 60_000} min`,
+      );
+    }
+    if (played >= STABLE_MS) {
       this._failures = 0;
       void this._attempt(run);
       return;

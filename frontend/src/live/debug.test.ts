@@ -116,4 +116,13 @@ describe("debugText", () => {
     info.players = [{ ...player, state: { kind: "idle" } }];
     expect(debugText(info, {}, AT)).toContain("SD (sub, cold): stopped");
   });
+
+  it("says when this page starts over WebRTC first, until it no longer does", () => {
+    const info: TileDebug = { camera: "Garage", connection: NVR, players: [], webRtcFirstUntil: AT + 1000 };
+    const until = new Date(AT + 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    expect(debugText(info, {}, AT)).toContain(
+      `Network: it cut MSE's connections twice, so WebRTC goes first until ${until}`,
+    );
+    expect(debugText(info, {}, AT + 1000)).not.toContain("Network:");
+  });
 });

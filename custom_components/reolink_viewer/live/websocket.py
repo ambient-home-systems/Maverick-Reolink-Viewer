@@ -47,7 +47,7 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.util.ssl import SSLCipherList
 
-from .capacity import CapacityError, CapacityTest
+from .capacity import CapacityError, CapacityTest, SlotsBusyError, busy_reason
 from .go2rtc import Go2rtcError, redact
 from .images import CameraImage
 from .service import MAX_EARLY_CANDIDATES, LiveService, WebRtcSession
@@ -609,12 +609,15 @@ async def ws_live_capacity(
         async with live.capacity_lock:
             await test()
 
+    host_id = sources[0].entry_id
+    scheduler = entry.runtime_data.scheduler
+
     async def test() -> None:
         try:
             server = await live.async_server()
             test = CapacityTest(
                 hass,
-                entry.runtime_data.scheduler,
+                scheduler,
                 server,
                 async_get_clientsession(
                     hass, verify_ssl=False, ssl_cipher=SSLCipherList.INSECURE
@@ -624,7 +627,24 @@ async def ws_live_capacity(
                 include_fill=msg["include_fill"],
                 progress=lambda text: send({"type": "progress", "message": text}),
             )
-            send({"type": "result", "report": await test.async_run()})
+            # The cameras kept warm hold most of the host's slots: set aside.
+            async with live.relay.async_set_aside(host_id) as aside:
+                if aside:
+                    cameras = f"{aside} camera{'s' if aside > 1 else ''}"
+                    send(
+                        {
+                            "type": "progress",
+                            "message": f"set aside the {cameras} kept warm until "
+                            "the test ends",
+                        }
+                    )
+                report = await test.async_run()
+            report["warm_set_aside"] = aside
+            send({"type": "result", "report": report})
+        except SlotsBusyError:
+            in_use = scheduler.host(host_id).streams.stats()["streams"]
+            message, advice = busy_reason(live.registry.held(host_id), in_use)
+            send({"type": "error", "message": message, "advice": advice})
         except (CapacityError, LiveError, Go2rtcError) as err:
             send({"type": "error", "message": redact(str(err))})
         except Exception as err:

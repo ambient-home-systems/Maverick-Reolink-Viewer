@@ -61,6 +61,7 @@ class LiveStream:
 class _Running:
     holds: int = 0
     ticket: StreamTicket | None = None
+    stream: LiveStream | None = None
     # go2rtc's generation the stream was registered in.
     generation: int = -1
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
@@ -102,6 +103,7 @@ class StreamRegistry:
         """Claim a stream: registered, and holding a stream slot while held."""
         await self._server.async_ready()
         state = self._running.setdefault(stream.name, _Running())
+        state.stream = stream
         async with state.lock:
             if state.holds == 0 or state.generation != self._server.generation:
                 await self._register(stream)
@@ -169,6 +171,14 @@ class StreamRegistry:
     def running(self) -> dict[str, int]:
         """Return the holds of each running stream (by go2rtc name)."""
         return {name: s.holds for name, s in self._running.items() if s.holds}
+
+    def held(self, entry_id: str) -> list[LiveStream]:
+        """Return a host's streams that hold a stream slot."""
+        return [
+            s.stream
+            for s in self._running.values()
+            if s.holds and s.stream is not None and s.stream.source.entry_id == entry_id
+        ]
 
     async def async_shutdown(self) -> None:
         """Release every hold (go2rtc is stopping)."""
