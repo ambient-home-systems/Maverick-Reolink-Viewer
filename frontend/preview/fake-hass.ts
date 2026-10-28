@@ -20,6 +20,8 @@ import type {
   LiveConnection,
   Segment,
   StreamEncoding,
+  RecentEvent,
+  RecentEvents,
   TimelineDay,
   TimelineEvent,
 } from "../src/types";
@@ -289,21 +291,35 @@ function liveCamera(cam: Cam): LiveCamera {
 const DAY_START = Date.parse("2026-10-27T00:00:00-05:00");
 const at = (h: number, m: number, s = 0) => DAY_START + ((h * 60 + m) * 60 + s) * 1000;
 
-const EVENTS: [number, number, number, string[]][] = [
-  [6, 12, 40, ["motion"]],
-  [7, 48, 70, ["vehicle"]],
-  [8, 3, 35, ["person"]],
-  [9, 31, 95, ["person", "vehicle"]],
-  [11, 20, 25, ["animal"]],
-  [12, 55, 60, ["package", "person"]],
-  [13, 41, 263, ["motion"]],
-  [15, 11, 66, ["motion"]],
-  [15, 47, 78, ["animal", "person"]],
-  [17, 2, 50, ["vehicle"]],
-  [18, 25, 43, ["motion"]],
-  [19, 40, 30, ["person"]],
-  [20, 58, 85, ["visitor", "person"]],
+// Hour, minute, length (s), the camera's VOD triggers, which camera.
+const EVENTS: [number, number, number, string[], string][] = [
+  [6, 12, 40, ["MOTION"], "cam-back"],
+  [7, 48, 70, ["MOTION", "VEHICLE"], "cam-fyl"],
+  [8, 3, 35, ["MOTION", "PERSON"], "cam-fyr"],
+  [9, 31, 95, ["MOTION", "PERSON", "VEHICLE"], "cam-fyl"],
+  [11, 20, 25, ["MOTION", "ANIMAL"], "cam-dogs"],
+  [12, 55, 60, ["MOTION", "PACKAGE", "PERSON"], "cam-door"],
+  [13, 41, 263, ["MOTION"], "cam-garage"],
+  [15, 11, 66, ["MOTION"], "cam-dogs"],
+  [15, 47, 78, ["MOTION", "ANIMAL", "PERSON"], "cam-back"],
+  [17, 2, 50, ["MOTION", "VEHICLE"], "cam-fyl"],
+  [18, 25, 43, ["MOTION"], "cam-hall"],
+  [19, 40, 30, ["MOTION", "PERSON"], "cam-fyr"],
+  [20, 58, 85, ["DOORBELL", "PERSON"], "cam-door"],
 ];
+
+/** Today's events across cameras, newest first; those after 19:00 not seen yet. */
+function recent(): RecentEvents {
+  const events: RecentEvent[] = EVENTS.map(([h, m, len, types, camera], i) => ({
+    camera_id: camera,
+    start: at(h, m),
+    end: at(h, m) + len * 1000,
+    types,
+    segment: `seg-${String(i)}`,
+    new: at(h, m) > at(19, 0),
+  })).reverse();
+  return { events, cameras: CAMS.filter((c) => c.records).length, failed: [], since: at(19, 0), now: NOW };
+}
 
 function day(date: string): TimelineDay {
   const offset = date === "2026-10-27" ? 0 : (Date.parse("2026-10-27") - Date.parse(date));
@@ -361,9 +377,14 @@ export function fakeHass(options: { admin: boolean; dark: boolean }): HomeAssist
     "reolink_viewer/playback/media_info": () => ({ sub: { codec: "avc1.640016", width: 640, height: 480, audio: "mp4a.40.2" }, main: { codec: "avc1.640032", width: 2560, height: 1920, audio: "mp4a.40.2" } }),
     "reolink_viewer/thumbnail/urls": (m) => {
       const times = (m.times as number[] | undefined) ?? [];
+      const camera = CAMS.find((c) => c.id === m.device_id);
       const cams = CAMS.filter((c) => c.records);
-      return { urls: times.map((time, i) => ({ time, bucket: Number(m.bucket), url: media(cams[i % cams.length] ?? CAMS[0]) })) };
+      return {
+        urls: times.map((time, i) => ({ time, bucket: Number(m.bucket), url: media(camera ?? cams[i % cams.length]) })),
+      };
     },
+    "reolink_viewer/events/recent": () => recent(),
+    "reolink_viewer/events/seen": () => ({}),
     "reolink_viewer/playback/check_reports": () => ({ reports: [] }),
     "reolink_viewer/live/soak": () => ({ sample_s: 300, keep_s: 129_600, warmup_s: 300, started_at: NOW - 3_600_000, run: null, samples: [], now: null }),
   };

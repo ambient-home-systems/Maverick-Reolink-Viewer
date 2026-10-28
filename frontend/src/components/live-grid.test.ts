@@ -701,6 +701,19 @@ describe("the board", () => {
     expect(fit(camera("unknown"), 272)).toBe("cover");
   });
 
+  it("tells the page how it numbers its cameras", async () => {
+    const { hass } = fakeHass();
+    const el = document.createElement("rv-live-grid");
+    const told: { cameras: { id: string; name: string; number: number }[] }[] = [];
+    el.addEventListener("rv-board", (e) => told.push((e as CustomEvent<(typeof told)[number]>).detail));
+    el.hass = hass;
+    document.body.appendChild(el);
+    await flush();
+    await el.updateComplete;
+    expect(told).toHaveLength(1);
+    expect(told[0]?.cameras).toEqual(CAMERAS.map((c, i) => ({ id: c.id, name: c.name, number: i + 1 })));
+  });
+
   it("numbers its tiles, which fill their cells", async () => {
     const { hass } = fakeHass();
     const { tiles } = await mountGrid(hass);

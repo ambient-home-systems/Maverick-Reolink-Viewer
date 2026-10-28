@@ -216,10 +216,14 @@ export function typeLabel(type: string): string {
   return EVENT_TYPES[TYPE_INDEX.get(type) ?? -1]?.label ?? type.toLowerCase();
 }
 
+/** Types in display order, the most specific first. */
+export function sortTypes(types: Iterable<string>): string[] {
+  return [...types].sort((a, b) => (TYPE_INDEX.get(a) ?? 99) - (TYPE_INDEX.get(b) ?? 99));
+}
+
 /** The types present in a day's events, in display order. */
 export function presentTypes(events: TimelineEvent[]): string[] {
-  const seen = new Set(events.flatMap((e) => e.types));
-  return [...seen].sort((a, b) => (TYPE_INDEX.get(a) ?? 99) - (TYPE_INDEX.get(b) ?? 99));
+  return sortTypes(new Set(events.flatMap((e) => e.types)));
 }
 
 /** Thumbnail bucket (seconds) for a zoom level: coarser when zoomed out. */

@@ -26,6 +26,7 @@ import type {
   ProbeEvent,
   ProbeOptions,
   ProbeReport,
+  RecentEvents,
 } from "./types";
 
 export const fetchDevices = (hass: HomeAssistant): Promise<DevicesResponse> =>
@@ -168,6 +169,29 @@ export const fetchTimelineDay = (
     date,
     ...(maxAge > 0 ? { max_age: maxAge } : {}),
   });
+
+/**
+ * Today's events of every recording camera, newest first. `maxAge` (s):
+ * accept cached copies of today that old; `background`: a refresh nobody
+ * waits for (it yields to what someone asked for).
+ */
+export const fetchRecentEvents = (
+  hass: HomeAssistant,
+  options: { maxAge?: number; background?: boolean } = {},
+): Promise<RecentEvents> =>
+  hass.callWS<RecentEvents>({
+    type: "reolink_viewer/events/recent",
+    ...(options.maxAge ? { max_age: options.maxAge } : {}),
+    ...(options.background ? { background: true } : {}),
+  });
+
+/** This user opened an event. */
+export const markEventSeen = (hass: HomeAssistant, cameraId: string, start: number): Promise<unknown> =>
+  hass.callWS({ type: "reolink_viewer/events/seen", camera_id: cameraId, start });
+
+/** Nothing until now is new for this user. */
+export const markAllEventsSeen = (hass: HomeAssistant): Promise<unknown> =>
+  hass.callWS({ type: "reolink_viewer/events/seen", all: true });
 
 /** Fetch today's timeline of every recording camera in the background. */
 export const warmTimelines = (hass: HomeAssistant): Promise<{ cameras: number }> =>

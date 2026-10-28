@@ -11,6 +11,7 @@ export const themeTokens = css`
   :host {
     --rv-rail: #1b2a6e;
     --rv-on-rail: #f4f4f1;
+    --rv-platform: #1b2a6e;
     --rv-on-rail-muted: #b4bbd3;
     --rv-board: #111418;
     --rv-on-board: #f4f4f1;
@@ -43,6 +44,7 @@ export const themeTokens = css`
     --rv-action: #8fa6ff;
     --rv-on-action: #0e1530;
     --rv-fault-ink: #f2b100;
+    --rv-platform: #3349a8;
     color-scheme: dark;
   }
   :host {

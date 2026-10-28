@@ -54,6 +54,16 @@ describe("reolink-viewer-panel", () => {
         (b) => b.textContent.trim() === label,
       );
     expect(el.shadowRoot?.querySelector("rv-live-grid")).not.toBeNull();
+    // Today's events under the board, numbered as the board numbers its cameras.
+    const timetable = el.shadowRoot?.querySelector("rv-timetable");
+    expect(timetable).not.toBeNull();
+    el.shadowRoot
+      ?.querySelector("rv-live-grid")
+      ?.dispatchEvent(
+        new CustomEvent("rv-board", { detail: { cameras: [{ id: "c", name: "Garage", number: 1 }] }, bubbles: true, composed: true }),
+      );
+    await el.updateComplete;
+    expect(timetable?.cameras).toEqual([{ id: "c", name: "Garage", number: 1 }]);
     expect(tab("Live")?.getAttribute("aria-current")).toBe("page");
     expect(tab("Devices")?.hasAttribute("aria-current")).toBe(false);
     tab("Devices")?.click();
@@ -175,6 +185,7 @@ describe("reolink-viewer-panel", () => {
       "rv-live-controls",
       "rv-live-debug",
       "rv-live-soak",
+      "rv-timetable",
     ]) {
       expect(customElements.get(name), name).toBeDefined();
     }

@@ -102,8 +102,12 @@ wide), each saying in a word what it is doing (Live, Starting, Picture 21:22, As
 Retrying). A railway-blue band holds the Live and Devices tabs and the time; the device
 list, the live check, the soak report and the hardware probe are under **Devices**. The
 panel follows Home Assistant's light or dark mode with its own colours, and its font
-(Barlow, SIL Open Font License) comes from the integration, not a font service. Today's
-events come to the live board next.
+(Barlow, SIL Open Font License) comes from the integration, not a font service.
+v0.17.0 sets today's events from every camera under the live board as a timetable:
+newest first under a red line at the time now, each with its time, what was seen, the
+camera's number on the board, its length and a thumbnail. An event you have not opened
+yet stays lit in red, per Home Assistant user, until you open it (a row plays the
+recording in the camera's Playback tab) or mark everything seen.
 
 Requires Home Assistant 2026.10 or newer with the Reolink integration set up.
 

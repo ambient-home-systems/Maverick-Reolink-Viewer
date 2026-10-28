@@ -41,6 +41,7 @@ from .const import (
     VOD_CACHE_DIR,
     VOD_CACHE_MAX_BYTES,
 )
+from .events import SeenStore
 from .live.service import LiveService
 from .live.views import LiveFrameView, LiveImageView, LiveMseView
 from .live.websocket import async_register_live_commands
@@ -150,9 +151,11 @@ async def async_setup_entry(
         get_ffmpeg_manager(hass).binary,
     )
     check_reports = CheckReports(hass)
+    seen = SeenStore(hass)
     await vod_cache.async_setup()
     await thumbnails.async_setup()
     await check_reports.async_load()
+    await seen.async_load()
     # go2rtc starts on the first live request.
     live = LiveService(
         hass,
@@ -170,6 +173,7 @@ async def async_setup_entry(
         vod_cache=vod_cache,
         thumbnails=thumbnails,
         check_reports=check_reports,
+        seen=seen,
         live=live,
         compat_ok=compat.ok,
     )

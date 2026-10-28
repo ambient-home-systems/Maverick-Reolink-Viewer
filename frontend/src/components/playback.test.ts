@@ -96,9 +96,10 @@ const instantImage = () => {
   return image;
 };
 
-async function mount(hass: FakeHass): Promise<RvPlayback> {
+async function mount(hass: FakeHass, at?: number): Promise<RvPlayback> {
   const el = document.createElement("rv-playback");
   el.thumbLoader = new ThumbLoader(2, instantImage);
+  el.at = at;
   el.hass = hass;
   el.deviceId = "dev-cam";
   el.cameraName = "Front Yard";
@@ -139,6 +140,21 @@ describe("rv-playback", () => {
     expect(hd?.title).toMatch(/cannot report/);
     expect(el.renderRoot.querySelector("rv-calendar")?.days.has(17)).toBe(true);
     expect(el.renderRoot.textContent).toContain("Debug");
+  });
+
+  it("opens on the day of a time it is given, and plays from it (an event from the timetable)", async () => {
+    const hass = playbackHass();
+    const at = T0 + 63 * MIN;
+    const el = await mount(hass, at);
+    for (let i = 0; i < 4; i += 1) await flush();
+    expect(el._cursor).toBe(at);
+    expect(sentOf(hass, "reolink_viewer/playback/url")[0]).toMatchObject({ segment_id: "s2", at });
+    // Given another day: that day is loaded.
+    el.at = T0 - 12 * 60 * MIN;
+    await el.updateComplete;
+    await flush();
+    expect(sentOf(hass, "reolink_viewer/timeline/day").at(-1)).toMatchObject({ date: "2026-10-16" });
+    expect(el._date).toBe("2026-10-16");
   });
 
   it("plays an event, preloads the next recording and moves on", async () => {

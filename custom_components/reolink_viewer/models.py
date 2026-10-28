@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from homeassistant.config_entries import ConfigEntry
 
 from .checks import CheckReports
+from .events import SeenStore
 from .live.service import LiveService
 from .scheduler import Scheduler
 from .thumbnails import ThumbnailService
@@ -23,6 +24,7 @@ class ReolinkViewerData:
     vod_cache: VodCache
     thumbnails: ThumbnailService
     check_reports: CheckReports
+    seen: SeenStore
     grants: Grants = field(default_factory=Grants)
     live: LiveService | None = None
     probe_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
