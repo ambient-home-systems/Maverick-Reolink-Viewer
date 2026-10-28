@@ -996,7 +996,7 @@ function Bt(e) {
 }
 //#endregion
 //#region src/version.ts
-var Vt = "0.32.2", Ht = "https://github.com/ambient-home-systems/Maverick-Reolink-Viewer", Ut = {
+var Vt = "0.32.3", Ht = "https://github.com/ambient-home-systems/Maverick-Reolink-Viewer", Ut = {
 	guide: ["user-guide"],
 	troubleshooting: ["troubleshooting"],
 	cameras: ["cameras"],
@@ -3385,15 +3385,21 @@ var vr = 3e3, yr = "rv-live-open", br = "rv-live-full", xr = "rv-live-count", Sr
       :host([fill]:not([full])) .tile {
         container: board-tile / size;
       }
-      :host([fill][fit="cover"]) .poster,
-      :host([fill][fit="cover"]) video.sub {
+      /* On the board, never in full screen: there the whole picture shows, SD too. */
+      :host([fill][fit="cover"]:not([full])) .poster,
+      :host([fill][fit="cover"]:not([full])) video.sub {
         object-fit: cover;
       }
-      /* Full screen: the browser's, or filling the window (the iPhone). */
+      /* Full screen: the browser's, or filling the window (the iPhone). The
+         picture and its buttons stay clear of a phone's rounded corners, notch
+         and home bar (its safe area); black fills the rest. */
       :host([full]) {
         position: fixed;
         inset: 0;
         z-index: 10000;
+        box-sizing: border-box;
+        padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px)
+          env(safe-area-inset-left, 0px);
         background: #000;
         overscroll-behavior: contain;
       }
@@ -4887,11 +4893,11 @@ function Mi(e) {
 //#endregion
 //#region src/views.ts
 var Ni = {
-	events: () => import("./events-view-ChtfuriE.js"),
-	list: () => import("./device-list-DCf2QuFI.js"),
-	device: () => import("./device-page-pM5Rix2l.js"),
-	"live-check": () => import("./live-check-DE8g-zMh.js"),
-	soak: () => import("./live-soak-DPpbZl0E.js")
+	events: () => import("./events-view-DsLF7Zb3.js"),
+	list: () => import("./device-list-Bw9RJdUY.js"),
+	device: () => import("./device-page-Bgz9RFWR.js"),
+	"live-check": () => import("./live-check-3lymUr1F.js"),
+	soak: () => import("./live-soak-C32no183.js")
 }, Pi = /* @__PURE__ */ new Map();
 function $(e) {
 	let t = Ni[e];

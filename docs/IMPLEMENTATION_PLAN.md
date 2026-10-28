@@ -20,7 +20,7 @@ put on it:
 | 1 | Device details and every setting, with explanations | Standard (catalog) / High (panel shell) | 2–3 wk | Done (2026-10-17) |
 | 2 | Event timeline, thumbnails, smooth playback | High (backend) / Very high (player) | 3–5 wk | Done (2026-10-21, v0.3.2). 2A (2026-10-20, v0.2.7): timeline 105–287 ms, first frame 0.6–1.1 s, auto-advance 6–7 ms on hardware. 2B: MSE player; uncached deep starts are the NVR's download up to the target (6.9–13.0 s in hour-long recordings, up to 84 s before), speeds 0.5–8×, HD/SD at the same moment, one-hour sessions within the caps, the iPhone app on Wi-Fi, Tailscale and Nabu Casa |
 | 3 | Live view via go2rtc, grid, fullscreen, PTZ | High | 3–4 wk | Done (2026-10-27, v0.15.1). Our own go2rtc and the live check (v0.4.0, runs 5–13); the key-frame cache, the image cache, the Live grid and Live tab, keep warm, full-screen HD, PTZ and the camera's controls, the picture first, battery cameras on wired power, a debug view per tile and the soak report (v0.5.0–v0.15.1). Exit runs: the soak passed (run 15), every tile's first image in a median 0.02 s on the iPhone and the Mac (runs 16–17), and the Phase 2 playback criteria held with live view running (runs 18–19) |
-| 4 | Design, performance, mobile, packaging, first release | Standard | 3–4 wk | Done (2026-10-28, v0.32.2). Step 1, the design (the Timetable), in v0.16.0–v0.22.0; step 2, the performance budget, in v0.23.0; step 3, mobile, in v0.24.0–v0.26.0; step 4, error states, in v0.27.0–v0.29.0; step 5, accessibility, in v0.30.0; step 6, packaging, in v0.31.0, the first release; step 7, docs, in v0.32.0, released the same day; v0.32.1 starts live video sooner where WebRTC cannot connect, from the work PC's check, and v0.32.2 keeps the capacity test from blaming the NVR for a stream that plays no video, from the owner's live check. The rest of the exit checklist was not run: the owner closed the phase on v0.32.0 working in daily use. See "Phase 4 status" |
+| 4 | Design, performance, mobile, packaging, first release | Standard | 3–4 wk | Done (2026-10-28, v0.32.3). Step 1, the design (the Timetable), in v0.16.0–v0.22.0; step 2, the performance budget, in v0.23.0; step 3, mobile, in v0.24.0–v0.26.0; step 4, error states, in v0.27.0–v0.29.0; step 5, accessibility, in v0.30.0; step 6, packaging, in v0.31.0, the first release; step 7, docs, in v0.32.0, released the same day; v0.32.1 starts live video sooner where WebRTC cannot connect, from the work PC's check, v0.32.2 keeps the capacity test from blaming the NVR for a stream that plays no video, from the owner's live check, and v0.32.3 fixes full screen and the timeline's pinch on the iPhone, from the owner's iPhone. The rest of the exit checklist was not run: the owner closed the phase on v0.32.0 working in daily use. See "Phase 4 status" |
 | 5 | Optional R&D: Baichuan live/playback | Very high | 4–8 wk, time-boxed with gates | Not started |
 
 Phases 1 and 2 can overlap once Phase 0 is done. Phase 5 can start any time after
@@ -2891,7 +2891,7 @@ redesigned views.
 | --- | --- |
 | 1. Design: the Timetable panel (home view, events, devices, device page, checks) | **Done** (v0.16.0–v0.22.0). Direction chosen (2026-10-28), see "Step 1: the design". 1.1 foundations built (v0.16.0, the board's crop fixed in v0.16.1) and checked by the owner on the hardware, see "Step 1.1: foundations". 1.2 the home view's timetable built (v0.17.0), see "Step 1.2: today's timetable". 1.3 the Events view built (v0.18.0), see "Step 1.3: the Events view". 1.4a the device list and the device page's header, Overview and Settings built (v0.19.0), see "Step 1.4a: devices, Overview and Settings". 1.4b the Playback tab built (v0.20.0), see "Step 1.4b: the Playback tab". 1.5 the checks and reports built, in plain words (v0.21.0), see "Step 1.5: checks and reports"; 1.6 the finish: the design detector, an independent finish review against the contract (verdict: ship after fixes) with every material fix built, and `DESIGN.md` (v0.22.0), see "Step 1.6: the finish". |
 | 2. Performance budget | **Done** (v0.23.0): the home view's first download is 40.9 KB gzipped (budget 200 KB) with every other view loaded on demand; no long tasks while scrubbing the timeline; time to first frame for live and playback on every setup. The first two run in CI. See "Step 2: the performance budget". Mobile (step 3) is next |
-| 3. Mobile, and networks that cut websockets | **Done** (v0.24.0–v0.26.0), in three parts (see "Step 3: mobile, and networks that cut websockets"). 3.1 built (v0.24.0): a page whose network cuts MSE's websockets switches live view to WebRTC first, and the capacity test sets the cameras kept warm aside and says plainly what else holds the slots, see "Step 3.1: live view that holds up". 3.2 built (v0.25.0): pinch and two-finger pan on the timeline, and picture-in-picture for live and playback, see "Step 3.2: touch, and picture-in-picture". 3.3 built (v0.26.0): full screen stays in the lighter SD away from home or on mobile data, with an HD button remembered per device, see "Step 3.3: away from home, and the iPhone checklist". The iPhone checklist was not run: the owner closed Phase 4 on daily use (2026-10-28). At the work PC the network cut nothing this time, so 3.1's switch is still not seen there, and WebRTC could not start: v0.32.1 then starts over MSE first on that device (see "Step 3.1: live view that holds up" and "Phase 4 exit: the checklist") |
+| 3. Mobile, and networks that cut websockets | **Done** (v0.24.0–v0.26.0), in three parts (see "Step 3: mobile, and networks that cut websockets"). 3.1 built (v0.24.0): a page whose network cuts MSE's websockets switches live view to WebRTC first, and the capacity test sets the cameras kept warm aside and says plainly what else holds the slots, see "Step 3.1: live view that holds up". 3.2 built (v0.25.0): pinch and two-finger pan on the timeline, and picture-in-picture for live and playback, see "Step 3.2: touch, and picture-in-picture". 3.3 built (v0.26.0): full screen stays in the lighter SD away from home or on mobile data, with an HD button remembered per device, see "Step 3.3: away from home, and the iPhone checklist". The iPhone checklist ran in a shorter form on 2026-10-28 (see "Phase 4 exit: the checklist"); v0.32.3 fixes full screen's crop and corners and the timeline's pinch it found. At the work PC the network cut nothing this time, so 3.1's switch is still not seen there, and WebRTC could not start: v0.32.1 then starts over MSE first on that device (see "Step 3.1: live view that holds up" and "Phase 4 exit: the checklist") |
 | 4. Error states | **Done** (v0.27.0–v0.29.0), in three parts (see "Step 4: error states"). 4.1 (v0.27.0): offline cameras on the board from Home Assistant's state, and live errors in plain words, see "Step 4.1: live error states". 4.2 (v0.28.0): cameras with nothing to play say why, disks that are not ready are flagged, and recordings that cannot be read or played say why in plain words, see "Step 4.2: playback and storage error states". 4.3 (v0.29.0): a plain note over every view when Reolink Viewer cannot reach the cameras, plain load errors, and screenshots of every error state, see "Step 4.3: when Reolink Viewer cannot reach the cameras". |
 | 5. Accessibility | **Done** (v0.30.0): every view passes WCAG 2.1 AA (axe-core, light and dark, desktop and phone) and works from the keyboard, checked in CI; the timeline, the calendar and the device tabs are keyboard widgets; reduced motion is honoured and tested. See "Step 5: accessibility". |
 | 6. Packaging and the HA version matrix | **Done** (v0.31.0): releases from a Release workflow (CI, then the package checked and attached, notes from `CHANGELOG.md`); CI tests the oldest supported Home Assistant (2026.10.1: the matrix found 2026.10.0 cannot run it) and the pinned newest (2026.10.4), and the newest weekly. The optional go2rtc app is not built (see "Step 6: packaging"). The first release, [v0.31.0](https://github.com/ambient-home-systems/Maverick-Reolink-Viewer/releases/tag/v0.31.0), was published on 2026-10-28, [v0.32.0](https://github.com/ambient-home-systems/Maverick-Reolink-Viewer/releases/tag/v0.32.0) and [v0.32.1](https://github.com/ambient-home-systems/Maverick-Reolink-Viewer/releases/tag/v0.32.1) the same day. HACS updated the owner's Home Assistant to v0.32.1 (Help says 0.32.1). The install through HACS on a clean Home Assistant, with the hardware checklist (the exit criterion), was not run, see "Phase 4 exit: the checklist" |
@@ -3399,6 +3399,18 @@ panel shows none):
   closes rather than show nothing.
 - Not yet tried on the owner's devices: on the iPhone app (3.3's checklist).
 
+**On the owner's iPhone (2026-10-28, v0.32.2).** Picture-in-picture worked. A
+pinch on the timeline zoomed only one step: the canvas lets one finger scroll the
+page (`touch-action: pan-y`), and iOS can take two fingers spreading for that
+scroll, cancelling the pinch (`pointercancel`) after its first move; Chromium does
+not, which is why `scripts/scrub_check.cjs` passed. v0.32.3 stops the browser
+taking two fingers on the timeline (non-passive `touchstart` and `touchmove` with
+two touches, and WebKit's `gesturestart`, are default-prevented), so the pinch
+keeps following them; one finger still scrolls the page. Not seen on an iPhone yet:
+the cause is read from WebKit's behaviour, not traced on the device. Tests: two
+touches are kept from the page, one is not (unit); the Chromium pinch still zooms
+24 h to 4 h (CI).
+
 Also: the device page's tests now wait for a tab's file, which loads on demand
 since step 2 (one passed only when another test had loaded it first); every
 test file passes on its own.
@@ -3423,6 +3435,27 @@ main stream, several times the data. Now (`src/network.ts`):
 - A name of your own (a domain through a proxy or a tunnel) cannot tell home
   from away, so it counts as home: HD, with the button to turn it off.
 - Where the camera has no HD stream, full screen says why, as before.
+
+**On the owner's iPhone (2026-10-28, v0.32.2).** Through Tailscale, full screen
+stayed in the lighter SD until HD was tapped, and HD stayed on when full screen
+was closed and opened again (a split second in SD each time, while HD started).
+Two things were wrong, both fixed in v0.32.3 and checked in Chromium on the design
+preview at a phone's size:
+
+- **The SD picture was cropped** in full screen until HD replaced it, so away from
+  home, where full screen stays in SD, it always was. The board's crop
+  (`:host([fill][fit="cover"])`, top and bottom, to fill a cell) outranked full
+  screen's whole picture (`:host([full]) video`), and HD is another `<video>`. The
+  crop now applies only off full screen (computed `object-fit`: `cover` on the
+  board, `contain` in full screen, for the SD video and the picture).
+- **The buttons sat under the iPhone's corners**: the HD button, the camera's name
+  and the full-screen button. On the iPhone full screen fills the window (WebKit
+  has no element full screen there), and Home Assistant's page draws under the
+  corners and notch (`viewport-fit=cover`). Full screen now pads itself by the
+  safe-area insets (`env(safe-area-inset-*)`), black around.
+
+Tests: the tile's stylesheet keeps the crop off full screen and the safe-area
+padding on it (unit; both fail on v0.32.2's).
 
 **The iPhone checklist.** What only the owner's devices can check. For each of
 three setups: the Companion app on home Wi-Fi; with Wi-Fi off, through
@@ -3804,7 +3837,16 @@ Assistant, 2026-10-28):
    the NVR for the Back Yard main, which plays no video: fixed in v0.32.2.
 4. **The playback check** on Front Yard Right (run 21): every part good; a deep
    start not cached 9.0 s, cached 0.1 s; HD 4.7 s ("Fine").
-5. **The iPhone at home**, and 6. **away**: not yet.
+5. **The iPhone at home** (v0.32.2): the board, picture-in-picture and the next
+   recording starting by itself worked; full screen's buttons sat under the
+   corners, and a pinch zoomed one step only (both fixed in v0.32.3, see steps 3.2
+   and 3.3).
+6. **Away, through Tailscale**: lighter SD until HD was tapped, and HD
+   remembered; the SD picture was cropped in full screen until HD (fixed in
+   v0.32.3).
+
+And the live check again on v0.32.2 (run 22): the capacity test left out the Back
+Yard's main and said so, and the NVR kept up at every level.
 
 **H, the work PC (2026-10-28 13:15).** The owner left the Live board open there,
 through Nabu Casa, "playing fine the whole time", and sent the Doorbell tile's ⓘ

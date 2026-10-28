@@ -368,6 +368,25 @@ describe("rv-timeline", () => {
     expect(seeks).toHaveLength(3); // a tap, not half of a pinch
   });
 
+  it("keeps two fingers on the timeline from the page: no scroll or zoom takes the pinch", async () => {
+    const el = await timeline();
+    const canvas = el.renderRoot.querySelector("canvas");
+    const send = (type: string, touches: number) => {
+      const event = new Event(type, { bubbles: true, cancelable: true });
+      if (touches) Object.defineProperty(event, "targetTouches", { value: { length: touches } });
+      canvas?.dispatchEvent(event);
+      return event.defaultPrevented;
+    };
+    // One finger: the page may still scroll up and down.
+    expect(send("touchstart", 1)).toBe(false);
+    expect(send("touchmove", 1)).toBe(false);
+    // Two: the timeline's pinch, whichever way the fingers move.
+    expect(send("touchstart", 2)).toBe(true);
+    expect(send("touchmove", 2)).toBe(true);
+    // WebKit's page zoom (no touch list): the timeline's too.
+    expect(send("gesturestart", 0)).toBe(true);
+  });
+
   it("zooms smoothly with a trackpad pinch, around the pointer", async () => {
     const el = await timeline();
     const canvas = el.renderRoot.querySelector("canvas");
