@@ -93,7 +93,8 @@ for 24 hours, with no page open, and the grid is visible for 8 hours in all, acr
 sittings and devices. Any device can read the report under Reolink → **Soak report**.
 v0.15.1 takes the soak's first sample 5 minutes after Home Assistant starts, once live
 view is up. Before, a sample taken at start counted go2rtc and the kept-warm feeds as
-missing.
+missing. The soak passed on v0.15.1: 24.4 hours of Home Assistant and 8.3 visible hours
+of the grid, with no reconnect loops, no restarts and no growth in camera sessions.
 
 Requires Home Assistant 2026.10 or newer with the Reolink integration set up.
 
