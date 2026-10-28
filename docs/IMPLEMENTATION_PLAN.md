@@ -1758,7 +1758,7 @@ gate), **2** builds live view from what step 1 decides.
 | 0. Fix four Phase 2B findings (a failing test for each first) | **Done** (v0.4.0), see "Step 0" below |
 | 1. Our own go2rtc, and a live check in the panel (gate) | **Done** (v0.4.0), see "Step 1 as built". Every setup's report is in: desktop Chrome on the LAN (run 5), the iPhone app on Wi-Fi (run 11), through Tailscale (run 12) and through Nabu Casa (run 13) |
 | 1. Record the reports here and in the hardware matrix; decide the live stream budget, WebRTC or MSE per setup, which cameras stay warm, the HD stream per camera | **Desktop Chrome on the LAN: recorded and decided** (v0.4.1), see "Step 1 results". **Done for every setup.** Desktop Chrome on the LAN (v0.4.1), see "Step 1 results"; the iPhone app on Wi-Fi, through Tailscale and through Nabu Casa (runs 11–13), see "Step 2: the iPhone on Wi-Fi", "… through Tailscale" and "… through Nabu Casa". The rules are fixed below, before seeing the reports |
-| 2. Stream registry, delivery, Live tab and grid, keep warm, debug panel | **Built** (v0.5.0–v0.15.1); the exit runs remain, see "What is left of Phase 3". The key-frame cache is built (v0.5.0) and measured on the desktop (run 6), see "Step 2: the key-frame cache"; v0.5.1 rebuilds the MSE init segment and records why warm feeds end (run 7: the sizes are right). v0.5.2 measured the last two oddities (run 8); v0.5.3 fixed the late H.264 paints (run 9: warm MSE median 0.15 s); run 10 (v0.5.4) confirms it. v0.5.5 files each live check report under its device. v0.6.0 keeps each camera's last picture for the tiles, see "Step 2: the image cache"; the live check measures it. v0.7.0: the Live grid and each camera's Live tab, see "Step 2: the Live grid". v0.8.0: keep warm per camera and the NVR budget of 7, see "Step 2: keep warm". v0.9.0: full-screen HD, see "Step 2: full-screen HD". v0.10.0: the camera's controls over its live view, see "Step 2: PTZ, presets, siren and floodlight". The owner checked v0.9.0 and v0.10.0 on the hardware. v0.11.0: the E1 Zoom's picture first, see "Step 2: the picture first"; the owner checked it on the hardware. v0.12.0: a battery camera on wired power is watched like the others, see "Step 2: battery cameras on wired power"; v0.12.1 fixes the Doorbell being shown picture-first; the owner checked it on the hardware. v0.13.0: a debug view per tile, see "Step 2: the debug view per tile". v0.14.0: the soak report, see "Step 2: the soak report". v0.15.0 keeps the soak run on the server and stores it, so a hidden page, a reload or a restart no longer starts it over, and any device can read the report; see "Step 2: the soak run outlives the page". The owner revised the soak (24 h of Home Assistant, 8 visible grid hours in all); Home Assistant's half is met (run 14). v0.15.1 takes the first sample once live view is up, not as Home Assistant starts. The soak passed on v0.15.1 (run 15). Next: the first-image and playback checks |
+| 2. Stream registry, delivery, Live tab and grid, keep warm, debug panel | **Built** (v0.5.0–v0.15.1); the exit runs remain, see "What is left of Phase 3". The key-frame cache is built (v0.5.0) and measured on the desktop (run 6), see "Step 2: the key-frame cache"; v0.5.1 rebuilds the MSE init segment and records why warm feeds end (run 7: the sizes are right). v0.5.2 measured the last two oddities (run 8); v0.5.3 fixed the late H.264 paints (run 9: warm MSE median 0.15 s); run 10 (v0.5.4) confirms it. v0.5.5 files each live check report under its device. v0.6.0 keeps each camera's last picture for the tiles, see "Step 2: the image cache"; the live check measures it. v0.7.0: the Live grid and each camera's Live tab, see "Step 2: the Live grid". v0.8.0: keep warm per camera and the NVR budget of 7, see "Step 2: keep warm". v0.9.0: full-screen HD, see "Step 2: full-screen HD". v0.10.0: the camera's controls over its live view, see "Step 2: PTZ, presets, siren and floodlight". The owner checked v0.9.0 and v0.10.0 on the hardware. v0.11.0: the E1 Zoom's picture first, see "Step 2: the picture first"; the owner checked it on the hardware. v0.12.0: a battery camera on wired power is watched like the others, see "Step 2: battery cameras on wired power"; v0.12.1 fixes the Doorbell being shown picture-first; the owner checked it on the hardware. v0.13.0: a debug view per tile, see "Step 2: the debug view per tile". v0.14.0: the soak report, see "Step 2: the soak report". v0.15.0 keeps the soak run on the server and stores it, so a hidden page, a reload or a restart no longer starts it over, and any device can read the report; see "Step 2: the soak run outlives the page". The owner revised the soak (24 h of Home Assistant, 8 visible grid hours in all); Home Assistant's half is met (run 14). v0.15.1 takes the first sample once live view is up, not as Home Assistant starts. The soak passed on v0.15.1 (run 15); the iPhone's first images, 0.02 s (run 16). Next: the desktop's first images, and the playback checks |
 
 #### Step 0: four Phase 2B findings (v0.4.0)
 
@@ -2803,8 +2803,9 @@ device under Reolink → Soak report.
 Step 2 is built. The exit criteria not yet met, to run on the hardware:
 
 - **Every tile shows its picture in under 0.5 s**, from the image cache
-  (v0.6.0): the live check's "First images (ours)" section, on the desktop
-  and the iPhone.
+  (v0.6.0): the live check's "First images (ours)" section. **The iPhone:
+  met** (run 16, v0.15.1, the app at home): 8 of 8 in 8–31 ms, median
+  0.02 s. The desktop: not yet.
 - **The Phase 2 playback criteria still hold** with live view running: the
   playback check, on the desktop and the iPhone.
 
@@ -2857,6 +2858,10 @@ Then Phase 3 is marked done here and in the README.
    long-lived websockets (Phase 3's soak, run 15: about every 5½ minutes
    from a filtered work network through Nabu Casa): switch a tile to WebRTC
    once its MSE keeps being cut.
+   The live check's capacity test needs all of a host's stream slots, so it
+   cannot run while cameras are kept warm (run 16): say so, instead of "the
+   host's stream slots stayed busy", or set the warm feeds aside while it
+   runs.
 3. **Error states:** camera offline, battery asleep, no storage, unsupported codec,
    Reolink integration internals changed (bridge banner).
 4. **Accessibility:** keyboard navigation and labels; respect reduced-motion.

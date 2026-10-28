@@ -18,7 +18,8 @@ rebuilt from the stream, run 8 (v0.5.2) with the MSE steps timed, run 9
 more. Runs 11–13 (v0.5.5) are the iPhone in the Companion app, on home
 Wi-Fi, through Tailscale and through Nabu Casa. Run 14 (2026-10-26, v0.14.0)
 is Home Assistant's half of the Phase 3 soak, and run 15 (2026-10-26 → 27,
-v0.15.1) the whole soak, passed.
+v0.15.1) the whole soak, passed. Run 16 (2026-10-27, v0.15.1) is the live
+check on the iPhone app at home, for the first images from the image cache.
 
 ## Setup probed
 
@@ -579,6 +580,34 @@ filtered work network, which closed every MSE tile's websocket about every
 server closed the stream", playing again in 0.25 s). The warm feed behind
 it ran on (10.2 h old). The tiles playing over WebRTC, whose video does not
 cross that websocket, held: the Doorbell dropped once in the whole soak.
+
+Run 16, 2026-10-27 21:24: the live check (v0.15.1) in the iPhone app (iOS
+27.0, Companion app 2026.10.2) on home Wi-Fi, the page local over http. MSE
+through ManagedMediaSource (H.264 and H.265); WebRTC receives H.264, H.265,
+VP8, VP9 and AV1. The six NVR sub streams were kept warm, as in daily use.
+
+| Measure | Median (range) |
+| --- | --- |
+| **First image, ours** (the image cache) | **0.02 s** (8–31 ms, 8 of 8): Front Yard Right's is its 2560×1440 picture, the rest sub-sized, all taken about 125 s before |
+| First image, Home Assistant's snapshot | 0.50 s (16 of 19; it failed on both Doorbell streams and the Laundry Room's main), slowest 1.06 s |
+| First image, go2rtc's frame | 2.08 s (28 of 29; Front Yard Right's main failed once), slowest 2.90 s |
+| Warm MSE, sub | 0.09 s (0.08–3.49 s, 10 of 10) |
+| Warm MSE, main and ext | 0.22 s (0.10–2.02 s, 19 of 19) |
+| Cold WebRTC, sub | 2.09 s (0.14–3.66 s); main and ext 1.28 s |
+| Cold MSE, sub | 0.11 s (the kept-warm subs are not cold); main and ext 1.90 s |
+| Warm WebRTC, sub | 3.93 s (it waits for a key frame, every ~4 s); main and ext 1.82 s |
+| Home Assistant's view | 1.94 s, 19 of 19; ours, the better of cold and warm, faster on 19 of 19 |
+
+WebRTC connected in 58 of 58 sessions, all host/udp ↔ host/udp. Two warm
+MSE starts were slow in getting their signed URL (Hallway's sub 2.69 s, Dogs'
+ext 1.78 s), the rest under 0.05 s. Full screen chose H.264 mains for Front
+Yard Right, Dogs and Hallway; the ext stream where the H.265 main would not
+play smoothly (Garage, Front Yard Left, Laundry Room) or is wider than 4096
+pixels (Back Yard); SD only for the Doorbell (H.265 main, no ext). The
+capacity test did not run: it needs all 7 of the NVR's stream slots, and the
+six kept-warm feeds hold 6 ("the host's stream slots stayed busy"). go2rtc
+logged five RTSP read timeouts in about 25 hours; no kept-warm feed ended (the
+soak, run 15).
 
 ## Findings
 
