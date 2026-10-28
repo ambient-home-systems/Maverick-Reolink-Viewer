@@ -19,7 +19,8 @@ more. Runs 11–13 (v0.5.5) are the iPhone in the Companion app, on home
 Wi-Fi, through Tailscale and through Nabu Casa. Run 14 (2026-10-26, v0.14.0)
 is Home Assistant's half of the Phase 3 soak, and run 15 (2026-10-26 → 27,
 v0.15.1) the whole soak, passed. Run 16 (2026-10-27, v0.15.1) is the live
-check on the iPhone app at home, for the first images from the image cache.
+check on the iPhone app at home, and run 17 (2026-10-27, v0.15.1) on the
+Mac in Safari, for the first images from the image cache.
 
 ## Setup probed
 
@@ -608,6 +609,32 @@ capacity test did not run: it needs all 7 of the NVR's stream slots, and the
 six kept-warm feeds hold 6 ("the host's stream slots stayed busy"). go2rtc
 logged five RTSP read timeouts in about 25 hours; no kept-warm feed ended (the
 soak, run 15).
+
+Run 17, 2026-10-27 21:38: the live check (v0.15.1) on the Mac in Safari
+26.5.2 on the LAN (the check's setup was labeled "Desktop Chrome, LAN"), the
+page on its own domain over http. MSE through ManagedMediaSource (H.264 and
+H.265); WebRTC receives H.264, H.265, VP8, VP9 and AV1. The six NVR sub
+streams were kept warm.
+
+| Measure | Median (range) |
+| --- | --- |
+| **First image, ours** (the image cache) | **0.02 s** (7–36 ms, 8 of 8): Front Yard Right's is its 2560×1440 picture, the rest sub-sized |
+| First image, Home Assistant's snapshot | 0.55 s (19 of 19), slowest 0.96 s |
+| First image, go2rtc's frame | 1.97 s (28 of 29; Front Yard Right's main failed, as in run 16), slowest 2.67 s |
+| Warm MSE, sub | 0.05 s (0.05–2.88 s, 10 of 10) |
+| Warm MSE, main and ext | 0.08 s (0.05–0.13 s, 19 of 19) |
+| Cold WebRTC, sub | 2.69 s (0.33–3.75 s); main and ext 1.13 s |
+| Cold MSE, sub | 0.06 s (the kept-warm subs are not cold); main and ext 1.72 s |
+| Warm WebRTC, sub | 3.95 s (it waits for a key frame); main and ext 1.88 s |
+| Home Assistant's view | 1.39 s, 19 of 19; ours, the better of cold and warm, faster on 19 of 19 |
+
+WebRTC connected in 58 of 58 sessions, all host/udp ↔ host/udp. One warm
+MSE start was slow in getting its signed URL (Front Yard Left's NVR sub,
+2.80 s), as two were in run 16; the rest took under 0.25 s. Full screen
+chose every main here (Safari on the Mac plays the H.265 mains smoothly)
+except the Back Yard's, which is wider than 4096 pixels (its ext). The
+capacity test did not run, as in run 16. go2rtc logged nothing new since
+run 16.
 
 ## Findings
 
