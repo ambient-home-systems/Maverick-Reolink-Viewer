@@ -404,6 +404,8 @@ export class RvLiveCamera extends LitElement {
     return html`<label class="keep-warm">
       <input
         type="checkbox"
+        aria-labelledby="keep-warm-name"
+        aria-describedby="keep-warm-about"
         .checked=${state === "on"}
         ?disabled=${state !== "on" && state !== "off"}
         @change=${(e: Event) => {
@@ -418,8 +420,8 @@ export class RvLiveCamera extends LitElement {
         }}
       />
       <span>
-        <strong>Keep warm</strong>
-        <span class="muted small"
+        <strong id="keep-warm-name">Keep warm</strong>
+        <span class="muted small" id="keep-warm-about"
           >Keeps the camera connected so its live view starts at once. Uses one of
           its NVR's or camera's stream slots all the time.</span
         >

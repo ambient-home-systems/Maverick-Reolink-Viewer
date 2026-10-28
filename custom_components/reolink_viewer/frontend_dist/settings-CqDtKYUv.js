@@ -1,4 +1,4 @@
-import { I as e, Jt as t, Kt as n, Wt as r, Yt as i, bt as a, it as o, qt as s, r as c, yt as l } from "./home-CRi9TKP3.js";
+import { I as e, Jt as t, Kt as n, Wt as r, Yt as i, bt as a, it as o, qt as s, r as c, yt as l } from "./home-U1fpKtN8.js";
 //#region src/catalog.ts
 var u = {
 	id: "other",
@@ -206,7 +206,7 @@ var b = 1e4, x = class {
             ${this.hass?.user?.is_admin ? "Enabling one makes Home Assistant reload the Reolink integration entry for this device after about 30 seconds; its entities are briefly unavailable and the new one appears then." : "An administrator can enable them."}
           </p>` : s}
       ${i.length ? i.map((e) => t`<section class="category">
-              <h3>${e.title}</h3>
+              <h2>${e.title}</h2>
               <p class="muted small">${e.description}</p>
               <ul class="rows">
                 ${(n.get(e.id) ?? []).map((e) => this._renderRow(e))}
@@ -258,7 +258,7 @@ var b = 1e4, x = class {
 			this._setOpen(n.entity_id, e.target.open);
 		}}
           >
-            <summary class="small">About this setting${l("chevronDown")}</summary>
+            <summary class="small" aria-label=${`About this setting: ${i}`}>About this setting${l("chevronDown")}</summary>
             ${a ? this._renderAbout(r) : s}
           </details>` : s}
     </li>`;
@@ -465,7 +465,7 @@ var b = 1e4, x = class {
 			e.stopPropagation();
 		}}
       >
-        <h3 id="confirm-title">${e.title}</h3>
+        <h2 id="confirm-title">${e.title}</h2>
         <p>${e.message}</p>
         <p class="muted small">Do you want to continue?</p>
         <div class="actions">
@@ -537,7 +537,7 @@ var b = 1e4, x = class {
         padding-top: 14px;
         border-top: 2px solid var(--rv-rule-strong);
       }
-      .category h3 {
+      .category h2 {
         margin: 0 0 2px;
         font-family: var(--rv-font-cond);
         font-size: 21px;
@@ -652,7 +652,7 @@ var b = 1e4, x = class {
         background: var(--rv-ground);
         box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
       }
-      .dialog h3 {
+      .dialog h2 {
         font-family: var(--rv-font-cond);
         font-size: 22px;
       }

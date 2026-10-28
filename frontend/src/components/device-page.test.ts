@@ -152,6 +152,28 @@ describe("rv-device-page", () => {
     ]);
   });
 
+  it("makes the tabs one keyboard stop, moved through with the arrows", async () => {
+    const el = await mount(makeHass(okDevices()));
+    const tabs = () => [...(el.shadowRoot?.querySelectorAll<HTMLButtonElement>('[role="tab"]') ?? [])];
+    const focused = () => el.shadowRoot?.activeElement?.textContent.trim();
+    // Only the open tab is a stop, and it labels its panel.
+    expect(tabs().map((t) => t.tabIndex)).toEqual([0, -1, -1, -1]);
+    expect(el.shadowRoot?.querySelector('[role="tabpanel"]')?.getAttribute("aria-labelledby")).toBe("tab-overview");
+    const key = (k: string) =>
+      el.shadowRoot?.activeElement?.dispatchEvent(new KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true }));
+    tabs()[0]?.focus();
+    key("ArrowRight");
+    expect(focused()).toBe("Live");
+    key("End");
+    expect(focused()).toBe("Settings");
+    key("ArrowRight"); // round to the first
+    expect(focused()).toBe("Overview");
+    key("ArrowLeft");
+    expect(focused()).toBe("Settings");
+    key("Home");
+    expect(focused()).toBe("Overview");
+  });
+
   it("offers Live for cameras and Playback only for cameras that record", async () => {
     const hass = makeHass(okDevices());
     const el = await mount(hass, "playback");

@@ -244,6 +244,7 @@ describe("reolink-viewer-panel", () => {
     const row = [...(list?.shadowRoot?.querySelectorAll("button") ?? [])].find((b) =>
       b.textContent.includes("Front Yard"),
     );
+    row?.focus();
     row?.click();
     // The device page's file loads the first time it is shown.
     await loadView("device");
@@ -252,6 +253,10 @@ describe("reolink-viewer-panel", () => {
     expect(window.location.hash).toBe("#device/dev-cam/overview");
     const page = el.shadowRoot?.querySelector("rv-device-page");
     expect(page?.deviceId).toBe("dev-cam");
+    // The row pressed went with the list: the new view has the focus, named for it.
+    const main = el.shadowRoot?.querySelector("main");
+    expect(el.shadowRoot?.activeElement).toBe(main);
+    expect(main?.getAttribute("aria-label")).toBe("Device");
     await flush();
     await page?.updateComplete;
     expect(hass.sent).toContainEqual({ type: "reolink_viewer/device", device_id: "dev-cam" });

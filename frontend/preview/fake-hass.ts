@@ -229,6 +229,13 @@ function states(offline: readonly string[] = []): HassEntities {
       const id = `switch.${prefix}_keep_live_view_warm`;
       out[id] = { entity_id: id, state: cam.warm ? "on" : "off", attributes: {}, last_changed: "", last_updated: "" };
     }
+    // The controls over its live view (liveCamera's), so they can be used here.
+    const controls = liveCamera(cam).controls ?? {};
+    for (const id of [...Object.values(controls.ptz ?? {}), controls.zoom, controls.floodlight, controls.siren]) {
+      if (!id) continue;
+      const attributes: Record<string, unknown> = id.startsWith("number.") ? { min: 0, max: 33, step: 1 } : {};
+      out[id] = { entity_id: id, state: id.startsWith("button.") ? "unknown" : id.startsWith("number.") ? "0" : "off", attributes, last_changed: "", last_updated: "" };
+    }
   }
   return out;
 }

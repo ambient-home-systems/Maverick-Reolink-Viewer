@@ -1,4 +1,4 @@
-import { E as e, F as t, Jt as n, Kt as r, M as i, T as a, Tt as o, U as s, W as c, Yt as l, it as u, l as d, p as f, qt as p, v as m, y as h, yt as g } from "./home-CRi9TKP3.js";
+import { E as e, F as t, Jt as n, Kt as r, M as i, T as a, Tt as o, U as s, W as c, Yt as l, it as u, l as d, p as f, qt as p, v as m, y as h, yt as g } from "./home-U1fpKtN8.js";
 //#region src/playback/calendar.ts
 var _ = [
 	0,
@@ -8,7 +8,12 @@ var _ = [
 	4,
 	5,
 	6
-], v = class extends r {
+], v = {
+	ArrowLeft: -1,
+	ArrowRight: 1,
+	ArrowUp: -7,
+	ArrowDown: 7
+}, y = class extends r {
 	static properties = {
 		year: { type: Number },
 		month: { type: Number },
@@ -16,8 +21,10 @@ var _ = [
 		selected: { attribute: !1 },
 		today: { attribute: !1 },
 		firstDay: { type: Number },
-		loading: { type: Boolean }
+		loading: { type: Boolean },
+		_focus: { state: !0 }
 	};
+	_focusAfter;
 	constructor() {
 		super();
 		let e = /* @__PURE__ */ new Date();
@@ -37,6 +44,38 @@ var _ = [
 			month: n
 		});
 	}
+	_stop(e) {
+		let t = (e) => e?.startsWith(`${this._shown}-`) ? Number(e.slice(8)) : void 0, n = this._focus ?? t(this.selected) ?? t(this.today) ?? 1;
+		return Math.min(Math.max(n, 1), e);
+	}
+	_onKey(e, t) {
+		let n = new Date(Date.UTC(this.year, this.month - 1, t)), r = (n.getUTCDay() - this.firstDay % 7 + 7) % 7, i = new Date(Date.UTC(this.year, this.month, 0)).getUTCDate(), a;
+		if (v[e.key] !== void 0) a = new Date(n.getTime() + (v[e.key] ?? 0) * 864e5);
+		else if (e.key === "Home") a = /* @__PURE__ */ new Date(n.getTime() - r * 864e5);
+		else if (e.key === "End") a = new Date(n.getTime() + (6 - r) * 864e5);
+		else if (e.key === "PageUp" || e.key === "PageDown") {
+			let [n, r] = f(this.year, this.month, e.key === "PageUp" ? -1 : 1), i = new Date(Date.UTC(n, r, 0)).getUTCDate();
+			a = new Date(Date.UTC(n, r - 1, Math.min(t, i)));
+		} else return;
+		e.preventDefault();
+		let o = a.toISOString().slice(0, 10);
+		if (this.today !== void 0 && o > this.today) return;
+		let s = (a.getUTCFullYear() - this.year) * 12 + a.getUTCMonth() + 1 - this.month;
+		this._focusAfter = {
+			month: o.slice(0, 7),
+			day: a.getUTCDate()
+		}, s ? this._move(s) : this._focus = Math.min(a.getUTCDate(), i);
+	}
+	get _shown() {
+		return m(this.year, this.month, 1).slice(0, 7);
+	}
+	willUpdate(e) {
+		(e.has("month") || e.has("year")) && (this._focus = this._focusAfter?.month === this._shown ? this._focusAfter.day : void 0);
+	}
+	updated() {
+		let e = this._focusAfter;
+		e?.month === this._shown && (this._focusAfter = void 0, this.renderRoot.querySelector(`button[data-day="${String(e.day)}"]`)?.focus());
+	}
 	render() {
 		let e = new Date(Date.UTC(this.year, this.month - 1, 15)).toLocaleDateString(void 0, {
 			month: "long",
@@ -45,34 +84,52 @@ var _ = [
 		}), t = _.map((e) => (e + this.firstDay) % 7).map((e) => new Date(Date.UTC(2023, 0, 1 + e)).toLocaleDateString(void 0, {
 			weekday: "narrow",
 			timeZone: "UTC"
-		})), [r, i] = f(this.year, this.month, 1), a = this.today !== void 0 && m(r, i, 1) > this.today;
+		})), r = _.map((e) => (e + this.firstDay) % 7).map((e) => new Date(Date.UTC(2023, 0, 1 + e)).toLocaleDateString(void 0, {
+			weekday: "long",
+			timeZone: "UTC"
+		})), i = this._stop(new Date(Date.UTC(this.year, this.month, 0)).getUTCDate()), [a, o] = f(this.year, this.month, 1), s = this.today !== void 0 && m(a, o, 1) > this.today;
 		return n`<div class="head">
         <button class="text" aria-label="Previous month" @click=${() => {
 			this._move(-1);
 		}}>${g("chevronBack")}</button>
         <span class="title">${e}${this.loading ? n` <span class="muted small">…</span>` : p}</span>
-        <button class="text" aria-label="Next month" ?disabled=${a} @click=${() => {
+        <button class="text" aria-label="Next month" ?disabled=${s} @click=${() => {
 			this._move(1);
 		}}>${g("chevron")}</button>
       </div>
-      <div class="grid" role="grid">
-        ${t.map((e) => n`<span class="dow" role="columnheader">${e}</span>`)}
-        ${h(this.year, this.month, this.firstDay).flat().map((e) => {
-			if (e === null) return n`<span></span>`;
-			let t = m(this.year, this.month, e), r = this.today !== void 0 && t > this.today, i = this.days.has(e);
+      <div class="grid" role="grid" aria-label=${e}>
+        <div class="week" role="row">
+          ${t.map((e, t) => n`<span class="dow" role="columnheader" aria-label=${r[t] ?? e}>${e}</span>`)}
+        </div>
+        ${h(this.year, this.month, this.firstDay).map((e) => n`<div class="week" role="row">
+            ${e.map((e) => {
+			if (e === null) return n`<span role="gridcell"></span>`;
+			let t = m(this.year, this.month, e), r = this.today !== void 0 && t > this.today, a = this.days.has(e), o = new Date(Date.UTC(this.year, this.month - 1, e)).toLocaleDateString(void 0, {
+				weekday: "long",
+				month: "long",
+				day: "numeric",
+				timeZone: "UTC"
+			});
 			return n`<button
-              role="gridcell"
-              class="day ${t === this.selected ? "selected" : ""} ${t === this.today ? "today" : ""}"
-              ?disabled=${r}
-              aria-pressed=${t === this.selected ? "true" : "false"}
-              aria-label="${t}${i ? ", has recordings" : ""}"
-              @click=${() => {
-				this._emit("rv-day", { date: t });
+                role="gridcell"
+                data-day=${e}
+                class="day ${t === this.selected ? "selected" : ""} ${t === this.today ? "today" : ""}"
+                tabindex=${e === i ? "0" : "-1"}
+                ?disabled=${r}
+                aria-selected=${t === this.selected ? "true" : "false"}
+                aria-current=${t === this.today ? "date" : p}
+                aria-label="${o}${a ? ", has recordings" : ""}"
+                @click=${() => {
+				this._focus = e, this._emit("rv-day", { date: t });
 			}}
-            >
-              ${e}${i ? n`<span class="dot"></span>` : p}
-            </button>`;
+                @keydown=${(t) => {
+				this._onKey(t, e);
+			}}
+              >
+                ${e}${a ? n`<span class="dot"></span>` : p}
+              </button>`;
 		})}
+          </div>`)}
       </div>`;
 	}
 	static styles = [u, l`
@@ -89,10 +146,15 @@ var _ = [
         font-weight: 500;
       }
       .grid {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        text-align: center;
+      }
+      .week {
         display: grid;
         grid-template-columns: repeat(7, 1fr);
         gap: 2px;
-        text-align: center;
       }
       .dow {
         font-size: 12px;
@@ -128,10 +190,10 @@ var _ = [
       }
     `];
 };
-customElements.get("rv-calendar") || customElements.define("rv-calendar", v);
+customElements.get("rv-calendar") || customElements.define("rv-calendar", y);
 //#endregion
 //#region src/components/events-view.ts
-var y = class extends r {
+var b = class extends r {
 	static properties = {
 		hass: { attribute: !1 },
 		cameras: { attribute: !1 },
@@ -195,7 +257,7 @@ var y = class extends r {
 		return n.delete(t) || n.add(t), n;
 	}
 	render() {
-		let e = this._day, t = e === this._today, r = b(e);
+		let e = this._day, t = e === this._today, r = x(e);
 		return n`<div class="head">
         <h1>Events</h1>
         <div class="day-nav" role="group" aria-label="Day">
@@ -210,7 +272,7 @@ var y = class extends r {
 			this._calendar = !this._calendar;
 		}}
           >
-            ${t ? "Today" : x(e)}${g("chevronDown")}
+            ${t ? "Today" : S(e)}${g("chevronDown")}
           </button>
           <button class="step" aria-label="The day after" ?disabled=${t} @click=${() => {
 			this._shift(1);
@@ -422,7 +484,7 @@ var y = class extends r {
       }
     `];
 };
-function b(e) {
+function x(e) {
 	return (/* @__PURE__ */ new Date(`${e}T00:00:00Z`)).toLocaleDateString(void 0, {
 		weekday: "long",
 		day: "numeric",
@@ -430,7 +492,7 @@ function b(e) {
 		timeZone: "UTC"
 	});
 }
-function x(e) {
+function S(e) {
 	return (/* @__PURE__ */ new Date(`${e}T00:00:00Z`)).toLocaleDateString(void 0, {
 		weekday: "short",
 		day: "numeric",
@@ -438,6 +500,6 @@ function x(e) {
 		timeZone: "UTC"
 	});
 }
-customElements.get("rv-events") || customElements.define("rv-events", y);
+customElements.get("rv-events") || customElements.define("rv-events", b);
 //#endregion
-export { y as RvEvents, b as dayLabel, x as shortDay };
+export { b as RvEvents, x as dayLabel, S as shortDay };

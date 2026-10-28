@@ -1026,7 +1026,10 @@ export class RvPlayback extends LitElement {
             </button>`}
         <button @click=${() => void this._loadReports()}>Saved reports</button>
       </div>
-      ${summary ? html`<rv-findings .summary=${summary}></rv-findings>` : nothing}
+      <!-- What it finds is said as it finds it, while it runs. -->
+      <div aria-live=${running ? "polite" : "off"}>
+        ${summary ? html`<rv-findings .summary=${summary}></rv-findings>` : nothing}
+      </div>
       ${this._checkText
         ? html`<details class="support">
             <summary class="small">Details for support${icon("chevronDown")}</summary>

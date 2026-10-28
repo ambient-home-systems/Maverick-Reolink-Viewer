@@ -35,6 +35,15 @@ import { loadView } from "./views";
 export { loadView };
 
 const MAX_LOG_LINES = 8;
+/** What each view is called, for a screen reader arriving on it. */
+const VIEW_NAMES: Record<Route["view"], string> = {
+  live: "Live",
+  events: "Events",
+  list: "Devices",
+  device: "Device",
+  "live-check": "Live check",
+  soak: "Soak report",
+};
 const TOAST_MS = 6_000;
 
 type ProbeState =
@@ -163,6 +172,12 @@ export class ReolinkViewerPanel extends LitElement {
       // Warm the catalog so the Settings tab renders without waiting for it.
       fetchCatalog(this.hass).catch(() => undefined);
     }
+    // Another view, and what had the focus went with the last one: the new view
+    // has it, so the keyboard and a screen reader carry on from there.
+    if (changed.get("_route") !== undefined && !this.shadowRoot?.activeElement) {
+      const active = document.activeElement;
+      if (!active || active === document.body) this.shadowRoot?.querySelector("main")?.focus({ preventScroll: true });
+    }
   }
 
   /** Go to a view; the URL hash mirrors it so browser back works. */
@@ -229,7 +244,11 @@ export class ReolinkViewerPanel extends LitElement {
           ${formatClock(this._now, this.hass?.config?.time_zone)}
         </time>
       </header>
-      <main class=${route.view === "live" || route.view === "events" ? "wide" : "page"}>${this._renderView()}</main>
+      <main
+        class=${route.view === "live" || route.view === "events" ? "wide" : "page"}
+        tabindex="-1"
+        aria-label=${VIEW_NAMES[route.view]}
+      >${this._renderView()}</main>
       ${this._toast
         ? html`<div class="toast ${this._toast.kind}" role="status" aria-live="polite">
             <span>${this._toast.message}</span>
@@ -704,6 +723,10 @@ export class ReolinkViewerPanel extends LitElement {
       main {
         flex: 1;
         min-width: 0;
+      }
+      /* Focused by the panel after a change of view, not by the user: no ring. */
+      main:focus {
+        outline: none;
       }
       /* Over the board and the events, when neither can work. */
       .wide-note {

@@ -30,6 +30,15 @@ const BAR_TOP = 22;
 const BAR_HEIGHT = 26;
 const EVENT_TOP = 52;
 const EVENT_HEIGHT = 16;
+/** The keyboard's steps: about a 48th of the visible span, in round units. */
+const KEY_STEPS = [10_000, 30_000, MINUTE, 5 * MINUTE, 10 * MINUTE, 15 * MINUTE, 30 * MINUTE, 60 * MINUTE];
+/** After the arrow keys rest this long, the recording plays from where they left the time. */
+export const KEY_SEEK_MS = 500;
+
+/** How far one arrow key moves the time, for a visible span. */
+export function keyStep(span: number): number {
+  return KEY_STEPS.find((step) => step >= span / 48) ?? 60 * MINUTE;
+}
 
 export interface TimeDetail {
   time: number;
@@ -51,6 +60,11 @@ export interface HoverDetail {
  * fingers pinch to zoom and slide to pan, the time under them staying under
  * them. Events: `rv-view-change`, `rv-seek`, `rv-scrub`, `rv-hover`,
  * `rv-hover-end`.
+ *
+ * With the keyboard it is a slider of the time: the arrow keys move it (Page
+ * Up and Page Down further, Home and End to the start and end of the day), as
+ * a drag scrubs, and the recording plays from there once they rest, or at
+ * once with Enter or Space; + and - zoom. The view follows the time.
  */
 export class RvTimeline extends LitElement {
   static override properties = {
@@ -59,6 +73,7 @@ export class RvTimeline extends LitElement {
     view: { attribute: false },
     cursor: { attribute: false },
     timeZone: { attribute: false },
+    _keyTime: { state: true },
   };
 
   declare day: TimelineDay | undefined;
@@ -79,6 +94,9 @@ export class RvTimeline extends LitElement {
   /** Fingers pinched: no scrub or seek until the last one is up. */
   private _pinched = false;
   private _hoverTimer: ReturnType<typeof setTimeout> | undefined;
+  /** The time the arrow keys moved to (said at once), and the seek once they rest. */
+  declare _keyTime: number | undefined;
+  private _keySeek: ReturnType<typeof setTimeout> | undefined;
 
   constructor() {
     super();
@@ -100,6 +118,7 @@ export class RvTimeline extends LitElement {
     super.disconnectedCallback();
     this._resize?.disconnect();
     clearTimeout(this._hoverTimer);
+    clearTimeout(this._keySeek);
   }
 
   private get _canvas(): HTMLCanvasElement | null {
@@ -276,12 +295,26 @@ export class RvTimeline extends LitElement {
   }
 
   private _onKey(event: KeyboardEvent): void {
+    const from = this._keyTime ?? this.cursor ?? this.view.start + this.view.span / 2;
+    const step = keyStep(this.view.span);
+    const { start, end } = this._bounds;
+    const moves: Partial<Record<string, number>> = {
+      ArrowLeft: from - step,
+      ArrowDown: from - step,
+      ArrowRight: from + step,
+      ArrowUp: from + step,
+      PageDown: from - 6 * step,
+      PageUp: from + 6 * step,
+      Home: start,
+      // Today ends now: nothing is recorded after it.
+      End: Math.min(end, this.day?.now ?? end),
+    };
     const actions: Partial<Record<string, () => void>> = {
-      ArrowLeft: () => {
-        this.pan(-0.25);
+      Enter: () => {
+        this._seekNow(from);
       },
-      ArrowRight: () => {
-        this.pan(0.25);
+      " ": () => {
+        this._seekNow(from);
       },
       "+": () => {
         this.zoom(1);
@@ -293,11 +326,36 @@ export class RvTimeline extends LitElement {
         this.zoom(-1);
       },
     };
+    const to = moves[event.key];
     const action = actions[event.key];
-    if (action) {
+    if (to !== undefined) {
+      event.preventDefault();
+      this._keyTo(Math.min(Math.max(to, start), end));
+    } else if (action) {
       event.preventDefault();
       action();
     }
+  }
+
+  /** Move the time as a drag does, keep it in view, and play from it once the keys rest. */
+  private _keyTo(time: number): void {
+    this._keyTime = time;
+    const { start, span } = this.view;
+    const margin = span * 0.1;
+    if (time < start + margin || time > start + span - margin) {
+      this._setView({ start: time - span / 2, span });
+    }
+    this._emit("rv-scrub", { time } satisfies TimeDetail);
+    clearTimeout(this._keySeek);
+    this._keySeek = setTimeout(() => {
+      this._seekNow(time);
+    }, KEY_SEEK_MS);
+  }
+
+  private _seekNow(time: number): void {
+    clearTimeout(this._keySeek);
+    this._keyTime = undefined;
+    this._emit("rv-seek", { time } satisfies TimeDetail);
   }
 
   private _draw(): void {
@@ -386,10 +444,11 @@ export class RvTimeline extends LitElement {
       role="slider"
       tabindex="0"
       aria-label="Recording timeline"
+      aria-describedby="keys"
       aria-valuemin=${this.day?.start ?? 0}
       aria-valuemax=${this.day?.end ?? 0}
       aria-valuenow=${this.cursor ?? 0}
-      aria-valuetext=${this.cursor !== undefined ? formatClock(this.cursor, this.timeZone, true) : "no position"}
+      aria-valuetext=${this._valueText()}
       @wheel=${(e: WheelEvent) => {
         this._onWheel(e);
       }}
@@ -411,13 +470,39 @@ export class RvTimeline extends LitElement {
       @keydown=${(e: KeyboardEvent) => {
         this._onKey(e);
       }}
-    ></canvas>`;
+      @blur=${() => {
+        this._keyTime = undefined;
+      }}
+    ></canvas>
+    <span id="keys" class="hidden">
+      Arrow keys move the time, Page Up and Page Down further, Home and End to the start and end of the
+      day. It plays from there; Enter plays at once. Plus and minus zoom.
+    </span>`;
+  }
+
+  /** The time, and whether anything was recorded then, for a screen reader. */
+  private _valueText(): string {
+    const time = this._keyTime ?? this.cursor;
+    if (time === undefined) return "no time chosen";
+    const recorded = this.day?.segments.some((s) => s.start <= time && time < s.end) ?? false;
+    // To the second while the keys move it; while it plays, to the minute (said less often).
+    const clock = formatClock(time, this.timeZone, this._keyTime !== undefined);
+    return `${clock}, ${recorded ? "recorded" : "nothing recorded"}`;
   }
 
   static override styles = css`
     :host {
       display: block;
       position: relative;
+    }
+    /* For screen readers only. */
+    .hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
     }
     canvas {
       display: block;

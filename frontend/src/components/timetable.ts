@@ -344,7 +344,6 @@ export class RvTimetable extends LitElement {
     return html`<li class=${arrived ? "arrived" : ""}>
       <button
         class="row ${event.new ? "new" : ""}"
-        aria-label="${label}, ${name}, ${time}${event.new ? ", new" : ""}: play the recording"
         @click=${() => {
           this._open(event);
         }}

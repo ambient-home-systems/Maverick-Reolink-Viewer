@@ -65,7 +65,6 @@ export class RvEventList extends LitElement {
       <button
         class="row ${active ? "active" : ""}"
         aria-current=${active ? "true" : "false"}
-        aria-label="${label}, ${clock}${active ? (this.playing ? ", playing" : ", selected") : ""}: play"
         @click=${() => {
           this.dispatchEvent(new CustomEvent("rv-pick", { detail: { event }, bubbles: true, composed: true }));
         }}

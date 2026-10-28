@@ -167,7 +167,7 @@ export class RvSettings extends LitElement {
       ${categories.length
         ? categories.map(
             (category) => html`<section class="category">
-              <h3>${category.title}</h3>
+              <h2>${category.title}</h2>
               <p class="muted small">${category.description}</p>
               <ul class="rows">
                 ${(rows.get(category.id) ?? []).map((row) => this._renderRow(row))}
@@ -231,7 +231,7 @@ export class RvSettings extends LitElement {
               this._setOpen(entity.entity_id, (e.target as HTMLDetailsElement).open);
             }}
           >
-            <summary class="small">About this setting${icon("chevronDown")}</summary>
+            <summary class="small" aria-label=${`About this setting: ${label}`}>About this setting${icon("chevronDown")}</summary>
             ${open ? this._renderAbout(entry) : nothing}
           </details>`
         : nothing}
@@ -573,7 +573,7 @@ export class RvSettings extends LitElement {
           e.stopPropagation();
         }}
       >
-        <h3 id="confirm-title">${confirm.title}</h3>
+        <h2 id="confirm-title">${confirm.title}</h2>
         <p>${confirm.message}</p>
         <p class="muted small">Do you want to continue?</p>
         <div class="actions">
@@ -653,7 +653,7 @@ export class RvSettings extends LitElement {
         padding-top: 14px;
         border-top: 2px solid var(--rv-rule-strong);
       }
-      .category h3 {
+      .category h2 {
         margin: 0 0 2px;
         font-family: var(--rv-font-cond);
         font-size: 21px;
@@ -768,7 +768,7 @@ export class RvSettings extends LitElement {
         background: var(--rv-ground);
         box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
       }
-      .dialog h3 {
+      .dialog h2 {
         font-family: var(--rv-font-cond);
         font-size: 22px;
       }

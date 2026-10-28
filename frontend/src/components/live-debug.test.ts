@@ -81,5 +81,10 @@ describe("rv-live-debug", () => {
     expect(button("Copied")).toBeDefined();
     button("Close").click();
     expect(closed).toHaveLength(1);
+    // A dialog: it has the focus when it opens, and Escape closes it too.
+    const panel = el.shadowRoot?.querySelector<HTMLElement>('[role="dialog"]');
+    expect(el.shadowRoot?.activeElement).toBe(panel);
+    panel?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(closed).toHaveLength(2);
   });
 });
