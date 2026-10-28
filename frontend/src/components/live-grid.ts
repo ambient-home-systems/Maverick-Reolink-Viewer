@@ -12,6 +12,16 @@ import { navigate } from "./navigation";
 
 const GAP = 8;
 
+/** A camera as the board numbers it (the timetable shows the same numbers). */
+export interface BoardCamera {
+  id: string;
+  name: string;
+  number: number;
+}
+
+/** Fired when the board's cameras are known or change: `{ cameras: BoardCamera[] }`. */
+export const BOARD_EVENT = "rv-board";
+
 /**
  * Every camera live, on its sub stream (Reolink → Live): the live board.
  * Each tile shows the camera's last picture at once and fades into video; a
@@ -43,6 +53,8 @@ export class RvLiveGrid extends LitElement {
 
   private readonly _data = new LiveData(this);
   private _resize: ResizeObserver | undefined;
+  /** The cameras last announced to the page (BOARD_EVENT). */
+  private _announced: LiveCamera[] | undefined;
 
   constructor() {
     super();
@@ -99,6 +111,18 @@ export class RvLiveGrid extends LitElement {
 
   protected override willUpdate(): void {
     this._data.hass = this.hass;
+  }
+
+  protected override updated(): void {
+    // Tell the page how the board numbers its cameras.
+    const cameras = this._data.cameras;
+    if (cameras && cameras !== this._announced) {
+      this._announced = cameras;
+      const board: BoardCamera[] = boardOrder(cameras).map((c, i) => ({ id: c.id, name: c.name, number: i + 1 }));
+      this.dispatchEvent(
+        new CustomEvent<{ cameras: BoardCamera[] }>(BOARD_EVENT, { detail: { cameras: board }, bubbles: true, composed: true }),
+      );
+    }
   }
 
   protected override render(): TemplateResult {

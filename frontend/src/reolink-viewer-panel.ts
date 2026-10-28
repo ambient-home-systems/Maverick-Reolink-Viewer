@@ -6,6 +6,8 @@ import "./components/device-page";
 import "./components/live-check";
 import "./components/live-grid";
 import "./components/live-soak";
+import "./components/timetable";
+import type { BoardCamera } from "./components/live-grid";
 import {
   NAVIGATE_EVENT,
   TOAST_EVENT,
@@ -36,6 +38,7 @@ export class ReolinkViewerPanel extends LitElement {
     hass: { attribute: false },
     narrow: { type: Boolean, reflect: true },
     _now: { state: true },
+    _board: { state: true },
     _devices: { state: true },
     _loadError: { state: true },
     _probe: { state: true },
@@ -55,6 +58,8 @@ export class ReolinkViewerPanel extends LitElement {
   declare narrow: boolean;
   /** The band's clock. */
   declare _now: number;
+  /** The live board's cameras, numbered (the timetable shows the numbers). */
+  declare _board: BoardCamera[];
   declare _devices: DevicesResponse | undefined;
   declare _loadError: string | undefined;
   declare _probe: ProbeState;
@@ -82,6 +87,7 @@ export class ReolinkViewerPanel extends LitElement {
     super();
     this.narrow = false;
     this._now = Date.now();
+    this._board = [];
     this._probe = { status: "idle" };
     this._includeBattery = false;
     this._concurrency = false;
@@ -194,7 +200,7 @@ export class ReolinkViewerPanel extends LitElement {
           ${formatClock(this._now, this.hass?.config?.time_zone)}
         </time>
       </header>
-      <main class=${route.view === "live" ? "board" : "page"}>${this._renderView()}</main>
+      <main class=${route.view === "live" ? "home" : "page"}>${this._renderView()}</main>
       ${this._toast
         ? html`<div class="toast ${this._toast.kind}" role="status" aria-live="polite">
             <span>${this._toast.message}</span>
@@ -222,12 +228,19 @@ export class ReolinkViewerPanel extends LitElement {
     const route = this._route;
     switch (route.view) {
       case "live":
-        return html`<rv-live-grid .hass=${this.hass}></rv-live-grid>`;
+        return html`<rv-live-grid
+            .hass=${this.hass}
+            @rv-board=${(e: CustomEvent<{ cameras: BoardCamera[] }>) => {
+              this._board = e.detail.cameras;
+            }}
+          ></rv-live-grid>
+          <rv-timetable .hass=${this.hass} .cameras=${this._board}></rv-timetable>`;
       case "device":
         return html`<rv-device-page
           .hass=${this.hass}
           .deviceId=${route.id}
           .tab=${route.tab}
+          .at=${route.at}
         ></rv-device-page>`;
       case "live-check":
         return html`${this._renderBack()}<rv-live-check .hass=${this.hass}></rv-live-check>`;
@@ -602,10 +615,6 @@ export class ReolinkViewerPanel extends LitElement {
       main {
         flex: 1;
         min-width: 0;
-      }
-      main.board {
-        background: var(--rv-board);
-        color: var(--rv-on-board);
       }
       main.page {
         width: 100%;

@@ -7,7 +7,7 @@ export type Route =
   | { view: "live" }
   | { view: "live-check" }
   | { view: "soak" }
-  | { view: "device"; id: string; tab: Tab };
+  | { view: "device"; id: string; tab: Tab; at?: number };
 
 export const NAVIGATE_EVENT = "rv-navigate";
 export const TOAST_EVENT = "rv-toast";
@@ -38,19 +38,24 @@ export function routeToHash(route: Route): string {
   if (route.view === "live-check") return "#live-check";
   if (route.view === "soak") return "#soak";
   if (route.view === "list") return "#devices";
-  return route.view === "live" ? "" : `#device/${encodeURIComponent(route.id)}/${route.tab}`;
+  if (route.view === "live") return "";
+  const at = route.tab === "playback" && route.at !== undefined ? `/${route.at}` : "";
+  return `#device/${encodeURIComponent(route.id)}/${route.tab}${at}`;
 }
 
 export function routeFromHash(hash: string): Route {
   if (hash === "#live-check") return { view: "live-check" };
   if (hash === "#soak") return { view: "soak" };
   if (hash === "#devices") return { view: "list" };
-  const match = /^#device\/([^/]+)(?:\/(overview|live|settings|playback))?$/.exec(hash);
+  const match = /^#device\/([^/]+)(?:\/(overview|live|settings|playback)(?:\/(\d+))?)?$/.exec(hash);
   if (!match?.[1]) return { view: "live" };
   const tab = match[2];
+  const id = decodeURIComponent(match[1]);
+  // A recording to play: #device/<id>/playback/<epoch ms>.
+  if (tab === "playback" && match[3]) return { view: "device", id, tab, at: Number(match[3]) };
   return {
     view: "device",
-    id: decodeURIComponent(match[1]),
+    id,
     tab: tab === "live" || tab === "settings" || tab === "playback" ? tab : "overview",
   };
 }

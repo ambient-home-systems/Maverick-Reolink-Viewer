@@ -37,6 +37,11 @@ describe("navigation hash", () => {
     expect(routeFromHash("#device/x")).toEqual({ view: "device", id: "x", tab: "overview" });
     expect(routeFromHash("#nonsense")).toEqual({ view: "live" });
     expect(routeFromHash("#device/x/playback")).toEqual({ view: "device", id: "x", tab: "playback" });
+    // A recording to play, from the timetable.
+    const play = { view: "device", id: "cam", tab: "playback", at: 1761616680000 } as const;
+    expect(routeToHash(play)).toBe("#device/cam/playback/1761616680000");
+    expect(routeFromHash(routeToHash(play))).toEqual(play);
+    expect(routeToHash({ view: "device", id: "cam", tab: "live", at: 5 })).toBe("#device/cam/live");
     expect(routeFromHash("")).toEqual({ view: "live" });
   });
 });

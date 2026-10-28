@@ -331,6 +331,29 @@ export interface TimelineEvent {
   ambiguous: boolean;
 }
 
+/** One event of one camera, in today's events across cameras (events/recent). */
+export interface RecentEvent {
+  camera_id: string;
+  start: number;
+  end: number;
+  types: string[];
+  segment: string | null;
+  /** Not yet opened by this Home Assistant user, and after their first look. */
+  new: boolean;
+}
+
+export interface RecentEvents {
+  /** Newest first. */
+  events: RecentEvent[];
+  /** Cameras that record, asked. */
+  cameras: number;
+  /** Cameras whose search failed (their cached events, if any, still show). */
+  failed: { camera_id: string; error: string }[];
+  /** Events after this are new (this user's first look, or "all seen"). */
+  since: number;
+  now: number;
+}
+
 export interface TimelineDay {
   date: string;
   start: number;

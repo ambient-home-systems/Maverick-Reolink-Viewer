@@ -2889,7 +2889,7 @@ redesigned views.
 
 | Step | Status |
 | --- | --- |
-| 1. Design: the Timetable panel (home view, events, devices, device page, checks) | **In progress.** Direction chosen (2026-10-28), see "Step 1: the design". 1.1 foundations built (v0.16.0, the board's crop fixed in v0.16.1) and checked by the owner on the hardware, see "Step 1.1: foundations"; the home view's timetable is next |
+| 1. Design: the Timetable panel (home view, events, devices, device page, checks) | **In progress.** Direction chosen (2026-10-28), see "Step 1: the design". 1.1 foundations built (v0.16.0, the board's crop fixed in v0.16.1) and checked by the owner on the hardware, see "Step 1.1: foundations". 1.2 the home view's timetable built (v0.17.0), see "Step 1.2: today's timetable"; the Events view is next |
 | 2. Performance budget | Not started |
 | 3. Mobile, and networks that cut websockets | Not started |
 | 4. Error states | Not started |
@@ -3001,6 +3001,31 @@ iPhone and the Mac):
   stream. Its buttons show on hover; a touch screen has full screen only on the board.
   The board itself can go full screen where the browser allows.
 - The bundle is 85 KB gzipped (80 KB before).
+
+### Step 1.2: today's timetable (v0.17.0)
+
+- **The server's feed** (`events.py`, `events/recent`): today's events of every
+  recording camera, each camera's own today from the timeline service (its cached
+  copy, or a search through the scheduler), merged newest first. A camera whose
+  search fails is named in `failed`; its cached events still show. The home view
+  reads cached copies up to an hour old at once, then asks again in the background
+  (prefetch priority, behind anything someone asked for), and every 2 minutes while
+  the page is visible.
+- **New until opened** (`events/seen`, stored per Home Assistant user): from a
+  user's first look at the feed, a later event is new until they open it or mark
+  everything seen, so a first visit is not a wall of new events, and a phone and a
+  desktop agree. Opened events are remembered for 3 days.
+- **The timetable** (`timetable.ts`) under the live board: Today and its count, the
+  column labels, a red line at the time now, then a row per event, newest first:
+  the time (red while new, with "New"), a drawn pictogram and what was seen (the
+  specific types; motion only when nothing more is known), the camera's number on
+  the board and its name, the length and a thumbnail. 8 rows, then "Show all".
+  "Mark all seen". A row opens the camera's Playback tab at the event
+  (`#device/<id>/playback/<epoch ms>`), which plays from there. Events that arrive
+  in a refresh slide in under the line (not with reduced motion). On a phone, a row
+  is the time, what was seen over the camera and length, and the thumbnail.
+- The board tells the page how it numbers its cameras (`rv-board`), so the
+  timetable's numbers match the tiles'.
 
 ### Steps 2–7
 

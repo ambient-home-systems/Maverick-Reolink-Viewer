@@ -16,7 +16,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.loader import async_get_integration
 from homeassistant.util.ssl import SSLCipherList
 
-from . import bridge, devices
+from . import bridge, devices, events
 from .catalog import async_get_catalog
 from .checks import MAX_TEXT
 from .const import DOMAIN, PROBE_HARD_MAX_STREAMS, PROBE_PLAYBACK_HARD_MAX_STREAMS
@@ -65,6 +65,8 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_timeline_days)
     websocket_api.async_register_command(hass, ws_timeline_day)
     websocket_api.async_register_command(hass, ws_timeline_warm)
+    websocket_api.async_register_command(hass, ws_events_recent)
+    websocket_api.async_register_command(hass, ws_events_seen)
     websocket_api.async_register_command(hass, ws_playback_url)
     websocket_api.async_register_command(hass, ws_playback_mse)
     websocket_api.async_register_command(hass, ws_playback_prefetch)
@@ -439,6 +441,82 @@ def ws_timeline_warm(
         hass, entry.runtime_data.timeline.async_warm(sources), "reolink_viewer warm"
     )
     connection.send_result(msg["id"], {"cameras": len(sources)})
+
+
+@websocket_api.websocket_command(
+    {
+        probatio.Required("type"): f"{DOMAIN}/events/recent",
+        # Accept copies of today this many seconds old (then ask again).
+        probatio.Optional("max_age", default=0): probatio.All(
+            int, probatio.Range(min=0, max=86400)
+        ),
+        # A refresh in the background: after what someone asked for.
+        probatio.Optional("background", default=False): bool,
+    }
+)
+@websocket_api.async_response
+async def ws_events_recent(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Return today's events of every recording camera, newest first."""
+    if (entry := _loaded_entry(hass)) is None:
+        connection.send_error(msg["id"], ERR_NOT_LOADED, "Reolink Viewer is not loaded")
+        return
+    if not (compat := bridge.async_check_compat(hass)).ok:
+        connection.send_error(
+            msg["id"],
+            ERR_INCOMPATIBLE,
+            "Reolink integration internals changed: " + "; ".join(compat.errors),
+        )
+        return
+    data = entry.runtime_data
+    result = await events.async_recent(
+        hass,
+        data.timeline,
+        data.seen,
+        _user_id(connection),
+        max_age=msg["max_age"],
+        priority=Priority.PREFETCH if msg["background"] else Priority.PLAYBACK,
+    )
+    connection.send_result(msg["id"], result)
+
+
+@callback
+@websocket_api.websocket_command(
+    {
+        probatio.Required("type"): f"{DOMAIN}/events/seen",
+        probatio.Optional("camera_id"): str,
+        probatio.Optional("start"): int,
+        probatio.Optional("all", default=False): bool,
+    }
+)
+def ws_events_seen(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Note that this user opened an event, or has seen everything until now."""
+    if (entry := _loaded_entry(hass)) is None:
+        connection.send_error(msg["id"], ERR_NOT_LOADED, "Reolink Viewer is not loaded")
+        return
+    seen = entry.runtime_data.seen
+    now = events.now_ms()
+    if msg["all"]:
+        seen.all_seen(_user_id(connection), now)
+    elif "camera_id" in msg and "start" in msg:
+        seen.opened(_user_id(connection), msg["camera_id"], msg["start"], now)
+    else:
+        connection.send_error(
+            msg["id"], websocket_api.ERR_INVALID_FORMAT, "camera_id and start, or all"
+        )
+        return
+    connection.send_result(msg["id"], {})
+
+
+def _user_id(connection: websocket_api.ActiveConnection) -> str:
+    return connection.user.id if connection.user else ""
 
 
 async def _recording(

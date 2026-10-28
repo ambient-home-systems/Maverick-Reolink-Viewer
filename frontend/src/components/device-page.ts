@@ -30,6 +30,7 @@ export class RvDevicePage extends LitElement {
     hass: { attribute: false },
     deviceId: { attribute: false },
     tab: { attribute: false },
+    at: { attribute: false },
     _device: { state: true },
     _catalog: { state: true },
     _error: { state: true },
@@ -38,6 +39,8 @@ export class RvDevicePage extends LitElement {
   declare hass: HomeAssistant | undefined;
   declare deviceId: string;
   declare tab: Tab;
+  /** On the Playback tab: a time to play (an event opened from the timetable). */
+  declare at: number | undefined;
   declare _device: DeviceResponse | undefined;
   declare _catalog: Catalog | undefined;
   declare _error: string | undefined;
@@ -183,6 +186,7 @@ export class RvDevicePage extends LitElement {
                   .hass=${this.hass}
                   .deviceId=${node.id}
                   .cameraName=${node.name ?? ""}
+                  .at=${this.at}
                 ></rv-playback>`
               : this.tab === "overview" || this.tab === "playback" || this.tab === "live"
               ? html`<rv-overview .hass=${this.hass} .device=${device}></rv-overview>`

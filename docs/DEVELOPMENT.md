@@ -19,6 +19,8 @@ custom_components/reolink_viewer/
   probe_playback.py  # Phase 2 gate: recording playback check (opt-in probe section)
   timeconv.py        # camera-local time -> UTC (device DST rules, repeated-hour hints)
   timeline.py        # day/month timelines: permanent cache for past days, 60 s for today
+  events.py          # today's events across cameras (the home view's timetable) and,
+                     # per Home Assistant user, which are new (events/recent, events/seen)
   vodcache.py        # disk cache of recordings: fills under the stream budget, LRU
   mp4index.py        # writes a sidx index into cached recordings (fast browser seeks)
   fmp4.py            # indexes a cached recording's fragments as it grows; makes each MSE-ready
@@ -48,7 +50,8 @@ frontend/            # Lit + TypeScript panel, built with Vite
   src/icons.ts       # drawn icons; src/fonts.ts loads Barlow from public/fonts (OFL)
   preview/           # the design preview: the panel on a fake hass (see Design preview)
   src/components/    # device list, device page, overview, settings, playback tab,
-                     # live grid and Live tab (live-grid.ts) with their tiles (live-tile.ts)
+                     # live grid and Live tab (live-grid.ts) with their tiles (live-tile.ts),
+                     # today's timetable under the board (timetable.ts)
                      # and the camera's controls (live-controls.ts) and debug view
                      # (live-debug.ts) over them; the soak report (live-soak.ts)
   src/playback/      # timeline canvas + math, calendar, event list, player (MSE feeder in

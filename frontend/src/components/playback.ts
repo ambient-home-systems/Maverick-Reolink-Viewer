@@ -143,6 +143,7 @@ export class RvPlayback extends LitElement {
     hass: { attribute: false },
     deviceId: { attribute: false },
     cameraName: { attribute: false },
+    at: { attribute: false },
     _date: { state: true },
     _day: { state: true },
     _error: { state: true },
@@ -175,6 +176,8 @@ export class RvPlayback extends LitElement {
   declare hass: HomeAssistant | undefined;
   declare deviceId: string;
   declare cameraName: string;
+  /** A time to play once its day is loaded (an event opened from the timetable). */
+  declare at: number | undefined;
   declare _date: string;
   declare _day: TimelineDay | undefined;
   declare _error: string | undefined;
@@ -208,6 +211,8 @@ export class RvPlayback extends LitElement {
   declare _mode: PlayerMode;
 
   private _daySeq = 0;
+  /** The `at` already played (it plays once). */
+  private _openedAt: number | undefined;
   private _playSeq = 0;
   private _hoverSeq = 0;
   private _monthSeq = 0;
@@ -296,10 +301,12 @@ export class RvPlayback extends LitElement {
 
   protected override willUpdate(changed: PropertyValues<this>): void {
     if ((changed.has("deviceId") || changed.has("hass")) && this.hass && this.deviceId && !this._date) {
-      this._date = this._today;
+      this._date = this.at !== undefined ? dateIn(this.at, this._zone) : this._today;
       const [year, month] = this._date.split("-").map(Number);
       if (year && month) this._month = { year, month };
-      void this._loadDay(this._date);
+      void this._loadDay(this._date).then(() => {
+        this._openAt();
+      });
       void this._loadMonth(this._month.year, this._month.month);
       void this._checkHd();
       if (!interruptedLookedFor) {
@@ -308,7 +315,25 @@ export class RvPlayback extends LitElement {
           this._checkNote = note;
         });
       }
+    } else if (changed.has("at") && this.at !== undefined && this._date) {
+      const date = dateIn(this.at, this._zone);
+      if (date === this._date) this._openAt();
+      else
+        void this._selectDate(date).then(() => {
+          this._openAt();
+        });
     }
+  }
+
+  /** Play the time asked for, once, when its day is on show. */
+  private _openAt(): void {
+    const at = this.at;
+    const day = this._day;
+    if (at === undefined || at === this._openedAt || !day || dateIn(at, this._zone) !== day.date) return;
+    this._openedAt = at;
+    this._cursor = at;
+    this._view = centreOn(this._view, at, day);
+    void this.playAt(at);
   }
 
   // ---- Loading ----
@@ -741,10 +766,10 @@ export class RvPlayback extends LitElement {
     if (!y || !m || !d) return;
     const next = new Date(Date.UTC(y, m - 1, d + delta)).toISOString().slice(0, 10);
     if (next > this._today) return;
-    this._selectDate(next);
+    void this._selectDate(next);
   }
 
-  private _selectDate(date: string): void {
+  private _selectDate(date: string): Promise<void> {
     this._date = date;
     this._player?.stop();
     this._playing = undefined;
@@ -752,11 +777,12 @@ export class RvPlayback extends LitElement {
     this.thumbLoader.clear();
     this._thumbs = new Map();
     this._thumbsRequested.clear();
-    void this._loadDay(date);
+    const loading = this._loadDay(date);
     const [year, month] = date.split("-").map(Number);
     if (year && month && (year !== this._month.year || month !== this._month.month)) {
       void this._loadMonth(year, month);
     }
+    return loading;
   }
 
   // ---- Thumbnails ----
@@ -880,7 +906,7 @@ export class RvPlayback extends LitElement {
         return el._playing;
       },
       selectDate: (date: string) => {
-        el._selectDate(date);
+        void el._selectDate(date);
       },
       playAt: (time: number, requestedAt?: number) => el.playAt(time, requestedAt),
     };
@@ -1250,7 +1276,7 @@ export class RvPlayback extends LitElement {
             @rv-month=${(e: CustomEvent<{ year: number; month: number }>) =>
               void this._loadMonth(e.detail.year, e.detail.month)}
             @rv-day=${(e: CustomEvent<{ date: string }>) => {
-              this._selectDate(e.detail.date);
+              void this._selectDate(e.detail.date);
             }}
           ></rv-calendar>
           <h3>Events</h3>
