@@ -2889,7 +2889,7 @@ redesigned views.
 
 | Step | Status |
 | --- | --- |
-| 1. Design: the Timetable panel (home view, events, devices, device page, checks) | **In progress.** Direction chosen (2026-10-28), see "Step 1: the design". 1.1 foundations built (v0.16.0, the board's crop fixed in v0.16.1) and checked by the owner on the hardware, see "Step 1.1: foundations". 1.2 the home view's timetable built (v0.17.0), see "Step 1.2: today's timetable". 1.3 the Events view built (v0.18.0), see "Step 1.3: the Events view". 1.4a the device list and the device page's header, Overview and Settings built (v0.19.0), see "Step 1.4a: devices, Overview and Settings". 1.4b the Playback tab built (v0.20.0), see "Step 1.4b: the Playback tab"; the checks and reports (1.5) are next |
+| 1. Design: the Timetable panel (home view, events, devices, device page, checks) | **In progress.** Direction chosen (2026-10-28), see "Step 1: the design". 1.1 foundations built (v0.16.0, the board's crop fixed in v0.16.1) and checked by the owner on the hardware, see "Step 1.1: foundations". 1.2 the home view's timetable built (v0.17.0), see "Step 1.2: today's timetable". 1.3 the Events view built (v0.18.0), see "Step 1.3: the Events view". 1.4a the device list and the device page's header, Overview and Settings built (v0.19.0), see "Step 1.4a: devices, Overview and Settings". 1.4b the Playback tab built (v0.20.0), see "Step 1.4b: the Playback tab". 1.5 the checks and reports built, in plain words (v0.21.0), see "Step 1.5: checks and reports"; the finish (1.6) is next |
 | 2. Performance budget | Not started |
 | 3. Mobile, and networks that cut websockets | Not started |
 | 4. Error states | Not started |
@@ -3085,6 +3085,40 @@ Step 4 of the design comes in two parts: this one, then the Playback tab (1.4b).
   font. On a phone the day's events come before the calendar.
 - `shownTypes` moved to `timeline-math.ts`, shared by the timetable, the Events
   view and the Playback tab; the per-type colours are gone.
+
+### Step 1.5: checks and reports (v0.21.0)
+
+The owner asked (2026-10-28) that the checks and reports be "extremely clear to users
+even if they are not techy": useful, easy to understand. So each check now says what
+it found in plain words before any measurement.
+
+- **In short.** Every check gives a headline and its findings, each with a word for
+  how it went (Good, Fine, Slow, Problem, Note, Not yet), a sentence, and what to do
+  when anything (`src/plain.ts`, shown by `rv-findings`):
+  - the live check: how soon each camera's live video starts (as its tiles play it),
+    in HD and kept warm; what would help a slow one (its keep-warm switch; a battery
+    camera wakes first); the still pictures; Home Assistant's own view; WebRTC that
+    could not connect; each NVR's capacity;
+  - the soak report: whether live video kept playing, the video service ran, its
+    memory held, connections piled up, any camera or NVR was asked for too many
+    streams, battery cameras slept; the hours so far of each half, as "Not yet";
+  - the playback check: the timeline, opening events, jumping into long recordings,
+    playing on, fast forward, dragging along the timeline, HD, the connection's speed
+    and the long session.
+- The reports' text starts its summary with the same "In short" block, so a report
+  saved on a phone shows its plain summary when read on a desktop (`parseInShort`).
+  Every measurement stays, under **Details for support**, with Copy.
+- **Plain wording throughout:** the intros say what each check does, how long it
+  takes and that it changes nothing; the options are named for what they mean
+  ("Low (the live board)", not "sub"); a running check says which camera it is on.
+- **The look:** a form with labels in a column, reports as ruled sheets, drawn arrows
+  on every disclosure. The live check and the soak report have page titles and an
+  "All devices" link back; the Devices page lists the checks as rows. The Playback
+  tab's "Debug" is "Details and playback check", the check first and the technical
+  details last; its saved reports leave out the live check's.
+- The hardware probe says, in plain words, what it is for (a file to attach when you
+  report a problem with a camera model) and what it leaves out.
+- The preview has a saved live check, a saved playback check and a soak run half-way.
 
 ### Steps 2–7
 

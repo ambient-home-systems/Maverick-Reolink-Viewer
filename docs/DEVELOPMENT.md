@@ -49,6 +49,8 @@ custom_components/reolink_viewer/
 frontend/            # Lit + TypeScript panel, built with Vite
   src/styles.ts      # the Timetable's tokens (light and dark) and shared element styles
   src/icons.ts       # drawn icons; src/fonts.ts loads Barlow from public/fonts (OFL)
+  src/plain.ts       # what a check found, in plain words ("In short"), shown by
+                     # components/findings.ts and written at the top of each report
   preview/           # the design preview: the panel on a fake hass (see Design preview)
   src/components/    # device list, device page, overview, settings, playback tab,
                      # live grid and Live tab (live-grid.ts) with their tiles (live-tile.ts),

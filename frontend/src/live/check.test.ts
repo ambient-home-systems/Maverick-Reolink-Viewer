@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { parseInShort } from "../plain";
 import type { CapacityEvent, HomeAssistant, LiveCamera, LiveImagesEvent } from "../types";
 import type { SessionResult } from "./session";
 
@@ -247,6 +248,20 @@ describe("LiveCheck", () => {
     // connections; stock for the one stream with an entity.
     expect(plays.filter((p) => p.kind === "stock").map((p) => p.ref)).toEqual(["camera.fyr_fluent"]);
     expect(plays.filter((p) => p.kind !== "stock")).toHaveLength(3 * 2 * 2 + 2 * 2 * 2);
+    // In plain words first: how soon each camera starts, and how the rest compared.
+    expect(parseInShort(text)).toEqual({
+      headline: "Both cameras started live video, typically in 0.8 s.",
+      findings: [
+        { grade: "good", text: "Front Yard Right: live video starts in 0.8 s; full screen in HD in 0.8 s; kept warm, in 0.8 s." },
+        { grade: "good", text: "Doorbell: live video starts in 0.8 s; full screen in HD in 0.8 s." },
+        { grade: "good", text: "A still picture of each camera shows in under 0.1 s, while its live video starts." },
+        {
+          grade: "note",
+          text: "Compared with Home Assistant's own camera view: this viewer was quicker on 1 of 1 stream (typically 0.8 s against 3.0 s).",
+        },
+        { grade: "good", text: "RLN36 kept up with 1 video stream at once." },
+      ],
+    });
     expect(text).toContain("Reolink Viewer live check v");
     expect(text).toContain("ICE servers (Home Assistant's): 1 STUN, 0 TURN");
     expect(text).toContain("go2rtc: running 1.9.14 (Home Assistant's binary)");
@@ -339,6 +354,50 @@ describe("LiveCheck", () => {
     expect(text).toContain("WebRTC 0.80 s (answer 100 ms, connected 200 ms; host/udp ↔ host/udp; 640×360) (kept warm by its switch; turn it off to measure cold: not cold)");
     const stateCalls = calls.filter((c) => c.type === "reolink_viewer/live/state");
     expect(stateCalls.every((c) => c.connection_id === "c-direct")).toBe(true);
+  });
+
+  it("says in plain words which cameras are slow or did not start, and what would help", async () => {
+    const run = async (cameraIds: string[], camera?: LiveCamera) => {
+      const { hass } = fakeHass(true);
+      if (camera) (hass.states as Record<string, unknown>)["switch.fyr_keep_live_view_warm"] = { state: "off" };
+      const check = new LiveCheck(
+        hass,
+        { setup: "Other", streams: ["sub"], warm: false, stock: false, capacity: false, cameraIds },
+        document.createElement("div"),
+      );
+      if (camera) vi.spyOn(check as unknown as { _cameras(): Promise<LiveCamera[]> }, "_cameras").mockResolvedValue([camera]);
+      check.afterFrameMs = 0;
+      expect(check.inShort(false).headline).toBe("Measuring…");
+      await check.run();
+      return check.inShort();
+    };
+    // Slow, with a switch that is off: turning it on would help.
+    outcome.set("webrtc:sub", { firstFrameMs: 5200 });
+    outcome.set("mse:sub", { firstFrameMs: 5400 });
+    const slow = await run(["cam1"], { ...CAMERAS[0], keep_warm_entity: "switch.fyr_keep_live_view_warm" });
+    expect(slow.findings[0]).toEqual({
+      grade: "slow",
+      text: "Front Yard Right: live video starts in 5.2 s.",
+      advice: "Turn on its “keep live view warm” switch in Home Assistant to make it start faster.",
+    });
+    // A battery camera wakes first.
+    expect((await run(["cam2"])).findings[0]?.advice).toBe("Battery cameras wake up before they stream, so a few seconds is normal.");
+    // WebRTC never connected, MSE played.
+    outcome.set("webrtc:sub", { ok: false, steps: {}, error: "timed out" });
+    outcome.set("mse:sub", { firstFrameMs: 900 });
+    expect((await run(["cam2"])).findings).toContainEqual({
+      grade: "note",
+      text: "WebRTC could not connect from this device, so live video used the viewer's other way of streaming (MSE), which worked.",
+    });
+    // Nothing played.
+    outcome.set("mse:sub", { ok: false, error: "timed out" });
+    const failed = await run(["cam2"]);
+    expect(failed.headline).toBe("0 of 1 camera started live video; 1 did not.");
+    expect(failed.findings[0]).toEqual({
+      grade: "problem",
+      text: "Doorbell: live video did not start.",
+      advice: "Check that the camera is online (for example in the Reolink app), then run the check again.",
+    });
   });
 
   it("skips a stream the connection does not serve", async () => {

@@ -687,23 +687,9 @@ export class RvSettings extends LitElement {
         grid-column: 1 / -1;
       }
       .about summary {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
         min-height: 28px;
-        cursor: pointer;
         color: var(--rv-action);
-        list-style: none;
-      }
-      .about summary::-webkit-details-marker {
-        display: none;
-      }
-      .about summary svg {
-        width: 16px;
-        height: 16px;
-      }
-      .about[open] summary svg {
-        transform: rotate(180deg);
+        font-weight: 400;
       }
       .about-body p {
         margin: 6px 0;

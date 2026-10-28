@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { parseInShort } from "../plain";
 import { makeHass, okDevices, type FakeHass } from "../test-fixtures";
 import type { TimelineDay } from "../types";
 import { PlaybackCheck, hdByDefault, noteInterruptedCheck, type CheckTarget } from "./check";
@@ -130,6 +131,16 @@ describe("PlaybackCheck", () => {
     expect(report).toContain("HD as the tab opened: this browser cannot decode hvc1 at 7680×2160");
     expect(report).toContain("Summary:");
     expect(report).toContain("- Timeline: today 120 ms ✓");
+    // In plain words first.
+    expect(parseInShort(report)).toEqual({
+      headline: "Garage's recordings play well on this device.",
+      findings: [
+        { grade: "good", text: "Today's recordings appear on the timeline in 0.1 s." },
+        { grade: "note", text: "There were no events today to try opening." },
+        { grade: "note", text: "HD is not offered on this device: this browser cannot decode hvc1 at 7680×2160." },
+      ],
+    });
+    expect(check.inShort().headline).toBe("Garage's recordings play well on this device.");
     expect(changes.length).toBeGreaterThan(5);
     expect(check.running).toBe(false);
     const saves = hass.sent.filter((m) => m.type === "reolink_viewer/playback/check_report");
@@ -212,6 +223,14 @@ describe("PlaybackCheck: scrubbing and HD", () => {
     // The tab's decision from before HD played is not the summary's word on HD.
     expect(report).toContain("HD as the tab opened: hvc1.1.6.L153.B0 at 3840×2160 is supported (played in H above)");
     expect(report).not.toContain("- HD: offered");
+    expect(parseInShort(report)?.findings).toContainEqual({
+      grade: "good",
+      text: "Switching to HD takes 2.8 s and keeps your place; back to SD, 0.2 s.",
+    });
+    expect(parseInShort(report)?.findings).toContainEqual({
+      grade: "fine",
+      text: "Dragging along the timeline shows the video at 4 of 5 points; elsewhere a thumbnail shows instead.",
+    });
     expect(stream).toBe("sub");
   });
 
@@ -230,6 +249,12 @@ describe("PlaybackCheck: scrubbing and HD", () => {
     };
     const report = await new PlaybackCheck(target, { setup: "iPhone app, Wi-Fi (local)", soakMinutes: 0, hd: true }).run();
     expect(report).toContain("FAILED: MEDIA_ERR_DECODE (back on the sub stream)");
+    expect(parseInShort(report)?.headline).toBe("1 problem found with Garage's recordings on this device.");
+    expect(parseInShort(report)?.findings).toContainEqual({
+      grade: "problem",
+      text: "HD did not play; the viewer went back to SD.",
+      advice: "SD still works. Include the details below if you report it.",
+    });
     const off = await new PlaybackCheck({ ...stubTarget(reportingHass()), player: fakePlayer() }, {
       setup: "Other",
       soakMinutes: 0,
