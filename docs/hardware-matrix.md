@@ -20,7 +20,9 @@ Wi-Fi, through Tailscale and through Nabu Casa. Run 14 (2026-10-26, v0.14.0)
 is Home Assistant's half of the Phase 3 soak, and run 15 (2026-10-26 → 27,
 v0.15.1) the whole soak, passed. Run 16 (2026-10-27, v0.15.1) is the live
 check on the iPhone app at home, and run 17 (2026-10-27, v0.15.1) on the
-Mac in Safari, for the first images from the image cache.
+Mac in Safari, for the first images from the image cache. Runs 18 and 19
+(2026-10-27, v0.15.1) are the playback check on the Mac and the iPhone with
+live view running, Phase 3's last exit run.
 
 ## Setup probed
 
@@ -635,6 +637,33 @@ chose every main here (Safari on the Mac plays the H.265 mains smoothly)
 except the Back Yard's, which is wider than 4096 pixels (its ext). The
 capacity test did not run, as in run 16. go2rtc logged nothing new since
 run 16.
+
+Runs 18 and 19, 2026-10-27 21:53: the playback check (v0.3.2, in
+integration v0.15.1) on the Dogs camera (NVR, sub avc1.640016, main
+avc1.640032 2560×1920), on the Mac in Safari 26.5.2 (run 18) and the iPhone
+app (iOS 27.0, Companion app 2026.10.2; run 19), both at home over http/1.1
+and both through `ManagedMediaSource`. The two ran at the same time, with the
+six kept-warm live feeds holding 6 of the NVR's 7 stream slots: every
+download found a slot at once (queue 0 ms). The iPhone's events and HD found
+the files the Mac's run had just fetched.
+
+| Part | Mac, Safari (run 18) | iPhone app (run 19) |
+| --- | --- | --- |
+| Timeline: today, a past day, again, today again | 59, 48, 168, 121 ms | 93, 831, 57, 152 ms |
+| Events → first frame (sub) | 493 and 433 ms (not cached), 199 ms (same recording) | 165, 338 and 245 ms (cached) |
+| Deep starts (D) | skipped: no recording of 20 min or more (Dogs records events) | skipped, the same |
+| Auto-advance | gap 13 ms (preloaded) | gap 24 ms (preloaded) |
+| Rates 0.5×, 1×, 2×, 4×, 8× | on pace, 0 stalls; painted 5, 10, 20, 40 and 60 fps; longest gaps 201, 101, 52, 34, 18 ms | on pace, 0 stalls; painted 5, 10, 20, 40 and 60 fps; longest gaps 202, 107, 75, 39, 40 ms |
+| Scrub | 5 of 5 from the buffer, median 49 ms, at each point | 5 of 5, median 253 ms, within 3.93 s (the nearest key frame) |
+| HD switch | 4.6 s, cold: the server fetched the 169 MB main recording in 4.5 s (300 Mbit/s); kept the moment (0.01 s); back to SD 137 ms | 362 ms, cached; kept the moment (0.00 s); back to SD 381 ms |
+| Link | 380 Mbit/s | 400 Mbit/s |
+| MSE probe | `MediaSource` and `ManagedMediaSource` play every shape | `ManagedMediaSource` plays every shape; no `MediaSource` |
+
+The check judged 1× and 4× ✗ on the Mac and 0.5× ✗ on the iPhone, by
+painted frames against WebKit's decoded-frame counter, which ran ahead (12,
+46 and 8 frames a second where the recording gives 10, 40 and 5). The frames
+painted match the recording's rate, and no gap between them reached what a
+skipped frame would leave: every frame was shown.
 
 ## Findings
 
