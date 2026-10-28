@@ -475,10 +475,12 @@ describe("rv-live-grid", () => {
     expect(unsubscribed()).toBe(1);
   });
 
-  it("shows a load error and loads again on Retry", async () => {
+  it("shows a load error and loads again on Try again", async () => {
     const failing = fakeHass(true);
     const { el } = await mountGrid(failing.hass);
-    expect(el.shadowRoot?.textContent).toContain("Could not load live view: not loaded");
+    const banner = el.shadowRoot?.querySelector(".problem");
+    expect(banner?.querySelector("strong")?.textContent).toBe("Live view could not load: Reolink Viewer is not running.");
+    expect(banner?.querySelector("details")?.textContent).toContain("not loaded");
     expect(failing.unsubscribed()).toBe(1); // the pictures are not watched for nothing
     el.shadowRoot?.querySelector<HTMLButtonElement>(".banner button")?.click();
     await flush();

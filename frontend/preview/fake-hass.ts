@@ -27,6 +27,8 @@ import type {
 } from "../src/types";
 
 const COMPAT = { ok: true, errors: [], reolink_aio_version: "0.21.18" };
+/** What the compatibility check finds after an update that changed the integration (?degraded=changed). */
+const CHANGED = { ok: false, errors: ["Reolink runtime_data.host has no 'api'"], reolink_aio_version: "0.22.0" };
 const NOW = Date.parse("2026-10-27T21:24:13-05:00");
 
 interface Cam {
@@ -93,6 +95,13 @@ const NVR: HostNode = {
 
 /** Disks that are not ready: "dev-nvr" for the NVR's, or a camera's id for its SD card (?disk=). */
 let badDisks: readonly string[] = [];
+/** Cameras Home Assistant cannot reach (?offline=). */
+let offlineCams: readonly string[] = [];
+/**
+ * Reolink Viewer cannot reach the cameras (?degraded=): an update changed the
+ * Reolink integration, it is not running, or no devices are set up yet.
+ */
+let trouble: "changed" | "stopped" | "none" | undefined;
 
 /** Whether the disk keeping a camera's recordings is ready. */
 function diskOf(cam: Cam): "ready" | "not_ready" {
@@ -122,7 +131,7 @@ function cameraNode(cam: Cam): CameraNode {
     disabled_by: null,
     host_id: cam.channel === null ? null : "dev-nvr",
     connections,
-    status: { online: true, sleeping: false, is_battery: cam.battery === true, is_doorbell: cam.doorbell === true },
+    status: { online: !offlineCams.includes(cam.id), sleeping: false, is_battery: cam.battery === true, is_doorbell: cam.doorbell === true },
     primary_view: cam.snapshot ? "snapshot" : "live",
     recordings: cam.records ? { where: "playable", storage: diskOf(cam) } : { where: "none", storage: null },
     snapshot_entity_id: `camera.${cam.media.replace(/-/g, "_")}_fluent`,
@@ -131,7 +140,22 @@ function cameraNode(cam: Cam): CameraNode {
   };
 }
 
-const devices = (): DevicesResponse => ({ degraded: false, compat: COMPAT, hosts: [NVR], cameras: CAMS.map(cameraNode) });
+function devices(): DevicesResponse {
+  if (trouble === "none") return { degraded: true, compat: COMPAT, hosts: [], cameras: [] };
+  const cameras = CAMS.map(cameraNode);
+  if (!trouble) return { degraded: false, compat: COMPAT, hosts: [NVR], cameras };
+  // From the device registry only: nothing known of their connections or recordings.
+  return {
+    degraded: true,
+    compat: trouble === "changed" ? CHANGED : COMPAT,
+    hosts: [NVR],
+    cameras: cameras.map((c) => ({
+      ...c,
+      connections: c.connections.map((conn) => ({ ...conn, playback_source: false })),
+      recordings: { where: "none", storage: null },
+    })),
+  };
+}
 
 // ---- Settings: a typical camera's entities, keyed as the catalog knows them ----
 
@@ -211,6 +235,16 @@ function states(offline: readonly string[] = []): HassEntities {
 
 function device(id: string): DeviceResponse {
   const cam = CAMS.find((c) => c.id === id);
+  if (trouble) {
+    const node = devices().cameras.find((c) => c.id === id) ?? NVR;
+    const connections = node.kind === "camera" ? node.connections : [];
+    return {
+      degraded: true,
+      compat: trouble === "changed" ? CHANGED : COMPAT,
+      node,
+      connections: connections.map((c) => ({ ...c, details: null, entities: entities(cam?.media.replace(/-/g, "_") ?? "nvr", c.device_id) })),
+    };
+  }
   if (!cam) {
     const connection: DeviceConnection = { device_id: "dev-nvr", entry_id: "entry-nvr", entry_title: "NVR", via: "nvr", channel: null, host_id: "dev-nvr", host_name: "NVR", playback_source: false, details: null, entities: entities("nvr", "dev-nvr").slice(18, 20) };
     return { degraded: false, compat: COMPAT, node: NVR, connections: [connection] };
@@ -246,7 +280,7 @@ function device(id: string): DeviceResponse {
           model_id: null,
           hardware_version: "IPC",
           firmware_version: "v3.1.0.3429",
-          online: true,
+          online: !offlineCams.includes(cam.id),
           sleeping: false,
           is_battery: cam.battery === true,
           wired_power: cam.battery === true,
@@ -437,8 +471,41 @@ function soak(): unknown {
   };
 }
 
-export function fakeHass(options: { admin: boolean; dark: boolean; offline?: readonly string[]; disks?: readonly string[] }): HomeAssistant {
+/** What a request fails with when the preview is told to (?fail=). */
+const FAILURES: Record<string, { code: string; message: string }> = {
+  board: { code: "not_loaded", message: "Reolink Viewer is not loaded" },
+  events: { code: "not_loaded", message: "Reolink Viewer is not loaded" },
+  day: { code: "search_failed", message: "day search failed: Timeout error" },
+  tiles: { code: "stream_failed", message: "streams: dial tcp 192.168.1.31:554: i/o timeout" },
+  // Reolink Viewer updated, Home Assistant not restarted since.
+  devices: { code: "unknown_command", message: "Unknown command." },
+};
+const REQUESTS: Record<string, string> = {
+  "reolink_viewer/live/cameras": "board",
+  "reolink_viewer/events/recent": "events",
+  "reolink_viewer/timeline/day": "day",
+  "reolink_viewer/live/mse": "tiles",
+  "reolink_viewer/live/webrtc": "tiles",
+  "reolink_viewer/devices": "devices",
+};
+
+export function fakeHass(options: {
+  admin: boolean;
+  dark: boolean;
+  offline?: readonly string[];
+  disks?: readonly string[];
+  degraded?: string | null;
+  fail?: readonly string[];
+}): HomeAssistant {
   badDisks = options.disks ?? [];
+  offlineCams = options.offline ?? [];
+  trouble = options.degraded === "changed" || options.degraded === "stopped" || options.degraded === "none" ? options.degraded : undefined;
+  const fails = options.fail ?? [];
+  /** The error a request fails with, when the preview is told to fail it. */
+  const failure = (type: unknown) => {
+    const what = REQUESTS[String(type)];
+    return what && fails.includes(what) ? FAILURES[what] : undefined;
+  };
   const catalog: Catalog = {
     version: settings.version,
     categories: categories.categories,
@@ -478,6 +545,9 @@ export function fakeHass(options: { admin: boolean; dark: boolean; offline?: rea
   const hass: HomeAssistant = {
     callWS: <T>(message: Record<string, unknown>): Promise<T> => {
       const handler = handlers[String(message.type)];
+      const failed = failure(message.type);
+      // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- HA rejects with {code, message}
+      if (failed) return Promise.reject(failed);
       // Live and playback streams never start here: tiles stay on their picture.
       if (!handler) return pending<T>();
       return Promise.resolve(handler(message) as T);
@@ -486,6 +556,9 @@ export function fakeHass(options: { admin: boolean; dark: boolean; offline?: rea
     connection: {
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters -- HA's signature
       subscribeMessage: <T>(callback: (message: T) => void, message: Record<string, unknown>) => {
+        const failed = failure(message.type);
+        // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- HA rejects with {code, message}
+        if (failed) return Promise.reject(failed);
         if (message.type === "reolink_viewer/live/images") {
           const images = Object.fromEntries(CAMS.map((c) => [c.id, { url: media(c), taken: NOW - 125_000 }]));
           setTimeout(() => {

@@ -161,7 +161,9 @@ export class RvOverview extends LitElement {
       </div>
       ${details === null
         ? html`<p class="muted">
-            Details are unavailable${device.degraded ? " in degraded mode" : ""}.
+            ${device.degraded
+              ? "Details are unavailable while Reolink Viewer cannot reach the Reolink integration."
+              : "Details are unavailable."}
           </p>`
         : html`
             ${conn.via === "direct" || !isCamera ? storageWarning(details.host) : nothing}

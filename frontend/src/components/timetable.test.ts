@@ -128,7 +128,8 @@ describe("rv-timetable", () => {
     expect(quiet.text()).toContain("Front Yard: today's recordings could not be searched");
     document.body.innerHTML = "";
     const failing = await mount(timetableHass(new Error("Reolink Viewer is not loaded")));
-    expect(failing.text()).toContain("Could not read today's events: Reolink Viewer is not loaded");
+    expect(failing.text()).toContain("Today's events could not load: Reolink Viewer is not running.");
+    expect(failing.text()).toContain("Check it under Settings → Devices & services, then try again.");
   });
 });
 

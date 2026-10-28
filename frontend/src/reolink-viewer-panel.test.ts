@@ -168,18 +168,73 @@ describe("reolink-viewer-panel", () => {
     expect(text(el)).toContain("No Reolink devices");
   });
 
-  it("shows the degraded banner", async () => {
+  it("says, in plain words, that an update changed the Reolink integration", async () => {
     const degraded: DevicesResponse = {
       ...okDevices(),
       degraded: true,
-      compat: { ok: false, errors: ["ReolinkData no longer has a 'host' field"], reolink_aio_version: null },
+      compat: { ok: false, errors: ["ReolinkData no longer has a 'host' field"], reolink_aio_version: "0.19.0" },
     };
-    const el = await mount(makeHass(degraded));
-    const content = text(el);
-    expect(content).toContain("Degraded mode.");
-    expect(content).toContain("no longer has a 'host' field");
-    expect(content).toContain("Garage NVR");
+    const hass = makeHass(degraded);
+    const el = await mount(hass);
+    const note = () => el.shadowRoot?.querySelector(".integration");
+    expect(note()?.querySelector("h2")?.textContent).toBe("Reolink Viewer needs an update");
+    expect(note()?.textContent).toContain("Update Reolink Viewer in HACS when a new version is out.");
+    expect(note()?.textContent).toContain("Your cameras keep recording");
+    // The technical text, for support, under Details.
+    expect(note()?.querySelector("details")?.textContent).toContain("no longer has a 'host' field\nreolink-aio 0.19.0");
+    // Devices and their settings still work.
+    expect(text(el)).toContain("Garage NVR");
     expect(button(el, "Run probe")?.disabled).toBe(true);
+
+    // The board and the events cannot work: the note stands in for them.
+    for (const hash of ["#live", "#events"]) {
+      window.history.replaceState(null, "", `/${hash === "#live" ? "" : hash}`);
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+      await el.updateComplete;
+      expect(el.shadowRoot?.querySelector("rv-live-grid, rv-timetable, rv-events")).toBeNull();
+      expect(note()?.querySelector("h2")?.textContent).toBe("Reolink Viewer needs an update");
+    }
+
+    // Fixed (Reolink Viewer updated): Check again brings everything back.
+    hass.responses["reolink_viewer/devices"] = okDevices();
+    note()?.querySelector<HTMLButtonElement>("button.check")?.click();
+    await flush();
+    await el.updateComplete;
+    expect(note()).toBeNull();
+    expect(el.shadowRoot?.querySelector("rv-events")).not.toBeNull();
+  });
+
+  it("says when the Reolink integration is not running, or has no devices yet", async () => {
+    window.history.replaceState(null, "", "/");
+    const stopped: DevicesResponse = { ...okDevices(), degraded: true };
+    let el = await mount(makeHass(stopped));
+    const note = () => el.shadowRoot?.querySelector(".integration");
+    expect(note()?.querySelector("h2")?.textContent).toBe("The Reolink integration is not running");
+    expect(note()?.textContent).toContain("it may be waiting for a camera or NVR to come back online");
+    expect(note()?.classList.contains("fault")).toBe(true);
+    expect(note()?.querySelector("details")).toBeNull();
+    document.body.innerHTML = "";
+
+    el = await mount(makeHass({ ...okDevices([], []), degraded: true }));
+    expect(note()?.querySelector("h2")?.textContent).toBe("No Reolink devices yet");
+    expect(note()?.classList.contains("fault")).toBe(false);
+    // The device list says it there, without the note.
+    window.history.replaceState(null, "", "/#devices");
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+    await flush();
+    await el.updateComplete;
+    expect(note()).toBeNull();
+    expect(text(el)).toContain("No Reolink devices");
+  });
+
+  it("puts the note over a device's page and the checks", async () => {
+    window.history.replaceState(null, "", "/#device/dev-cam/overview");
+    const el = await mount(makeHass({ ...okDevices(), degraded: true }));
+    await loadView("device");
+    await el.updateComplete;
+    const main = el.shadowRoot?.querySelector("main");
+    expect(main?.firstElementChild?.classList.contains("integration")).toBe(true);
+    expect(main?.querySelector("rv-device-page")).not.toBeNull();
   });
 
   it("opens a device and goes back to the list", async () => {
@@ -285,7 +340,8 @@ describe("reolink-viewer-panel", () => {
     // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
     hass.callWS = () => Promise.reject({ code: "not_loaded", message: "Reolink Viewer is not loaded" });
     const el = await mount(hass);
-    expect(text(el)).toContain("Could not load devices: Reolink Viewer is not loaded");
+    expect(text(el)).toContain("Your devices could not load: Reolink Viewer is not running.");
+    expect(el.shadowRoot?.querySelector(".problem details")?.textContent).toContain("Reolink Viewer is not loaded");
   });
 
   it("hides the probe from non-admins", async () => {

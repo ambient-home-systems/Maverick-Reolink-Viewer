@@ -1,6 +1,6 @@
-import { Bt as e, Gt as t, Jt as n, Kt as r, L as i, Ot as a, Ut as o, at as s, it as c, ot as l, qt as u, vt as d } from "./home-DANJK4HC.js";
-import { n as f, t as p } from "./findings-ZtDSUEOW.js";
-import { t as m } from "./check-Cmy68jrG.js";
+import { Jt as e, Kt as t, L as n, Vt as r, Wt as i, Yt as a, it as o, kt as s, ot as c, qt as l, st as u, yt as d } from "./home-CRi9TKP3.js";
+import { n as f, t as p } from "./findings-BZqo8VrU.js";
+import { t as m } from "./check-D-jGoDrW.js";
 function h(e) {
 	return v(e).text;
 }
@@ -186,8 +186,8 @@ var S = "rv-live-soak-close", C = class extends t {
 		if (e) {
 			this._read = !0, this._state = "loading";
 			try {
-				await l.flush(e);
-				let t = await a(e), n = {
+				await u.flush(e);
+				let t = await s(e), n = {
 					version: m,
 					now: Date.now(),
 					sampleS: t.sample_s,
@@ -202,31 +202,31 @@ var S = "rv-live-soak-close", C = class extends t {
 					summary: g(n)
 				};
 			} catch (e) {
-				this._state = { error: o(e).message };
+				this._state = { error: i(e).message };
 			}
 		}
 	}
 	async _startOver() {
-		let t = this.hass;
-		if (this._confirm = !1, t) {
-			l.discard();
+		let e = this.hass;
+		if (this._confirm = !1, e) {
+			u.discard();
 			try {
-				await e(t, s(navigator.userAgent), l.open), await this.refresh();
+				await r(e, c(navigator.userAgent), u.open), await this.refresh();
 			} catch (e) {
-				this._state = { error: o(e).message };
+				this._state = { error: i(e).message };
 			}
 		}
 	}
 	render() {
-		let e = this._state, t = typeof e == "object" && "text" in e ? e : void 0;
-		return u`<div class="soak" role="region" aria-label="Soak report">
+		let t = this._state, r = typeof t == "object" && "text" in t ? t : void 0;
+		return e`<div class="soak" role="region" aria-label="Soak report">
       <p class="intro">
         A day-long test of live view. Home Assistant keeps watch for ${24} hours, and the live board
         counts what happens whenever it is on screen: ${8} hours in all, on any of your devices. It
         tells you whether live video kept playing, whether connections to your cameras piled up, and whether
         battery cameras slept when nobody watched.
       </p>
-      ${e === "loading" ? u`<p class="muted">Reading the soak run…</p>` : "error" in e ? u`<div class="banner error" role="alert">Could not make the soak report: ${e.error}</div>` : u`<rv-findings .summary=${e.summary}></rv-findings>`}
+      ${t === "loading" ? e`<p class="muted">Reading the soak run…</p>` : "error" in t ? e`<div class="banner error" role="alert">Could not make the soak report: ${t.error}</div>` : e`<rv-findings .summary=${t.summary}></rv-findings>`}
       <div class="actions">
         <button
           class="with-icon"
@@ -236,14 +236,14 @@ var S = "rv-live-soak-close", C = class extends t {
         >
           ${d("refresh")}Refresh
         </button>
-        ${this._confirm ? r : u`<button
+        ${this._confirm ? l : e`<button
               @click=${() => {
 			this._confirm = !0;
 		}}
             >
               Start over…
             </button>`}
-        ${this.closable ? u`<button
+        ${this.closable ? e`<button
               @click=${() => {
 			this.dispatchEvent(new CustomEvent(S, {
 				bubbles: !0,
@@ -252,9 +252,9 @@ var S = "rv-live-soak-close", C = class extends t {
 		}}
             >
               Close
-            </button>` : r}
+            </button>` : l}
       </div>
-      ${this._confirm ? u`<div class="banner warning confirm" role="alert">
+      ${this._confirm ? e`<div class="banner warning confirm" role="alert">
             <span>Start the soak over? What was counted is dropped.</span>
             <button
               class="danger"
@@ -271,28 +271,28 @@ var S = "rv-live-soak-close", C = class extends t {
             >
               Cancel
             </button>
-          </div>` : r}
-      ${t ? u`<details class="support">
+          </div>` : l}
+      ${r ? e`<details class="support">
             <summary>Details for support${d("chevronDown")}</summary>
             <div class="actions">
               <button
                 @click=${() => {
-			i(t.text).then((e) => {
+			n(r.text).then((e) => {
 				this._state = {
-					...t,
+					...r,
 					copied: e
 				};
 			});
 		}}
               >
-                ${t.copied === void 0 ? "Copy report" : t.copied ? "Copied" : "Could not copy"}
+                ${r.copied === void 0 ? "Copy report" : r.copied ? "Copied" : "Could not copy"}
               </button>
             </div>
-            <pre class="report">${t.text}</pre>
-          </details>` : r}
+            <pre class="report">${r.text}</pre>
+          </details>` : l}
     </div>`;
 	}
-	static styles = [c, n`
+	static styles = [o, a`
       :host {
         display: block;
       }

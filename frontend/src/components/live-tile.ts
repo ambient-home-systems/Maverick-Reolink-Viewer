@@ -681,6 +681,10 @@ export class RvLiveTile extends LitElement {
       :host([fill]) .tile {
         aspect-ratio: auto;
       }
+      /* A board cell is as tall as the board makes it: what it says fits that. */
+      :host([fill]:not([full])) .tile {
+        container: board-tile / size;
+      }
       :host([fill][fit="cover"]) .poster,
       :host([fill][fit="cover"]) video.sub {
         object-fit: cover;
@@ -922,7 +926,8 @@ export class RvLiveTile extends LitElement {
         justify-content: center;
         gap: 8px;
         text-align: center;
-        padding: 40px 12px 12px;
+        /* Clear of the number and state above, and the name below. */
+        padding: 36px 12px 34px;
         background: rgba(17, 20, 24, 0.55);
       }
       .status.center .what {
@@ -981,13 +986,25 @@ export class RvLiveTile extends LitElement {
         }
         /* A small tile says what happened; what to do is on the camera's own view. */
         .status.center {
-          padding: 32px 8px 8px;
+          padding: 30px 8px 26px;
           gap: 6px;
         }
         .status.center .what {
           font-size: 14px;
         }
         .status.center .small {
+          display: none;
+        }
+      }
+      /* A short board tile says what happened; what to do is on the camera's own view. */
+      @container board-tile (max-height: 220px) {
+        .status.center .small {
+          display: none;
+        }
+      }
+      /* Too short for a button as well: tapping it opens the camera's view, which has it. */
+      @container board-tile (max-height: 130px) {
+        .status.center button {
           display: none;
         }
       }

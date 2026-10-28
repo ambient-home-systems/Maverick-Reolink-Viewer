@@ -237,6 +237,22 @@ export const sharedStyles = css`
   .banner.info {
     background: var(--rv-ground-2);
   }
+  /* A problem's technical text, for support, under its plain words. */
+  .problem details {
+    margin-top: 6px;
+    font-size: 13px;
+  }
+  .problem summary {
+    cursor: pointer;
+    font-weight: 500;
+  }
+  .problem .technical {
+    display: block;
+    margin-top: 4px;
+    font-family: var(--rv-mono);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
   /* Facts as ruled rows: a label, then its value. */
   dl.facts {
     display: grid;

@@ -3,9 +3,12 @@
 // view, light and dark, at desktop (1440) and phone (390) width.
 //
 //   node scripts/preview_capture.cjs <out-dir> [view ...]
+//   node scripts/preview_capture.cjs <out-dir> errors
 //
-// A view is one of the names below, or any hash (#device/cam-fyl/live).
+// A view is one of the names below, or any hash (#device/cam-fyl/live), after
+// the preview's query if any (&offline=cam-dogs#device/cam-dogs/live).
 // Views: live (home), events, devices, overview, live-tab, settings, playback, live-check, soak.
+// `errors` takes every error state instead (ERRORS below).
 // The pictures are synthetic (frontend/preview/make-media.sh).
 const { chromium } = require("playwright");
 const http = require("node:http");
@@ -23,6 +26,24 @@ const VIEWS = {
   playback: "#device/cam-fyr/playback",
   "live-check": "#live-check",
   soak: "#soak",
+};
+// Every error state the panel has (Phase 4 step 4), as the preview shows them.
+const ERRORS = {
+  "offline-board": "&offline=cam-dogs,cam-garage",
+  "tile-errors": "&fail=tiles",
+  "board-error": "&fail=board,events",
+  "storage-playback": "&disk=cam-door#device/cam-door/playback",
+  "storage-overview": "&disk=cam-door#device/cam-door/overview",
+  "nvr-disk-playback": "&disk=dev-nvr#device/cam-garage/playback",
+  "no-recordings": "#device/cam-laundry/playback",
+  "day-error": "&fail=day#device/cam-fyr/playback",
+  "offline-playback": "&offline=cam-door&fail=day#device/cam-door/playback",
+  "changed-board": "&degraded=changed",
+  "changed-devices": "&degraded=changed#devices",
+  "changed-playback": "&degraded=changed#device/cam-fyr/playback",
+  "stopped-board": "&degraded=stopped",
+  "none-board": "&degraded=none",
+  "devices-error": "&fail=devices#devices",
 };
 const VIEWPORTS = {
   desktop: { width: 1440, height: 900, deviceScaleFactor: 1 },
@@ -52,16 +73,20 @@ async function main() {
   const browser = await chromium.launch();
   const errors = [];
   try {
-    const views = wanted.length
-      ? wanted.map((view) => [view.replace(/^#/, "").replace(/\//g, "-"), VIEWS[view] ?? view])
-      : Object.entries(VIEWS);
+    const views =
+      wanted.length === 1 && wanted[0] === "errors"
+        ? Object.entries(ERRORS)
+        : wanted.length
+          ? wanted.map((view) => [view.replace(/^#/, "").replace(/[/&=,]/g, "-"), VIEWS[view] ?? view])
+          : Object.entries(VIEWS);
     for (const [name, hash] of views) {
       for (const theme of ["light", "dark"]) {
         for (const [size, viewport] of Object.entries(VIEWPORTS)) {
           const page = await browser.newPage({ viewport: { width: viewport.width, height: viewport.height }, deviceScaleFactor: viewport.deviceScaleFactor });
           page.on("pageerror", (err) => errors.push(`${name}/${theme}/${size}: ${err}`));
           await page.goto(`${origin}/index.html?theme=${theme}${hash}`);
-          await page.waitForTimeout(1500);
+          // Long enough for a failing tile to give up its first try.
+          await page.waitForTimeout(hash.includes("fail=tiles") ? 6000 : 1500);
           const file = path.join(out, `${name}-${theme}-${size}.png`);
           await page.screenshot({ path: file, fullPage: true });
           await page.close();

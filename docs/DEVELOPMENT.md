@@ -55,6 +55,9 @@ frontend/            # Lit + TypeScript panel, built with Vite
                      # the first download; see Performance budget)
   src/pip.ts         # picture-in-picture (the standard API, else WebKit's)
   src/network.ts     # where the page is (home or away) and HD in full screen there
+  src/integration.ts # when Reolink Viewer cannot reach the cameras, in plain words,
+                     # and why a view's data could not load
+  src/problem.ts     # a problem banner: plain words, what to do, Details
   scripts/bundle-budget.mjs  # the home view's size against its budget (npm run budget)
   preview/           # the design preview: the panel on a fake hass (see Design preview)
   src/components/    # device list, device page, overview, settings, playback tab,
@@ -127,13 +130,16 @@ python -m script.hassfest --action validate \
 The panel without Home Assistant or cameras, for designing and checking every view:
 `frontend/preview/` mounts the real panel on a fake `hass` with the owner's eight
 cameras, every setting and a day of events. Its pictures are synthetic. Add
-`?offline=cam-dogs,cam-garage` for cameras Home Assistant cannot reach, and
-`?disk=cam-door,dev-nvr` for the Doorbell's SD card or the NVR's disk not ready.
+`?offline=cam-dogs,cam-garage` for cameras Home Assistant cannot reach,
+`?disk=cam-door,dev-nvr` for the Doorbell's SD card or the NVR's disk not ready,
+`?degraded=changed|stopped|none` for Reolink Viewer unable to reach the cameras,
+and `?fail=board,events,day,tiles,devices` to fail those requests.
 
 ```bash
 frontend/preview/make-media.sh                     # once: the synthetic pictures (ffmpeg)
 cd frontend && npx vite build -c vite.preview.config.ts
 node ../scripts/preview_capture.cjs <out-dir> [view ...]   # light and dark, desktop and phone
+node ../scripts/preview_capture.cjs <out-dir> errors       # every error state
 ```
 
 The design's direction contract is in `.impeccable/surfaces/`; `PRODUCT.md` holds

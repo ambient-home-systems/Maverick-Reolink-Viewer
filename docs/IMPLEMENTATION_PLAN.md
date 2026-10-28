@@ -20,7 +20,7 @@ put on it:
 | 1 | Device details and every setting, with explanations | Standard (catalog) / High (panel shell) | 2–3 wk | Done (2026-10-17) |
 | 2 | Event timeline, thumbnails, smooth playback | High (backend) / Very high (player) | 3–5 wk | Done (2026-10-21, v0.3.2). 2A (2026-10-20, v0.2.7): timeline 105–287 ms, first frame 0.6–1.1 s, auto-advance 6–7 ms on hardware. 2B: MSE player; uncached deep starts are the NVR's download up to the target (6.9–13.0 s in hour-long recordings, up to 84 s before), speeds 0.5–8×, HD/SD at the same moment, one-hour sessions within the caps, the iPhone app on Wi-Fi, Tailscale and Nabu Casa |
 | 3 | Live view via go2rtc, grid, fullscreen, PTZ | High | 3–4 wk | Done (2026-10-27, v0.15.1). Our own go2rtc and the live check (v0.4.0, runs 5–13); the key-frame cache, the image cache, the Live grid and Live tab, keep warm, full-screen HD, PTZ and the camera's controls, the picture first, battery cameras on wired power, a debug view per tile and the soak report (v0.5.0–v0.15.1). Exit runs: the soak passed (run 15), every tile's first image in a median 0.02 s on the iPhone and the Mac (runs 16–17), and the Phase 2 playback criteria held with live view running (runs 18–19) |
-| 4 | Design, performance, mobile, packaging, first release | Standard | 3–4 wk | In progress. Step 1, the design (the Timetable), done in v0.16.0–v0.22.0; step 2, the performance budget, done in v0.23.0; step 3 built in v0.24.0–v0.26.0, its iPhone checklist with the owner; steps 4.1–4.2 built in v0.27.0–v0.28.0. See "Phase 4 status" |
+| 4 | Design, performance, mobile, packaging, first release | Standard | 3–4 wk | In progress. Step 1, the design (the Timetable), done in v0.16.0–v0.22.0; step 2, the performance budget, done in v0.23.0; step 3 built in v0.24.0–v0.26.0, its iPhone checklist with the owner; step 4, error states, built in v0.27.0–v0.29.0. See "Phase 4 status" |
 | 5 | Optional R&D: Baichuan live/playback | Very high | 4–8 wk, time-boxed with gates | Not started |
 
 Phases 1 and 2 can overlap once Phase 0 is done. Phase 5 can start any time after
@@ -2892,7 +2892,7 @@ redesigned views.
 | 1. Design: the Timetable panel (home view, events, devices, device page, checks) | **Done** (v0.16.0–v0.22.0). Direction chosen (2026-10-28), see "Step 1: the design". 1.1 foundations built (v0.16.0, the board's crop fixed in v0.16.1) and checked by the owner on the hardware, see "Step 1.1: foundations". 1.2 the home view's timetable built (v0.17.0), see "Step 1.2: today's timetable". 1.3 the Events view built (v0.18.0), see "Step 1.3: the Events view". 1.4a the device list and the device page's header, Overview and Settings built (v0.19.0), see "Step 1.4a: devices, Overview and Settings". 1.4b the Playback tab built (v0.20.0), see "Step 1.4b: the Playback tab". 1.5 the checks and reports built, in plain words (v0.21.0), see "Step 1.5: checks and reports"; 1.6 the finish: the design detector, an independent finish review against the contract (verdict: ship after fixes) with every material fix built, and `DESIGN.md` (v0.22.0), see "Step 1.6: the finish". |
 | 2. Performance budget | **Done** (v0.23.0): the home view's first download is 40.9 KB gzipped (budget 200 KB) with every other view loaded on demand; no long tasks while scrubbing the timeline; time to first frame for live and playback on every setup. The first two run in CI. See "Step 2: the performance budget". Mobile (step 3) is next |
 | 3. Mobile, and networks that cut websockets | In progress, in three parts (see "Step 3: mobile, and networks that cut websockets"). 3.1 built (v0.24.0): a page whose network cuts MSE's websockets switches live view to WebRTC first, and the capacity test sets the cameras kept warm aside and says plainly what else holds the slots, see "Step 3.1: live view that holds up". 3.2 built (v0.25.0): pinch and two-finger pan on the timeline, and picture-in-picture for live and playback, see "Step 3.2: touch, and picture-in-picture". 3.3 built (v0.26.0): full screen stays in the lighter SD away from home or on mobile data, with an HD button remembered per device, see "Step 3.3: away from home, and the iPhone checklist". **Waiting on the owner's iPhone checklist** (and the work-PC check from 3.1); the error states (step 4) can start meanwhile |
-| 4. Error states | In progress, in three parts (see "Step 4: error states"). 4.1 built (v0.27.0): offline cameras on the board from Home Assistant's state, and live errors in plain words, see "Step 4.1: live error states". 4.2 built (v0.28.0): cameras with nothing to play say why, disks that are not ready are flagged, and recordings that cannot be read or played say why in plain words, see "Step 4.2: playback and storage error states". 4.3 (the integration changed) is next |
+| 4. Error states | **Built** (v0.27.0–v0.29.0), in three parts (see "Step 4: error states"). 4.1 (v0.27.0): offline cameras on the board from Home Assistant's state, and live errors in plain words, see "Step 4.1: live error states". 4.2 (v0.28.0): cameras with nothing to play say why, disks that are not ready are flagged, and recordings that cannot be read or played say why in plain words, see "Step 4.2: playback and storage error states". 4.3 (v0.29.0): a plain note over every view when Reolink Viewer cannot reach the cameras, plain load errors, and screenshots of every error state, see "Step 4.3: when Reolink Viewer cannot reach the cameras". Step 5 (accessibility) is next |
 | 5. Accessibility | Not started |
 | 6. Packaging and the HA version matrix | Not started |
 | 7. Docs | Not started |
@@ -3421,9 +3421,9 @@ Built in three parts:
 - **4.2 playback and storage** (v0.28.0): no SD card, a failed or unformatted
   disk, recordings out of reach while a camera is offline, and video the
   browser cannot play.
-- **4.3 the integration changed:** a plain banner when a Home Assistant update
-  changes the Reolink integration's internals, and screenshots of every error
-  state in the design preview.
+- **4.3 the integration changed** (v0.29.0): a plain banner when a Home
+  Assistant update changes the Reolink integration's internals, and screenshots
+  of every error state in the design preview.
 
 ### Step 4.1: live error states (v0.27.0)
 
@@ -3515,6 +3515,61 @@ browser cannot play this recording. Back to SD."
 The design preview takes `?disk=cam-door,dev-nvr` to show the Doorbell's SD
 card or the NVR's disk not ready; Laundry Room shows a camera with no
 recordings.
+
+### Step 4.3: when Reolink Viewer cannot reach the cameras (v0.29.0)
+
+**A note over every view** (`src/integration.ts`). Before, the Devices list
+alone said "Degraded mode" with the compatibility check's findings, while the
+home view showed an empty board and "Could not read today's events: Reolink
+integration internals changed: …". Now the panel tells three cases apart, from
+the `devices` answer, and says each the same way on every view:
+
+| Case | The note says |
+| --- | --- |
+| an update changed the integration (the compatibility check failed) | **Reolink Viewer needs an update.** A Home Assistant update changed its Reolink integration, and this version of Reolink Viewer cannot work with it. *Update Reolink Viewer in HACS when a new version is out. Until then, live view, recordings and events are off here. Your cameras keep recording, the Reolink app still works, and your devices and their settings are still here.* The check's findings and the reolink-aio version under Details |
+| no Reolink entry loaded | **The Reolink integration is not running.** Home Assistant's Reolink integration has not loaded your cameras or NVR, so Reolink Viewer cannot reach them. *Check it under Settings → Devices & services → Reolink: it may be waiting for a camera or NVR to come back online.* |
+| no Reolink devices at all | **No Reolink devices yet.** Set up your cameras or NVR in Home Assistant's Reolink integration first (not a fault: grey, not amber) |
+
+- The Live and Events views show the note instead of the board and the
+  events, which cannot work meanwhile.
+- The Devices list, a device's page and the checks show it over what still
+  works. The device page's own "Degraded mode" line is gone; its Playback tab
+  says "Recordings cannot be played right now" and why.
+- **Check again** loads the devices again, so the panel comes back without a
+  reload once the integration runs or Reolink Viewer is updated.
+- Home Assistant's repair notice says the same: "Reolink Viewer needs an
+  update".
+
+**Load errors in plain words.** The board's, the events' and the device
+list's load errors say what happened and what to do, with **Try again** and
+the technical text under Details:
+
+| The error | It says |
+| --- | --- |
+| Reolink Viewer is not loaded | Live view could not load: Reolink Viewer is not running. *Check it under Settings → Devices & services, then try again.* |
+| internals changed | … Reolink Viewer needs an update to work with this Home Assistant release. |
+| unknown command (updated, not restarted) | … Reolink Viewer was updated, but Home Assistant has not restarted since. *Restart Home Assistant, then reload this page.* |
+| anything else | … could not load from Home Assistant. *Check the connection to Home Assistant, then try again.* |
+
+**Fixed on the way:**
+
+- On the board, a camera's error text and its Retry button covered its name
+  (desktop and phone). A board tile now says what happened, clear of its
+  number, state and name; it adds what to do when tall enough, and the button
+  when there is room for it. Tapping a tile opens the camera's view, which has
+  both.
+- A day whose recordings could not be read said "No events for the chosen
+  kinds"; it now says "This day's events could not be read."
+
+**Screenshots of every error state.** The design preview takes
+`?degraded=changed|stopped|none` and `?fail=board,events,day,tiles,devices`
+(the board's, the events', a day's recordings', the tiles' or the device list's
+requests fail), and `node scripts/preview_capture.cjs <dir> errors` captures
+all 15 error states, light and dark, desktop and phone:
+offline cameras, tiles that cannot play, the board and events not loading, an
+SD card and an NVR disk not ready (Playback and Overview), a camera with no
+recordings, a day that could not be read, an offline camera's SD card, the
+three integration cases, and the device list not loading.
 
 ### Steps 2–7
 

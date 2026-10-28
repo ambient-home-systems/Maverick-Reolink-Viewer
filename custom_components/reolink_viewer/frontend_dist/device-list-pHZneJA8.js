@@ -1,6 +1,6 @@
-import { F as e, Gt as t, Jt as n, Kt as r, i, it as a, qt as o, vt as s } from "./home-DANJK4HC.js";
+import { F as e, Jt as t, Kt as n, Yt as r, i, it as a, qt as o, yt as s } from "./home-CRi9TKP3.js";
 //#region src/components/device-list.ts
-var c = class extends t {
+var c = class extends n {
 	static properties = {
 		devices: { attribute: !1 },
 		cameras: { attribute: !1 },
@@ -11,87 +11,87 @@ var c = class extends t {
 	}
 	render() {
 		let e = this.devices;
-		if (!e) return o`<p class="muted">Loading devices…</p>`;
-		if (!e.hosts.length && !e.cameras.length) return o`<section class="card">
+		if (!e) return t`<p class="muted">Loading devices…</p>`;
+		if (!e.hosts.length && !e.cameras.length) return t`<section class="card">
         <h2>No Reolink devices</h2>
         <p class="muted">
           Set up your cameras, NVRs or Home Hubs in the Reolink integration first; they appear
           here once loaded.
         </p>
       </section>`;
-		let t = new Map(e.cameras.map((e) => [e.id, e]));
+		let n = new Map(e.cameras.map((e) => [e.id, e]));
 		if (this.hostId !== void 0) {
-			let n = e.hosts.find((e) => e.id === this.hostId);
-			return n ? this._renderCameras(n, t) : o``;
+			let r = e.hosts.find((e) => e.id === this.hostId);
+			return r ? this._renderCameras(r, n) : t``;
 		}
-		let n = e.cameras.filter((e) => e.host_id === null);
-		return o`
-      ${e.hosts.map((e) => this._renderHost(e, t))}
-      ${n.length ? o`<section class="card">
+		let r = e.cameras.filter((e) => e.host_id === null);
+		return t`
+      ${e.hosts.map((e) => this._renderHost(e, n))}
+      ${r.length ? t`<section class="card">
             <div class="head"><h2>Cameras added directly</h2></div>
-            ${this._renderTable(n.map((e) => this._renderCamera(e)))}
-          </section>` : r}
+            ${this._renderTable(r.map((e) => this._renderCamera(e)))}
+          </section>` : o}
     `;
 	}
-	_renderHost(t, n) {
-		let r = i(t.kind);
-		return o`<section class="card">
+	_renderHost(n, r) {
+		let a = i(n.kind);
+		return t`<section class="card">
       <div class="head">
         <h2>
           <button class="link host" @click=${() => {
 			e(this, {
 				view: "device",
-				id: t.id,
+				id: n.id,
 				tab: "overview"
 			});
-		}}>${t.name ?? t.entry_title}</button>
+		}}>${n.name ?? n.entry_title}</button>
         </h2>
         <p class="muted">
           ${[
-			r,
-			t.model,
-			t.sw_version && `firmware ${t.sw_version}`
+			a,
+			n.model,
+			n.sw_version && `firmware ${n.sw_version}`
 		].filter(Boolean).join(" · ")}
         </p>
       </div>
-      ${this._renderCameras(t, n)}
+      ${this._renderCameras(n, r)}
     </section>`;
 	}
-	_renderCameras(e, t) {
-		let n = e.camera_ids.map((e) => t.get(e)).filter((e) => e !== void 0);
-		return n.length ? this._renderTable(n.map((t) => this._renderCamera(t, e))) : o`<p class="muted">No cameras on this ${i(e.kind)}.</p>`;
+	_renderCameras(e, n) {
+		let r = e.camera_ids.map((e) => n.get(e)).filter((e) => e !== void 0);
+		return r.length ? this._renderTable(r.map((t) => this._renderCamera(t, e))) : t`<p class="muted">No cameras on this ${i(e.kind)}.</p>`;
 	}
 	_renderTable(e) {
-		return o`<div class="cols" aria-hidden="true">
+		return t`<div class="cols" aria-hidden="true">
         <span></span><span>Camera</span><span>Channel</span><span class="model">Model</span><span>State</span><span></span>
       </div>
       <ul class="devices">
         ${e}
       </ul>`;
 	}
-	_renderCamera(t, n) {
-		let i = n ? t.connections.find((e) => e.host_id === n.id)?.channel : void 0, a = n !== void 0 && t.connections.some((e) => e.via === "direct"), c = this.cameras.find((e) => e.id === t.id)?.number, u = [a ? "Also added directly" : void 0, t.primary_view === "snapshot" ? "Snapshots only" : void 0].filter((e) => e !== void 0);
-		return o`<li>
+	_renderCamera(n, r) {
+		let i = r ? n.connections.find((e) => e.host_id === r.id)?.channel : void 0, a = r !== void 0 && n.connections.some((e) => e.via === "direct"), c = this.cameras.find((e) => e.id === n.id)?.number, u = [a ? "Also added directly" : void 0, n.primary_view === "snapshot" ? "Snapshots only" : void 0].filter((e) => e !== void 0);
+		return t`<li>
       <button
         class="row"
         @click=${() => {
 			e(this, {
 				view: "device",
-				id: t.id,
+				id: n.id,
 				tab: "overview"
 			});
 		}}
       >
-        <span class="plat-cell">${c === void 0 ? r : o`<span class="plat" aria-hidden="true">${c}</span>`}</span>
-        <span class="name">${t.name ?? "Camera"}</span>
+        <span class="plat-cell">${c === void 0 ? o : t`<span class="plat" aria-hidden="true">${c}</span>`}</span>
+        <span class="name">${n.name ?? "Camera"}</span>
         <span class="ch muted">${i == null ? "Direct" : `Ch ${String(i + 1)}`}</span>
-        <span class="model muted">${t.model ?? ""}</span>
-        <span class="state">${l(t)}${u.length ? o`<span class="flags muted">${u.join(" · ")}</span>` : r}</span>
+        <span class="model muted">${n.model ?? ""}</span>
+        <span class="state">${l(n)}${u.length ? t`<span class="flags muted">${u.join(" · ")}</span>` : o}</span>
         ${s("chevron")}
       </button>
     </li>`;
 	}
-	static styles = [a, n`
+	static styles = [a, r`
       :host {
         display: flex;
         flex-direction: column;
@@ -229,8 +229,8 @@ var c = class extends t {
     `];
 };
 function l(e) {
-	let t = e.status;
-	return t.online === !1 ? o`<span class="offline">Offline</span>` : t.sleeping ? o`<span>Asleep</span>` : t.online ? o`<span>Online</span>` : r;
+	let n = e.status;
+	return n.online === !1 ? t`<span class="offline">Offline</span>` : n.sleeping ? t`<span>Asleep</span>` : n.online ? t`<span>Online</span>` : o;
 }
 customElements.get("rv-device-list") || customElements.define("rv-device-list", c);
 //#endregion

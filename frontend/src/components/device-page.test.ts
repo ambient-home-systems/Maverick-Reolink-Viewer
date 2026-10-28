@@ -216,7 +216,15 @@ describe("rv-device-page", () => {
     el.tab = "playback";
     await el.reload();
     await el.updateComplete;
-    expect(why()).toContain("No playback in degraded mode");
+    expect(why()).toContain("Recordings cannot be played right now");
+    expect(why()).toContain("Home Assistant's Reolink integration is not running, so Front Yard's recordings cannot be read.");
+    hass.responses["reolink_viewer/device"] = {
+      ...degraded,
+      compat: { ok: false, errors: ["Reolink runtime_data has no 'host'"], reolink_aio_version: "0.19.0" },
+    };
+    await el.reload();
+    await el.updateComplete;
+    expect(why()).toContain("Reolink Viewer needs an update to read Front Yard's recordings since Home Assistant's last update.");
   });
 
   it("reloads after an entity registry change of its own entities", async () => {
@@ -323,7 +331,7 @@ describe("rv-overview", () => {
     const camera = makeCamera({ snapshot_entity_id: null });
     const el = await overview(makeHass(okDevices()), makeDevice({ node: camera, degraded: true }));
     expect(deepText(el)).toContain("No snapshot: enable one of this camera's stream entities");
-    expect(deepText(el)).toContain("Details are unavailable in degraded mode");
+    expect(deepText(el)).toContain("Details are unavailable while Reolink Viewer cannot reach the Reolink integration.");
   });
 
   it("summarizes an NVR", async () => {
