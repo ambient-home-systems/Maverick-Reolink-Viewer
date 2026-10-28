@@ -148,3 +148,50 @@ async def test_failed_cameras_and_degraded_mode(
     assert msg["error"]["code"] == "not_loaded"
     msg = await _ws(client, {"type": "reolink_viewer/events/seen", "all": True})
     assert msg["error"]["code"] == "not_loaded"
+
+
+async def test_a_given_day_and_the_days_with_recordings(
+    hass: HomeAssistant,
+    hass_ws_client: WebSocketGenerator,
+    reolink_host: MagicMock,
+    loaded_with_entities: MockConfigEntry,
+    viewer_entry: MockConfigEntry,
+    today: None,
+) -> None:
+    """The Events view asks for any day, and for the days that have recordings."""
+    client = await hass_ws_client(hass)
+    msg = await _ws(
+        client, {"type": "reolink_viewer/events/recent", "date": "2026-10-17"}
+    )
+    assert [e["types"] for e in msg["result"]["events"]] == [["MOTION", "PERSON"]]
+    msg = await _ws(client, {"type": "reolink_viewer/events/recent", "date": "nope"})
+    assert msg["success"] is False
+
+    msg = await _ws(
+        client, {"type": "reolink_viewer/events/days", "year": 2026, "month": 10}
+    )
+    assert msg["result"] == {"days": list(range(1, 18)), "failed": []}
+
+    # Both of the camera's ways to search a month fail.
+    reolink_host.baichuan.search_vod_days = AsyncMock(side_effect=TimeoutError)
+    reolink_host.request_vod_files = AsyncMock(side_effect=TimeoutError)
+    msg = await _ws(
+        client, {"type": "reolink_viewer/events/days", "year": 2026, "month": 9}
+    )
+    assert msg["result"]["days"] == []
+    assert len(msg["result"]["failed"]) == 1
+
+    with patch.object(
+        bridge,
+        "async_check_compat",
+        return_value=bridge.CompatReport(ok=False, errors=("x",)),
+    ):
+        msg = await _ws(
+            client, {"type": "reolink_viewer/events/days", "year": 2026, "month": 10}
+        )
+    assert msg["error"]["code"] == "incompatible"
+    await hass.config_entries.async_unload(viewer_entry.entry_id)
+    msg = await _ws(
+        client, {"type": "reolink_viewer/events/days", "year": 2026, "month": 10}
+    )
+    assert msg["error"]["code"] == "not_loaded"

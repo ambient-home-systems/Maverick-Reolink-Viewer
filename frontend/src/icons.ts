@@ -13,6 +13,7 @@ const PATHS = {
   back: svg`<path d="M19 12H5.5M11 5.5 4.5 12l6.5 6.5" />`,
   chevron: svg`<path d="m9.5 5.5 6.5 6.5-6.5 6.5" />`,
   chevronBack: svg`<path d="m14.5 5.5-6.5 6.5 6.5 6.5" />`,
+  chevronDown: svg`<path d="m5.5 9.5 6.5 6.5 6.5-6.5" />`,
   close: svg`<path d="M6 6l12 12M18 6 6 18" />`,
   info: svg`<circle cx="12" cy="12" r="9" /><path d="M12 11v6M12 7.5v.5" />`,
   enterFull: svg`<path d="M4.5 9V4.5H9M15 4.5h4.5V9M19.5 15v4.5H15M9 19.5H4.5V15" />`,

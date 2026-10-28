@@ -66,6 +66,7 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_timeline_day)
     websocket_api.async_register_command(hass, ws_timeline_warm)
     websocket_api.async_register_command(hass, ws_events_recent)
+    websocket_api.async_register_command(hass, ws_events_days)
     websocket_api.async_register_command(hass, ws_events_seen)
     websocket_api.async_register_command(hass, ws_playback_url)
     websocket_api.async_register_command(hass, ws_playback_mse)
@@ -446,6 +447,8 @@ def ws_timeline_warm(
 @websocket_api.websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/events/recent",
+        # A camera-local day; by default each camera's today.
+        probatio.Optional("date"): probatio.All(str, _date),
         # Accept copies of today this many seconds old (then ask again).
         probatio.Optional("max_age", default=0): probatio.All(
             int, probatio.Range(min=0, max=86400)
@@ -460,7 +463,7 @@ async def ws_events_recent(
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    """Return today's events of every recording camera, newest first."""
+    """Return a day's events of every recording camera, newest first."""
     if (entry := _loaded_entry(hass)) is None:
         connection.send_error(msg["id"], ERR_NOT_LOADED, "Reolink Viewer is not loaded")
         return
@@ -477,8 +480,39 @@ async def ws_events_recent(
         data.timeline,
         data.seen,
         _user_id(connection),
+        day=msg.get("date"),
         max_age=msg["max_age"],
         priority=Priority.PREFETCH if msg["background"] else Priority.PLAYBACK,
+    )
+    connection.send_result(msg["id"], result)
+
+
+@websocket_api.websocket_command(
+    {
+        probatio.Required("type"): f"{DOMAIN}/events/days",
+        probatio.Required("year"): probatio.All(int, probatio.Range(2000, 2100)),
+        probatio.Required("month"): probatio.All(int, probatio.Range(1, 12)),
+    }
+)
+@websocket_api.async_response
+async def ws_events_days(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Return the days of a month with recordings on any camera (calendar dots)."""
+    if (entry := _loaded_entry(hass)) is None:
+        connection.send_error(msg["id"], ERR_NOT_LOADED, "Reolink Viewer is not loaded")
+        return
+    if not (compat := bridge.async_check_compat(hass)).ok:
+        connection.send_error(
+            msg["id"],
+            ERR_INCOMPATIBLE,
+            "Reolink integration internals changed: " + "; ".join(compat.errors),
+        )
+        return
+    result = await events.async_days(
+        hass, entry.runtime_data.timeline, msg["year"], msg["month"]
     )
     connection.send_result(msg["id"], result)
 

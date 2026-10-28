@@ -72,10 +72,39 @@ describe("reolink-viewer-panel", () => {
     expect(el.shadowRoot?.querySelector("rv-live-grid")).toBeNull();
     expect(el.shadowRoot?.querySelector("rv-device-list")).not.toBeNull();
     expect(tab("Devices")?.getAttribute("aria-current")).toBe("page");
+    tab("Events")?.click();
+    await el.updateComplete;
+    expect(window.location.hash).toBe("#events");
+    expect(el.shadowRoot?.querySelector("rv-events")).not.toBeNull();
+    expect(tab("Events")?.getAttribute("aria-current")).toBe("page");
     tab("Live")?.click();
     await el.updateComplete;
     expect(window.location.hash).toBe("");
     expect(el.shadowRoot?.querySelector("rv-live-grid")).not.toBeNull();
+  });
+
+  it("numbers the cameras for the Events view without the board open", async () => {
+    window.history.replaceState(null, "", "/#events");
+    const hass = makeHass(okDevices());
+    const sub = { encoding: { codec: "h264", bit_rate: 512, frame_rate: 15, width: 640, height: 360 }, entity_id: null };
+    const camera = (id: string, name: string, width = 640, height = 360) => ({
+      id,
+      name,
+      model: null,
+      records: true,
+      connections: [
+        { connection_id: id, via: "direct", entry_title: name, is_battery: false, streams: { sub: { ...sub, encoding: { ...sub.encoding, width, height } } } },
+      ],
+    });
+    hass.responses["reolink_viewer/live/cameras"] = { cameras: [camera("yard", "Front Yard"), camera("door", "Doorbell", 720, 720)] };
+    const el = await mount(hass);
+    await flush();
+    await el.updateComplete;
+    // The board's order: the square doorbell first.
+    expect(el.shadowRoot?.querySelector("rv-events")?.cameras).toEqual([
+      { id: "door", name: "Doorbell", number: 1 },
+      { id: "yard", name: "Front Yard", number: 2 },
+    ]);
   });
 
   it("follows Home Assistant's dark mode, and shows the time in its time zone", async () => {
@@ -186,6 +215,8 @@ describe("reolink-viewer-panel", () => {
       "rv-live-debug",
       "rv-live-soak",
       "rv-timetable",
+      "rv-events",
+      "rv-calendar",
     ]) {
       expect(customElements.get(name), name).toBeDefined();
     }

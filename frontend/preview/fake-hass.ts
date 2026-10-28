@@ -308,15 +308,16 @@ const EVENTS: [number, number, number, string[], string][] = [
   [20, 58, 85, ["DOORBELL", "PERSON"], "cam-door"],
 ];
 
-/** Today's events across cameras, newest first; those after 19:00 not seen yet. */
-function recent(): RecentEvents {
+/** A day's events across cameras, newest first; today's after 19:00 not seen yet. */
+function recent(date?: string): RecentEvents {
+  const offset = date && date !== "2026-10-27" ? Date.parse("2026-10-27") - Date.parse(date) : 0;
   const events: RecentEvent[] = EVENTS.map(([h, m, len, types, camera], i) => ({
     camera_id: camera,
-    start: at(h, m),
-    end: at(h, m) + len * 1000,
+    start: at(h, m) - offset,
+    end: at(h, m) - offset + len * 1000,
     types,
     segment: `seg-${String(i)}`,
-    new: at(h, m) > at(19, 0),
+    new: !offset && at(h, m) > at(19, 0),
   })).reverse();
   return { events, cameras: CAMS.filter((c) => c.records).length, failed: [], since: at(19, 0), now: NOW };
 }
@@ -383,7 +384,8 @@ export function fakeHass(options: { admin: boolean; dark: boolean }): HomeAssist
         urls: times.map((time, i) => ({ time, bucket: Number(m.bucket), url: media(camera ?? cams[i % cams.length]) })),
       };
     },
-    "reolink_viewer/events/recent": () => recent(),
+    "reolink_viewer/events/recent": (m) => recent(typeof m.date === "string" ? m.date : undefined),
+    "reolink_viewer/events/days": () => ({ days: [21, 22, 23, 24, 25, 26, 27], failed: [] }),
     "reolink_viewer/events/seen": () => ({}),
     "reolink_viewer/playback/check_reports": () => ({ reports: [] }),
     "reolink_viewer/live/soak": () => ({ sample_s: 300, keep_s: 129_600, warmup_s: 300, started_at: NOW - 3_600_000, run: null, samples: [], now: null }),
