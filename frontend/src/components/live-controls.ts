@@ -1,6 +1,7 @@
 import { LitElement, css, html, nothing, svg, type TemplateResult } from "lit";
 
 import { toError } from "../api";
+import { icon } from "../icons";
 import { sharedStyles } from "../styles";
 import type { HassEntity, HomeAssistant, LiveControls, PtzMove } from "../types";
 
@@ -249,7 +250,7 @@ export class RvLiveControls extends LitElement {
             this._step(entity, -1, what);
           }}
         >
-          −
+          ${icon("minus")}
         </button>
         <span class="small">${label}</span>
         <button
@@ -259,14 +260,14 @@ export class RvLiveControls extends LitElement {
             this._step(entity, 1, what);
           }}
         >
-          +
+          ${icon("plus")}
         </button>
       </span>`;
     return html`<div class="zoom">
       ${focus ? stepper(focus, "focus", "Focus") : nothing}
       ${buttons
         ? html`<span class="stepper" role="group" aria-label="Zoom">
-            ${this._holdButton("zoom_out", html`−`)}<span class="small">Zoom</span>${this._holdButton("zoom_in", html`+`)}
+            ${this._holdButton("zoom_out", icon("minus"))}<span class="small">Zoom</span>${this._holdButton("zoom_in", icon("plus"))}
           </span>`
         : zoom
           ? stepper(zoom, "zoom", "Zoom")

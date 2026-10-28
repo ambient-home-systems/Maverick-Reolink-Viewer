@@ -113,17 +113,21 @@ async function run({ origin, token }) {
   }
   tile?.shadowRoot?.querySelector(".corner-button.info")?.click();
 
-  // The soak report: the run the grid reports to, and the server's samples (and one now).
-  [...grid.shadowRoot.querySelectorAll("button")].find((b) => b.textContent.trim() === "Soak report")?.click();
+  // The soak report (Devices → Checks), open next to the grid: the run the
+  // grid reports to, and the server's samples (and one now).
+  const soak = document.createElement("rv-live-soak");
+  soak.hass = hass;
+  document.body.appendChild(soak);
   const soakAt = performance.now();
   while (performance.now() < soakAt + 5000) {
-    const text = grid.shadowRoot?.querySelector("rv-live-soak")?.shadowRoot?.querySelector("pre")?.textContent ?? "";
+    const text = soak.shadowRoot?.querySelector("pre")?.textContent ?? "";
     if (text.includes("Verdict:")) {
       result.soak = text.split("\n");
       break;
     }
     await sleep(100);
   }
+  soak.remove();
 
   // Full screen: HD (the main stream, H.264 here) starts next to the sub stream.
   const holding = (now, kind) => Object.entries(now.running).some(([name, holds]) => name.endsWith(`_${kind}`) && holds > 0);

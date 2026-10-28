@@ -15,8 +15,11 @@ import {
   type ToastDetail,
 } from "./components/navigation";
 import { downloadJson } from "./download";
+import { loadFonts } from "./fonts";
 import { probeFilename } from "./format";
-import { sharedStyles } from "./styles";
+import { icon } from "./icons";
+import { formatClock } from "./playback/time";
+import { sharedStyles, themeTokens } from "./styles";
 import type { DevicesResponse, HomeAssistant, ProbeReport } from "./types";
 
 const MAX_LOG_LINES = 8;
@@ -31,7 +34,8 @@ type ProbeState =
 export class ReolinkViewerPanel extends LitElement {
   static override properties = {
     hass: { attribute: false },
-    narrow: { type: Boolean },
+    narrow: { type: Boolean, reflect: true },
+    _now: { state: true },
     _devices: { state: true },
     _loadError: { state: true },
     _probe: { state: true },
@@ -49,6 +53,8 @@ export class ReolinkViewerPanel extends LitElement {
 
   declare hass: HomeAssistant | undefined;
   declare narrow: boolean;
+  /** The band's clock. */
+  declare _now: number;
   declare _devices: DevicesResponse | undefined;
   declare _loadError: string | undefined;
   declare _probe: ProbeState;
@@ -67,6 +73,7 @@ export class ReolinkViewerPanel extends LitElement {
   private _loading = false;
   private _warmed = false;
   private _toastTimer: ReturnType<typeof setTimeout> | undefined;
+  private _clockTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly _onHashChange = () => {
     this._route = routeFromHash(window.location.hash);
   };
@@ -74,6 +81,7 @@ export class ReolinkViewerPanel extends LitElement {
   constructor() {
     super();
     this.narrow = false;
+    this._now = Date.now();
     this._probe = { status: "idle" };
     this._includeBattery = false;
     this._concurrency = false;
@@ -83,7 +91,7 @@ export class ReolinkViewerPanel extends LitElement {
     this._playbackConcurrency = false;
     this._playbackStreams = 4;
     this._copied = false;
-    this._route = { view: "list" };
+    this._route = { view: "live" };
     this.addEventListener(NAVIGATE_EVENT, (e) => {
       this.navigate((e as CustomEvent<Route>).detail);
     });
@@ -94,16 +102,33 @@ export class ReolinkViewerPanel extends LitElement {
 
   override connectedCallback(): void {
     super.connectedCallback();
+    loadFonts(import.meta.url);
     this._route = routeFromHash(window.location.hash);
     window.addEventListener("hashchange", this._onHashChange);
+    this._tick();
   }
 
   override disconnectedCallback(): void {
     super.disconnectedCallback();
     window.removeEventListener("hashchange", this._onHashChange);
     clearTimeout(this._toastTimer);
+    clearTimeout(this._clockTimer);
     this._run?.cancel();
     this._run = undefined;
+  }
+
+  /** The clock moves on at the start of each minute. */
+  private _tick(): void {
+    this._now = Date.now();
+    clearTimeout(this._clockTimer);
+    this._clockTimer = setTimeout(() => {
+      this._tick();
+    }, 60_000 - (this._now % 60_000) + 50);
+  }
+
+  protected override willUpdate(): void {
+    // Home Assistant's dark mode picks the timetable's paper or navy.
+    this.toggleAttribute("dark", this.hass?.themes?.darkMode === true);
   }
 
   protected override updated(changed: PropertyValues<this>): void {
@@ -121,7 +146,7 @@ export class ReolinkViewerPanel extends LitElement {
       const url = `${window.location.pathname}${window.location.search}${hash}`;
       window.history.pushState(null, "", url);
     }
-    if (route.view === "list" && this._route.view === "device") void this._load();
+    if (route.view === "list" && this._route.view !== "list") void this._load();
     this._route = route;
   }
 
@@ -158,55 +183,79 @@ export class ReolinkViewerPanel extends LitElement {
   protected override render(): TemplateResult {
     const route = this._route;
     return html`
-      <div class="toolbar">
+      <header class="band">
         <ha-menu-button .hass=${this.hass} .narrow=${this.narrow}></ha-menu-button>
         <div class="title">Reolink</div>
-        ${route.view === "list"
-          ? html`<button class="text" @click=${() => void this._load()} ?disabled=${this._loading}>
-              Refresh
-            </button>`
-          : nothing}
-      </div>
-      <main>
-        ${route.view === "device"
-          ? html`<rv-device-page
-              .hass=${this.hass}
-              .deviceId=${route.id}
-              .tab=${route.tab}
-            ></rv-device-page>`
-          : route.view === "live"
-            ? html`<rv-live-grid .hass=${this.hass}></rv-live-grid>`
-          : route.view === "live-check"
-            ? html`<div>
-                  <button class="text" @click=${() => {
-                    this.navigate({ view: "list" });
-                  }}>← Devices</button>
-                </div>
-                <rv-live-check .hass=${this.hass}></rv-live-check>`
-          : route.view === "soak"
-            ? html`<div>
-                  <button class="text" @click=${() => {
-                    this.navigate({ view: "list" });
-                  }}>← Devices</button>
-                </div>
-                <h2>Soak report</h2>
-                <rv-live-soak .hass=${this.hass}></rv-live-soak>`
-            : html`${this._renderBanner()}
-                ${this._loadError
-                  ? nothing
-                  : html`<rv-device-list .devices=${this._devices}></rv-device-list>`}
-                ${this._renderLiveEntry()}
-                ${this._isAdmin ? this._renderProbe() : nothing}`}
-      </main>
+        <nav aria-label="Reolink">
+          ${this._renderTab("Live", { view: "live" }, route.view === "live")}
+          ${this._renderTab("Devices", { view: "list" }, route.view !== "live")}
+        </nav>
+        <time class="clock" aria-label="Time">
+          ${formatClock(this._now, this.hass?.config?.time_zone)}
+        </time>
+      </header>
+      <main class=${route.view === "live" ? "board" : "page"}>${this._renderView()}</main>
       ${this._toast
         ? html`<div class="toast ${this._toast.kind}" role="status" aria-live="polite">
             <span>${this._toast.message}</span>
-            <button class="text" aria-label="Dismiss" @click=${() => {
+            <button class="dismiss" aria-label="Dismiss" @click=${() => {
               this._toast = undefined;
-            }}>✕</button>
+            }}>${icon("close")}</button>
           </div>`
         : nothing}
     `;
+  }
+
+  private _renderTab(label: string, to: Route, current: boolean): TemplateResult {
+    return html`<button
+      class="tab"
+      aria-current=${current ? "page" : nothing}
+      @click=${() => {
+        this.navigate(to);
+      }}
+    >
+      ${label}
+    </button>`;
+  }
+
+  private _renderView(): TemplateResult {
+    const route = this._route;
+    switch (route.view) {
+      case "live":
+        return html`<rv-live-grid .hass=${this.hass}></rv-live-grid>`;
+      case "device":
+        return html`<rv-device-page
+          .hass=${this.hass}
+          .deviceId=${route.id}
+          .tab=${route.tab}
+        ></rv-device-page>`;
+      case "live-check":
+        return html`${this._renderBack()}<rv-live-check .hass=${this.hass}></rv-live-check>`;
+      case "soak":
+        return html`${this._renderBack()}
+          <h1>Soak report</h1>
+          <rv-live-soak .hass=${this.hass}></rv-live-soak>`;
+      case "list":
+        return html`<div class="heading">
+            <h1>Devices</h1>
+            <button class="text with-icon" @click=${() => void this._load()} ?disabled=${this._loading}>
+              ${icon("refresh")}Refresh
+            </button>
+          </div>
+          ${this._renderBanner()}
+          ${this._loadError
+            ? nothing
+            : html`<rv-device-list .devices=${this._devices}></rv-device-list>`}
+          ${this._renderChecks()} ${this._isAdmin ? this._renderProbe() : nothing}`;
+    }
+  }
+
+  private _renderBack(): TemplateResult {
+    return html`<div>
+      <button class="text with-icon back" @click=${() => {
+        this.navigate({ view: "list" });
+      }}>${icon("back")}Devices</button>
+    </div>`;
   }
 
   private _renderBanner(): TemplateResult | typeof nothing {
@@ -227,32 +276,29 @@ export class ReolinkViewerPanel extends LitElement {
     </div>`;
   }
 
-  private _renderLiveEntry(): TemplateResult | typeof nothing {
+  /** How live view does on this device, and how it held up over a day. */
+  private _renderChecks(): TemplateResult | typeof nothing {
     if (!this._devices || this._devices.degraded) return nothing;
     return html`<section class="card">
-      <h2>Live view</h2>
-      <p class="muted">
-        Every camera live, each showing its last picture until its video starts. The live check
-        measures how fast each camera starts on this device and compares it with Home Assistant's
-        own camera view. The soak report says how live view held up with the grid open, from any
-        device.
-      </p>
-      <div class="actions">
-        <button class="primary" @click=${() => {
-          this.navigate({ view: "live" });
-        }}>
-          Watch live
-        </button>
+      <h2>Checks</h2>
+      <div class="check">
+        <p>
+          <strong>Live check.</strong>
+          <span class="muted">How fast each camera starts on this device, next to Home Assistant's
+          own camera view.</span>
+        </p>
         <button @click=${() => {
           this.navigate({ view: "live-check" });
-        }}>
-          Open the live check
-        </button>
+        }}>Open the live check</button>
+      </div>
+      <div class="check">
+        <p>
+          <strong>Soak report.</strong>
+          <span class="muted">How live view held up with the grid open, from any device.</span>
+        </p>
         <button @click=${() => {
           this.navigate({ view: "soak" });
-        }}>
-          Soak report
-        </button>
+        }}>Soak report</button>
       </div>
     </section>`;
   }
@@ -463,63 +509,177 @@ export class ReolinkViewerPanel extends LitElement {
   }
 
   static override styles = [
+    themeTokens,
     sharedStyles,
     css`
       :host {
-        display: block;
-        min-height: 100%;
-        background: var(--primary-background-color);
-        color: var(--primary-text-color);
-        font-family: var(--paper-font-body1_-_font-family, Roboto, sans-serif);
-      }
-      .toolbar {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        height: var(--header-height, 56px);
-        padding: 0 12px;
-        background: var(--app-header-background-color, var(--primary-color));
-        color: var(--app-header-text-color, white);
-        box-sizing: border-box;
-      }
-      .title {
-        flex: 1;
-        min-width: 0;
-        font-size: 20px;
-      }
-      main {
-        max-width: 1100px;
-        margin: 0 auto;
-        padding: 16px;
         display: flex;
         flex-direction: column;
+        min-height: 100vh;
+        min-height: 100dvh;
+        background: var(--rv-ground);
+        color: var(--rv-text);
+        -webkit-font-smoothing: antialiased;
+      }
+      /* The band: where you are, and the time. */
+      .band {
+        display: flex;
+        align-items: stretch;
+        gap: 24px;
+        height: 64px;
+        padding: 0 20px;
+        background: var(--rv-rail);
+        color: var(--rv-on-rail);
+        box-sizing: border-box;
+        flex: none;
+      }
+      ha-menu-button {
+        align-self: center;
+      }
+      .title {
+        display: flex;
+        align-items: center;
+        font-family: var(--rv-font-cond);
+        font-size: 22px;
+        font-weight: 600;
+      }
+      nav {
+        display: flex;
+      }
+      .tab {
+        min-height: 0;
+        padding: 0 14px;
+        border: none;
+        border-radius: 0;
+        background: transparent;
+        color: var(--rv-on-rail-muted);
+        font-size: 16px;
+        box-shadow: inset 0 -3px 0 transparent;
+      }
+      .tab:hover:not(:disabled) {
+        background: transparent;
+        color: var(--rv-on-rail);
+      }
+      .tab[aria-current] {
+        color: var(--rv-on-rail);
+        box-shadow: inset 0 -3px 0 var(--rv-on-rail);
+      }
+      .tab:focus-visible {
+        outline-color: var(--rv-on-rail);
+        outline-offset: -6px;
+      }
+      .clock {
+        margin-left: auto;
+        align-self: center;
+        font-family: var(--rv-font-cond);
+        font-size: 30px;
+        font-weight: 600;
+        line-height: 1;
+      }
+      :host([narrow]) .band {
+        flex-wrap: wrap;
+        height: auto;
+        gap: 0;
+        padding: 0 16px 0 4px;
+      }
+      :host([narrow]) .title {
+        height: 56px;
+        font-size: 20px;
+        padding-left: 8px;
+      }
+      :host([narrow]) nav {
+        order: 3;
+        width: 100%;
+        height: 44px;
+      }
+      :host([narrow]) .tab {
+        flex: 1;
+        font-size: 15px;
+      }
+      :host([narrow]) .clock {
+        font-size: 24px;
+      }
+      main {
+        flex: 1;
+        min-width: 0;
+      }
+      main.board {
+        background: var(--rv-board);
+        color: var(--rv-on-board);
+      }
+      main.page {
+        width: 100%;
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 20px 24px 40px;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+      :host([narrow]) main.page {
+        padding: 14px 16px 32px;
+      }
+      main.page > * {
+        min-width: 0;
+      }
+      h1 {
+        margin: 0;
+        font-family: var(--rv-font-cond);
+        font-size: 28px;
+        font-weight: 600;
+        line-height: 1.1;
+      }
+      .heading {
+        display: flex;
+        align-items: baseline;
         gap: 16px;
       }
-      main > * {
-        min-width: 0;
+      .back {
+        padding-left: 0;
+      }
+      .check {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 10px 0;
+        border-bottom: 1px solid var(--rv-rule);
+      }
+      .check p {
+        flex: 1;
+        margin: 0;
+      }
+      .check button {
+        flex: none;
+      }
+      :host([narrow]) .check {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
       }
       label {
         display: block;
-        margin: 8px 0;
+        margin: 10px 0;
       }
       label.nested {
-        margin-inline-start: 24px;
+        margin-inline-start: 26px;
       }
       .actions {
         display: flex;
+        flex-wrap: wrap;
         gap: 8px;
         margin-top: 12px;
       }
       .log {
-        font-family: var(--code-font-family, monospace);
+        font-family: var(--rv-mono);
         font-size: 13px;
-        color: var(--secondary-text-color);
+        color: var(--rv-muted);
       }
       pre {
         max-height: 400px;
         overflow: auto;
         font-size: 12px;
-        background: var(--secondary-background-color, #f5f5f5);
+        background: var(--rv-ground-2);
         padding: 8px;
       }
       .toast {
@@ -532,15 +692,21 @@ export class ReolinkViewerPanel extends LitElement {
         align-items: center;
         gap: 12px;
         max-width: min(560px, calc(100vw - 32px));
-        padding: 10px 16px;
-        border-radius: 8px;
-        background: var(--primary-text-color, #222);
-        color: var(--primary-background-color, white);
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        padding: 8px 8px 8px 16px;
+        background: var(--rv-board);
+        color: var(--rv-on-board);
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.28);
       }
       .toast.error {
-        background: var(--error-color, #db4437);
-        color: var(--text-primary-color, white);
+        background: var(--rv-fault);
+        color: var(--rv-on-fault);
+      }
+      .toast .dismiss {
+        min-height: 0;
+        padding: 6px;
+        border: none;
+        background: transparent;
+        color: inherit;
       }
     `,
   ];

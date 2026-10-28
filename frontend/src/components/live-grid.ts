@@ -1,58 +1,89 @@
 import { LitElement, css, html, nothing, type TemplateResult } from "lit";
 
 import { toError } from "../api";
+import { icon } from "../icons";
 import { LiveData, cameraFor, isWarm, liveConnection } from "../live/data";
 import { soakTally } from "../live/soak-tally";
 import { sharedStyles } from "../styles";
-import type { HomeAssistant, LiveCamera } from "../types";
-import "./live-soak";
+import type { HomeAssistant, LiveCamera, LiveConnection } from "../types";
 import "./live-tile";
 import type { LiveCountDetail } from "./live-tile";
 import { navigate } from "./navigation";
 
+const GAP = 8;
+
 /**
- * Every camera live, on its sub stream (Reolink → Live). Each tile shows the
- * camera's last picture at once and fades into video; a click opens the
- * camera's Live tab. While one tile is full screen, the others stop.
+ * Every camera live, on its sub stream (Reolink → Live): the live board.
+ * Each tile shows the camera's last picture at once and fades into video; a
+ * click opens the camera's Live tab. Tiles are numbered, and packed by the
+ * camera's shape: a square doorbell runs two rows tall, a panorama two
+ * columns wide. While one tile is full screen, the others stop.
  *
  * For Phase 3's 24-hour soak, the grid counts how long it is open and
  * visible (tiles pause while the page is hidden) and what its tiles count,
  * and sends it to the server's soak run every minute (soakTally): the run
  * outlives the grid, which Home Assistant unloads when its page has been
- * hidden for 5 minutes. Its soak report reads the run.
+ * hidden for 5 minutes. The soak report (Devices → Checks) reads the run.
  */
 export class RvLiveGrid extends LitElement {
   static override properties = {
     hass: { attribute: false },
     _full: { state: true },
-    _soak: { state: true },
+    _boardFull: { state: true },
+    _width: { state: true },
   };
 
   declare hass: HomeAssistant | undefined;
   /** The camera full screen, if any. */
   declare _full: string | undefined;
-  /** The soak report is shown. */
-  declare _soak: boolean;
+  /** The whole board is in the browser's full screen. */
+  declare _boardFull: boolean;
+  /** The grid's width, which sets its columns and row height. */
+  declare _width: number;
 
   private readonly _data = new LiveData(this);
+  private _resize: ResizeObserver | undefined;
 
   constructor() {
     super();
-    this._soak = false;
+    this._boardFull = false;
+    this._width = 0;
   }
 
   override connectedCallback(): void {
     super.connectedCallback();
     soakTally.opened(() => this.hass, document.visibilityState !== "hidden");
     document.addEventListener("visibilitychange", this._onVisibility);
+    document.addEventListener("fullscreenchange", this._onFullscreen);
+    if (typeof ResizeObserver !== "undefined") {
+      this._resize = new ResizeObserver((entries) => {
+        const entry = entries.at(-1);
+        if (entry && Math.abs(entry.contentRect.width - this._width) >= 1) {
+          this._width = entry.contentRect.width;
+        }
+      });
+      this._resize.observe(this);
+    }
     this._flush();
   }
 
   override disconnectedCallback(): void {
     super.disconnectedCallback();
     document.removeEventListener("visibilitychange", this._onVisibility);
+    document.removeEventListener("fullscreenchange", this._onFullscreen);
+    this._resize?.disconnect();
+    this._resize = undefined;
     soakTally.closed();
     this._flush();
+  }
+
+  private readonly _onFullscreen = (): void => {
+    this._boardFull = document.fullscreenElement === this;
+  };
+
+  private _toggleBoardFull(): void {
+    if (document.fullscreenElement === this) void document.exitFullscreen().catch(() => undefined);
+    else void this.requestFullscreen().catch(() => undefined);
   }
 
   private readonly _onVisibility = (): void => {
@@ -73,36 +104,20 @@ export class RvLiveGrid extends LitElement {
   protected override render(): TemplateResult {
     const data = this._data;
     const cameras = data.cameras;
-    return html`<div class="header">
-        <button
-          class="text back"
-          @click=${() => {
-            navigate(this, { view: "list" });
-          }}
-        >
-          ← Devices
-        </button>
-        <h2>Live</h2>
-        <button
-          class="text soak-button"
-          title="After 24 hours with the grid open: did live view hold up?"
-          @click=${() => {
-            this._soak = true;
-          }}
-        >
-          Soak report
-        </button>
+    const canFull = document.fullscreenEnabled && typeof this.requestFullscreen === "function";
+    return html`<div class="head">
+        <h1>Live</h1>
+        ${cameras?.length
+          ? html`<p class="count">${cameras.length} ${cameras.length === 1 ? "camera" : "cameras"}</p>`
+          : nothing}
+        ${canFull && cameras?.length
+          ? html`<button class="text with-icon full" @click=${() => {
+              this._toggleBoardFull();
+            }}>
+              ${icon(this._boardFull ? "exitFull" : "enterFull")}${this._boardFull ? "Exit full screen" : "Full screen"}
+            </button>`
+          : nothing}
       </div>
-      ${this._soak
-        ? html`<rv-live-soak
-            class="soak"
-            closable
-            .hass=${this.hass}
-            @rv-live-soak-close=${() => {
-              this._soak = false;
-            }}
-          ></rv-live-soak>`
-        : nothing}
       ${data.error
         ? html`<div class="banner error" role="alert">
             Could not load live view: ${data.error}
@@ -118,74 +133,134 @@ export class RvLiveGrid extends LitElement {
       ${cameras === undefined
         ? data.error
           ? nothing
-          : html`<p class="muted">Loading…</p>`
+          : html`<p class="note">Loading…</p>`
         : cameras.length === 0
-          ? html`<p class="muted">No camera can be watched live.</p>`
-          : html`<div
-              class="grid"
-              @rv-live-open=${(e: CustomEvent<{ cameraId: string }>) => {
-                navigate(this, {
-                  view: "device",
-                  id: e.detail.cameraId,
-                  tab: "live",
-                });
-              }}
-              @rv-live-full=${(e: CustomEvent<{ cameraId: string; full: boolean }>) => {
-                if (e.detail.full) this._full = e.detail.cameraId;
-                else if (this._full === e.detail.cameraId) this._full = undefined;
-              }}
-              @rv-live-count=${(e: CustomEvent<LiveCountDetail>) => {
-                soakTally.count(e.detail.camera, e.detail.kind);
-              }}
-            >
-              ${cameras.map(
-                (camera) =>
-                  html`<rv-live-tile
-                    .hass=${this.hass}
-                    .camera=${camera}
-                    .connection=${liveConnection(camera)}
-                    .image=${data.images[camera.id]}
-                    .iceServers=${data.iceServers}
-                    .warm=${isWarm(this.hass, camera)}
-                    .suspended=${this._full !== undefined && this._full !== camera.id}
-                    .controls=${camera.controls}
-                    openable
-                  ></rv-live-tile>`,
-              )}
-            </div>`}`;
+          ? html`<p class="note">No camera can be watched live.</p>`
+          : this._renderGrid(cameras)}`;
+  }
+
+  private _renderGrid(all: LiveCamera[]): TemplateResult {
+    const data = this._data;
+    const cameras = boardOrder(all);
+    const shapes = cameras.map((camera) => tileShape(liveConnection(camera)));
+    const cells = shapes.reduce((n, shape) => n + (shape ? 2 : 1), 0);
+    const width = this._width;
+    const maxCols = width >= 1100 ? 5 : width >= 800 ? 4 : width >= 540 ? 3 : 2;
+    const cols = Math.max(2, Math.min(maxCols, cells));
+    const row = width ? ((width - (cols - 1) * GAP) / cols) * (9 / 16) : 0;
+    return html`<div
+      class="grid"
+      style=${`--cols: ${cols}; --row: ${row ? `${row.toFixed(1)}px` : "auto"}`}
+      @rv-live-open=${(e: CustomEvent<{ cameraId: string }>) => {
+        navigate(this, {
+          view: "device",
+          id: e.detail.cameraId,
+          tab: "live",
+        });
+      }}
+      @rv-live-full=${(e: CustomEvent<{ cameraId: string; full: boolean }>) => {
+        if (e.detail.full) this._full = e.detail.cameraId;
+        else if (this._full === e.detail.cameraId) this._full = undefined;
+      }}
+      @rv-live-count=${(e: CustomEvent<LiveCountDetail>) => {
+        soakTally.count(e.detail.camera, e.detail.kind);
+      }}
+    >
+      ${cameras.map(
+        (camera, i) =>
+          html`<rv-live-tile
+            class=${shapes[i] ?? ""}
+            fill
+            .number=${i + 1}
+            .hass=${this.hass}
+            .camera=${camera}
+            .connection=${liveConnection(camera)}
+            .image=${data.images[camera.id]}
+            .iceServers=${data.iceServers}
+            .warm=${isWarm(this.hass, camera)}
+            .suspended=${this._full !== undefined && this._full !== camera.id}
+            .controls=${camera.controls}
+            openable
+          ></rv-live-tile>`,
+      )}
+    </div>`;
   }
 
   static override styles = [
     sharedStyles,
     css`
       :host {
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
+        display: block;
+        padding: 16px 24px 28px;
+        color: var(--rv-on-board);
+        background: var(--rv-board);
       }
-      .header {
+      .head {
         display: flex;
-        align-items: center;
-        gap: 8px;
+        align-items: baseline;
+        gap: 14px;
+        margin-bottom: 12px;
       }
-      .header h2 {
+      h1 {
         margin: 0;
+        font-family: var(--rv-font-cond);
+        font-size: 22px;
+        font-weight: 600;
       }
-      .back {
-        padding-left: 0;
-        color: var(--primary-color);
+      .count,
+      .note {
+        margin: 0;
+        color: var(--rv-on-board-muted);
+        font-size: 15px;
       }
-      .soak-button {
+      button.full {
         margin-left: auto;
-        color: var(--primary-color);
+        color: var(--rv-on-board);
+      }
+      button.full:focus-visible {
+        outline-color: var(--rv-on-board);
       }
       .grid {
         display: grid;
-        gap: 8px;
-        grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+        grid-template-columns: repeat(var(--cols, 2), minmax(0, 1fr));
+        grid-auto-rows: var(--row, auto);
+        grid-auto-flow: dense;
+        gap: ${GAP}px;
+      }
+      rv-live-tile.tall {
+        grid-row: span 2;
+      }
+      rv-live-tile.wide {
+        grid-column: span 2;
+      }
+      @media (max-width: 600px) {
+        :host {
+          padding: 12px 12px 20px;
+        }
       }
     `,
   ];
+}
+
+/**
+ * The board's order, which numbers its tiles: tall cameras first, so they
+ * stand in the first columns and the rest pack around them.
+ */
+export function boardOrder(cameras: LiveCamera[]): LiveCamera[] {
+  const tall = cameras.filter((c) => tileShape(liveConnection(c)) === "tall");
+  return [...tall, ...cameras.filter((c) => !tall.includes(c))];
+}
+
+/** A square or portrait camera runs two rows tall; a panorama two columns wide. */
+export function tileShape(connection: LiveConnection | undefined): "tall" | "wide" | undefined {
+  const encoding = connection?.streams.sub?.encoding;
+  const width = encoding?.width;
+  const height = encoding?.height;
+  if (!width || !height) return undefined;
+  const ratio = width / height;
+  if (ratio < 1.2) return "tall";
+  if (ratio > 2.4) return "wide";
+  return undefined;
 }
 
 /** One camera live, large (the camera's Live tab). */

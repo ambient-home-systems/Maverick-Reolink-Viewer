@@ -3,6 +3,7 @@ import { LitElement, css, html, nothing, type PropertyValues, type TemplateResul
 import { fetchCatalog, fetchDevice, toError } from "../api";
 import { deviceTypeLabel } from "../format";
 import { statesChanged } from "../render-filter";
+import { icon } from "../icons";
 import { sharedStyles } from "../styles";
 import type { Catalog, DeviceResponse, HassEntities, HomeAssistant, Unsubscribe } from "../types";
 import "./live-grid";
@@ -137,9 +138,9 @@ export class RvDevicePage extends LitElement {
     const node = device?.node;
     return html`
       <div class="header">
-        <button class="text back" @click=${() => {
+        <button class="text with-icon back" @click=${() => {
           navigate(this, { view: "list" });
-        }} aria-label="Back to all devices">← All devices</button>
+        }}>${icon("back")}All devices</button>
       </div>
       ${this._error
         ? html`<div class="banner error" role="alert">Could not load the device: ${this._error}</div>`

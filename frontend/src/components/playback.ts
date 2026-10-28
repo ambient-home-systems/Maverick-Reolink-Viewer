@@ -61,6 +61,7 @@ import {
   zoomIndex,
   type View,
 } from "../playback/timeline-math";
+import { icon } from "../icons";
 import { sharedStyles } from "../styles";
 import type { CacheStatus, HomeAssistant, PlaybackUrl, Segment, Stream, TimelineDay, Timing } from "../types";
 import { toast } from "./navigation";
@@ -1002,7 +1003,7 @@ export class RvPlayback extends LitElement {
       <div class="group">
         <button aria-label="Previous event" title="Previous event" @click=${() => {
           this._jump(-1);
-        }}>⏮</button>
+        }}>${icon("previous")}</button>
         <button
           aria-label=${this._player?.paused === false ? "Pause" : "Play"}
           @click=${() => {
@@ -1013,19 +1014,19 @@ export class RvPlayback extends LitElement {
             else player.pause();
             this.requestUpdate();
           }}
-        >${this._player?.paused === false ? "⏸" : "▶"}</button>
+        >${icon(this._player?.paused === false ? "pause" : "play")}</button>
         <button aria-label="Next event" title="Next event" @click=${() => {
           this._jump(1);
-        }}>⏭</button>
+        }}>${icon("next")}</button>
       </div>
       <div class="group">
-        <button aria-label="Zoom out" ?disabled=${zoom === 0} @click=${() => this._timeline?.zoom(-1)}>−</button>
+        <button aria-label="Zoom out" ?disabled=${zoom === 0} @click=${() => this._timeline?.zoom(-1)}>${icon("minus")}</button>
         <span class="small muted zoom">${zoomLabel(this._view.span)}</span>
         <button
           aria-label="Zoom in"
           ?disabled=${zoom === ZOOM_LEVELS.length - 1}
           @click=${() => this._timeline?.zoom(1)}
-        >+</button>
+        >${icon("plus")}</button>
       </div>
       <div class="group">
         <button
@@ -1186,7 +1187,7 @@ export class RvPlayback extends LitElement {
           <div class="dayline">
             <button class="text" aria-label="Previous day" @click=${() => {
               this._changeDay(-1);
-            }}>‹</button>
+            }}>${icon("chevronBack")}</button>
             <strong>${day ? formatDay(day.start + 12 * 3_600_000, zone) : this._date}</strong>
             <button
               class="text"
@@ -1195,7 +1196,7 @@ export class RvPlayback extends LitElement {
               @click=${() => {
                 this._changeDay(1);
               }}
-            >›</button>
+            >${icon("chevron")}</button>
             <span class="muted small">
               ${this._cursor !== undefined ? formatClock(this._cursor, zone, true) : ""}
               ${this._loading ? " · loading…" : ""}

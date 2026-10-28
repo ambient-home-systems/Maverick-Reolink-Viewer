@@ -44,6 +44,9 @@ custom_components/reolink_viewer/
   translations/en.json
   frontend_dist/     # built panel bundle (committed; CI checks it matches the source)
 frontend/            # Lit + TypeScript panel, built with Vite
+  src/styles.ts      # the Timetable's tokens (light and dark) and shared element styles
+  src/icons.ts       # drawn icons; src/fonts.ts loads Barlow from public/fonts (OFL)
+  preview/           # the design preview: the panel on a fake hass (see Design preview)
   src/components/    # device list, device page, overview, settings, playback tab,
                      # live grid and Live tab (live-grid.ts) with their tiles (live-tile.ts)
                      # and the camera's controls (live-controls.ts) and debug view
@@ -102,6 +105,21 @@ check out HA core at the tested tag and run, from that checkout, in a venv with 
 python -m script.hassfest --action validate \
   --integration-path /path/to/repo/custom_components/reolink_viewer
 ```
+
+## Design preview
+
+The panel without Home Assistant or cameras, for designing and checking every view:
+`frontend/preview/` mounts the real panel on a fake `hass` with the owner's eight
+cameras, every setting and a day of events. Its pictures are synthetic.
+
+```bash
+frontend/preview/make-media.sh                     # once: the synthetic pictures (ffmpeg)
+cd frontend && npx vite build -c vite.preview.config.ts
+node ../scripts/preview_capture.cjs <out-dir> [view ...]   # light and dark, desktop and phone
+```
+
+The design's direction contract is in `.impeccable/surfaces/`; `PRODUCT.md` holds
+who the panel is for.
 
 ## Tests
 

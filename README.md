@@ -9,7 +9,7 @@ built-in [Reolink integration](https://www.home-assistant.io/integrations/reolin
   (person, vehicle, animal, face, package, visitor, ...) and recording thumbnails
 - smooth recorded-video playback and low-latency live view
 
-**Status: Phase 3 (live view) done; Phase 4 is next.** Phase 3 is done (v0.15.1): live
+**Status: Phase 4 (design, performance, mobile, release) in progress.** Phase 3 is done (v0.15.1): live
 view through the integration's own go2rtc, with a grid of every camera, a Live tab per
 camera, full-screen HD and the camera's controls. It was verified on the owner's
 hardware: a 24-hour soak, every tile's first image in a median 0.02 s on a Mac and an
@@ -94,6 +94,16 @@ v0.15.1 takes the soak's first sample 5 minutes after Home Assistant starts, onc
 view is up. Before, a sample taken at start counted go2rtc and the kept-warm feeds as
 missing. The soak passed on v0.15.1: 24.4 hours of Home Assistant and 8.3 visible hours
 of the grid, with no reconnect loops, no restarts and no growth in camera sessions.
+
+**Phase 4 (in progress):** v0.16.0 starts the panel's new design, the Timetable. The
+**Reolink** panel opens on **Live**: every camera on a dark live board, numbered and
+packed by its shape (a square doorbell runs two rows tall, a panorama two columns
+wide), each saying in a word what it is doing (Live, Starting, Picture 21:22, Asleep,
+Retrying). A railway-blue band holds the Live and Devices tabs and the time; the device
+list, the live check, the soak report and the hardware probe are under **Devices**. The
+panel follows Home Assistant's light or dark mode with its own colours, and its font
+(Barlow, SIL Open Font License) comes from the integration, not a font service. Today's
+events come to the live board next.
 
 Requires Home Assistant 2026.10 or newer with the Reolink integration set up.
 

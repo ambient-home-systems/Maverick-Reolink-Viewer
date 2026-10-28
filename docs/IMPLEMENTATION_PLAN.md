@@ -2889,7 +2889,7 @@ redesigned views.
 
 | Step | Status |
 | --- | --- |
-| 1. Design: the Timetable panel (home view, events, devices, device page, checks) | **Direction chosen** (2026-10-28); building next, see "Step 1: the design" |
+| 1. Design: the Timetable panel (home view, events, devices, device page, checks) | **In progress.** Direction chosen (2026-10-28), see "Step 1: the design". 1.1 foundations built (v0.16.0), see "Step 1.1: foundations"; the home view's timetable is next |
 | 2. Performance budget | Not started |
 | 3. Mobile, and networks that cut websockets | Not started |
 | 4. Error states | Not started |
@@ -2973,6 +2973,31 @@ iPhone and the Mac):
    - The design detector, then an independent finish review against the
      contract, acted on.
    - `DESIGN.md`, written from the built panel.
+
+### Step 1.1: foundations (v0.16.0)
+
+- **Live is the home view.** The panel opens on the live board; the device list moved
+  to `#devices` (an old `#live` link still opens the board). A railway-blue band holds
+  the title, the **Live** and **Devices** tabs and a clock in Home Assistant's time
+  zone. On a phone, the tabs take a row of their own.
+- **Devices** holds the device list, then **Checks** (the live check and the soak
+  report, which left the grid) and, for admins, the hardware probe.
+- **Tokens** (`styles.ts`): the Timetable's palette, light and dark with Home
+  Assistant's dark mode (`hass.themes.darkMode`), mapped onto Home Assistant's theme
+  variables so every view follows. Sections are ruled, not boxed. Faults are amber:
+  red is kept for "now" and "new".
+- **Fonts**: Barlow and Barlow Semi Condensed, latin, five woff2 files (78 KB, SIL Open
+  Font License) in `frontend/public/fonts`, built into `frontend_dist/fonts/` and
+  loaded from beside the panel's module.
+- **Icons** (`icons.ts`): drawn, one stroke. They replace the text glyphs that stood
+  in for icons (playback transport, zoom, back, dismiss).
+- **The live board**: tiles numbered, the tall ones first, packed by the sub stream's
+  shape (under 1.2:1 runs two rows tall, over 2.4:1 two columns wide) on 2–5 columns
+  by width, filling their cells (cropped; full screen shows the whole picture). Each
+  tile says what it is doing: Live, Starting, Picture hh:mm, Asleep, Retrying, No sub
+  stream. Its buttons show on hover; a touch screen has full screen only on the board.
+  The board itself can go full screen where the browser allows.
+- The bundle is 85 KB gzipped (80 KB before).
 
 ### Steps 2–7
 

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { PlayerOptions, PlayerState } from "../live/player";
+import { formatClock } from "../playback/time";
 import type { HomeAssistant, LiveCamera, LiveImagesEvent } from "../types";
 import { routeFromHash, routeToHash, type Route } from "./navigation";
 
@@ -55,7 +56,7 @@ vi.mock("../live/player", () => {
   return { LivePlayer: FakePlayer };
 });
 
-await import("./live-grid");
+const { boardOrder, tileShape } = await import("./live-grid");
 const { OFFSCREEN_GRACE_MS } = await import("./live-tile");
 
 const encoding = { codec: "h264", frame_rate: 15, bit_rate: 512 };
@@ -279,12 +280,14 @@ describe("rv-live-grid", () => {
     if (!doorbell) throw new Error("no doorbell");
     const bell = () => players.find((p) => p.ref.connectionId === "bell");
     expect(bell()?.running ?? false).toBe(false);
-    expect(doorbell.shadowRoot?.textContent).toContain("Tap to watch");
+    expect(doorbell.shadowRoot?.textContent).toContain("Asleep");
+    expect(doorbell.shadowRoot?.textContent).toContain("Tap to wake it and watch");
     tileBox(doorbell).click();
     await doorbell.updateComplete;
     await flush();
     expect(bell()?.starts).toBe(1);
-    expect(doorbell.shadowRoot?.textContent).not.toContain("Tap to watch");
+    expect(doorbell.shadowRoot?.textContent).not.toContain("Tap to wake");
+    expect(doorbell.shadowRoot?.textContent).not.toContain("Asleep");
 
     const routes: Route[] = [];
     el.addEventListener("rv-navigate", (e) => routes.push((e as CustomEvent<Route>).detail));
@@ -306,7 +309,7 @@ describe("rv-live-grid", () => {
     const text = () => laundry.shadowRoot?.textContent ?? "";
     expect(text()).toContain("No picture yet");
     expect(text()).toContain("Tap to watch live");
-    expect(text()).not.toContain("Battery camera");
+    expect(text()).not.toContain("Asleep");
     // Its picture shows, with when it was taken.
     const taken = new Date(2026, 9, 22, 14, 5).getTime();
     fake.image({ images: { cam3: { url: "/api/reolink_viewer/live/image/t3?authSig=y", taken } } });
@@ -315,9 +318,7 @@ describe("rv-live-grid", () => {
     expect(laundry.shadowRoot?.querySelector("img")?.getAttribute("src")).toBe(
       "/api/reolink_viewer/live/image/t3?authSig=y",
     );
-    expect(text()).toContain(
-      `Picture from ${new Date(taken).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`,
-    );
+    expect(text()).toContain(`Picture ${formatClock(taken)}`);
     // A tap plays its video.
     tileBox(laundry).click();
     await laundry.updateComplete;
@@ -654,33 +655,44 @@ describe("soak run", () => {
     expect(counts(fake.sent).at(-1)).toEqual({ opens: 1, open_ms: 0, visible_ms: 0, tiles: [] });
     expect(counts(fake.sent)).toHaveLength(4);
   });
+});
 
-  it("shows the run's report over the grid", async () => {
-    const fake = fakeHass();
-    const { el } = await mountGrid(fake.hass);
-    const button = [...(el.shadowRoot?.querySelectorAll("button") ?? [])].find(
-      (b) => b.textContent.trim() === "Soak report",
+describe("the board", () => {
+  const camera = (id: string, width?: number, height?: number): LiveCamera => ({
+    id,
+    name: id,
+    model: null,
+    records: true,
+    connections: [
+      {
+        connection_id: id,
+        via: "direct",
+        entry_title: id,
+        is_battery: false,
+        streams: { sub: { encoding: { ...encoding, width: width ?? null, height: height ?? null }, entity_id: null } },
+      },
+    ],
+  });
+
+  it("packs cameras by their shape, the tall ones first", () => {
+    const door = camera("door", 720, 720);
+    const pano = camera("pano", 1536, 432);
+    const yard = camera("yard", 640, 360);
+    const unknown = camera("unknown");
+    expect(tileShape(door.connections[0])).toBe("tall");
+    expect(tileShape(pano.connections[0])).toBe("wide");
+    expect(tileShape(yard.connections[0])).toBeUndefined();
+    expect(tileShape(unknown.connections[0])).toBeUndefined();
+    expect(boardOrder([yard, pano, door, unknown]).map((c) => c.id)).toEqual(["door", "yard", "pano", "unknown"]);
+  });
+
+  it("numbers its tiles, which fill their cells", async () => {
+    const { hass } = fakeHass();
+    const { tiles } = await mountGrid(hass);
+    expect(tiles().map((t) => t.shadowRoot?.querySelector(".num")?.textContent)).toEqual(
+      CAMERAS.map((_, i) => String(i + 1)),
     );
-    if (!button) throw new Error("no Soak report button");
-    button.click();
-    await el.updateComplete;
-    const soak = el.shadowRoot?.querySelector("rv-live-soak");
-    if (!soak) throw new Error("no soak report");
-    await flush();
-    await soak.updateComplete;
-    expect(fake.sent).toContainEqual({ type: "reolink_viewer/live/soak" });
-    const text = soak.shadowRoot?.querySelector("pre")?.textContent ?? "";
-    expect(text).toContain("Reolink Viewer soak report v");
-    expect(text).toContain("grid open 4.0 h, visible 3.0 h · opened 2 times");
-    expect(text).toContain("  RLN36: 1 → 1 of 7 (peak 1)");
-    expect(text).toContain("  Garage: 2 · 0 · 0");
-    expect(text).toContain("✗ The grid has been visible 3.0 h of 8: open it whenever it suits");
-    const close = [...(soak.shadowRoot?.querySelectorAll("button") ?? [])].find((b) => b.textContent.trim() === "Close");
-    close?.click();
-    await el.updateComplete;
-    expect(el.shadowRoot?.querySelector("rv-live-soak")).toBeNull();
-    // Still open: the grid kept counting.
-    expect(players.some((p) => p.running)).toBe(true);
+    expect(tiles().every((t) => t.hasAttribute("fill"))).toBe(true);
   });
 });
 
@@ -732,9 +744,10 @@ describe("rv-live-camera", () => {
 });
 
 describe("routes", () => {
-  it("has a Live view and a Live tab", () => {
+  it("has a Live view (the home view, and the old #live) and a Live tab", () => {
+    expect(routeFromHash("")).toEqual({ view: "live" });
     expect(routeFromHash("#live")).toEqual({ view: "live" });
-    expect(routeToHash({ view: "live" })).toBe("#live");
+    expect(routeToHash({ view: "live" })).toBe("");
     expect(routeFromHash("#device/x/live")).toEqual({ view: "device", id: "x", tab: "live" });
   });
 });

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { formatClock } from "./playback/time";
 import "./reolink-viewer-panel";
 import type { ReolinkViewerPanel } from "./reolink-viewer-panel";
 import {
@@ -36,10 +37,60 @@ const button = (el: ReolinkViewerPanel, label: string) =>
 describe("reolink-viewer-panel", () => {
   beforeEach(() => {
     download.mockReset();
+    // Most of these are about the device list.
+    window.history.replaceState(null, "", "/#devices");
   });
   afterEach(() => {
     document.body.innerHTML = "";
     window.history.replaceState(null, "", "/");
+    vi.useRealTimers();
+  });
+
+  it("opens on the live board, with a tab to the devices", async () => {
+    window.history.replaceState(null, "", "/");
+    const el = await mount(makeHass(okDevices()));
+    const tab = (label: string) =>
+      [...(el.shadowRoot?.querySelectorAll<HTMLButtonElement>("nav button") ?? [])].find(
+        (b) => b.textContent.trim() === label,
+      );
+    expect(el.shadowRoot?.querySelector("rv-live-grid")).not.toBeNull();
+    expect(tab("Live")?.getAttribute("aria-current")).toBe("page");
+    expect(tab("Devices")?.hasAttribute("aria-current")).toBe(false);
+    tab("Devices")?.click();
+    await el.updateComplete;
+    expect(window.location.hash).toBe("#devices");
+    expect(el.shadowRoot?.querySelector("rv-live-grid")).toBeNull();
+    expect(el.shadowRoot?.querySelector("rv-device-list")).not.toBeNull();
+    expect(tab("Devices")?.getAttribute("aria-current")).toBe("page");
+    tab("Live")?.click();
+    await el.updateComplete;
+    expect(window.location.hash).toBe("");
+    expect(el.shadowRoot?.querySelector("rv-live-grid")).not.toBeNull();
+  });
+
+  it("follows Home Assistant's dark mode, and shows the time in its time zone", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(Date.UTC(2026, 9, 28, 2, 24, 13));
+    const hass = makeHass(okDevices());
+    hass.themes = { darkMode: true };
+    hass.config = { time_zone: "America/Chicago" };
+    const el = await mount(hass);
+    expect(el.hasAttribute("dark")).toBe(true);
+    expect(el.shadowRoot?.querySelector(".clock")?.textContent.trim()).toBe("21:24");
+    expect(formatClock(Date.now(), "America/Chicago")).toBe("21:24");
+    el.hass = { ...hass, themes: { darkMode: false } };
+    await el.updateComplete;
+    expect(el.hasAttribute("dark")).toBe(false);
+  });
+
+  it("loads its fonts from beside its module, once", async () => {
+    await mount(makeHass(okDevices()));
+    await mount(makeHass(okDevices()));
+    const styles = document.querySelectorAll("#reolink-viewer-fonts");
+    expect(styles).toHaveLength(1);
+    const css = styles.item(0).textContent;
+    expect(css).toContain('font-family:"Barlow Semi Condensed"');
+    expect(css).toMatch(/url\("[^"]*\/fonts\/barlow-500\.woff2"\)/);
   });
 
   it("lists NVRs with their cameras and cameras added directly", async () => {
@@ -107,7 +158,7 @@ describe("reolink-viewer-panel", () => {
     await page?.updateComplete;
     expect(hass.sent).toContainEqual({ type: "reolink_viewer/device", device_id: "dev-cam" });
 
-    window.history.pushState(null, "", "#");
+    window.history.pushState(null, "", "#devices");
     window.dispatchEvent(new HashChangeEvent("hashchange"));
     await el.updateComplete;
     expect(el.shadowRoot?.querySelector("rv-device-list")).not.toBeNull();
@@ -159,7 +210,7 @@ describe("reolink-viewer-panel", () => {
     await soak?.updateComplete;
     expect(hass.sent).toContainEqual({ type: "reolink_viewer/live/soak" });
     expect(text(el)).toContain("No grid has reported yet");
-    button(el, "← Devices")?.click();
+    el.shadowRoot?.querySelector<HTMLButtonElement>("button.back")?.click();
     await flush();
     await el.updateComplete;
     expect(el.shadowRoot?.querySelector("rv-device-list")).not.toBeNull();
