@@ -48,7 +48,7 @@ import { liveConnection } from "./data";
 import { chooseHd } from "./hd";
 import { OurMse, OurWebRtc, StockWebRtc, type LiveSession, type SessionResult } from "./session";
 
-export const LIVE_CHECK_VERSION = "0.21.0";
+export const LIVE_CHECK_VERSION = "0.22.0";
 /** Saved reports share the playback check's store; this marks a live one. */
 export const LIVE_REPORT_PREFIX = "Live check · ";
 export const LIVE_SETUPS = [
@@ -566,6 +566,7 @@ export class LiveCheck {
   inShort(final = !this.running): InShort {
     const findings: Finding[] = [];
     const starts: number[] = [];
+    const slow: string[] = [];
     let measured = 0;
     let failed = 0;
     const best = (list: Measured[]) => {
@@ -594,6 +595,7 @@ export class LiveCheck {
       const hd = low.length ? best(cold.filter((m) => m.stream !== "sub")) : undefined;
       const warm = best(mine.filter((m) => m.phase === "warm" && m.stream === "sub"));
       const grade = speed(live, GOOD_START_MS, FINE_START_MS);
+      if (grade === "slow") slow.push(camera.name);
       const parts = [`live video starts in ${secondsText(live)}`];
       if (hd !== undefined) parts.push(`full screen in HD in ${secondsText(hd)}`);
       if (warm !== undefined) parts.push(`kept warm, in ${secondsText(warm)}`);
@@ -662,15 +664,16 @@ export class LiveCheck {
 
     const typical = middle(starts);
     const ok = measured - failed;
+    const started = failed
+      ? `${String(ok)} of ${count(measured, "camera")} started live video; ${String(failed)} did not`
+      : `${measured === 1 ? "The camera" : measured === 2 ? "Both cameras" : `All ${count(measured, "camera")}`} started live video` +
+        (typical !== undefined ? `, typically in ${secondsText(typical)}` : "");
+    const slowly = slow.length ? `; ${String(slow.length)} ${slow.length === 1 ? "is" : "are"} slow: ${slow.join(", ")}` : "";
     const headline = !measured
       ? final
         ? "No camera was measured."
         : "Measuring…"
-      : `${final ? "" : "So far: "}${
-          failed
-            ? `${String(ok)} of ${count(measured, "camera")} started live video; ${String(failed)} did not.`
-            : `${measured === 1 ? "The camera" : measured === 2 ? "Both cameras" : `All ${count(measured, "camera")}`} started live video`
-        }${!failed && typical !== undefined ? `, typically in ${secondsText(typical)}.` : ""}`;
+      : `${final ? "" : "So far: "}${started}${slowly}.`;
     return { headline, findings };
   }
 

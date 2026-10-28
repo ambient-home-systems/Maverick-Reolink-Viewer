@@ -19,6 +19,18 @@ function formatter(timeZone: string | undefined, options: Intl.DateTimeFormatOpt
   return fmt;
 }
 
+/** When a report was made: "28 Oct 2026, 01:10" (in the zone, on a 24-hour clock). */
+export function formatStamp(ms: number, timeZone?: string): string {
+  return formatter(timeZone, {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(ms);
+}
+
 export function formatClock(ms: number, timeZone?: string, seconds = false): string {
   return formatter(timeZone, {
     hour: "2-digit",

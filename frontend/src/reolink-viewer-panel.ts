@@ -252,7 +252,7 @@ export class ReolinkViewerPanel extends LitElement {
               this._board = e.detail.cameras;
             }}
           ></rv-live-grid>
-          <rv-timetable .hass=${this.hass} .cameras=${this._board}></rv-timetable>`;
+          <rv-timetable .hass=${this.hass} .cameras=${this._board} .filters=${true}></rv-timetable>`;
       case "events":
         return html`<rv-events .hass=${this.hass} .cameras=${this._board} .date=${route.date}></rv-events>`;
       case "device":

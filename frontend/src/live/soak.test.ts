@@ -166,7 +166,7 @@ describe("soakReport", () => {
         { grade: "good", text: "The video service's memory use stayed steady (about 40.0 MB)." },
         { grade: "good", text: "Connections to your cameras did not pile up." },
         { grade: "good", text: "No camera or NVR was asked for more video streams than it can serve." },
-        { grade: "note", text: "Processor load at its highest: RLN36 23%." },
+        { grade: "note", text: "Processor load at its highest: RLN36 23%, well within what it can handle." },
         { grade: "good", text: "Home Assistant ran live view for 24.0 hours." },
         { grade: "good", text: "The live board was on screen for 8.0 hours, opened 3 times." },
       ],
@@ -201,7 +201,7 @@ describe("soakReport", () => {
         text: "The video service's memory use grew from 40.0 to 157.2 MB.",
         advice: "If it keeps growing, restart Home Assistant and report it with the details below.",
       },
-      { grade: "note", text: "Processor load at its highest: RLN36 23%." },
+      { grade: "note", text: "Processor load at its highest: RLN36 23%, well within what it can handle." },
       {
         grade: "problem",
         text: "Doorbell stayed awake when nobody was watching, which drains its battery.",
@@ -219,6 +219,13 @@ describe("soakReport", () => {
       },
     ]);
 
+    // A processor near its limit is worth a look.
+    const busy = soakSummary(input({ samples: day(() => ({ hosts: [{ name: "RLN36", streams: 6, limit: 7, waiting: 0, cpu: 91 }] })) }));
+    expect(busy.findings).toContainEqual({
+      grade: "slow",
+      text: "Processor load at its highest: RLN36 91%, near its limit.",
+      advice: "Keep fewer cameras warm, or watch fewer of them at once.",
+    });
     // Nothing measured yet.
     const waiting = soakSummary(input({ run: null, samples: [] }));
     expect(waiting.headline).toBe("The test has not started yet.");

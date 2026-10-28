@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { Segment, TimelineEvent } from "../types";
 import { canPlayMain, playsProgressive } from "./codec";
-import { dateIn, firstDayOfWeek, formatClock, formatDuration, offsetAt } from "./time";
+import { dateIn, firstDayOfWeek, formatClock, formatDuration, formatStamp, offsetAt } from "./time";
 import {
   DAY,
   HOUR,
@@ -169,6 +169,8 @@ describe("time display", () => {
   it("formats in a zone", () => {
     expect(formatClock(T0, "America/New_York")).toBe("00:00");
     expect(formatClock(T0 + 61_000, "America/New_York", true)).toBe("00:01:01");
+    // A report's date and time: short, on a 24-hour clock.
+    expect(formatStamp(T0 + 13 * 3_600_000 + 5 * 60_000, "America/New_York")).toMatch(/2026.*13:05/);
     expect(dateIn(T0 - 1, "America/New_York")).toBe("2026-10-16");
     expect(dateIn(T0, "America/New_York")).toBe("2026-10-17");
     expect(offsetAt(T0, "America/New_York")).toBe(-4 * HOUR);

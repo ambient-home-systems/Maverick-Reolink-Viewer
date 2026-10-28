@@ -206,8 +206,8 @@ export class RvEvents extends LitElement {
           </div>`
         : nothing}
       ${types.length
-        ? html`<div class="group" role="group" aria-label="What was seen">
-            <span class="label">Seen</span>
+        ? html`<div class="group" role="group" aria-label="What was detected">
+            <span class="label">Detected</span>
             ${sortTypes(types).map(
               (t) => html`<button
                 class="chip"

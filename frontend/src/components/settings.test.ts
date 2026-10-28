@@ -14,7 +14,7 @@ import {
 } from "../test-fixtures";
 import type { DeviceResponse } from "../types";
 import "./settings";
-import { formatState, type RvSettings } from "./settings";
+import { formatState, optionLabel, type RvSettings } from "./settings";
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -50,6 +50,14 @@ function captureToasts(el: HTMLElement): string[] {
   return messages;
 }
 
+describe("option labels", () => {
+  it("says a select's raw option in words", () => {
+    expect(optionLabel("black&white")).toBe("Black & white");
+    expect(optionLabel("auto")).toBe("Auto");
+    expect(optionLabel("on_motion")).toBe("On motion");
+  });
+});
+
 describe("rv-settings", () => {
   afterEach(() => {
     document.body.innerHTML = "";
@@ -71,7 +79,7 @@ describe("rv-settings", () => {
     expect(text).toContain("Status LED summary.");
     expect(text).toContain("Show disabled entities (1)");
     expect(text).toContain("-45 dBm");
-    expect(text).toContain("diagnostic");
+    expect(text).toContain("Read only");
   });
 
   it("updates a toggle immediately and keeps HA's state as the truth", async () => {
@@ -311,9 +319,9 @@ describe("rv-settings", () => {
     });
     const hass = makeHass(okDevices());
     const el = await mount(hass, makeDevice({ connections: [makeConnection(), direct] }));
-    expect(deepText(el)).toContain("NVR (Garage NVR) (8)");
+    expect(deepText(el)).toContain("Through Garage NVR · 8 settings");
     expect(row(el, "switch.record")).not.toBeNull();
-    buttonByText(el, "Direct (2)")?.click();
+    buttonByText(el, "Added directly · 2 settings")?.click();
     await el.updateComplete;
     expect(row(el, "switch.record")).toBeNull();
     expect(row(el, "switch.record_direct")?.textContent).toContain("Not loaded yet");

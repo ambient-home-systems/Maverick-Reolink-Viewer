@@ -55,6 +55,10 @@ describe("plain words", () => {
     expect(rows.map((r) => r.className)).toEqual(["good", "problem", "pending"]);
     expect(rows.map((r) => r.querySelector(".grade")?.textContent)).toEqual(["Good", "Problem", "Not yet"]);
     expect(rows[1]?.querySelector(".advice")?.textContent).toBe("Check that the camera is online.");
+    // A key to the words used.
+    expect(el.shadowRoot?.querySelector(".key")?.textContent).toBe(
+      "Good: as it should be · Problem: something is wrong · Not yet: still to come",
+    );
     el.summary = undefined;
     await el.updateComplete;
     expect(el.shadowRoot?.querySelector(".headline")).toBeNull();

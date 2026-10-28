@@ -375,6 +375,7 @@ describe("LiveCheck", () => {
     outcome.set("webrtc:sub", { firstFrameMs: 5200 });
     outcome.set("mse:sub", { firstFrameMs: 5400 });
     const slow = await run(["cam1"], { ...CAMERAS[0], keep_warm_entity: "switch.fyr_keep_live_view_warm" });
+    expect(slow.headline).toBe("The camera started live video, typically in 5.2 s; 1 is slow: Front Yard Right.");
     expect(slow.findings[0]).toEqual({
       grade: "slow",
       text: "Front Yard Right: live video starts in 5.2 s.",

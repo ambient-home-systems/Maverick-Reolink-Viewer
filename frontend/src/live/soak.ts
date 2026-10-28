@@ -160,6 +160,7 @@ function soakAnalysis(input: SoakInput): { text: string; inShort: InShort } {
   const over: string[] = [];
   const cpus: string[] = [];
   const cpusPlain: string[] = [];
+  let busiest = 0;
   const hostNames = [...new Set(samples.flatMap((s) => s.hosts.map((h) => h.name)))];
   for (const name of hostNames) {
     const series = samples.map((s) => s.hosts.find((h) => h.name === name));
@@ -184,6 +185,7 @@ function soakAnalysis(input: SoakInput): { text: string; inShort: InShort } {
     if (cpu.length) {
       cpus.push(`${name} peak ${Math.max(...cpu)}%`);
       cpusPlain.push(`${name} ${String(Math.max(...cpu))}%`);
+      busiest = Math.max(busiest, ...cpu);
     }
   }
   if (byIdle) {
@@ -216,7 +218,20 @@ function soakAnalysis(input: SoakInput): { text: string; inShort: InShort } {
         }
       : { grade: "good", text: "No camera or NVR was asked for more video streams than it can serve." },
   );
-  if (cpusPlain.length) plain.push({ grade: "note", text: `Processor load at its highest: ${cpusPlain.join(", ")}.` });
+  if (cpusPlain.length) {
+    plain.push(
+      busiest < 85
+        ? {
+            grade: "note",
+            text: `Processor load at its highest: ${cpusPlain.join(", ")}, ${busiest < 60 ? "well within what it can handle" : "busy but coping"}.`,
+          }
+        : {
+            grade: "slow",
+            text: `Processor load at its highest: ${cpusPlain.join(", ")}, near its limit.`,
+            advice: "Keep fewer cameras warm, or watch fewer of them at once.",
+          },
+    );
+  }
 
   // Battery cameras
   const batteryNames = [...new Set(samples.flatMap((s) => s.battery.map((b) => b.camera)))];

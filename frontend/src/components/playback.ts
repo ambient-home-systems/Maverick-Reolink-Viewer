@@ -40,7 +40,7 @@ import {
   type RvPlayer,
 } from "../playback/player";
 import { ThumbLoader } from "../playback/thumb-loader";
-import { dateIn, firstDayOfWeek, formatClock } from "../playback/time";
+import { dateIn, firstDayOfWeek, formatClock, formatStamp } from "../playback/time";
 import "../playback/timeline";
 import type { HoverDetail, RvTimeline, TimeDetail } from "../playback/timeline";
 import {
@@ -1027,7 +1027,7 @@ export class RvPlayback extends LitElement {
             ${this._reports.length
               ? this._reports.map(
                   (r) => html`<li>
-                    <span class="when">${new Date(r.updated).toLocaleString()} · ${r.setup}${r.done ? "" : " · running or cut short"}</span>
+                    <span class="when">${formatStamp(Date.parse(r.updated), this._zone)} · ${r.setup}${r.done ? "" : " · running or cut short"}</span>
                     <button class="text" @click=${() => void this._copy(r.text)}>Copy</button>
                     <button
                       class="text"
@@ -1116,12 +1116,12 @@ export class RvPlayback extends LitElement {
     </div>`;
   }
 
-  /** What was seen in the day's events, to show only some. */
+  /** What was detected in the day's events, to show only some. */
   private _renderFilters(): TemplateResult | typeof nothing {
     const events = this._day?.events ?? [];
     const types = [...new Set([...presentTypes(events), ...this._only])];
     if (!types.length) return nothing;
-    return html`<div class="chips" role="group" aria-label="What was seen">
+    return html`<div class="chips" role="group" aria-label="What was detected">
       ${types.map((type) => {
         const on = this._only.has(type);
         return html`<button
@@ -1331,6 +1331,7 @@ export class RvPlayback extends LitElement {
             .events=${this._events}
             .thumbs=${this._thumbs}
             .current=${this._cursor}
+            .playing=${this._playing !== undefined}
             .timeZone=${zone}
             @rv-pick=${(e: CustomEvent<{ event: { start: number } }>) => {
               this._cursor = e.detail.event.start;

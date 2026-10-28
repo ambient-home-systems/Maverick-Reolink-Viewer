@@ -41,6 +41,7 @@ export class RvLiveGrid extends LitElement {
     _full: { state: true },
     _boardFull: { state: true },
     _width: { state: true },
+    _live: { state: true },
   };
 
   declare hass: HomeAssistant | undefined;
@@ -50,6 +51,8 @@ export class RvLiveGrid extends LitElement {
   declare _boardFull: boolean;
   /** The grid's width, which sets its columns and row height. */
   declare _width: number;
+  /** The cameras playing live now. */
+  declare _live: ReadonlySet<string>;
 
   private readonly _data = new LiveData(this);
   private _resize: ResizeObserver | undefined;
@@ -60,6 +63,7 @@ export class RvLiveGrid extends LitElement {
     super();
     this._boardFull = false;
     this._width = 0;
+    this._live = new Set();
   }
 
   override connectedCallback(): void {
@@ -131,9 +135,7 @@ export class RvLiveGrid extends LitElement {
     const canFull = document.fullscreenEnabled && typeof this.requestFullscreen === "function";
     return html`<div class="head">
         <h1>Live</h1>
-        ${cameras?.length
-          ? html`<p class="count">${cameras.length} ${cameras.length === 1 ? "camera" : "cameras"}</p>`
-          : nothing}
+        ${cameras?.length ? html`<p class="count">${playingCount(cameras, this._live)}</p>` : nothing}
         ${canFull && cameras?.length
           ? html`<button class="text with-icon full" @click=${() => {
               this._toggleBoardFull();
@@ -189,6 +191,12 @@ export class RvLiveGrid extends LitElement {
       }}
       @rv-live-count=${(e: CustomEvent<LiveCountDetail>) => {
         soakTally.count(e.detail.camera, e.detail.kind);
+      }}
+      @rv-live-state=${(e: CustomEvent<{ cameraId: string; live: boolean }>) => {
+        const live = new Set(this._live);
+        if (e.detail.live) live.add(e.detail.cameraId);
+        else live.delete(e.detail.cameraId);
+        this._live = live;
       }}
     >
       ${cameras.map(
@@ -269,6 +277,13 @@ export class RvLiveGrid extends LitElement {
 }
 
 /** The board's cameras, numbered as its tiles are. */
+/** The board's count: "6 of 8 playing", or the cameras while none plays yet. */
+export function playingCount(cameras: readonly LiveCamera[], live: ReadonlySet<string>): string {
+  const playing = cameras.filter((c) => live.has(c.id)).length;
+  if (!playing) return `${String(cameras.length)} ${cameras.length === 1 ? "camera" : "cameras"}`;
+  return `${String(playing)} of ${String(cameras.length)} playing`;
+}
+
 export function boardCameras(cameras: LiveCamera[]): BoardCamera[] {
   return boardOrder(cameras).map((c, i) => ({ id: c.id, name: c.name, number: i + 1 }));
 }
@@ -356,15 +371,17 @@ export class RvLiveCamera extends LitElement {
     const camera = cameraFor(data.cameras, this.deviceId);
     if (!camera)
       return html`<p class="muted">This camera cannot be watched live.</p>`;
-    return html`<rv-live-tile
-        .hass=${this.hass}
-        .camera=${camera}
-        .connection=${liveConnection(camera)}
-        .image=${data.images[camera.id]}
-        .iceServers=${data.iceServers}
-        .warm=${isWarm(this.hass, camera)}
-        .controls=${camera.controls}
-      ></rv-live-tile>
+    return html`<div class="board">
+        <rv-live-tile
+          .hass=${this.hass}
+          .camera=${camera}
+          .connection=${liveConnection(camera)}
+          .image=${data.images[camera.id]}
+          .iceServers=${data.iceServers}
+          .warm=${isWarm(this.hass, camera)}
+          .controls=${camera.controls}
+        ></rv-live-tile>
+      </div>
       ${this._renderKeepWarm(camera)}`;
   }
 
@@ -410,6 +427,11 @@ export class RvLiveCamera extends LitElement {
         flex-direction: column;
         gap: 12px;
         max-width: 1280px;
+      }
+      /* Video sits on the board's ink, with a margin of it. */
+      .board {
+        padding: 10px;
+        background: var(--rv-board);
       }
       .keep-warm {
         display: flex;

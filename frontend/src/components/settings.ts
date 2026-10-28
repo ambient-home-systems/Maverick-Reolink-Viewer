@@ -180,8 +180,8 @@ export class RvSettings extends LitElement {
     const connections = this.device?.connections ?? [];
     if (connections.length < 2) return nothing;
     const current = this.connection;
-    return html`<div class="connections" role="radiogroup" aria-label="Settings via">
-      <span class="small muted">Settings via</span>
+    return html`<div class="connections" role="radiogroup" aria-label="Settings through">
+      <span class="small muted">Settings through</span>
       ${connections.map(
         (conn, index) => html`<button
           role="radio"
@@ -191,7 +191,7 @@ export class RvSettings extends LitElement {
             this._connection = index;
           }}
         >
-          ${connectionLabel(conn)} (${conn.entities.length})
+          ${connectionLabel(conn)} · ${conn.entities.length} settings
         </button>`,
       )}
       <span class="small muted">
@@ -208,13 +208,13 @@ export class RvSettings extends LitElement {
         <div class="label">
           ${label}
           ${entity.sub_device ? html`<span class="badge">${entity.sub_device}</span>` : nothing}
-          ${entity.disabled_by !== null ? html`<span class="badge">disabled</span>` : nothing}
-          ${entity.hidden_by !== null ? html`<span class="badge">hidden</span>` : nothing}
+          ${entity.disabled_by !== null ? html`<span class="badge">Turned off</span>` : nothing}
+          ${entity.hidden_by !== null ? html`<span class="badge">Hidden</span>` : nothing}
           ${entity.entity_category === "diagnostic"
-            ? html`<span class="badge">diagnostic</span>`
+            ? html`<span class="badge">Read only</span>`
             : nothing}
           ${entry?.impact === "disruptive"
-            ? html`<span class="badge warning" title=${entry.impact_note ?? ""}>disruptive</span>`
+            ? html`<span class="badge warning" title=${entry.impact_note ?? ""}>Asks first</span>`
             : nothing}
         </div>
         ${entry ? html`<div class="muted small">${entry.summary}</div>` : nothing}
@@ -319,7 +319,7 @@ export class RvSettings extends LitElement {
           ?disabled=${off}
           @click=${() => void this._write(entity, label, "press", "any")}
         >
-          ${pending ? "Pressing…" : "Press"}
+          ${pending ? "Working…" : label}
         </button>`;
       case "update":
         return this._update(entity, label, state, pending);
@@ -458,7 +458,7 @@ export class RvSettings extends LitElement {
     >
       ${options.includes(value) ? nothing : html`<option value="" selected>—</option>`}
       ${options.map(
-        (option) => html`<option value=${option} ?selected=${option === value}>${option}</option>`,
+        (option) => html`<option value=${option} ?selected=${option === value}>${optionLabel(option)}</option>`,
       )}
     </select>`;
   }
@@ -795,7 +795,13 @@ export class RvSettings extends LitElement {
 }
 
 export function connectionLabel(conn: Pick<DeviceConnection, "via" | "host_name" | "entry_title">): string {
-  return conn.via === "nvr" ? `NVR (${conn.host_name ?? conn.entry_title})` : "Direct";
+  return conn.via === "nvr" ? `Through ${conn.host_name ?? conn.entry_title}` : "Added directly";
+}
+
+/** A select's raw option as words: "black&white" → "Black & white". */
+export function optionLabel(option: string): string {
+  const words = option.replace(/_/g, " ").replace(/\s*&\s*/g, " & ").trim();
+  return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
 function numberAttr(value: unknown, fallback: number): number {

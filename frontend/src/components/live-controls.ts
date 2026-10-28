@@ -328,7 +328,7 @@ export class RvLiveControls extends LitElement {
         position: absolute;
         inset: 0;
         pointer-events: none;
-        color: #fff;
+        color: var(--rv-on-board);
       }
       .top,
       .pad,
@@ -338,12 +338,13 @@ export class RvLiveControls extends LitElement {
         position: absolute;
         pointer-events: auto;
       }
+      /* Square controls in the board's ink over the video. */
       button,
       select {
         border: none;
-        border-radius: 16px;
-        background: rgba(0, 0, 0, 0.5);
-        color: #fff;
+        border-radius: 2px;
+        background: rgba(17, 20, 24, 0.72);
+        color: var(--rv-on-board);
         min-height: 32px;
       }
       button:disabled {
@@ -364,10 +365,12 @@ export class RvLiveControls extends LitElement {
         padding: 4px 12px;
       }
       .toggle.on {
-        background: var(--primary-color);
+        background: var(--rv-on-board);
+        color: var(--rv-board);
       }
       .toggle.siren.on {
-        background: var(--error-color, #db4437);
+        background: var(--rv-fault);
+        color: var(--rv-on-fault);
       }
       .pad {
         left: 8px;
@@ -381,14 +384,14 @@ export class RvLiveControls extends LitElement {
         width: 32px;
         height: 32px;
         padding: 4px;
-        border-radius: 50%;
         touch-action: none;
         user-select: none;
         -webkit-user-select: none;
         -webkit-touch-callout: none;
       }
       .hold.held {
-        background: var(--primary-color);
+        background: var(--rv-on-board);
+        color: var(--rv-board);
       }
       .hold svg {
         display: block;
@@ -423,8 +426,8 @@ export class RvLiveControls extends LitElement {
         gap: 6px;
         max-width: min(320px, 90%);
         padding: 12px 16px;
-        border-radius: 8px;
-        background: rgba(0, 0, 0, 0.8);
+        border-top: 2px solid var(--rv-fault);
+        background: var(--rv-board);
       }
       .confirm .actions {
         display: flex;
@@ -435,7 +438,8 @@ export class RvLiveControls extends LitElement {
         padding: 4px 12px;
       }
       .confirm button.danger {
-        background: var(--error-color, #db4437);
+        background: var(--rv-fault);
+        color: var(--rv-on-fault);
       }
       .error {
         left: 50%;
@@ -443,9 +447,9 @@ export class RvLiveControls extends LitElement {
         transform: translateX(-50%);
         max-width: 90%;
         padding: 6px 12px;
-        border-radius: 8px;
         font-size: 13px;
-        background: var(--error-color, #db4437);
+        background: var(--rv-fault);
+        color: var(--rv-on-fault);
       }
     `,
   ];

@@ -366,7 +366,7 @@ const LIVE_REPORT = [
   "Reolink Viewer live check v0.21.0 · iPhone app, Wi-Fi (local) · 10/27/2026, 8:10:00 PM",
   "Browser: iOS 27.0, Companion app 2026.10.1 · page LAN over https · screen 402×874 @3x",
   "",
-  "In short: All 8 cameras started live video, typically in 1.4 s.",
+  "In short: All 8 cameras started live video, typically in 1.4 s; 1 is slow: Back Yard.",
   "- Good: Front Yard Right: live video starts in 1.1 s; full screen in HD in 1.6 s.",
   "- Good: Garage Camera: live video starts in 1.3 s; full screen in HD in 1.9 s.",
   "- Good: Front Yard Left: live video starts in 1.2 s; full screen in HD in 2.4 s.",

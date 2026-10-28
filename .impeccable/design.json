@@ -1,0 +1,753 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-28T00:00:00Z",
+  "title": "Design System: Reolink Viewer",
+  "extensions": {
+    "colorMeta": {
+      "rail-blue": {
+        "role": "primary",
+        "displayName": "Rail Blue",
+        "canonical": "#1b2a6e",
+        "purpose": "The shell band, platform chips and timeline recording spans; identity, never an action.",
+        "tonalRamp": [
+          "#05091d",
+          "#182245",
+          "#2f3e71",
+          "#485d9f",
+          "#687fc4",
+          "#8ea3dd",
+          "#b7c8f5",
+          "#e3eeff"
+        ]
+      },
+      "on-rail": {
+        "role": "neutral",
+        "displayName": "On Rail",
+        "canonical": "#f4f4f1",
+        "purpose": "Band text and the current band tab.",
+        "tonalRamp": [
+          "#0b0b0a",
+          "#252524",
+          "#424240",
+          "#61615f",
+          "#828280",
+          "#a5a5a3",
+          "#c9c9c7",
+          "#eeeeed"
+        ]
+      },
+      "on-rail-muted": {
+        "role": "neutral",
+        "displayName": "On Rail Muted",
+        "canonical": "#b4bbd3",
+        "purpose": "Band tabs that are not current.",
+        "tonalRamp": [
+          "#090b10",
+          "#22252f",
+          "#3d4150",
+          "#5b6074",
+          "#7c8296",
+          "#9fa4b6",
+          "#c5c9d6",
+          "#ebeef7"
+        ]
+      },
+      "platform-navy-dark": {
+        "role": "primary",
+        "displayName": "Platform Navy",
+        "canonical": "#3349a8",
+        "purpose": "Platform chips in dark mode.",
+        "tonalRamp": [
+          "#040822",
+          "#15204e",
+          "#2a3b7e",
+          "#4259b1",
+          "#607cd7",
+          "#88a1ed",
+          "#b2c7ff",
+          "#dfeeff"
+        ]
+      },
+      "recording-blue-dark": {
+        "role": "primary",
+        "displayName": "Recording Blue",
+        "canonical": "#5a6cb4",
+        "purpose": "Timeline recording spans in dark mode.",
+        "tonalRamp": [
+          "#06091c",
+          "#1a2244",
+          "#323e6f",
+          "#4c5c9c",
+          "#6c7ec1",
+          "#92a2db",
+          "#bac8f4",
+          "#e4eeff"
+        ]
+      },
+      "board-ink": {
+        "role": "neutral",
+        "displayName": "Board Ink",
+        "canonical": "#111418",
+        "purpose": "The live board, snapshot frame, player, toasts, readouts.",
+        "tonalRamp": [
+          "#0a0b0d",
+          "#232528",
+          "#404246",
+          "#5e6166",
+          "#7f8388",
+          "#a2a5a9",
+          "#c7c9cc",
+          "#edeef1"
+        ]
+      },
+      "on-board": {
+        "role": "neutral",
+        "displayName": "On Board",
+        "canonical": "#f4f4f1",
+        "purpose": "Text on the ink board.",
+        "tonalRamp": [
+          "#0b0b0a",
+          "#252524",
+          "#424240",
+          "#61615f",
+          "#828280",
+          "#a5a5a3",
+          "#c9c9c7",
+          "#eeeeed"
+        ]
+      },
+      "on-board-muted": {
+        "role": "neutral",
+        "displayName": "On Board Muted",
+        "canonical": "#a9b0c4",
+        "purpose": "Counts and notes on the board.",
+        "tonalRamp": [
+          "#090b10",
+          "#22252d",
+          "#3d424e",
+          "#5b6171",
+          "#7c8293",
+          "#a0a5b3",
+          "#c5c9d4",
+          "#eceef6"
+        ]
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "Paper",
+        "canonical": "#f4f4f1",
+        "purpose": "Timetable ground in light mode.",
+        "tonalRamp": [
+          "#0b0b0a",
+          "#252524",
+          "#424240",
+          "#61615f",
+          "#828280",
+          "#a5a5a3",
+          "#c9c9c7",
+          "#eeeeed"
+        ]
+      },
+      "paper-2": {
+        "role": "neutral",
+        "displayName": "Paper 2",
+        "canonical": "#e9e9e4",
+        "purpose": "Hover, report sheet and info banner ground on paper.",
+        "tonalRamp": [
+          "#0b0b0a",
+          "#252523",
+          "#42423f",
+          "#61615e",
+          "#83837e",
+          "#a5a5a2",
+          "#c9c9c6",
+          "#eeeeed"
+        ]
+      },
+      "paper-text": {
+        "role": "neutral",
+        "displayName": "Paper Text",
+        "canonical": "#111418",
+        "purpose": "Ink text on paper.",
+        "tonalRamp": [
+          "#0a0b0d",
+          "#232528",
+          "#404246",
+          "#5e6166",
+          "#7f8388",
+          "#a2a5a9",
+          "#c7c9cc",
+          "#edeef1"
+        ]
+      },
+      "paper-muted": {
+        "role": "neutral",
+        "displayName": "Paper Muted",
+        "canonical": "#5d6370",
+        "purpose": "Secondary text, column and fact labels on paper.",
+        "tonalRamp": [
+          "#0a0b0f",
+          "#22252b",
+          "#3e424b",
+          "#5c616d",
+          "#7d828f",
+          "#a0a5b0",
+          "#c5c9d1",
+          "#eceef4"
+        ]
+      },
+      "paper-rule": {
+        "role": "neutral",
+        "displayName": "Paper Hairline",
+        "canonical": "rgba(17, 20, 24, 0.14)",
+        "purpose": "Row hairlines on paper."
+      },
+      "paper-rule-strong": {
+        "role": "neutral",
+        "displayName": "Paper Strong Rule",
+        "canonical": "#111418",
+        "purpose": "Section rules and outlined controls on paper.",
+        "tonalRamp": [
+          "#0a0b0d",
+          "#232528",
+          "#404246",
+          "#5e6166",
+          "#7f8388",
+          "#a2a5a9",
+          "#c7c9cc",
+          "#edeef1"
+        ]
+      },
+      "departure-navy": {
+        "role": "neutral",
+        "displayName": "Departure Navy",
+        "canonical": "#0e1530",
+        "purpose": "Timetable ground in dark mode.",
+        "tonalRamp": [
+          "#080b13",
+          "#1f2434",
+          "#3a4158",
+          "#56607e",
+          "#7781a1",
+          "#9ba4bf",
+          "#c1c9de",
+          "#e9eefc"
+        ]
+      },
+      "departure-navy-2": {
+        "role": "neutral",
+        "displayName": "Navy 2",
+        "canonical": "#18224a",
+        "purpose": "Hover and sheet ground on navy.",
+        "tonalRamp": [
+          "#070a16",
+          "#1d243a",
+          "#364060",
+          "#525f89",
+          "#7281ac",
+          "#97a4c9",
+          "#bec8e5",
+          "#e7eeff"
+        ]
+      },
+      "navy-text": {
+        "role": "neutral",
+        "displayName": "Navy Text",
+        "canonical": "#eef0f6",
+        "purpose": "Text on navy.",
+        "tonalRamp": [
+          "#0b0b0c",
+          "#242527",
+          "#414245",
+          "#5f6166",
+          "#808287",
+          "#a3a5a9",
+          "#c8c9cc",
+          "#eeeef0"
+        ]
+      },
+      "navy-muted": {
+        "role": "neutral",
+        "displayName": "Navy Muted",
+        "canonical": "#9aa3c0",
+        "purpose": "Secondary text on navy.",
+        "tonalRamp": [
+          "#090b12",
+          "#212431",
+          "#3c4154",
+          "#596078",
+          "#7a819b",
+          "#9ea4ba",
+          "#c3c9d9",
+          "#ebeef9"
+        ]
+      },
+      "navy-rule": {
+        "role": "neutral",
+        "displayName": "Navy Hairline",
+        "canonical": "rgba(238, 240, 246, 0.16)",
+        "purpose": "Row hairlines on navy."
+      },
+      "navy-rule-strong": {
+        "role": "neutral",
+        "displayName": "Navy Strong Rule",
+        "canonical": "#eef0f6",
+        "purpose": "Section rules and outlined controls on navy.",
+        "tonalRamp": [
+          "#0b0b0c",
+          "#242527",
+          "#414245",
+          "#5f6166",
+          "#808287",
+          "#a3a5a9",
+          "#c8c9cc",
+          "#eeeef0"
+        ]
+      },
+      "signal-red": {
+        "role": "secondary",
+        "displayName": "Signal Red",
+        "canonical": "#e10600",
+        "purpose": "Now and new only: the now line, unseen event times, the New tag.",
+        "tonalRamp": [
+          "#240000",
+          "#540000",
+          "#870000",
+          "#bd0000",
+          "#e63628",
+          "#ff7462",
+          "#ffa897",
+          "#ffdace"
+        ]
+      },
+      "signal-red-dark": {
+        "role": "secondary",
+        "displayName": "Signal Red (navy)",
+        "canonical": "#ff4a3d",
+        "purpose": "Signal red in dark mode.",
+        "tonalRamp": [
+          "#230000",
+          "#510000",
+          "#830000",
+          "#b80207",
+          "#e13f34",
+          "#fa7868",
+          "#ffaa9c",
+          "#ffdcd1"
+        ]
+      },
+      "action-blue": {
+        "role": "primary",
+        "displayName": "Action Blue",
+        "canonical": "#2140c4",
+        "purpose": "Only what can be pressed: primary buttons, links, focus, switches on.",
+        "tonalRamp": [
+          "#020629",
+          "#0c1c5c",
+          "#1d3792",
+          "#3053cb",
+          "#4e78f2",
+          "#79a0ff",
+          "#a7c7ff",
+          "#d8eeff"
+        ]
+      },
+      "on-action": {
+        "role": "neutral",
+        "displayName": "On Action",
+        "canonical": "#ffffff",
+        "purpose": "Text on action blue.",
+        "tonalRamp": [
+          "#0b0b0b",
+          "#252525",
+          "#424242",
+          "#616161",
+          "#828282",
+          "#a5a5a5",
+          "#c9c9c9",
+          "#eeeeee"
+        ]
+      },
+      "action-blue-dark": {
+        "role": "primary",
+        "displayName": "Action Blue (navy)",
+        "canonical": "#8fa6ff",
+        "purpose": "Action blue in dark mode.",
+        "tonalRamp": [
+          "#05091e",
+          "#192148",
+          "#303d75",
+          "#4a5aa5",
+          "#697cca",
+          "#8fa1e3",
+          "#b8c7fa",
+          "#e3edff"
+        ]
+      },
+      "on-action-dark": {
+        "role": "neutral",
+        "displayName": "On Action (navy)",
+        "canonical": "#0e1530",
+        "purpose": "Text on action blue in dark mode.",
+        "tonalRamp": [
+          "#080b13",
+          "#1f2434",
+          "#3a4158",
+          "#56607e",
+          "#7781a1",
+          "#9ba4bf",
+          "#c1c9de",
+          "#e9eefc"
+        ]
+      },
+      "fault-amber": {
+        "role": "tertiary",
+        "displayName": "Fault Amber",
+        "canonical": "#f2b100",
+        "purpose": "Warning and error banners, danger button, Problem grade.",
+        "tonalRamp": [
+          "#170700",
+          "#3a1e00",
+          "#613800",
+          "#8b5400",
+          "#af7600",
+          "#cb9d3f",
+          "#e7c483",
+          "#ffebc3"
+        ]
+      },
+      "on-fault": {
+        "role": "neutral",
+        "displayName": "On Fault",
+        "canonical": "#111418",
+        "purpose": "Text on fault amber.",
+        "tonalRamp": [
+          "#0a0b0d",
+          "#232528",
+          "#404246",
+          "#5e6166",
+          "#7f8388",
+          "#a2a5a9",
+          "#c7c9cc",
+          "#edeef1"
+        ]
+      },
+      "fault-ink": {
+        "role": "tertiary",
+        "displayName": "Fault Ink",
+        "canonical": "#8a5a00",
+        "purpose": "Amber as text on paper: the Slow grade, HA's error colour.",
+        "tonalRamp": [
+          "#150800",
+          "#361f00",
+          "#5b3a01",
+          "#83570f",
+          "#a67838",
+          "#c49e6c",
+          "#e1c49e",
+          "#ffebd3"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Departure times in timetable and playback event rows."
+      },
+      "clock": {
+        "displayName": "Clock",
+        "purpose": "The band clock and the playback position readout."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Page titles (h1), such as the device name."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Section titles, the board's Live, band title, check headlines, dialog titles."
+      },
+      "subtitle": {
+        "displayName": "Subtitle",
+        "purpose": "h3 and check row names."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Rows, camera names, lengths; paragraphs stop at 72ch."
+      },
+      "body-small": {
+        "displayName": "Body Small",
+        "purpose": "Counts, fact rows, form labels, advice."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Badges, tile states, column labels, grade key; sentence case."
+      },
+      "platform": {
+        "displayName": "Platform",
+        "purpose": "Numbers in platform and tile chips."
+      },
+      "mono": {
+        "displayName": "Mono",
+        "purpose": "Support reports and logs."
+      }
+    },
+    "themes": {
+      "note": "Tokens are --rv-* custom properties on the panel host (frontend/src/styles.ts themeTokens). Light is the default; Home Assistant's dark mode sets the host's dark attribute.",
+      "light": {
+        "ground": "paper",
+        "ground-2": "paper-2",
+        "text": "paper-text",
+        "muted": "paper-muted",
+        "rule": "paper-rule",
+        "rule-strong": "paper-rule-strong",
+        "red": "signal-red",
+        "action": "action-blue",
+        "on-action": "on-action",
+        "fault-ink": "fault-ink",
+        "platform": "rail-blue",
+        "recording": "rail-blue"
+      },
+      "dark": {
+        "ground": "departure-navy",
+        "ground-2": "departure-navy-2",
+        "text": "navy-text",
+        "muted": "navy-muted",
+        "rule": "navy-rule",
+        "rule-strong": "navy-rule-strong",
+        "red": "signal-red-dark",
+        "action": "action-blue-dark",
+        "on-action": "on-action-dark",
+        "fault-ink": "fault-amber",
+        "platform": "platform-navy-dark",
+        "recording": "recording-blue-dark"
+      },
+      "fixed": [
+        "rail-blue band",
+        "board-ink board",
+        "fault-amber",
+        "on-fault"
+      ]
+    },
+    "shadows": [
+      {
+        "name": "toast",
+        "value": "0 6px 20px rgba(0, 0, 0, 0.28)",
+        "purpose": "The bottom-centred ink toast."
+      },
+      {
+        "name": "readout",
+        "value": "0 6px 18px rgba(0, 0, 0, 0.28)",
+        "purpose": "The timeline's hover time box."
+      },
+      {
+        "name": "dialog",
+        "value": "0 12px 40px rgba(0, 0, 0, 0.35)",
+        "purpose": "Settings confirmation dialog over an ink scrim rgba(17, 20, 24, 0.55)."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-arrive",
+        "value": "cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Arrival slide and switch knob."
+      },
+      {
+        "name": "arrive",
+        "value": "0.5s ease-arrive, from opacity 0 and translateY(-8px)",
+        "purpose": "A new timetable row slides in under the now line; none under reduced motion."
+      },
+      {
+        "name": "knob",
+        "value": "left 0.15s ease-arrive",
+        "purpose": "Switch knob; none under reduced motion."
+      },
+      {
+        "name": "video-fade",
+        "value": "opacity 0.3s",
+        "purpose": "Live video fading in over the picture; none under reduced motion."
+      },
+      {
+        "name": "corner-reveal",
+        "value": "opacity 0.15s",
+        "purpose": "Tile corner buttons on hover-capable devices."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "narrow",
+        "value": "Home Assistant narrow attribute",
+        "purpose": "56px band plus 44px tab row."
+      },
+      {
+        "name": "tile-small",
+        "value": "260px (container)",
+        "purpose": "Smaller tile chips and labels."
+      },
+      {
+        "name": "sm",
+        "value": "600px",
+        "purpose": "Forms and facts to one column; tighter page padding."
+      },
+      {
+        "name": "timetable-fold",
+        "value": "640px (container)",
+        "purpose": "Timetable rows fold to time, type over meta, thumbnail."
+      }
+    ],
+    "icons": {
+      "grid": "24x24",
+      "strokeWidth": 1.8,
+      "linecap": "round",
+      "linejoin": "round",
+      "source": "frontend/src/icons.ts",
+      "sizes": {
+        "button": "20px",
+        "row": "22px",
+        "summary": "16px"
+      }
+    }
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one filled action per area, in action blue.",
+      "html": "<button class=\"ds-btn-primary\">Save changes</button>",
+      "css": ".ds-btn-primary { font: 500 16px Barlow, system-ui, sans-serif; min-height: 36px; padding: 6px 14px; border-radius: 2px; border: 1px solid #2140c4; background: #2140c4; color: #ffffff; cursor: pointer; } .ds-btn-primary:hover { filter: brightness(1.1); } .ds-btn-primary:focus-visible { outline: 2px solid #2140c4; outline-offset: 2px; } .ds-btn-primary:disabled { opacity: 0.45; cursor: default; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Default button: transparent, ruled in ink.",
+      "html": "<button class=\"ds-btn\">Run the check</button>",
+      "css": ".ds-btn { font: 500 16px Barlow, system-ui, sans-serif; min-height: 36px; padding: 6px 14px; border-radius: 2px; border: 1px solid #111418; background: transparent; color: #111418; cursor: pointer; } .ds-btn:hover { background: #e9e9e4; } .ds-btn:focus-visible { outline: 2px solid #2140c4; outline-offset: 2px; }"
+    },
+    {
+      "name": "Text Button",
+      "kind": "button",
+      "refersTo": "button-text",
+      "description": "Borderless action-blue words; underline on hover.",
+      "html": "<button class=\"ds-btn-text\">Mark all seen</button>",
+      "css": ".ds-btn-text { font: 500 16px Barlow, system-ui, sans-serif; padding: 6px 4px; border: none; background: transparent; color: #2140c4; cursor: pointer; } .ds-btn-text:hover { text-decoration: underline; text-underline-offset: 3px; } .ds-btn-text:focus-visible { outline: 2px solid #2140c4; outline-offset: 2px; }"
+    },
+    {
+      "name": "Danger Button",
+      "kind": "button",
+      "refersTo": "button-danger",
+      "description": "Fault amber, for actions that change or risk something.",
+      "html": "<button class=\"ds-btn-danger\">Turn off recording</button>",
+      "css": ".ds-btn-danger { font: 500 16px Barlow, system-ui, sans-serif; min-height: 36px; padding: 6px 14px; border-radius: 2px; border: 1px solid #f2b100; background: #f2b100; color: #111418; cursor: pointer; } .ds-btn-danger:focus-visible { outline: 2px solid #2140c4; outline-offset: 2px; }"
+    },
+    {
+      "name": "Band",
+      "kind": "nav",
+      "refersTo": "band",
+      "description": "Rail-blue shell band: title, tabs with an inset underline, condensed clock.",
+      "html": "<header class=\"ds-band\"><span class=\"ds-band-title\">Reolink</span><nav class=\"ds-band-nav\"><button class=\"ds-band-tab\" aria-current=\"page\">Live</button><button class=\"ds-band-tab\">Events</button><button class=\"ds-band-tab\">Devices</button></nav><span class=\"ds-band-clock\">21:24</span></header>",
+      "css": ".ds-band { display: flex; align-items: stretch; gap: 24px; height: 64px; padding: 0 20px; background: #1b2a6e; color: #f4f4f1; font-family: Barlow, system-ui, sans-serif; } .ds-band-title { display: flex; align-items: center; font: 600 22px 'Barlow Semi Condensed', Barlow, system-ui, sans-serif; } .ds-band-nav { display: flex; } .ds-band-tab { padding: 0 14px; border: none; border-radius: 0; background: transparent; color: #b4bbd3; font: 500 16px Barlow, system-ui, sans-serif; box-shadow: inset 0 -3px 0 transparent; cursor: pointer; } .ds-band-tab:hover { color: #f4f4f1; } .ds-band-tab[aria-current] { color: #f4f4f1; box-shadow: inset 0 -3px 0 #f4f4f1; } .ds-band-tab:focus-visible { outline: 2px solid #f4f4f1; outline-offset: -6px; } .ds-band-clock { margin-left: auto; align-self: center; font: 600 30px/1 'Barlow Semi Condensed', Barlow, system-ui, sans-serif; font-variant-numeric: tabular-nums; }"
+    },
+    {
+      "name": "Filter Chip",
+      "kind": "chip",
+      "refersTo": "filter-chip",
+      "description": "Square camera filter led by its platform chip; pressed fills with ink.",
+      "html": "<div class=\"ds-chips\"><button class=\"ds-chip\" aria-pressed=\"true\"><span class=\"ds-plat\">1</span>Doorbell</button><button class=\"ds-chip\" aria-pressed=\"false\"><span class=\"ds-plat\">2</span>Front Yard</button></div>",
+      "css": ".ds-chips { display: flex; gap: 6px; } .ds-chip { display: inline-flex; align-items: center; gap: 7px; min-height: 34px; padding: 0 12px 0 5px; border: 1px solid rgba(17, 20, 24, 0.14); border-radius: 0; background: transparent; color: #111418; font: 500 15px Barlow, system-ui, sans-serif; cursor: pointer; } .ds-chip:hover { background: #e9e9e4; } .ds-chip[aria-pressed=\"true\"] { background: #111418; border-color: #111418; color: #f4f4f1; } .ds-chip:focus-visible { outline: 2px solid #2140c4; outline-offset: 2px; } .ds-plat { min-width: 22px; height: 22px; padding: 0 3px; box-sizing: border-box; display: grid; place-items: center; background: #1b2a6e; color: #f4f4f1; font: 600 14px/1 'Barlow Semi Condensed', Barlow, system-ui, sans-serif; }"
+    },
+    {
+      "name": "Timetable Row",
+      "kind": "custom",
+      "refersTo": "timetable-row",
+      "description": "A departure: condensed time (red while unseen), pictogram and type, platform chip and camera, length, under the red now line.",
+      "html": "<div class=\"ds-tt\"><div class=\"ds-now\"><b>21:24 now</b></div><button class=\"ds-row ds-new\"><span class=\"ds-t\">20:58</span><span class=\"ds-ev\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"12\" cy=\"7\" r=\"3.2\" /><path d=\"M5.5 20.5v-1.8a6.5 6.5 0 0 1 13 0v1.8\" /></svg>Person <span class=\"ds-tag\">New</span></span><span class=\"ds-cam\"><span class=\"ds-plat\">1</span>Doorbell</span><span class=\"ds-len\">1:25</span></button></div>",
+      "css": ".ds-tt { font-family: Barlow, system-ui, sans-serif; color: #111418; background: #f4f4f1; font-variant-numeric: tabular-nums; } .ds-now { display: flex; align-items: center; gap: 12px; height: 30px; color: #e10600; } .ds-now b { font: 600 15px 'Barlow Semi Condensed', Barlow, system-ui, sans-serif; } .ds-now::after { content: \"\"; flex: 1; height: 2px; background: #e10600; } .ds-row { display: grid; grid-template-columns: 96px minmax(0, 1.3fr) minmax(0, 1fr) 80px; column-gap: 20px; align-items: center; width: 100%; min-height: 62px; padding: 0 8px; border: none; border-bottom: 1px solid rgba(17, 20, 24, 0.14); border-radius: 0; background: transparent; color: inherit; text-align: left; font: 400 16px Barlow, system-ui, sans-serif; cursor: pointer; } .ds-row:hover { background: #e9e9e4; } .ds-row:focus-visible { outline: 2px solid #2140c4; outline-offset: -2px; } .ds-t { font: 600 32px/1 'Barlow Semi Condensed', Barlow, system-ui, sans-serif; } .ds-new .ds-t { color: #e10600; } .ds-ev { display: flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 500; } .ds-ev svg { width: 22px; height: 22px; } .ds-tag { color: #e10600; font-size: 13px; font-weight: 600; } .ds-cam { display: flex; align-items: center; gap: 10px; } .ds-plat { min-width: 26px; height: 26px; padding: 0 4px; box-sizing: border-box; display: grid; place-items: center; background: #1b2a6e; color: #f4f4f1; font: 600 16px/1 'Barlow Semi Condensed', Barlow, system-ui, sans-serif; } .ds-len { text-align: right; color: #5d6370; }"
+    },
+    {
+      "name": "Live Tile",
+      "kind": "card",
+      "refersTo": "live-board",
+      "description": "A camera on the ink board: paper number chip, state label from the fixed vocabulary, name over a gradient.",
+      "html": "<div class=\"ds-board\"><div class=\"ds-tile\"><span class=\"ds-num\">1</span><span class=\"ds-state\"><i class=\"ds-dot\"></i>Live</span><span class=\"ds-label\">Doorbell</span></div></div>",
+      "css": ".ds-board { padding: 16px 24px 28px; background: #111418; color: #f4f4f1; font-family: Barlow, system-ui, sans-serif; } .ds-tile { position: relative; aspect-ratio: 16 / 9; max-width: 360px; background: #000; border-radius: 2px; overflow: hidden; cursor: pointer; } .ds-tile:hover .ds-label { text-decoration: underline; } .ds-tile:focus-visible { outline: 2px solid #f4f4f1; outline-offset: -2px; } .ds-num { position: absolute; top: 8px; left: 8px; min-width: 26px; height: 26px; padding: 0 5px; box-sizing: border-box; display: grid; place-items: center; background: #f4f4f1; color: #111418; font: 600 16px/1 'Barlow Semi Condensed', Barlow, system-ui, sans-serif; } .ds-state { position: absolute; top: 8px; right: 8px; display: flex; align-items: center; gap: 6px; padding: 3px 8px; background: rgba(17, 20, 24, 0.74); font-size: 13px; font-weight: 500; line-height: 18px; } .ds-dot { width: 7px; height: 7px; background: currentColor; } .ds-label { position: absolute; left: 0; right: 0; bottom: 0; padding: 26px 48px 8px 10px; background: linear-gradient(to top, rgba(0, 0, 0, 0.72), rgba(0, 0, 0, 0)); font-size: 15px; font-weight: 500; }"
+    },
+    {
+      "name": "Switch",
+      "kind": "input",
+      "refersTo": "toggle",
+      "description": "Square knob on a ruled rail; action blue when on.",
+      "html": "<button class=\"ds-toggle ds-on\" role=\"switch\" aria-checked=\"true\" aria-label=\"Record\"><span class=\"ds-knob\"></span></button>",
+      "css": ".ds-toggle { position: relative; width: 46px; height: 26px; padding: 0; border-radius: 2px; border: 1px solid #111418; background: transparent; cursor: pointer; } .ds-toggle:hover { background: #e9e9e4; } .ds-toggle:focus-visible { outline: 2px solid #2140c4; outline-offset: 2px; } .ds-knob { position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 1px; background: #5d6370; transition: left 0.15s cubic-bezier(0.16, 1, 0.3, 1); } .ds-toggle.ds-on, .ds-toggle.ds-on:hover { border-color: #2140c4; background: #2140c4; } .ds-toggle.ds-on .ds-knob { left: 23px; background: #ffffff; } @media (prefers-reduced-motion: reduce) { .ds-knob { transition: none; } }"
+    },
+    {
+      "name": "Plain Summary",
+      "kind": "custom",
+      "refersTo": "badge-warning",
+      "description": "Check findings: grade words in a ruled list, Problem filled amber, Slow boxed in amber, a key underneath.",
+      "html": "<div class=\"ds-sum\"><p class=\"ds-head\">Garage Camera is slow to start</p><ul><li><span class=\"ds-grade\">Good</span><span>Doorbell starts in 0.1 s</span></li><li class=\"ds-slow\"><span class=\"ds-grade\">Slow</span><span>Garage Camera starts in 4 s</span></li><li class=\"ds-problem\"><span class=\"ds-grade\">Problem</span><span>Back Yard did not play</span></li></ul><p class=\"ds-key\">Good, Fine: nothing to do. Slow, Problem: worth a look.</p></div>",
+      "css": ".ds-sum { font-family: Barlow, system-ui, sans-serif; color: #111418; } .ds-head { margin: 0 0 10px; font: 600 22px/1.2 'Barlow Semi Condensed', Barlow, system-ui, sans-serif; } .ds-sum ul { list-style: none; margin: 0; padding: 0; border-top: 1px solid #111418; } .ds-sum li { display: grid; grid-template-columns: 86px minmax(0, 1fr); column-gap: 14px; align-items: baseline; padding: 10px 0; border-bottom: 1px solid rgba(17, 20, 24, 0.14); font-size: 16px; } .ds-grade { justify-self: start; font: 600 16px 'Barlow Semi Condensed', Barlow, system-ui, sans-serif; } .ds-slow .ds-grade, .ds-problem .ds-grade { padding: 0 6px; border: 1.5px solid #f2b100; } .ds-problem .ds-grade { background: #f2b100; color: #111418; } .ds-slow .ds-grade { color: #8a5a00; } .ds-key { margin: 8px 0 0; color: #5d6370; font-size: 13px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The House Timetable",
+    "overview": "**Creative North Star: \"The House Timetable\"**\n\nThe panel reads like a Swiss railway station (FORM seed `seed:7a12c38cdc815d8c`). A railway-blue band carries the title, the tabs and a big clock. Below it, the cameras play on an ink departure board, and the day's events run as a timetable on paper: big condensed times, numbered platforms and a red line for \"now\". Hierarchy comes from scale contrast and from rules between rows. It does not come from boxes, shadows or tinted cards.\n\nThe timetable follows Home Assistant's dark mode (paper by day, departure navy by night), but the panel never takes Home Assistant's theme colours. It sets its own tokens on its host and maps HA's variables onto them, so HA's own elements inside the panel fall in line. Video never follows the mode: it always sits on ink. The type is dense and tabular, and every number lines up. Words are plain: tile states, grade words and settings labels each come from a fixed, everyday vocabulary.\n\nThe build rejects the card dashboard: soft rounded cards, pill chips, a header in the theme's colour, and grey badges with no meaning.",
+    "keyCharacteristics": [
+      "Three fixed grounds: the rail band, the ink board and the paper (or navy) timetable.",
+      "Ruled rows and ruled sections, with no card boxes. Corners are square or 2px.",
+      "Barlow for words. Barlow Semi Condensed for times, numbers, titles and the clock. Tabular figures everywhere.",
+      "Square platform chips number the cameras in the same way across the board, the timetable, the filters and device pages.",
+      "Every colour has one meaning: red for now and new, blue for what can be pressed, amber for faults."
+    ],
+    "rules": [
+      {
+        "name": "The One Meaning Rule",
+        "body": "Red means now or new. Blue means pressable. Amber means a fault. A colour is never used for decoration or for any other meaning.",
+        "section": "colors"
+      },
+      {
+        "name": "The Own Theme Rule",
+        "body": "The panel sets its tokens on its host, light, or dark when HA's dark mode adds the `dark` attribute. It maps HA's variables onto those tokens and never the reverse.",
+        "section": "colors"
+      },
+      {
+        "name": "The Ink Board Rule",
+        "body": "Video and camera pictures always sit on board ink: the Live board, the Live tab, the Overview snapshot frame and the player, including when it is empty. They never sit on paper or navy.",
+        "section": "colors"
+      },
+      {
+        "name": "The Condensed Numbers Rule",
+        "body": "Every time, count chip, clock and title uses the semi-condensed face at 600. Running words use Barlow.",
+        "section": "typography"
+      },
+      {
+        "name": "The Scale Not Weight Rule",
+        "body": "Hierarchy comes from size steps (32, 28, 22, 17, 16, 13). Weights stay between 400 and 600.",
+        "section": "typography"
+      },
+      {
+        "name": "The Ruled Not Boxed Rule",
+        "body": "A section is a strong top rule and a row is a hairline. Nothing that sits in the flow gets a shadow or a filled card.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do take colours from the `--rv-*` tokens on the host, with light values and the `[dark]` overrides. Never read HA theme colours.",
+      "Do put any picture or video on board ink, with a 10px ink margin around snapshots.",
+      "Do number cameras with square platform chips, using the board's order everywhere.",
+      "Do separate sections with a 2px strong top rule and rows with 1px hairlines.",
+      "Do set times, numbers and titles in Barlow Semi Condensed 600 with tabular figures.",
+      "Do show a pressed or selected filter by filling it with ink and turning its text paper.",
+      "Do use the fixed vocabularies (tile states, grade words, plain settings words) and name buttons for their action.",
+      "Do honour reduced motion: the arrival slide, the knob slide and the video fade all switch off."
+    ],
+    "donts": [
+      "Don't use signal red for anything except now and new, or action blue for anything that cannot be pressed.",
+      "Don't use a radius over 2px on surfaces or controls, and don't use pill chips or soft rounded cards. Round forms belong only inside the drawn icons.",
+      "Don't add shadows to anything in the page flow. Shadows are for toasts, the hover readout and dialogs only.",
+      "Don't use grey badges as decoration. A badge carries a plain word or a meaning colour (accent or warning).",
+      "Don't place video on paper or navy, or let it follow light mode.",
+      "Don't use icon fonts or text glyphs as icons. Draw them on the 24×24, 1.8-stroke grid in `icons.ts`."
+    ]
+  }
+}

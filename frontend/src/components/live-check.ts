@@ -6,6 +6,7 @@ import { LIVE_REPORT_PREFIX, LIVE_SETUPS, LiveCheck, type LiveCheckOptions } fro
 import { reportSource } from "../live/check-util";
 import { fetchCheckReports, type SavedReport } from "../playback/check";
 import { deviceSetup, setupMismatch } from "../playback/check-util";
+import { formatStamp } from "../playback/time";
 import { icon } from "../icons";
 import { parseInShort } from "../plain";
 import { sharedStyles } from "../styles";
@@ -331,7 +332,7 @@ export class RvLiveCheck extends LitElement {
           (r) => html`<li>
             <div class="report-row">
               <span class="when"
-                >${[new Date(r.updated).toLocaleString(), r.setup.slice(LIVE_REPORT_PREFIX.length), reportSource(r.text)]
+                >${[formatStamp(Date.parse(r.updated), this.hass?.config?.time_zone), r.setup.slice(LIVE_REPORT_PREFIX.length), reportSource(r.text)]
                   .filter(Boolean)
                   .join(" · ")}${r.done ? "" : " (not finished)"}</span
               >

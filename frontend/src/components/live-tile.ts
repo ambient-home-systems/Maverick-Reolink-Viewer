@@ -26,6 +26,8 @@ export const TILE_OPEN_EVENT = "rv-live-open";
 export const TILE_FULL_EVENT = "rv-live-full";
 /** Fired (bubbling) on each first frame, end after one and failed start of its players. */
 export const TILE_COUNT_EVENT = "rv-live-count";
+/** Fired (bubbling) when the tile starts or stops playing live: `{ cameraId, live }`. */
+export const TILE_STATE_EVENT = "rv-live-state";
 
 export interface LiveCountDetail {
   camera: string;
@@ -328,6 +330,12 @@ export class RvLiveTile extends LitElement {
       { connectionId: connection.connection_id, stream: this.stream },
       { warm: false, iceServers: [] },
       (state) => {
+        const live = state.kind === "playing";
+        if (live !== (this._state.kind === "playing")) {
+          this.dispatchEvent(
+            new CustomEvent(TILE_STATE_EVENT, { detail: { cameraId: this.camera?.id ?? "", live }, bubbles: true }),
+          );
+        }
         this._state = state;
       },
     );
