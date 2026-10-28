@@ -50,8 +50,9 @@ jobs:
         ha: [pinned]
         include:
           # The oldest release this version supports (hacs.json), with its harness.
-          - ha: "2026.10.0"
-            harness: "0.13.371"
+          # (2026.10.0's reolink-aio 0.21.17 has no Baichuan.search_vod_days.)
+          - ha: "2026.10.1"
+            harness: "0.13.372"
           # The weekly run also tries the newest HA release, non-blocking.
           - ha: ${{ github.event_name == 'schedule' && 'latest' || 'pinned' }}
     continue-on-error: ${{ matrix.ha == 'latest' }}

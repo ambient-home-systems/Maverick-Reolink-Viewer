@@ -213,7 +213,7 @@ ffmpeg against a generated clip when ffmpeg is installed and skip otherwise.
 CI runs the whole test suite against:
 
 - **the pinned release** (`requirements_test.txt`), the newest tested;
-- **the oldest supported release** (`hacs.json`'s `homeassistant`, 2026.10.0): its
+- **the oldest supported release** (`hacs.json`'s `homeassistant`, 2026.10.1): its
   `pytest-homeassistant-custom-component` is in the `pytest` job's matrix, and
   `scripts/ha_requirements.py` installs what that release pins for the Reolink,
   ffmpeg, frontend, camera and stream components (reolink-aio above all);

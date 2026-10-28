@@ -155,7 +155,7 @@ arrows, every button says what it does, and motion stops when your device asks f
 v0.31.0 is the first release: from now on each one comes packaged, with what it brings
 in [CHANGELOG.md](CHANGELOG.md), and HACS offers it as an update.
 
-Requires Home Assistant 2026.10 or newer with the Reolink integration set up.
+Requires Home Assistant 2026.10.1 or newer with the Reolink integration set up.
 
 ### Install (HACS custom repository)
 
@@ -172,7 +172,8 @@ unzip it into `config/custom_components/reolink_viewer`, and restart Home Assist
 ### Home Assistant versions
 
 Each release is tested on every Home Assistant release from the oldest it supports to
-the newest of its day: v0.31.0 on 2026.10.0 to 2026.10.4. A weekly check tries each
+the newest of its day: v0.31.0 on 2026.10.1 to 2026.10.4 (2026.10.0's Reolink library
+is too old for its recordings). A weekly check tries each
 new Home Assistant release. If one changes the Reolink integration in a way Reolink
 Viewer cannot read, the panel says so on every page ("Reolink Viewer needs an
 update"), and your devices and their settings keep working until an update is out.

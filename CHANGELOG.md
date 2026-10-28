@@ -27,8 +27,10 @@ New in this release:
 
 - Each release comes packaged: for HACS, and as `reolink_viewer.zip` to install by
   hand.
-- Tested on every Home Assistant release from 2026.10.0 to 2026.10.4; a weekly
-  check tries the newest.
+- Tested on every Home Assistant release from 2026.10.1 to 2026.10.4; a weekly
+  check tries the newest. It needs 2026.10.1 or newer: 2026.10.0's Reolink library
+  cannot search the recorder's days, so there it would run without live view,
+  recordings and events, and HACS no longer installs it there.
 
 Earlier versions were not released; the
 [README](https://github.com/ambient-home-systems/Maverick-Reolink-Viewer#readme) says

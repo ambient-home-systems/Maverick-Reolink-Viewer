@@ -2894,7 +2894,7 @@ redesigned views.
 | 3. Mobile, and networks that cut websockets | In progress, in three parts (see "Step 3: mobile, and networks that cut websockets"). 3.1 built (v0.24.0): a page whose network cuts MSE's websockets switches live view to WebRTC first, and the capacity test sets the cameras kept warm aside and says plainly what else holds the slots, see "Step 3.1: live view that holds up". 3.2 built (v0.25.0): pinch and two-finger pan on the timeline, and picture-in-picture for live and playback, see "Step 3.2: touch, and picture-in-picture". 3.3 built (v0.26.0): full screen stays in the lighter SD away from home or on mobile data, with an HD button remembered per device, see "Step 3.3: away from home, and the iPhone checklist". **Waiting on the owner's iPhone checklist** (and the work-PC check from 3.1); the error states (step 4) can start meanwhile |
 | 4. Error states | **Built** (v0.27.0–v0.29.0), in three parts (see "Step 4: error states"). 4.1 (v0.27.0): offline cameras on the board from Home Assistant's state, and live errors in plain words, see "Step 4.1: live error states". 4.2 (v0.28.0): cameras with nothing to play say why, disks that are not ready are flagged, and recordings that cannot be read or played say why in plain words, see "Step 4.2: playback and storage error states". 4.3 (v0.29.0): a plain note over every view when Reolink Viewer cannot reach the cameras, plain load errors, and screenshots of every error state, see "Step 4.3: when Reolink Viewer cannot reach the cameras". |
 | 5. Accessibility | **Built** (v0.30.0): every view passes WCAG 2.1 AA (axe-core, light and dark, desktop and phone) and works from the keyboard, checked in CI; the timeline, the calendar and the device tabs are keyboard widgets; reduced motion is honoured and tested. See "Step 5: accessibility". |
-| 6. Packaging and the HA version matrix | **Built** (v0.31.0): releases from a Release workflow (CI, then the package checked and attached, notes from `CHANGELOG.md`); CI tests the oldest supported Home Assistant (2026.10.0) and the pinned newest (2026.10.4), and the newest weekly. The optional go2rtc app is not built (see "Step 6: packaging"). **Waiting on the owner:** running the first release and installing it through HACS on a clean Home Assistant (the exit criterion). Step 7 (docs) is next |
+| 6. Packaging and the HA version matrix | **Built** (v0.31.0): releases from a Release workflow (CI, then the package checked and attached, notes from `CHANGELOG.md`); CI tests the oldest supported Home Assistant (2026.10.1: the matrix found 2026.10.0 cannot run it) and the pinned newest (2026.10.4), and the newest weekly. The optional go2rtc app is not built (see "Step 6: packaging"). **Waiting on the owner:** running the first release and installing it through HACS on a clean Home Assistant (the exit criterion). Step 7 (docs) is next |
 | 7. Docs | Not started |
 
 ### Step 1: the design
@@ -3640,14 +3640,21 @@ internals, so each release needs its own test run, with its own pins:
 
 | Home Assistant | Its test harness | Pins it brings | Runs |
 | --- | --- | --- | --- |
-| 2026.10.0, the oldest supported (`hacs.json`) | 0.13.371 | reolink-aio 0.21.17, frontend 20260930.2 | every change |
-| 2026.10.4, the pinned newest (`requirements_test.txt`) | 0.13.375 | reolink-aio 0.21.18, frontend 20260930.3 | every change |
+| 2026.10.1, the oldest supported (`hacs.json`) | 0.13.372 | reolink-aio 0.21.18, frontend 20260930.3 | every change |
+| 2026.10.4, the pinned newest (`requirements_test.txt`) | 0.13.375 | reolink-aio 0.21.18, frontend 20260930.5 | every change |
 | the newest | the newest | its own | weekly, non-blocking |
 
 `scripts/ha_requirements.py` reads a release's pins from its own component
 manifests, so the matrix installs the right ones without a list to keep up.
 `tests/test_packaging.py` keeps `requirements_test.txt`, `hacs.json`, the README and
 the matrix in step. The pin moved from 2026.10.1 to 2026.10.4.
+
+Its first run found that **2026.10.0 cannot run Reolink Viewer**, though
+`hacs.json` had claimed it since Phase 1: its reolink-aio (0.21.17) has no
+`Baichuan.search_vod_days`, which the recordings calendar uses, so the compatibility
+check put the integration in degraded mode (no live view, recordings or events; 44
+tests failed). The oldest supported release is now 2026.10.1, in `hacs.json`, so HACS
+no longer installs it on 2026.10.0.
 
 **The optional go2rtc app: not built.** Reolink Viewer already runs its own go2rtc,
 from the binary Home Assistant's container ships (Home Assistant OS included) or a

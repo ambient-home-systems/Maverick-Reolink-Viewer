@@ -150,8 +150,5 @@ def test_the_oldest_home_assistant_claimed_is_tested() -> None:
     minimum = json.loads((ROOT / "hacs.json").read_text())["homeassistant"]
     ci = (ROOT / ".github" / "workflows" / "ci.yml").read_text()
     assert f'ha: "{minimum}"' in ci
-    year, month = minimum.split(".")[:2]
-    assert (
-        f"Requires Home Assistant {year}.{month} or newer"
-        in (ROOT / "README.md").read_text()
-    )
+    readme = (ROOT / "README.md").read_text()
+    assert f"Requires Home Assistant {minimum} or newer" in readme
