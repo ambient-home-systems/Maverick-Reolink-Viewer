@@ -3,7 +3,7 @@ import { LitElement, css, html, nothing, type PropertyValues, type TemplateResul
 import { icon } from "../icons";
 import type { DebugPlayer, TileDebug } from "../live/debug";
 import { chooseHd, type HdChoice } from "../live/hd";
-import { LivePlayer, type PlayerState } from "../live/player";
+import { LivePlayer, pageCuts, type PlayerState } from "../live/player";
 import { formatClock } from "../playback/time";
 import { sharedStyles } from "../styles";
 import type {
@@ -474,7 +474,13 @@ export class RvLiveTile extends LitElement {
     };
     add("SD", this.stream, this._player, this._state);
     if (this._hd?.stream) add("HD", this._hd.stream, this._hdPlayer, this._hdState);
-    return { camera: name, connection: this.connection, players, hd: this._hd?.reason };
+    return {
+      camera: name,
+      connection: this.connection,
+      players,
+      hd: this._hd?.reason,
+      webRtcFirstUntil: pageCuts.preferWebRtc() ? pageCuts.until : undefined,
+    };
   }
 
   /** Full screen: whether HD shows, and why not. */

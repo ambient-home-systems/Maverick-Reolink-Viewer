@@ -36,7 +36,8 @@ sample flags; the feed reads no more than the boxes' headers and flags.
 
 import asyncio
 from collections import deque
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
+import contextlib
 import json
 import logging
 import struct
@@ -475,6 +476,8 @@ class MseRelay:
         self._closing: set[Feed] = set()
         # Per stream: feeds that ended on their own, and the last reason.
         self._ends: dict[str, tuple[int, str]] = {}
+        # Hosts whose warm feeds are set aside (async_set_aside), and how often.
+        self._aside: dict[str, int] = {}
         self._stopped = False
 
     async def async_attach(self, stream: LiveStream, codecs: str) -> Viewer:
@@ -525,6 +528,8 @@ class MseRelay:
             return False
         owners.add(owner)
         self._warm[name] = stream
+        if self._is_aside(stream):
+            return False  # it opens when the host's feeds come back
         try:
             feed = await self._warm_feed(stream)
         except LiveError:
@@ -538,6 +543,38 @@ class MseRelay:
     def warm_streams(self) -> list[str]:
         """Return the go2rtc names of the streams kept warm."""
         return list(self._warm)
+
+    @contextlib.asynccontextmanager
+    async def async_set_aside(self, entry_id: str) -> AsyncIterator[int]:
+        """Close a host's warm feeds that nobody watches, for the block.
+
+        The capacity test needs every stream slot of its host, and a host's
+        warm feeds hold most of them. They stay warm for their owners, and
+        open again when the block ends. Yields how many were set aside.
+        """
+        self._aside[entry_id] = self._aside.get(entry_id, 0) + 1
+        closing: list[Feed] = []
+        for name, stream in self._warm.items():
+            if stream.source.entry_id != entry_id:
+                continue
+            if (timer := self._timers.pop(name, None)) is not None:
+                timer.cancel()
+            for feed in list(self._feeds.get(name, [])):
+                if feed.warm and not feed.viewers:
+                    feed.warm = False
+                    feed.close()
+                    closing.append(feed)
+        for feed in closing:
+            await feed.async_wait_closed()
+        try:
+            yield len({feed.stream.name for feed in closing})
+        finally:
+            self._aside[entry_id] -= 1
+            if not self._aside[entry_id]:
+                del self._aside[entry_id]
+                for name, stream in list(self._warm.items()):
+                    if stream.source.entry_id == entry_id:
+                        self._rewarm(name)
 
     def stats(self) -> dict[str, int]:
         """Return the open feeds, the streams kept warm, viewers and feeds ended."""
@@ -636,10 +673,15 @@ class MseRelay:
             timer.cancel()
         self._timers[name] = self.hass.loop.call_later(delay, self._rewarm, name)
 
+    def _is_aside(self, stream: LiveStream) -> bool:
+        return stream.source.entry_id in self._aside
+
     def _rewarm(self, name: str) -> None:
         self._timers.pop(name, None)
         if (stream := self._warm.get(name)) is None or self._stopped:
             return
+        if self._is_aside(stream):
+            return  # async_set_aside opens it again
         self.hass.async_create_background_task(
             self._async_rewarm(stream), "reolink_viewer keep a stream warm"
         )

@@ -68,6 +68,51 @@ class CapacityError(Exception):
     """The test cannot run."""
 
 
+class SlotsBusyError(CapacityError):
+    """The host's stream slots stayed in use (see ``busy_reason``)."""
+
+
+def busy_reason(held: list[LiveStream], in_use: int) -> tuple[str, str]:
+    """Say in plain words what kept a host's stream slots in use, and what to do.
+
+    ``held``: the host's live streams still open (warm feeds set aside, so
+    someone is watching them); ``in_use``: the slots in use, recordings
+    downloading included.
+    """
+    cameras = sorted({stream.source.name for stream in held})
+    downloads = max(0, in_use - len(held))
+    what = []
+    if cameras:
+        what.append(f"live view of {_join(cameras)} is open")
+    if downloads:
+        what.append(
+            f"{downloads} recording{'s are' if downloads > 1 else ' is'} downloading"
+        )
+    message = (
+        f"Every stream slot of this host stayed in use for {_duration(SLOT_TIMEOUT)}"
+    )
+    if not what:
+        return f"{message}.", "Run the check again in a few minutes."
+    return (
+        f"{message}: {' and '.join(what)}.",
+        "Close live view on other screens and let playback finish, then run the "
+        "check again.",
+    )
+
+
+def _duration(seconds: float) -> str:
+    """Return "1 second", "45 seconds", "2 minutes"."""
+    if seconds >= 120:
+        return f"{round(seconds / 60)} minutes"
+    whole = round(seconds)
+    return f"{whole} second{'' if whole == 1 else 's'}"
+
+
+def _join(names: list[str]) -> str:
+    """Return "A", "A and B", "A, B and C"."""
+    return names[0] if len(names) == 1 else f"{', '.join(names[:-1])} and {names[-1]}"
+
+
 @dataclass(slots=True)
 class Reader:
     """Reads one stream from go2rtc as fragmented MP4, counting its frames."""
@@ -208,7 +253,7 @@ class CapacityTest:
                     for ticket in tickets:
                         await ticket.wait()
             except TimeoutError:
-                raise CapacityError("the host's stream slots stayed busy") from None
+                raise SlotsBusyError("the host's stream slots stayed busy") from None
             return await self._scheduler.run(
                 self._entry_id,
                 self._levels,

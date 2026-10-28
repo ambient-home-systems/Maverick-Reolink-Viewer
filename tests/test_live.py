@@ -330,6 +330,41 @@ def test_verdict() -> None:
     }
 
 
+def test_busy_slots_are_explained() -> None:
+    """When the slots stay in use, the report says what holds them, plainly."""
+    dogs = LiveSource("dogs", "conn2", "Dogs", "entry1", 1, "nvr")
+    head = "Every stream slot of this host stayed in use for 2 minutes"
+    then = (
+        "Close live view on other screens and let playback finish, "
+        "then run the check again."
+    )
+    held = [LiveStream(SOURCE, "sub"), LiveStream(SOURCE, "main")]
+    assert capacity.busy_reason(held, 2) == (
+        f"{head}: live view of Garage is open.",
+        then,
+    )
+    held.append(LiveStream(dogs, "sub"))
+    assert capacity.busy_reason(held, 5) == (
+        f"{head}: live view of Dogs and Garage is open and 2 recordings are "
+        "downloading.",
+        then,
+    )
+    assert capacity.busy_reason([], 1) == (
+        f"{head}: 1 recording is downloading.",
+        then,
+    )
+    assert capacity.busy_reason([], 0) == (
+        f"{head}.",
+        "Run the check again in a few minutes.",
+    )
+    assert capacity._join(["A", "B", "C"]) == "A, B and C"
+    assert [capacity._duration(s) for s in (1, 45, 120)] == [
+        "1 second",
+        "45 seconds",
+        "2 minutes",
+    ]
+
+
 # ---- The stream registry ----
 
 

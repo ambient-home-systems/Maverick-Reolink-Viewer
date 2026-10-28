@@ -651,9 +651,11 @@ export interface CapacityReport {
   fill?: { channel: number; duration_s: number } | string;
   fill_alone_mbit_s?: number | null;
   verdict: { first_failing_level: number | null; reasons: string[] };
+  /** The cameras kept warm on the host, set aside while the test ran. */
+  warm_set_aside?: number;
 }
 
 export type CapacityEvent =
   | { type: "progress"; message: string }
   | { type: "result"; report: CapacityReport }
-  | { type: "error"; message: string };
+  | { type: "error"; message: string; advice?: string };

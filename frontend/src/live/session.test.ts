@@ -391,7 +391,7 @@ describe("OurMse", () => {
       const video = fakeVideo();
       const session = new OurMse(hass, video, { connectionId: "c1", stream: "sub" }, 5000, "http://ha/");
       const ended: string[] = [];
-      session.onEnd = (error) => ended.push(error);
+      session.onEnd = (error, cut) => ended.push(cut ? `${error} (cut)` : error);
       await flush();
       const ws = FakeSocket.last;
       if (!ws) throw new Error("no socket");
@@ -406,8 +406,15 @@ describe("OurMse", () => {
     const closed = await start();
     closed.ws.drop();
     closed.ws.drop();
-    expect(closed.ended).toEqual(["the server closed the stream"]); // once
+    // Closed without a word from the server: a cut, reported once.
+    expect(closed.ended).toEqual(["the server closed the stream (cut)"]);
     closed.session.close();
+    // The server said why first: not a cut.
+    const said = await start();
+    said.ws.message(JSON.stringify({ type: "error", value: "the camera went away" }));
+    said.ws.drop();
+    expect(said.ended).toEqual(["the camera went away"]);
+    said.session.close();
 
     vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "performance"] });
     try {

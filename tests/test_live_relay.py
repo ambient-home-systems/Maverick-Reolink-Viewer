@@ -601,3 +601,67 @@ async def test_a_warm_stream_retries_until_it_opens(
     assert relay.state(SUB) is not None
     await relay.async_shutdown()
     await hass.async_block_till_done()
+
+
+async def test_set_aside_a_hosts_warm_feeds(
+    hass: HomeAssistant,
+    setup: tuple[MseRelay, FakeServer, Scheduler],
+) -> None:
+    """The capacity test sets a host's unwatched warm feeds aside, then they open again."""
+    relay, server, scheduler = setup
+    main = LiveStream(SOURCE, "main")
+    elsewhere = LiveStream(
+        LiveSource(
+            camera_id="cam2",
+            connection_id="conn2",
+            name="Doorbell",
+            entry_id="entry2",
+            channel=0,
+            via="direct",
+            is_battery=False,
+        ),
+        "sub",
+    )
+    for stream in (SUB, main, elsewhere):
+        assert await relay.async_keep_warm(stream, True, key_frame_timeout=0) is False
+    # Someone watches the main stream: its feed stays.
+    viewer = await relay.async_attach(main, CHROME)
+    assert slots(scheduler) == 2
+    assert {s.name for s in relay.registry.held("entry1")} == {SUB.name, main.name}
+    sub_socket, main_socket, other_socket = server.sockets
+
+    async with relay.async_set_aside("entry1") as aside:
+        assert aside == 1
+        assert is_closed(sub_socket)
+        assert not is_closed(main_socket)
+        assert not is_closed(other_socket)  # another host
+        assert slots(scheduler) == 1
+        assert [s.name for s in relay.registry.held("entry1")] == [main.name]
+        # Still warm for its owners, and not opened again meanwhile.
+        assert set(relay.warm_streams()) == {SUB.name, main.name, elsewhere.name}
+        with patch.object(relay_module, "RETRY_S", (0.0,)):
+            main_socket.end()
+            await asyncio.sleep(0.05)
+        await settle()
+        assert len(server.sockets) == 3
+        # Kept warm by another owner meanwhile: nothing opens yet.
+        assert await relay.async_keep_warm(SUB, True, owner="setting") is False
+        assert relay.warm_owners(SUB) == {"check", "setting"}
+        assert len(server.sockets) == 3
+        # Set aside twice (nested): still aside when the inner block ends.
+        async with relay.async_set_aside("entry1") as again:
+            assert again == 0
+        await settle()
+        assert len(server.sockets) == 3
+
+    for _ in range(100):
+        await asyncio.sleep(0.01)
+        if len(server.sockets) == 5:
+            break
+    assert len(server.sockets) == 5  # sub and main open again
+    await settle()
+    assert slots(scheduler) == 2
+    assert set(relay.warm_streams()) == {SUB.name, main.name, elsewhere.name}
+    viewer.detach()
+    await relay.async_shutdown()
+    await hass.async_block_till_done()

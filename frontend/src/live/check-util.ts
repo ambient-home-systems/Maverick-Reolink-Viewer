@@ -150,6 +150,9 @@ export function streamLabel(kind: string, encoding: StreamEncoding | null | unde
 export function capacityLines(report: CapacityReport): string[] {
   const lines: string[] = [];
   const fill = typeof report.fill === "string" ? report.fill : report.fill ? `ch${report.fill.channel + 1}, ${Math.round(report.fill.duration_s / 60)} min recording` : "not run";
+  if (report.warm_set_aside) {
+    lines.push(`  cameras kept warm, set aside while it ran: ${String(report.warm_set_aside)}`);
+  }
   lines.push(`  logged-in clients (GetOnline) before: ${report.online_users_before}, after: ${report.online_users_after}`);
   lines.push(
     `  download: ${fill}${report.fill_alone_mbit_s != null ? `, alone ${report.fill_alone_mbit_s} Mbit/s` : ""}`,

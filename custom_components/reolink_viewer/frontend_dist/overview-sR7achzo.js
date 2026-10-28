@@ -1,5 +1,5 @@
-import { Bt as e, Ht as t, Q as n, Vt as r, a as i, ft as a, i as o, o as s, r as c, zt as l } from "./home-BgEtUrjD.js";
-import "./device-list-DLLkXDNr.js";
+import { Bt as e, Ht as t, Q as n, Vt as r, a as i, ft as a, i as o, o as s, r as c, zt as l } from "./home-CkkHTxZF.js";
+import "./device-list-D4yJ8c1U.js";
 //#region src/components/overview.ts
 var u = 3e4, d = {
 	people: "person",

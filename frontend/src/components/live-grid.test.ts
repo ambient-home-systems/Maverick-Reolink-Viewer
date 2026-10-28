@@ -19,7 +19,8 @@ const players = vi.hoisted(
     }[],
 );
 
-vi.mock("../live/player", () => {
+vi.mock("../live/player", async () => {
+  const actual = await vi.importActual<typeof import("../live/player")>("../live/player");
   class FakePlayer {
     running = false;
     starts = 0;
@@ -53,7 +54,7 @@ vi.mock("../live/player", () => {
       this._onState(state);
     }
   }
-  return { LivePlayer: FakePlayer };
+  return { ...actual, LivePlayer: FakePlayer };
 });
 
 const { boardOrder, playingCount, tileFit, tileShape } = await import("./live-grid");
@@ -391,6 +392,7 @@ describe("rv-live-grid", () => {
     expect(text).toContain("Garage · through the NVR (RLN36)");
     expect(text).toContain("SD (sub, kept warm): starting over MSE");
     expect(text).toContain("server: not in go2rtc, held 1×");
+    expect(text).not.toContain("Network:");
     expect(sent).toContainEqual({ type: "reolink_viewer/live/state", connection_id: "nvr1", stream: "sub" });
     // Its Close, or the info button again, hides it.
     [...(debug?.shadowRoot?.querySelectorAll("button") ?? [])].find((b) => b.textContent.trim() === "Close")?.click();
@@ -401,6 +403,19 @@ describe("rv-live-grid", () => {
     info.click();
     await garage.updateComplete;
     expect(garage.shadowRoot?.querySelector("rv-live-debug")).toBeNull();
+    // On a page whose network cut MSE twice, it says WebRTC goes first.
+    const { pageCuts } = await import("../live/player");
+    pageCuts.note(Date.now() - 60_000);
+    pageCuts.note(Date.now());
+    info.click();
+    await garage.updateComplete;
+    await flush();
+    const again = garage.shadowRoot?.querySelector("rv-live-debug");
+    await again?.updateComplete;
+    expect(again?.shadowRoot?.querySelector("pre")?.textContent).toContain(
+      "Network: it cut MSE's connections twice, so WebRTC goes first until",
+    );
+    pageCuts.giveUp();
   });
 
   it("plays again when a tile is attached again", async () => {

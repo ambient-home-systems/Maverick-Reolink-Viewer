@@ -1,7 +1,7 @@
-import { Ct as e, Ft as t, G as n, It as r, J as i, Lt as a, Nt as o, U as s, W as c, Y as l, _t as u, at as d, bt as f, dt as p, it as m, lt as h, nt as g, ot as _, rt as v, st as y, tt as b, ut as x, wt as S, xt as C, yt as w } from "./home-BgEtUrjD.js";
-import { a as T, d as E, l as D, n as O, o as k, r as A, t as j } from "./findings-BWpLmNlZ.js";
+import { Ct as e, Ft as t, G as n, It as r, J as i, Lt as a, Nt as o, U as s, W as c, Y as l, _t as u, at as d, bt as f, dt as p, it as m, lt as h, nt as g, ot as _, rt as v, st as y, tt as b, ut as x, wt as S, xt as C, yt as w } from "./home-CkkHTxZF.js";
+import { a as T, d as E, l as D, n as O, o as k, r as A, t as j } from "./findings-DHMHFT4a.js";
 //#region src/live/check.ts
-var M = "0.23.0", N = [
+var M = "0.24.0", N = [
 	"Desktop Chrome, LAN",
 	"Desktop Chrome, Tailscale",
 	"Desktop Chrome, Nabu Casa",
@@ -28,6 +28,7 @@ var M = "0.23.0", N = [
 	_measured = [];
 	_posters = [];
 	_capacity = [];
+	_capacityFailed = [];
 	_chosen = [];
 	constructor(e, t, n, r = () => void 0) {
 		this._hass = e, this.options = t, this._stage = n, this._onChange = r, this.id = `live-${(/* @__PURE__ */ new Date()).toISOString().slice(0, 19)}-${Math.random().toString(36).slice(2, 6)}`;
@@ -283,7 +284,10 @@ var M = "0.23.0", N = [
 			let n = await this._capacity_(t.id, (t) => {
 				this._status(`capacity test: ${e}: ${t}`);
 			});
-			if (typeof n == "string") this._log(`  failed: ${n}`);
+			if ("message" in n) this._log(`  failed: ${n.message}${n.advice ? ` ${n.advice}` : ""}`), this._capacityFailed.push({
+				host: e,
+				...n
+			});
 			else {
 				this._capacity.push({
 					host: e,
@@ -299,11 +303,14 @@ var M = "0.23.0", N = [
 				o || (o = !0, i?.().catch(() => void 0), r(e));
 			};
 			t(this._hass, e, (e) => {
-				e.type === "progress" ? n(e.message) : e.type === "result" ? s(e.report) : s(e.message);
+				e.type === "progress" ? n(e.message) : e.type === "result" ? s(e.report) : s(e.advice ? {
+					message: e.message,
+					advice: e.advice
+				} : { message: e.message });
 			}).then((e) => {
 				i = e, o && e().catch(() => void 0);
 			}).catch((e) => {
-				s(a(e).message);
+				s({ message: a(e).message });
 			});
 		});
 	}
@@ -376,6 +383,11 @@ var M = "0.23.0", N = [
 				});
 			}
 		}
+		for (let { host: e, message: n, advice: r } of this._capacityFailed) t.push({
+			grade: "note",
+			text: `${e}'s capacity test could not run${/^[A-Z]/.test(n) ? "." : ":"} ${n}${/[.!?]$/.test(n) ? "" : "."}`,
+			...r ? { advice: r } : {}
+		});
 		let p = A(n), m = i - a, h = a ? `${String(m)} of ${j(i, "camera")} started live video; ${String(a)} did not` : `${i === 1 ? "The camera" : i === 2 ? "Both cameras" : `All ${j(i, "camera")}`} started live video` + (p === void 0 ? "" : `, typically in ${T(p)}`), g = r.length ? `; ${String(r.length)} ${r.length === 1 ? "is" : "are"} slow: ${r.join(", ")}` : "";
 		return {
 			headline: i ? `${e ? "" : "So far: "}${h}${g}.` : e ? "No camera was measured." : "Measuring…",

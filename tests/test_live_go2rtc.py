@@ -543,12 +543,22 @@ async def test_capacity_test(
     live: MockConfigEntry,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Sub streams one by one, a main, a download: frames counted at each level."""
+    """Sub streams one by one, a main, a download: frames counted at each level.
+
+    A camera kept warm is set aside while it runs, and kept warm again after.
+    """
     monkeypatch.setattr(capacity, "MEASURE_S", 1.5)
     monkeypatch.setattr(capacity, "FILL_ALONE_S", 0.5)
     client = await hass_ws_client(hass)
     msg = await _ws(client, {"type": "reolink_viewer/devices"})
     host_id = msg["result"]["hosts"][0]["id"]
+    msg = await _ws(client, {"type": "reolink_viewer/live/cameras"})
+    conn = msg["result"]["cameras"][0]["connections"][0]
+    ref = {"connection_id": conn["connection_id"], "stream": "sub"}
+    msg = await _ws(
+        client, {"type": "reolink_viewer/live/preload", **ref, "enabled": True}
+    )
+    assert msg["result"]["key_frame"] is True
     began = time.monotonic()
     await client.send_json_auto_id(
         {"type": "reolink_viewer/live/capacity", "host_id": host_id}
@@ -572,7 +582,50 @@ async def test_capacity_test(
     # The mocked NVR answers GetOnline with nothing usable: reported, not raised.
     assert str(report["online_users_before"]).startswith("n/a")
     assert "verdict" in report
-    assert any(e["type"] == "progress" for e in events)
+    assert report["warm_set_aside"] == 1
+    progress = [e["message"] for e in events if e["type"] == "progress"]
+    assert progress[0] == "set aside the 1 camera kept warm until the test ends"
     assert time.monotonic() - began < 45
+    # Warm again: its feed opens and caches a key frame.
+    async with asyncio.timeout(15):
+        while True:
+            msg = await _ws(client, {"type": "reolink_viewer/live/state", **ref})
+            cache = msg["result"]["cache"]
+            if cache and cache["warm"] and cache["key_frame_age_ms"] is not None:
+                break
+            await asyncio.sleep(0.2)
     msg = await _ws(client, {"type": "reolink_viewer/live/capacity", "host_id": "nope"})
     assert msg["error"]["code"] == "not_found"
+
+
+async def test_capacity_test_says_what_holds_the_slots(
+    hass: HomeAssistant,
+    hass_ws_client: WebSocketGenerator,
+    hass_client_no_auth: ClientSessionGenerator,
+    live: MockConfigEntry,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A camera being watched keeps its slot: the test says so, in plain words."""
+    monkeypatch.setattr(capacity, "SLOT_TIMEOUT", 1.0)
+    client = await hass_ws_client(hass)
+    msg = await _ws(client, {"type": "reolink_viewer/devices"})
+    host_id = msg["result"]["hosts"][0]["id"]
+    msg = await _ws(client, {"type": "reolink_viewer/live/cameras"})
+    camera = msg["result"]["cameras"][0]
+    ref = {"connection_id": camera["connections"][0]["connection_id"], "stream": "sub"}
+    msg = await _ws(client, {"type": "reolink_viewer/live/mse", **ref})
+    http = await hass_client_no_auth()
+    async with http.ws_connect(msg["result"]["path"]) as socket:
+        await socket.send_json({"type": "mse", "value": "avc1.640029,mp4a.40.2"})
+        assert json.loads((await socket.receive(timeout=10)).data)["type"] == "mse"
+        await client.send_json_auto_id(
+            {"type": "reolink_viewer/live/capacity", "host_id": host_id}
+        )
+        events = await _events(client, "result", timeout=20)
+    assert events[-1] == {
+        "type": "error",
+        "message": "Every stream slot of this host stayed in use for 1 second: "
+        f"live view of {camera['name']} is open.",
+        "advice": "Close live view on other screens and let playback finish, then "
+        "run the check again.",
+    }

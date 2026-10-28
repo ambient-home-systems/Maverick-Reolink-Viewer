@@ -135,6 +135,7 @@ describe("live check helpers", () => {
     const ok = { ...report, fill: "no recording in the last 24 h", fill_alone_mbit_s: null, levels: [], verdict: { first_failing_level: null, reasons: [] } };
     expect(capacityLines(ok).at(-1)).toBe("  verdict: every level kept up");
     expect(capacityLines(ok)[1]).toBe("  download: no recording in the last 24 h");
+    expect(capacityLines({ ...ok, warm_set_aside: 6 })[0]).toBe("  cameras kept warm, set aside while it ran: 6");
   });
 
   it("builds websocket URLs on the page's server", () => {

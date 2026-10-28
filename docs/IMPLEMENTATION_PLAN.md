@@ -20,7 +20,7 @@ put on it:
 | 1 | Device details and every setting, with explanations | Standard (catalog) / High (panel shell) | 2–3 wk | Done (2026-10-17) |
 | 2 | Event timeline, thumbnails, smooth playback | High (backend) / Very high (player) | 3–5 wk | Done (2026-10-21, v0.3.2). 2A (2026-10-20, v0.2.7): timeline 105–287 ms, first frame 0.6–1.1 s, auto-advance 6–7 ms on hardware. 2B: MSE player; uncached deep starts are the NVR's download up to the target (6.9–13.0 s in hour-long recordings, up to 84 s before), speeds 0.5–8×, HD/SD at the same moment, one-hour sessions within the caps, the iPhone app on Wi-Fi, Tailscale and Nabu Casa |
 | 3 | Live view via go2rtc, grid, fullscreen, PTZ | High | 3–4 wk | Done (2026-10-27, v0.15.1). Our own go2rtc and the live check (v0.4.0, runs 5–13); the key-frame cache, the image cache, the Live grid and Live tab, keep warm, full-screen HD, PTZ and the camera's controls, the picture first, battery cameras on wired power, a debug view per tile and the soak report (v0.5.0–v0.15.1). Exit runs: the soak passed (run 15), every tile's first image in a median 0.02 s on the iPhone and the Mac (runs 16–17), and the Phase 2 playback criteria held with live view running (runs 18–19) |
-| 4 | Design, performance, mobile, packaging, first release | Standard | 3–4 wk | In progress. Step 1, the design (the Timetable), done in v0.16.0–v0.22.0; step 2, the performance budget, done in v0.23.0. See "Phase 4 status" |
+| 4 | Design, performance, mobile, packaging, first release | Standard | 3–4 wk | In progress. Step 1, the design (the Timetable), done in v0.16.0–v0.22.0; step 2, the performance budget, done in v0.23.0; step 3.1 built in v0.24.0. See "Phase 4 status" |
 | 5 | Optional R&D: Baichuan live/playback | Very high | 4–8 wk, time-boxed with gates | Not started |
 
 Phases 1 and 2 can overlap once Phase 0 is done. Phase 5 can start any time after
@@ -2891,7 +2891,7 @@ redesigned views.
 | --- | --- |
 | 1. Design: the Timetable panel (home view, events, devices, device page, checks) | **Done** (v0.16.0–v0.22.0). Direction chosen (2026-10-28), see "Step 1: the design". 1.1 foundations built (v0.16.0, the board's crop fixed in v0.16.1) and checked by the owner on the hardware, see "Step 1.1: foundations". 1.2 the home view's timetable built (v0.17.0), see "Step 1.2: today's timetable". 1.3 the Events view built (v0.18.0), see "Step 1.3: the Events view". 1.4a the device list and the device page's header, Overview and Settings built (v0.19.0), see "Step 1.4a: devices, Overview and Settings". 1.4b the Playback tab built (v0.20.0), see "Step 1.4b: the Playback tab". 1.5 the checks and reports built, in plain words (v0.21.0), see "Step 1.5: checks and reports"; 1.6 the finish: the design detector, an independent finish review against the contract (verdict: ship after fixes) with every material fix built, and `DESIGN.md` (v0.22.0), see "Step 1.6: the finish". |
 | 2. Performance budget | **Done** (v0.23.0): the home view's first download is 40.9 KB gzipped (budget 200 KB) with every other view loaded on demand; no long tasks while scrubbing the timeline; time to first frame for live and playback on every setup. The first two run in CI. See "Step 2: the performance budget". Mobile (step 3) is next |
-| 3. Mobile, and networks that cut websockets | Not started |
+| 3. Mobile, and networks that cut websockets | In progress, in three parts (see "Step 3: mobile, and networks that cut websockets"). 3.1 built (v0.24.0): a page whose network cuts MSE's websockets switches live view to WebRTC first, and the capacity test sets the cameras kept warm aside and says plainly what else holds the slots, see "Step 3.1: live view that holds up". 3.2 (touch) is next |
 | 4. Error states | Not started |
 | 5. Accessibility | Not started |
 | 6. Packaging and the HA version matrix | Not started |
@@ -3252,6 +3252,68 @@ Playback (the Playback tab, sub stream):
 
 To refresh these on a new version, run the live check and the playback check
 on each setup; their "In short" says how each start went.
+
+### Step 3: mobile, and networks that cut websockets
+
+Built in three parts, as step 1 was:
+
+- **3.1 live view that holds up** (v0.24.0): networks that cut long-lived
+  websockets, and the capacity test while cameras are kept warm.
+- **3.2 touch:** gestures on the timeline, and picture-in-picture.
+- **3.3 away from home:** lighter streams on cellular and remote links, and the
+  Companion app checklist on the owner's iPhone.
+
+### Step 3.1: live view that holds up (v0.24.0)
+
+**Networks that cut long-lived websockets.** Phase 3's soak (run 15) found a
+filtered work network, through Nabu Casa, that closed every MSE tile's websocket
+about every 5½ minutes. Each tile played again from its warm feed in about
+0.25 s, but it is a visible blip, over and over. WebRTC's video does not cross
+that websocket, and its tiles held. So the page now switches:
+
+- **A cut** is an MSE session that played at least a minute and whose websocket
+  closed without a word from Home Assistant. When the server ends a stream it
+  sends the reason first; a stall (no frame for 10 s) or a session that played
+  under a minute is something else.
+- **Two cuts within 20 minutes**, at least 10 s apart, switch the whole page:
+  warm cameras start over WebRTC first, with MSE as the fallback. A restart of
+  Home Assistant or a short drop cuts every tile at the same moment, and counts
+  once. The network is the same for every tile on a page, so one tile's cuts
+  decide for all; a tile switches at its next start.
+- **For an hour**, then MSE goes first again: the device may have moved to
+  another network. If the network still cuts, two more cuts switch it back.
+- **If WebRTC cannot start either** while the page prefers it, MSE goes first
+  again at once, so a network that blocks both does not wait 15 s for WebRTC
+  on every restart.
+- The tile's debug view (ⓘ) says so: "Network: it cut MSE's connections twice,
+  so WebRTC goes first until 14:32", and the player's events say when and why.
+- Not yet seen on the work network itself. To check it, open the Live board
+  there for 15 minutes or more: after the second cut (about 11 minutes in) the
+  tiles should start over WebRTC and stop dropping.
+
+**The capacity test while cameras are kept warm.** The test needs every stream
+slot of a host, and the cameras kept warm hold most of them (by default, as
+many as the host allows less one), so on run 16 it could only say "the host's
+stream slots stayed busy". Now:
+
+- The test **sets the host's warm feeds aside** while it runs: the feeds that
+  nobody is watching close, and open again when it ends (a key frame is cached
+  again within seconds). The cameras stay kept warm throughout; a switch turned
+  on meanwhile opens its feed after the test. The progress line says "set aside
+  the 6 cameras kept warm until the test ends", and the report counts them.
+- When the slots still stay in use, the live check says what holds them, and
+  what to do, in its summary: "RLN36's capacity test could not run. Every stream
+  slot of this host stayed in use for 2 minutes: live view of Dogs and Garage is
+  open and 1 recording is downloading. What to do: Close live view on other
+  screens and let playback finish, then run the check again."
+- Any other reason the test could not run is in the summary too (it was only in
+  the details).
+
+Tests: the player's switch, its hour and its giving up (unit, fake sessions);
+the session telling a cut from an end the server explained; the relay setting a
+host's feeds aside and opening them again (unit); and, against a real go2rtc,
+the capacity test with a camera kept warm (set aside, warm again after) and with
+a camera being watched (the plain reason).
 
 ### Steps 2–7
 

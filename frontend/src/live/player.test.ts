@@ -2,8 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { HomeAssistant } from "../types";
 import {
+  CUT_MIN_PLAY_MS,
+  CUT_SAME_MS,
+  CUT_WINDOW_MS,
+  CutWatch,
   EVENT_LOG,
   LivePlayer,
+  PREFER_WEBRTC_MS,
   RETRY_S,
   STABLE_MS,
   type PlayerState,
@@ -19,7 +24,7 @@ const flush = async () => {
 /** A session whose start the test settles, and which it can end. */
 class FakeSession implements LiveSession {
   readonly done: Promise<SessionResult>;
-  onEnd?: (error: string) => void;
+  onEnd?: (error: string, cut: boolean) => void;
   closed = false;
   private _resolve!: (result: SessionResult) => void;
   constructor(
@@ -36,15 +41,15 @@ class FakeSession implements LiveSession {
   failStart(error: string): void {
     this._resolve({ ok: false, error, steps: {} });
   }
-  end(error: string): void {
-    this.onEnd?.(error);
+  end(error: string, cut = false): void {
+    this.onEnd?.(error, cut);
   }
   close(): void {
     this.closed = true;
   }
 }
 
-function setup(warm: boolean) {
+function setup(warm: boolean, cuts: CutWatch = new CutWatch()) {
   const sessions: FakeSession[] = [];
   const states: PlayerState[] = [];
   const factory: SessionFactory = (
@@ -66,6 +71,7 @@ function setup(warm: boolean) {
     { warm, iceServers: [] },
     (state) => states.push(state),
     factory,
+    cuts,
   );
   const last = () => {
     const session = sessions.at(-1);
@@ -223,6 +229,79 @@ describe("LivePlayer", () => {
     expect(player.events.at(0)?.text).toBe("WebRTC: starting");
   });
 
+  it("starts over WebRTC first once this page's MSE was cut twice", async () => {
+    const cuts = new CutWatch();
+    const { player, sessions, last } = setup(true, cuts);
+    // Played a while, then cut: MSE again (once could be a restart).
+    player.start();
+    last().play();
+    await flush();
+    vi.advanceTimersByTime(CUT_MIN_PLAY_MS);
+    last().end("the server closed the stream", true);
+    expect(last().transport).toBe("MSE");
+    expect(cuts.preferWebRtc()).toBe(false);
+    // A stall, or a cut of one that played under a minute, is not counted.
+    last().play();
+    await flush();
+    vi.advanceTimersByTime(CUT_MIN_PLAY_MS);
+    last().end("no new frame for 10 s");
+    last().play();
+    await flush();
+    vi.advanceTimersByTime(CUT_MIN_PLAY_MS - 1000);
+    last().end("the server closed the stream", true);
+    vi.advanceTimersByTime(RETRY_S[0] * 1000);
+    expect(cuts.preferWebRtc()).toBe(false);
+    // The second cut: WebRTC first.
+    last().play();
+    await flush();
+    vi.advanceTimersByTime(CUT_MIN_PLAY_MS);
+    last().end("the server closed the stream", true);
+    expect(cuts.preferWebRtc()).toBe(true);
+    expect(last().transport).toBe("WebRTC");
+    last().play();
+    await flush();
+    expect(player.state).toMatchObject({ kind: "playing", transport: "WebRTC" });
+    expect(sessions.map((s) => s.transport)).toEqual(["MSE", "MSE", "MSE", "MSE", "WebRTC"]);
+    expect(player.events.map((e) => e.text)).toContain(
+      "this page's MSE connections were cut twice within 20 min: WebRTC goes first for 60 min",
+    );
+    expect(player.events.filter((e) => e.text.startsWith("WebRTC first"))).toHaveLength(1);
+    // Another warm player on the page starts over WebRTC too.
+    const other = setup(true, cuts);
+    other.player.start();
+    expect(other.last().transport).toBe("WebRTC");
+    // An hour later, MSE goes first again.
+    vi.advanceTimersByTime(PREFER_WEBRTC_MS);
+    player.stop();
+    player.start();
+    expect(last().transport).toBe("MSE");
+    await flush();
+  });
+
+  it("goes back to MSE first when WebRTC cannot start either", async () => {
+    const cuts = new CutWatch();
+    cuts.note(Date.now() - 60_000);
+    cuts.note(Date.now());
+    expect(cuts.preferWebRtc()).toBe(true);
+    const { player, last } = setup(true, cuts);
+    player.start();
+    expect(last().transport).toBe("WebRTC");
+    last().failStart("ICE failed");
+    await flush();
+    expect(cuts.preferWebRtc()).toBe(false);
+    expect(last().transport).toBe("MSE");
+    expect(player.events.map((e) => e.text)).toContain("WebRTC could not start either: MSE goes first again");
+    // A cold stream's WebRTC failing says nothing about the network's cuts.
+    const again = new CutWatch();
+    again.note(Date.now() - 60_000);
+    again.note(Date.now());
+    const cold = setup(false, again);
+    cold.player.start();
+    cold.last().failStart("ICE failed");
+    await flush();
+    expect(again.preferWebRtc()).toBe(true);
+  });
+
   it("reads warm at each start", async () => {
     const { player, last } = setup(false);
     player.start();
@@ -232,5 +311,28 @@ describe("LivePlayer", () => {
     player.start();
     expect(last().transport).toBe("MSE");
     await flush();
+  });
+});
+
+describe("CutWatch", () => {
+  it("counts cuts close together once, and two within the window", () => {
+    const cuts = new CutWatch();
+    const t = 1_000_000;
+    expect(cuts.note(t)).toBe(false);
+    // Every tile cut at once (a restart, a blip): one cut.
+    expect(cuts.note(t + CUT_SAME_MS - 1)).toBe(false);
+    expect(cuts.preferWebRtc(t + CUT_SAME_MS)).toBe(false);
+    // Too long after the first: the first no longer counts.
+    expect(cuts.note(t + CUT_WINDOW_MS + 1)).toBe(false);
+    // The second within the window.
+    expect(cuts.note(t + CUT_WINDOW_MS + 5 * 60_000)).toBe(true);
+    const until = t + CUT_WINDOW_MS + 5 * 60_000 + PREFER_WEBRTC_MS;
+    expect(cuts.until).toBe(until);
+    expect(cuts.preferWebRtc(until - 1)).toBe(true);
+    // Cuts while WebRTC goes first do not extend it.
+    expect(cuts.note(until - 120_000)).toBe(false);
+    expect(cuts.note(until - 60_000)).toBe(false);
+    expect(cuts.until).toBe(until);
+    expect(cuts.preferWebRtc(until)).toBe(false);
   });
 });
