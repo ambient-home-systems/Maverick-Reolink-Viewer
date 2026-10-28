@@ -19,7 +19,7 @@ put on it:
 | 0 | Foundations, CI, adapter layer, hardware discovery | High | 1–2 wk | Done (2026-10-17) |
 | 1 | Device details and every setting, with explanations | Standard (catalog) / High (panel shell) | 2–3 wk | Done (2026-10-17) |
 | 2 | Event timeline, thumbnails, smooth playback | High (backend) / Very high (player) | 3–5 wk | Done (2026-10-21, v0.3.2). 2A (2026-10-20, v0.2.7): timeline 105–287 ms, first frame 0.6–1.1 s, auto-advance 6–7 ms on hardware. 2B: MSE player; uncached deep starts are the NVR's download up to the target (6.9–13.0 s in hour-long recordings, up to 84 s before), speeds 0.5–8×, HD/SD at the same moment, one-hour sessions within the caps, the iPhone app on Wi-Fi, Tailscale and Nabu Casa |
-| 3 | Live view via go2rtc, grid, fullscreen, PTZ | High | 3–4 wk | In progress. Step 0 done (four Phase 2B fixes). Step 1 done: our own go2rtc and the live check (v0.4.0), measured on desktop Chrome on the LAN and the iPhone app at home, through Tailscale and through Nabu Casa (runs 5–13), and decided. Step 2 in progress: the key-frame cache (v0.5.0–v0.5.5), the image cache (v0.6.0), the Live grid and Live tab (v0.7.0), keep warm per camera (v0.8.0), full-screen HD (v0.9.0), PTZ, presets, siren and floodlight (v0.10.0), the picture first for cameras that record nowhere (v0.11.0), and battery cameras on wired power watched like the others (v0.12.0) are built |
+| 3 | Live view via go2rtc, grid, fullscreen, PTZ | High | 3–4 wk | Done (2026-10-27, v0.15.1). Our own go2rtc and the live check (v0.4.0, runs 5–13); the key-frame cache, the image cache, the Live grid and Live tab, keep warm, full-screen HD, PTZ and the camera's controls, the picture first, battery cameras on wired power, a debug view per tile and the soak report (v0.5.0–v0.15.1). Exit runs: the soak passed (run 15), every tile's first image in a median 0.02 s on the iPhone and the Mac (runs 16–17), and the Phase 2 playback criteria held with live view running (runs 18–19) |
 | 4 | Performance, mobile, packaging, first release | Standard | 2–3 wk | Not started |
 | 5 | Optional R&D: Baichuan live/playback | Very high | 4–8 wk, time-boxed with gates | Not started |
 
@@ -1737,7 +1737,7 @@ Exit criteria:
 - A 24-hour soak test with the grid open has no reconnect loops and no growth in device
   sessions. (The owner revised it on 2026-10-26: Home Assistant runs live view for 24
   hours, which needs no page open, and the grid is visible for 8 hours in all, in as
-  many sittings and on as many devices as suits. See "What is left of Phase 3".)
+  many sittings and on as many devices as suits. See "Phase 3 exit".)
 - Camera CPU and session counts stay within the Phase 0 limits.
 - Battery cameras sleep normally when not viewed.
 
@@ -1758,7 +1758,7 @@ gate), **2** builds live view from what step 1 decides.
 | 0. Fix four Phase 2B findings (a failing test for each first) | **Done** (v0.4.0), see "Step 0" below |
 | 1. Our own go2rtc, and a live check in the panel (gate) | **Done** (v0.4.0), see "Step 1 as built". Every setup's report is in: desktop Chrome on the LAN (run 5), the iPhone app on Wi-Fi (run 11), through Tailscale (run 12) and through Nabu Casa (run 13) |
 | 1. Record the reports here and in the hardware matrix; decide the live stream budget, WebRTC or MSE per setup, which cameras stay warm, the HD stream per camera | **Desktop Chrome on the LAN: recorded and decided** (v0.4.1), see "Step 1 results". **Done for every setup.** Desktop Chrome on the LAN (v0.4.1), see "Step 1 results"; the iPhone app on Wi-Fi, through Tailscale and through Nabu Casa (runs 11–13), see "Step 2: the iPhone on Wi-Fi", "… through Tailscale" and "… through Nabu Casa". The rules are fixed below, before seeing the reports |
-| 2. Stream registry, delivery, Live tab and grid, keep warm, debug panel | **Built** (v0.5.0–v0.15.1); the exit runs remain, see "What is left of Phase 3". The key-frame cache is built (v0.5.0) and measured on the desktop (run 6), see "Step 2: the key-frame cache"; v0.5.1 rebuilds the MSE init segment and records why warm feeds end (run 7: the sizes are right). v0.5.2 measured the last two oddities (run 8); v0.5.3 fixed the late H.264 paints (run 9: warm MSE median 0.15 s); run 10 (v0.5.4) confirms it. v0.5.5 files each live check report under its device. v0.6.0 keeps each camera's last picture for the tiles, see "Step 2: the image cache"; the live check measures it. v0.7.0: the Live grid and each camera's Live tab, see "Step 2: the Live grid". v0.8.0: keep warm per camera and the NVR budget of 7, see "Step 2: keep warm". v0.9.0: full-screen HD, see "Step 2: full-screen HD". v0.10.0: the camera's controls over its live view, see "Step 2: PTZ, presets, siren and floodlight". The owner checked v0.9.0 and v0.10.0 on the hardware. v0.11.0: the E1 Zoom's picture first, see "Step 2: the picture first"; the owner checked it on the hardware. v0.12.0: a battery camera on wired power is watched like the others, see "Step 2: battery cameras on wired power"; v0.12.1 fixes the Doorbell being shown picture-first; the owner checked it on the hardware. v0.13.0: a debug view per tile, see "Step 2: the debug view per tile". v0.14.0: the soak report, see "Step 2: the soak report". v0.15.0 keeps the soak run on the server and stores it, so a hidden page, a reload or a restart no longer starts it over, and any device can read the report; see "Step 2: the soak run outlives the page". The owner revised the soak (24 h of Home Assistant, 8 visible grid hours in all); Home Assistant's half is met (run 14). v0.15.1 takes the first sample once live view is up, not as Home Assistant starts. Next: the exit runs |
+| 2. Stream registry, delivery, Live tab and grid, keep warm, debug panel | **Done** (v0.5.0–v0.15.1); every exit criterion is met, see "Phase 3 exit". The key-frame cache is built (v0.5.0) and measured on the desktop (run 6), see "Step 2: the key-frame cache"; v0.5.1 rebuilds the MSE init segment and records why warm feeds end (run 7: the sizes are right). v0.5.2 measured the last two oddities (run 8); v0.5.3 fixed the late H.264 paints (run 9: warm MSE median 0.15 s); run 10 (v0.5.4) confirms it. v0.5.5 files each live check report under its device. v0.6.0 keeps each camera's last picture for the tiles, see "Step 2: the image cache"; the live check measures it. v0.7.0: the Live grid and each camera's Live tab, see "Step 2: the Live grid". v0.8.0: keep warm per camera and the NVR budget of 7, see "Step 2: keep warm". v0.9.0: full-screen HD, see "Step 2: full-screen HD". v0.10.0: the camera's controls over its live view, see "Step 2: PTZ, presets, siren and floodlight". The owner checked v0.9.0 and v0.10.0 on the hardware. v0.11.0: the E1 Zoom's picture first, see "Step 2: the picture first"; the owner checked it on the hardware. v0.12.0: a battery camera on wired power is watched like the others, see "Step 2: battery cameras on wired power"; v0.12.1 fixes the Doorbell being shown picture-first; the owner checked it on the hardware. v0.13.0: a debug view per tile, see "Step 2: the debug view per tile". v0.14.0: the soak report, see "Step 2: the soak report". v0.15.0 keeps the soak run on the server and stores it, so a hidden page, a reload or a restart no longer starts it over, and any device can read the report; see "Step 2: the soak run outlives the page". The owner revised the soak (24 h of Home Assistant, 8 visible grid hours in all); Home Assistant's half is met (run 14). v0.15.1 takes the first sample once live view is up, not as Home Assistant starts. The soak passed on v0.15.1 (run 15); every tile's first image comes in a median 0.02 s on the iPhone (run 16) and the Mac (run 17); the Phase 2 playback criteria held with live view running (runs 18–19). Phase 3 is done |
 
 #### Step 0: four Phase 2B findings (v0.4.0)
 
@@ -2763,7 +2763,7 @@ v0.15.0 moves the soak to the server:
   (before Home Assistant unloads the grid), and when the grid closes. If a
   send fails, the counts go with the next one.
 - **The report** judges the two halves of the owner's revised soak (see
-  "What is left of Phase 3"):
+  "Phase 3 exit"):
   - **Home Assistant's half** from its samples: they must cover 24 hours,
     which needs no page open. If Home Assistant started again after the soak
     began, the report says so and the samples start then.
@@ -2798,34 +2798,85 @@ page open). Open Reolink → Watch live whenever it suits, on any device, and
 leave it showing; its visible hours add up to 8. Read the report from any
 device under Reolink → Soak report.
 
-#### What is left of Phase 3
+#### Phase 3 exit
 
-Step 2 is built. The exit criteria not yet met, to run on the hardware:
+Phase 3 is done (2026-10-27, v0.15.1): every exit criterion is met on the
+owner's hardware.
 
+- **The Phase 2 playback criteria still hold** with live view running
+  (runs 18–19, the playback check on the Dogs camera, v0.15.1 with the
+  check at v0.3.2): the Mac in Safari and the iPhone app, at home, at the
+  same time, while the six kept-warm feeds held 6 of the NVR's 7 stream
+  slots. Every download found a slot at once (queue 0 ms).
+  - Timeline: 48–168 ms on the Mac, 57–831 ms on the iPhone; all under 1 s.
+  - Event → first frame on the sub stream: 199–493 ms on the Mac (two not
+    cached), 165–338 ms on the iPhone; all under 2 s.
+  - Auto-advance across a file boundary: gaps of 13 and 24 ms.
+  - Speeds 0.5–8×: on pace at every rate, no stalls, every frame shown up
+    to 4× and the display's rate at 8×. The check's ✗ at 1× and 4× on the
+    Mac and at 0.5× on the iPhone is WebKit's decoded-frame counter running
+    ahead of the frames shown, as in Phase 2 (see the 2B iPhone run): the
+    frames painted match the recording's 10 fps times the rate, and the
+    longest gap between them (101, 34 and 202 ms) is shorter than a
+    skipped frame would leave (200, 50 and 400 ms).
+  - The main/sub switch: HD in 4.6 s on the Mac, cold (the server fetched
+    the 169 MB main recording in 4.5 s), and 362 ms on the iPhone, which
+    found it cached; back to SD in 137 and 381 ms; each kept the moment
+    (within 0.03 s).
+  - Scrubbing showed 5 of 5 points from the buffer: on the Mac at its
+    point, on the iPhone within 3.93 s, as WebKit's `fastSeek` lands on the
+    nearest key frame (every 4 s on this camera's sub stream).
+  - Not run here: the deep starts in a recording of 20 minutes or more
+    (Dogs records events only), and the optional one-hour session. Live
+    view does not share the playback path's buffers or cache.
+
+Met before:
+
+- **The grid shows live video within 1.5 s on the LAN** (runs 16–17): the
+  six kept-warm cameras start over MSE from their cached key frames in a
+  median 0.05 s on the Mac and 0.09 s on the iPhone, and the Doorbell, not
+  kept warm, over WebRTC in 0.39–0.40 s. The Laundry Room's E1 Zoom records
+  nowhere and, as the owner chose, shows its picture first and plays when
+  tapped (3.5–3.8 s cold); keep warm is off for it.
 - **Every tile shows its picture in under 0.5 s**, from the image cache
-  (v0.6.0): the live check's "First images (ours)" section, on the desktop
-  and the iPhone.
-- **The soak**: no reconnect loops and no growth in device sessions;
-  camera CPU and session counts within Phase 0's limits; battery cameras
-  sleep when not viewed. The owner revised it on 2026-10-26, as a
-  dedicated 24-hour run with the grid open was not practical. It has two
-  halves:
-  - **Home Assistant runs live view for 24 hours.** The keep-warm feeds run
-    whether or not a page is open. **Met**: run 14 (v0.14.0, 2026-10-26;
-    see the hardware matrix) covers 35.9 hours. go2rtc never restarted and
-    its memory went from 49.8 to 45.8 MB. None of the 6 warm feeds dropped.
-    No host's stream slots grew: NVR 6 of 7 throughout, Doorbell 1 of 2,
-    Laundry Room 1 → 0, and none ever waited. v0.15.0 changes only the
-    soak's bookkeeping, not the live paths, so this holds for it.
-  - **The grid is visible for 8 hours in all**, in as many sittings and on
-    as many devices as suits, with no reconnect loops. Not yet: the first
-    grid run (v0.14.0) was lost when Home Assistant unloaded the hidden
-    grid. The soak report (v0.15.0, Reolink → Soak report on any device)
-    adds up the hours.
-- **The Phase 2 playback criteria still hold** with live view running: the
-  playback check, on the desktop and the iPhone.
+  (v0.6.0), in the live check's "First images (ours)" section (v0.15.1):
+  the iPhone app at home (run 16), 8 of 8 in 8–31 ms, median 0.02 s; the
+  Mac in Safari on the LAN (run 17), 8 of 8 in 7–36 ms, median 0.02 s.
+  Home Assistant's own snapshot took a median 0.50 and 0.55 s.
 
-Then Phase 3 is marked done here and in the README.
+- **The soak** (run 15, v0.15.1, 2026-10-26 → 27; see the hardware matrix):
+  no reconnect loops and no growth in device sessions; camera CPU and
+  session counts within Phase 0's limits; battery cameras sleep when not
+  viewed. The owner revised it on 2026-10-26, as a dedicated 24-hour run
+  with the grid open was not practical. It has two halves, and both
+  passed:
+  - **Home Assistant ran live view for 24.4 hours** (295 samples) without a
+    restart. go2rtc never restarted; its memory went from 50.4 to 42.5 MB
+    (peak 58.8). None of the 6 warm feeds dropped. While nobody watched (195
+    samples), no host held more stream slots at the end than at the start:
+    NVR 6 of 7, Doorbell and Laundry Room 0. No host was ever above its
+    limit, and none waited. Run 14 (v0.14.0, 35.9 hours) had shown the same.
+  - **The grid was visible 8.3 hours**, opened 7 times on the Mac and a
+    Windows PC, with no reconnect loops: at most 5 drops and 4 failed starts
+    per tile, all recovered by themselves. Most came from the Windows PC,
+    which reached Home Assistant through Nabu Casa from a heavily filtered
+    work network (see the finding below).
+  - Camera CPU: only the E1 Zoom reports it (60%); Phase 0 set no limit. No
+    camera was on battery: the Doorbell is on wired power.
+  - The first grid run (v0.14.0) was lost when Home Assistant unloaded the
+    hidden grid, which v0.15.0 fixed.
+
+**Finding (for Phase 4): a network that cuts long-lived websockets.** From
+the owner's work PC (Windows, Chrome, through Nabu Casa, behind heavy web
+filtering) every MSE tile's websocket was closed about every 5½ minutes
+(336 s, 322 s): "the server closed the stream", with no error from Home
+Assistant first. Each tile played again in about 0.25 s, from the warm feed,
+which ran on unbroken (10.2 h old at the time). The tiles playing over
+WebRTC, whose video does not cross that websocket, held: the Doorbell
+dropped once in the whole soak, the Laundry Room (when tapped) never. On
+the home network the Mac had one drop in 7.7 hours. The owner attributes
+it to the work network's filtering. Phase 4 can switch a tile to WebRTC
+once its MSE keeps being cut this way.
 
 ## Phase 4 — Performance, mobile, packaging, release (difficulty: Standard, 2–3 wk)
 
@@ -2834,7 +2885,14 @@ Then Phase 3 is marked done here and in the README.
    - no long tasks over 50 ms during timeline scrubbing
    - documented time-to-first-frame figures for live and playback
 2. **Mobile:** HA Companion app testing, touch gestures on the timeline,
-   picture-in-picture, lower default bitrates on cellular.
+   picture-in-picture, lower default bitrates on cellular. Networks that cut
+   long-lived websockets (Phase 3's soak, run 15: about every 5½ minutes
+   from a filtered work network through Nabu Casa): switch a tile to WebRTC
+   once its MSE keeps being cut.
+   The live check's capacity test needs all of a host's stream slots, so it
+   cannot run while cameras are kept warm (run 16): say so, instead of "the
+   host's stream slots stayed busy", or set the warm feeds aside while it
+   runs.
 3. **Error states:** camera offline, battery asleep, no storage, unsupported codec,
    Reolink integration internals changed (bridge banner).
 4. **Accessibility:** keyboard navigation and labels; respect reduced-motion.

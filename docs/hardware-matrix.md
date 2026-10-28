@@ -17,7 +17,12 @@ rebuilt from the stream, run 8 (v0.5.2) with the MSE steps timed, run 9
 (v0.5.3) with H.264 frames declared in decode order, and run 10 (v0.5.4) once
 more. Runs 11–13 (v0.5.5) are the iPhone in the Companion app, on home
 Wi-Fi, through Tailscale and through Nabu Casa. Run 14 (2026-10-26, v0.14.0)
-is Home Assistant's half of the Phase 3 soak.
+is Home Assistant's half of the Phase 3 soak, and run 15 (2026-10-26 → 27,
+v0.15.1) the whole soak, passed. Run 16 (2026-10-27, v0.15.1) is the live
+check on the iPhone app at home, and run 17 (2026-10-27, v0.15.1) on the
+Mac in Safari, for the first images from the image cache. Runs 18 and 19
+(2026-10-27, v0.15.1) are the playback check on the Mac and the iPhone with
+live view running, Phase 3's last exit run.
 
 ## Setup probed
 
@@ -548,6 +553,117 @@ sessions).
 No restart, no feed dropped, no growth in stream slots, every host within
 its limit. Camera CPU was not summarized. The Doorbell is on wired power,
 so no camera was on battery.
+
+Run 15, 2026-10-26 20:49 → 2026-10-27 21:20 (local): the Phase 3 soak on
+v0.15.1, as the owner revised it: Home Assistant runs live view for 24
+hours, and the grid is visible for 8 hours in all. Its soak report
+(Reolink → Soak report) said **Passed**.
+
+| Measure | Start → end (peak) |
+| --- | --- |
+| Home Assistant's samples | 295 over 24.4 h, from 20:54, none missed |
+| Grid | visible 8.3 h (open 8.3 h), opened 7 times, on the Mac (Chrome) and a Windows PC (Chrome) |
+| go2rtc | running in every sample; restarts 0 → 0; memory 50.4 → 42.5 MB (peak 58.8) |
+| WebRTC sessions | 2 → 0 (peak 2) |
+| MSE feeds | 6 → 6, kept warm 6 → 6, viewers 6 → 0, feeds dropped 0 → 0 |
+| NVR stream slots | 6 → 6 of 7 (peak 6, none waiting) |
+| Doorbell stream slots | 1 → 0 of 2 (peak 1) |
+| Laundry Room stream slots | 1 → 0 of 2 (peak 1); CPU 60% throughout |
+| While nobody watched | 195 samples: NVR 6 → 6, Doorbell 0 → 0, Laundry Room 0 → 0 |
+
+Tiles over the 8.3 visible hours (plays · drops · failed starts): Front Yard
+Right 13 · 4 · 3, Garage 10 · 2 · 0, Back Yard 10 · 2 · 0, Dogs 11 · 3 · 2,
+Front Yard Left 13 · 5 · 0, Hallway 10 · 2 · 2, Doorbell 11 · 1 · 4, Laundry
+Room 6 · 0 · 2. No tile dropped or failed more than once an hour. At 05:09,
+after 7.7 hours on the Mac at home, the tiles had dropped once in all
+(Hallway) and never failed to start. Most of the rest came in the Windows
+sitting: that PC reached Home Assistant through Nabu Casa from a heavily
+filtered work network, which closed every MSE tile's websocket about every
+5½ minutes (Front Yard Left's debug view: ended after 336 s and 322 s, "the
+server closed the stream", playing again in 0.25 s). The warm feed behind
+it ran on (10.2 h old). The tiles playing over WebRTC, whose video does not
+cross that websocket, held: the Doorbell dropped once in the whole soak.
+
+Run 16, 2026-10-27 21:24: the live check (v0.15.1) in the iPhone app (iOS
+27.0, Companion app 2026.10.2) on home Wi-Fi, the page local over http. MSE
+through ManagedMediaSource (H.264 and H.265); WebRTC receives H.264, H.265,
+VP8, VP9 and AV1. The six NVR sub streams were kept warm, as in daily use.
+
+| Measure | Median (range) |
+| --- | --- |
+| **First image, ours** (the image cache) | **0.02 s** (8–31 ms, 8 of 8): Front Yard Right's is its 2560×1440 picture, the rest sub-sized, all taken about 125 s before |
+| First image, Home Assistant's snapshot | 0.50 s (16 of 19; it failed on both Doorbell streams and the Laundry Room's main), slowest 1.06 s |
+| First image, go2rtc's frame | 2.08 s (28 of 29; Front Yard Right's main failed once), slowest 2.90 s |
+| Warm MSE, sub | 0.09 s (0.08–3.49 s, 10 of 10) |
+| Warm MSE, main and ext | 0.22 s (0.10–2.02 s, 19 of 19) |
+| Cold WebRTC, sub | 2.09 s (0.14–3.66 s); main and ext 1.28 s |
+| Cold MSE, sub | 0.11 s (the kept-warm subs are not cold); main and ext 1.90 s |
+| Warm WebRTC, sub | 3.93 s (it waits for a key frame, every ~4 s); main and ext 1.82 s |
+| Home Assistant's view | 1.94 s, 19 of 19; ours, the better of cold and warm, faster on 19 of 19 |
+
+WebRTC connected in 58 of 58 sessions, all host/udp ↔ host/udp. Two warm
+MSE starts were slow in getting their signed URL (Hallway's sub 2.69 s, Dogs'
+ext 1.78 s), the rest under 0.05 s. Full screen chose H.264 mains for Front
+Yard Right, Dogs and Hallway; the ext stream where the H.265 main would not
+play smoothly (Garage, Front Yard Left, Laundry Room) or is wider than 4096
+pixels (Back Yard); SD only for the Doorbell (H.265 main, no ext). The
+capacity test did not run: it needs all 7 of the NVR's stream slots, and the
+six kept-warm feeds hold 6 ("the host's stream slots stayed busy"). go2rtc
+logged five RTSP read timeouts in about 25 hours; no kept-warm feed ended (the
+soak, run 15).
+
+Run 17, 2026-10-27 21:38: the live check (v0.15.1) on the Mac in Safari
+26.5.2 on the LAN (the check's setup was labeled "Desktop Chrome, LAN"), the
+page on its own domain over http. MSE through ManagedMediaSource (H.264 and
+H.265); WebRTC receives H.264, H.265, VP8, VP9 and AV1. The six NVR sub
+streams were kept warm.
+
+| Measure | Median (range) |
+| --- | --- |
+| **First image, ours** (the image cache) | **0.02 s** (7–36 ms, 8 of 8): Front Yard Right's is its 2560×1440 picture, the rest sub-sized |
+| First image, Home Assistant's snapshot | 0.55 s (19 of 19), slowest 0.96 s |
+| First image, go2rtc's frame | 1.97 s (28 of 29; Front Yard Right's main failed, as in run 16), slowest 2.67 s |
+| Warm MSE, sub | 0.05 s (0.05–2.88 s, 10 of 10) |
+| Warm MSE, main and ext | 0.08 s (0.05–0.13 s, 19 of 19) |
+| Cold WebRTC, sub | 2.69 s (0.33–3.75 s); main and ext 1.13 s |
+| Cold MSE, sub | 0.06 s (the kept-warm subs are not cold); main and ext 1.72 s |
+| Warm WebRTC, sub | 3.95 s (it waits for a key frame); main and ext 1.88 s |
+| Home Assistant's view | 1.39 s, 19 of 19; ours, the better of cold and warm, faster on 19 of 19 |
+
+WebRTC connected in 58 of 58 sessions, all host/udp ↔ host/udp. One warm
+MSE start was slow in getting its signed URL (Front Yard Left's NVR sub,
+2.80 s), as two were in run 16; the rest took under 0.25 s. Full screen
+chose every main here (Safari on the Mac plays the H.265 mains smoothly)
+except the Back Yard's, which is wider than 4096 pixels (its ext). The
+capacity test did not run, as in run 16. go2rtc logged nothing new since
+run 16.
+
+Runs 18 and 19, 2026-10-27 21:53: the playback check (v0.3.2, in
+integration v0.15.1) on the Dogs camera (NVR, sub avc1.640016, main
+avc1.640032 2560×1920), on the Mac in Safari 26.5.2 (run 18) and the iPhone
+app (iOS 27.0, Companion app 2026.10.2; run 19), both at home over http/1.1
+and both through `ManagedMediaSource`. The two ran at the same time, with the
+six kept-warm live feeds holding 6 of the NVR's 7 stream slots: every
+download found a slot at once (queue 0 ms). The iPhone's events and HD found
+the files the Mac's run had just fetched.
+
+| Part | Mac, Safari (run 18) | iPhone app (run 19) |
+| --- | --- | --- |
+| Timeline: today, a past day, again, today again | 59, 48, 168, 121 ms | 93, 831, 57, 152 ms |
+| Events → first frame (sub) | 493 and 433 ms (not cached), 199 ms (same recording) | 165, 338 and 245 ms (cached) |
+| Deep starts (D) | skipped: no recording of 20 min or more (Dogs records events) | skipped, the same |
+| Auto-advance | gap 13 ms (preloaded) | gap 24 ms (preloaded) |
+| Rates 0.5×, 1×, 2×, 4×, 8× | on pace, 0 stalls; painted 5, 10, 20, 40 and 60 fps; longest gaps 201, 101, 52, 34, 18 ms | on pace, 0 stalls; painted 5, 10, 20, 40 and 60 fps; longest gaps 202, 107, 75, 39, 40 ms |
+| Scrub | 5 of 5 from the buffer, median 49 ms, at each point | 5 of 5, median 253 ms, within 3.93 s (the nearest key frame) |
+| HD switch | 4.6 s, cold: the server fetched the 169 MB main recording in 4.5 s (300 Mbit/s); kept the moment (0.01 s); back to SD 137 ms | 362 ms, cached; kept the moment (0.00 s); back to SD 381 ms |
+| Link | 380 Mbit/s | 400 Mbit/s |
+| MSE probe | `MediaSource` and `ManagedMediaSource` play every shape | `ManagedMediaSource` plays every shape; no `MediaSource` |
+
+The check judged 1× and 4× ✗ on the Mac and 0.5× ✗ on the iPhone, by
+painted frames against WebKit's decoded-frame counter, which ran ahead (12,
+46 and 8 frames a second where the recording gives 10, 40 and 5). The frames
+painted match the recording's rate, and no gap between them reached what a
+skipped frame would leave: every frame was shown.
 
 ## Findings
 

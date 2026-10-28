@@ -9,16 +9,15 @@ built-in [Reolink integration](https://www.home-assistant.io/integrations/reolin
   (person, vehicle, animal, face, package, visitor, ...) and recording thumbnails
 - smooth recorded-video playback and low-latency live view
 
-**Status: Phase 3 (live view) in progress.** Phase 2 is done (event timeline and
+**Status: Phase 3 (live view) done; Phase 4 is next.** Phase 3 is done (v0.15.1): live
+view through the integration's own go2rtc, with a grid of every camera, a Live tab per
+camera, full-screen HD and the camera's controls. It was verified on the owner's
+hardware: a 24-hour soak, every tile's first image in a median 0.02 s on a Mac and an
+iPhone, and playback holding up with live view running, see the
+[plan](docs/IMPLEMENTATION_PLAN.md#phase-3-exit). Phase 2 is done (event timeline and
 recorded-video playback; v0.3.2, verified on the owner's hardware in Chrome and in the
 iPhone Companion app, at home and remotely, see the
-[plan](docs/IMPLEMENTATION_PLAN.md#phase-2-status)). v0.4.0 runs the integration's own
-go2rtc and adds a **live check** (Reolink → Open the live check) that measures live
-view on each device before the live tab and grid are built. Its reports are in, from
-desktop Chrome on the LAN and the iPhone app at home, through Tailscale and through
-Nabu Casa: live view will start a stream over WebRTC, or over MSE when it is kept
-warm, and the live tab and grid are next. See the
-[plan](docs/IMPLEMENTATION_PLAN.md#phase-3-status).
+[plan](docs/IMPLEMENTATION_PLAN.md#phase-2-status)).
 
 **Phase 1 (v0.1.0, done):** the **Reolink** sidebar panel lists your NVRs, Home Hubs
 and cameras (a camera that is in Home Assistant both via an NVR and directly is shown
@@ -49,7 +48,7 @@ hour-long recording that is not cached yet takes 7–13 s (the recorder's downlo
 to there) on a computer and an iPhone, at home, through Tailscale and through Nabu
 Casa; a start in a cached recording takes under half a second.
 
-**Phase 3 (in progress):** v0.4.0 runs its own [go2rtc](https://github.com/AlexxIT/go2rtc)
+**Phase 3 (v0.15.1, done):** v0.4.0 runs its own [go2rtc](https://github.com/AlexxIT/go2rtc)
 (Home Assistant's binary where the container ships it, else a pinned, checksum-verified
 download), separate from Home Assistant's: its own ports (WebRTC on 18556), its API on
 localhost only with generated credentials, no web UI, and camera credentials never
@@ -93,7 +92,8 @@ for 24 hours, with no page open, and the grid is visible for 8 hours in all, acr
 sittings and devices. Any device can read the report under Reolink → **Soak report**.
 v0.15.1 takes the soak's first sample 5 minutes after Home Assistant starts, once live
 view is up. Before, a sample taken at start counted go2rtc and the kept-warm feeds as
-missing.
+missing. The soak passed on v0.15.1: 24.4 hours of Home Assistant and 8.3 visible hours
+of the grid, with no reconnect loops, no restarts and no growth in camera sessions.
 
 Requires Home Assistant 2026.10 or newer with the Reolink integration set up.
 
