@@ -341,6 +341,7 @@ The checks open with a condensed headline that names the slow camera when there 
 - **Do** show a pressed or selected filter by filling it with ink and turning its text paper.
 - **Do** use the fixed vocabularies (tile states, grade words, plain settings words) and name buttons for their action.
 - **Do** honour reduced motion: the arrival slide, the knob slide and the video fade all switch off.
+- **Do** make every control a real button or input with a name that contains what it shows, and give each widget one Tab stop with the arrow keys inside it (timeline, calendar, tabs). A dialog takes the focus, closes on Escape and gives the focus back.
 
 ### Don't:
 - **Don't** use signal red for anything except now and new, or action blue for anything that cannot be pressed.

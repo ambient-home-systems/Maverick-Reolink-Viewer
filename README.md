@@ -148,6 +148,9 @@ v0.29.0 explains, on every page, when the panel cannot reach your cameras: a Hom
 Assistant update changed the Reolink integration (Reolink Viewer needs an update), the
 Reolink integration is not running, or no cameras are set up yet, with what still works
 and what to do.
+v0.30.0 works from the keyboard and with screen readers throughout: the timeline is a
+slider you move with the arrow keys, the calendar and the camera's tabs move with the
+arrows, every button says what it does, and motion stops when your device asks for less.
 
 Requires Home Assistant 2026.10 or newer with the Reolink integration set up.
 

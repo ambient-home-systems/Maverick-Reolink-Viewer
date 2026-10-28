@@ -66,11 +66,31 @@ export class RvLiveDebug extends LitElement {
     this._states = Object.fromEntries(entries);
   }
 
+  protected override firstUpdated(): void {
+    // Opened from the keyboard or not, a screen reader starts here.
+    this.renderRoot.querySelector<HTMLElement>(".panel")?.focus();
+  }
+
+  private _close(): void {
+    this.dispatchEvent(new CustomEvent(DEBUG_CLOSE_EVENT, { bubbles: true, composed: true }));
+  }
+
   protected override render(): TemplateResult {
     const info = this.info;
     const text = info ? debugText(info, this._states) : "";
-    return html`<div class="panel" role="dialog" aria-label=${`${info?.camera ?? "Camera"}: debug`}>
-      <pre>${text}</pre>
+    return html`<div
+      class="panel"
+      role="dialog"
+      tabindex="-1"
+      aria-label=${`${info?.camera ?? "Camera"}: debug`}
+      @keydown=${(e: KeyboardEvent) => {
+        if (e.key === "Escape") {
+          e.stopPropagation();
+          this._close();
+        }
+      }}
+    >
+      <pre tabindex="0" aria-label="Debug text">${text}</pre>
       <div class="actions">
         <button
           @click=${() => {
@@ -83,7 +103,7 @@ export class RvLiveDebug extends LitElement {
         </button>
         <button
           @click=${() => {
-            this.dispatchEvent(new CustomEvent(DEBUG_CLOSE_EVENT, { bubbles: true, composed: true }));
+            this._close();
           }}
         >
           Close

@@ -2494,9 +2494,21 @@ var Xn = 5e3, Zn = [
           </button>` : T}
     </div>`;
 	}
+	updated(e) {
+		if (!e.has("_confirmSiren")) return;
+		let t = this._confirmSiren ? ".confirm button" : "button.siren";
+		(this._confirmSiren || e.get("_confirmSiren") === !0) && this.renderRoot.querySelector(t)?.focus();
+	}
 	_renderConfirm() {
 		let e = this.controls?.siren;
-		return S`<div class="confirm" role="alertdialog" aria-labelledby="siren-title">
+		return S`<div
+      class="confirm"
+      role="alertdialog"
+      aria-labelledby="siren-title"
+      @keydown=${(e) => {
+			e.key === "Escape" && (e.stopPropagation(), this._confirmSiren = !1);
+		}}
+    >
       <strong id="siren-title">Sound the siren on ${this.cameraName}?</strong>
       <span class="small">It is loud, and keeps sounding until you stop it.</span>
       <span class="actions">
@@ -2827,10 +2839,27 @@ var or = 2e3, sr = "rv-live-debug-close", cr = class extends k {
 		}, i = await Promise.all(t.players.map(async (e) => [e.label, await r(e.stream)]));
 		this._states = Object.fromEntries(i);
 	}
+	firstUpdated() {
+		this.renderRoot.querySelector(".panel")?.focus();
+	}
+	_close() {
+		this.dispatchEvent(new CustomEvent(sr, {
+			bubbles: !0,
+			composed: !0
+		}));
+	}
 	render() {
 		let e = this.info, t = e ? nr(e, this._states) : "";
-		return S`<div class="panel" role="dialog" aria-label=${`${e?.camera ?? "Camera"}: debug`}>
-      <pre>${t}</pre>
+		return S`<div
+      class="panel"
+      role="dialog"
+      tabindex="-1"
+      aria-label=${`${e?.camera ?? "Camera"}: debug`}
+      @keydown=${(e) => {
+			e.key === "Escape" && (e.stopPropagation(), this._close());
+		}}
+    >
+      <pre tabindex="0" aria-label="Debug text">${t}</pre>
       <div class="actions">
         <button
           @click=${() => {
@@ -2843,10 +2872,7 @@ var or = 2e3, sr = "rv-live-debug-close", cr = class extends k {
         </button>
         <button
           @click=${() => {
-			this.dispatchEvent(new CustomEvent(sr, {
-				bubbles: !0,
-				composed: !0
-			}));
+			this._close();
 		}}
         >
           Close
@@ -3090,15 +3116,9 @@ var lr = 3e3, ur = "rv-live-open", dr = "rv-live-full", fr = "rv-live-count", pr
 		let e = this._state, t = e.kind === "playing", n = this.camera?.name ?? "Camera", r = !this._full && (this.openable || !this._wanted);
 		return S`<div class="frame">
       <div
-        class="tile ${t ? "playing" : ""} ${this.hdShown ? "hd-on" : ""}"
-        role=${r ? "button" : T}
-        tabindex=${r ? "0" : T}
-        aria-label=${r ? this._wanted ? `Open ${n}` : `Watch ${n}` : T}
+        class="tile ${t ? "playing" : ""} ${this.hdShown ? "hd-on" : ""} ${r ? "interactive" : ""}"
         @click=${() => {
 			this._activate();
-		}}
-        @keydown=${(e) => {
-			(e.key === "Enter" || e.key === " ") && (e.preventDefault(), this._activate());
 		}}
       >
         ${this.image ? S`<img class="poster" src=${this.image.url} alt="" />` : T}
@@ -3120,6 +3140,11 @@ var lr = 3e3, ur = "rv-live-open", dr = "rv-live-full", fr = "rv-live-count", pr
               @leavepictureinpicture=${this._onPipChange}
               @webkitpresentationmodechanged=${this._onPipChange}
             ></video>` : T}
+        ${r ? S`<button
+              class="open"
+              aria-label=${this._wanted ? `Open ${n}` : `Watch ${n}`}
+              aria-describedby="state status"
+            ></button>` : T}
         ${this.number !== void 0 && !this._full ? S`<span class="num" aria-hidden="true">${this.number}</span>` : T}
         <div class="label">
           <span class="name">${n}</span>
@@ -3134,7 +3159,9 @@ var lr = 3e3, ur = "rv-live-open", dr = "rv-live-full", fr = "rv-live-count", pr
             .hass=${this.hass}
             .info=${this._debugInfo(n)}
             @rv-live-debug-close=${() => {
-			this._debug = !1;
+			this._debug = !1, this.updateComplete.then(() => {
+				this.renderRoot.querySelector(".corner-button.info")?.focus();
+			});
 		}}
           ></rv-live-debug>` : T}
       <button
@@ -3219,7 +3246,7 @@ var lr = 3e3, ur = "rv-live-open", dr = "rv-live-full", fr = "rv-live-count", pr
 		if (t !== void 0) {
 			let e = this.hass?.config?.time_zone, n = Date.now() - t < 432e5 ? V(t, e) : Hn(t, e);
 			return S`${K("Offline", S`<i class="dot fault"></i>`)}
-        <div class="status center offline" role="status">
+        <div class="status center offline" id="status" role="status">
           <span class="what">Offline since ${n}</span>
           <span class="small">Home Assistant cannot reach this camera. It plays again when it is back.</span>
         </div>`;
@@ -3236,10 +3263,11 @@ var lr = 3e3, ur = "rv-live-open", dr = "rv-live-full", fr = "rv-live-count", pr
 			case "waiting": {
 				let t = $t(e.error, this.connection.is_battery);
 				return S`${K("Retrying")}
-          <div class="status center" role="alert">
+          <div class="status center" id="status" role="status">
             <span class="what">${t.text}</span>
             ${t.advice ? S`<span class="small">${t.advice}</span>` : T}
             <button
+              aria-label=${`Retry now: ${this.camera?.name ?? "camera"}`}
               @click=${(e) => {
 					e.stopPropagation(), this._player?.retryNow();
 				}}
@@ -3303,12 +3331,37 @@ var lr = 3e3, ur = "rv-live-open", dr = "rv-live-full", fr = "rv-live-count", pr
         overflow: hidden;
         color: #f4f4f1;
       }
-      .tile[role="button"] {
+      .tile.interactive {
         cursor: pointer;
       }
-      .tile:focus-visible {
+      /* Over the picture, under what the tile says: the tile as a button. */
+      .open {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        min-height: 0;
+        margin: 0;
+        padding: 0;
+        border: none;
+        border-radius: 0;
+        background: transparent;
+        cursor: pointer;
+      }
+      .open:hover:not(:disabled) {
+        background: transparent;
+      }
+      .open:focus-visible {
         outline: 2px solid #f4f4f1;
-        outline-offset: -2px;
+        outline-offset: -4px;
+      }
+      /* What the tile says lets a press through to it, but for its own buttons. */
+      .num,
+      .state,
+      .status {
+        pointer-events: none;
+      }
+      .status button {
+        pointer-events: auto;
       }
       .poster,
       video {
@@ -3593,14 +3646,15 @@ var lr = 3e3, ur = "rv-live-open", dr = "rv-live-full", fr = "rv-live-count", pr
         }
       }
       @media (prefers-reduced-motion: reduce) {
-        video {
+        video,
+        .corner-button {
           transition: none;
         }
       }
     `];
 };
 function K(e, t) {
-	return S`<span class="state">${t ?? T}${e}</span>`;
+	return S`<span class="state" id="state">${t ?? T}${e}</span>`;
 }
 customElements.get("rv-live-tile") || customElements.define("rv-live-tile", mr);
 //#endregion
@@ -3899,6 +3953,8 @@ var kr = class extends k {
 		return S`<label class="keep-warm">
       <input
         type="checkbox"
+        aria-labelledby="keep-warm-name"
+        aria-describedby="keep-warm-about"
         .checked=${n === "on"}
         ?disabled=${n !== "on" && n !== "off"}
         @change=${(e) => {
@@ -3909,8 +3965,8 @@ var kr = class extends k {
 		}}
       />
       <span>
-        <strong>Keep warm</strong>
-        <span class="muted small"
+        <strong id="keep-warm-name">Keep warm</strong>
+        <span class="muted small" id="keep-warm-about"
           >Keeps the camera connected so its live view starts at once. Uses one of
           its NVR's or camera's stream slots all the time.</span
         >
@@ -4332,7 +4388,6 @@ var ni = 12e4, ri = 3600, ii = 10, ai = "rv-timetable-feed", oi = class extends 
 		return S`<li class=${this._newestBefore !== void 0 && e.start > this._newestBefore ? "arrived" : ""}>
       <button
         class="row ${e.new ? "new" : ""}"
-        aria-label="${r}, ${a}, ${i}${e.new ? ", new" : ""}: play the recording"
         @click=${() => {
 			this._open(e);
 		}}
@@ -4738,11 +4793,11 @@ function Ci(e) {
 //#endregion
 //#region src/views.ts
 var wi = {
-	events: () => import("./events-view-FWLKYGDN.js"),
-	list: () => import("./device-list-pHZneJA8.js"),
-	device: () => import("./device-page-nshcbeOx.js"),
-	"live-check": () => import("./live-check-CUqT0bLJ.js"),
-	soak: () => import("./live-soak-BV3TrAH-.js")
+	events: () => import("./events-view-gwhkOFAH.js"),
+	list: () => import("./device-list-DsYTzAxx.js"),
+	device: () => import("./device-page-Dx4CFG6b.js"),
+	"live-check": () => import("./live-check-erUj-2KP.js"),
+	soak: () => import("./live-soak-BJacfADS.js")
 }, Ti = /* @__PURE__ */ new Map();
 function $(e) {
 	let t = wi[e];
@@ -4754,7 +4809,14 @@ function $(e) {
 }
 //#endregion
 //#region src/reolink-viewer-panel.ts
-var Ei = 6e3, Di = class extends k {
+var Ei = {
+	live: "Live",
+	events: "Events",
+	list: "Devices",
+	device: "Device",
+	"live-check": "Live check",
+	soak: "Soak report"
+}, Di = 6e3, Oi = class extends k {
 	static properties = {
 		hass: { attribute: !1 },
 		narrow: {
@@ -4813,7 +4875,10 @@ var Ei = 6e3, Di = class extends k {
 		}
 	}
 	updated(e) {
-		e.has("hass") && this.hass && !this._devices && !this._loading && (this._load(), Ve(this.hass).catch(() => void 0));
+		if (e.has("hass") && this.hass && !this._devices && !this._loading && (this._load(), Ve(this.hass).catch(() => void 0)), e.get("_route") !== void 0 && !this.shadowRoot?.activeElement) {
+			let e = document.activeElement;
+			(!e || e === document.body) && this.shadowRoot?.querySelector("main")?.focus({ preventScroll: !0 });
+		}
 	}
 	navigate(e) {
 		let t = vr(e);
@@ -4826,7 +4891,7 @@ var Ei = 6e3, Di = class extends k {
 	showToast(e) {
 		clearTimeout(this._toastTimer), this._toast = e, this._toastTimer = setTimeout(() => {
 			this._toast = void 0;
-		}, Ei);
+		}, Di);
 	}
 	async _load() {
 		if (this.hass) {
@@ -4860,7 +4925,11 @@ var Ei = 6e3, Di = class extends k {
           ${V(this._now, this.hass?.config?.time_zone)}
         </time>
       </header>
-      <main class=${e.view === "live" || e.view === "events" ? "wide" : "page"}>${this._renderView()}</main>
+      <main
+        class=${e.view === "live" || e.view === "events" ? "wide" : "page"}
+        tabindex="-1"
+        aria-label=${Ei[e.view]}
+      >${this._renderView()}</main>
       ${this._toast ? S`<div class="toast ${this._toast.kind}" role="status" aria-live="polite">
             <span>${this._toast.message}</span>
             <button class="dismiss" aria-label="Dismiss" @click=${() => {
@@ -5287,6 +5356,10 @@ var Ei = 6e3, Di = class extends k {
         flex: 1;
         min-width: 0;
       }
+      /* Focused by the panel after a change of view, not by the user: no ring. */
+      main:focus {
+        outline: none;
+      }
       /* Over the board and the events, when neither can work. */
       .wide-note {
         max-width: 760px;
@@ -5484,6 +5557,6 @@ var Ei = 6e3, Di = class extends k {
     `
 	];
 };
-customElements.get("reolink-viewer-panel") || customElements.define("reolink-viewer-panel", Di);
+customElements.get("reolink-viewer-panel") || customElements.define("reolink-viewer-panel", Oi);
 //#endregion
-export { L as $, zr as A, lt as At, U as B, pt as Bt, Kr as C, ze as Ct, Fr as D, ot as Dt, Xr as E, mt as Et, q as F, rt as Ft, V as G, $e as Gt, qn as H, vt as Ht, _r as I, Ge as It, Pn as J, S as Jt, Hn as K, k as Kt, tr as L, We as Lt, Yr as M, it as Mt, Mr as N, Qe as Nt, Qr as O, ct as Ot, Pr as P, Ze as Pt, _n as Q, Jn as R, nt as Rt, Zr as S, Ve as St, Q as T, qe as Tt, Un as U, _t as Ut, Yn as V, ft as Vt, Gn as W, A as Wt, Tn as X, Dn as Y, o as Yt, En as Z, Wr as _, At as _t, yi as a, F as at, Gr as b, He as bt, fi as c, N as ct, J as d, Pt as dt, pn as et, X as f, Dt as ft, Nr as g, Ot as gt, Ir as h, Et as ht, vi as i, I as it, jr as j, at as jt, Rr as k, ut as kt, di as l, Ct as lt, Br as m, Tt as mt, $ as n, tn as nt, xi as o, Vt as ot, ei as p, jt as pt, Wn as q, T as qt, Ci as r, nn as rt, ui as s, P as st, Di as t, on as tt, Ar as u, Mt as ut, ti as v, Nt as vt, Vr as w, Re as wt, Ur as x, tt as xt, $r as y, M as yt, W as z, et as zt };
+export { L as $, zr as A, lt as At, U as B, pt as Bt, Kr as C, ze as Ct, Fr as D, ot as Dt, Xr as E, mt as Et, q as F, rt as Ft, V as G, $e as Gt, qn as H, vt as Ht, _r as I, Ge as It, Pn as J, S as Jt, Hn as K, k as Kt, tr as L, We as Lt, Yr as M, it as Mt, Mr as N, Qe as Nt, Qr as O, ct as Ot, Pr as P, Ze as Pt, _n as Q, Jn as R, nt as Rt, Zr as S, Ve as St, Q as T, qe as Tt, Un as U, _t as Ut, Yn as V, ft as Vt, Gn as W, A as Wt, Tn as X, Dn as Y, o as Yt, En as Z, Wr as _, At as _t, yi as a, F as at, Gr as b, He as bt, fi as c, N as ct, J as d, Pt as dt, pn as et, X as f, Dt as ft, Nr as g, Ot as gt, Ir as h, Et as ht, vi as i, I as it, jr as j, at as jt, Rr as k, ut as kt, di as l, Ct as lt, Br as m, Tt as mt, $ as n, tn as nt, xi as o, Vt as ot, ei as p, jt as pt, Wn as q, T as qt, Ci as r, nn as rt, ui as s, P as st, Oi as t, on as tt, Ar as u, Mt as ut, ti as v, Nt as vt, Vr as w, Re as wt, Ur as x, tt as xt, $r as y, M as yt, W as z, et as zt };

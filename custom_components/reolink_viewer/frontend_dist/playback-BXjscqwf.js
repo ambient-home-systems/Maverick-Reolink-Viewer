@@ -1,7 +1,7 @@
-import { $ as e, A as t, B as n, C as r, D as i, Ft as a, G as o, Gt as s, H as c, I as l, It as u, Jt as d, K as f, Kt as p, L as m, Lt as ee, M as te, Mt as ne, N as re, Nt as h, O as ie, P as g, Pt as _, Q as ae, R as oe, Rt as v, S as se, T as ce, U as y, V as le, W as ue, Wt as b, Yt as x, _ as de, at as S, b as fe, c as pe, d as C, et as w, f as T, g as E, h as D, it as O, j as me, k as he, l as k, lt as ge, m as _e, nt as ve, q as ye, qt as A, rt as be, s as xe, u as Se, w as j, x as Ce, xt as we, yt as M, z as N, zt as Te } from "./home-CRi9TKP3.js";
-import { dayLabel as Ee, shortDay as De } from "./events-view-FWLKYGDN.js";
-import { i as Oe, p as ke } from "./findings-BZqo8VrU.js";
-import { a as Ae, i as P, n as F, r as je, t as Me } from "./check-DuErr5aR.js";
+import { $ as e, A as t, B as n, C as r, D as i, Ft as a, G as o, Gt as s, H as c, I as l, It as u, Jt as d, K as f, Kt as p, L as m, Lt as ee, M as te, Mt as ne, N as re, Nt as h, O as ie, P as g, Pt as _, Q as ae, R as oe, Rt as v, S as se, T as ce, U as y, V as le, W as ue, Wt as b, Yt as x, _ as de, at as S, b as fe, c as pe, d as C, et as w, f as T, g as E, h as D, it as O, j as me, k as he, l as k, lt as ge, m as _e, nt as ve, q as ye, qt as A, rt as be, s as xe, u as Se, w as j, x as Ce, xt as we, yt as M, z as N, zt as Te } from "./home-U1fpKtN8.js";
+import { dayLabel as Ee, shortDay as De } from "./events-view-gwhkOFAH.js";
+import { i as Oe, p as ke } from "./findings-BF5SOCGg.js";
+import { a as Ae, i as P, n as F, r as je, t as Me } from "./check-CZmseOYj.js";
 var Ne = class extends p {
 	static properties = {
 		events: { attribute: !1 },
@@ -31,7 +31,6 @@ var Ne = class extends p {
       <button
         class="row ${n ? "active" : ""}"
         aria-current=${n ? "true" : "false"}
-        aria-label="${r}, ${i}${n ? this.playing ? ", playing" : ", selected" : ""}: play"
         @click=${() => {
 			this.dispatchEvent(new CustomEvent("rv-pick", {
 				detail: { event: e },
@@ -568,13 +567,27 @@ var Ie = class {
 			}, this._active.add(n), t.src = e.url;
 		}
 	}
-}, Le = 4, I = 24, Re = .01, L = 76, R = 18, z = 22, ze = 26, Be = 52, Ve = 16, He = class extends p {
+}, Le = 4, I = 24, Re = .01, L = 76, R = 18, z = 22, ze = 26, Be = 52, Ve = 16, He = [
+	1e4,
+	3e4,
+	C,
+	5 * C,
+	10 * C,
+	15 * C,
+	30 * C,
+	60 * C
+];
+function Ue(e) {
+	return He.find((t) => t >= e / 48) ?? 36e5;
+}
+var We = class extends p {
 	static properties = {
 		day: { attribute: !1 },
 		events: { attribute: !1 },
 		view: { attribute: !1 },
 		cursor: { attribute: !1 },
-		timeZone: { attribute: !1 }
+		timeZone: { attribute: !1 },
+		_keyTime: { state: !0 }
 	};
 	_width = 0;
 	_resize;
@@ -583,6 +596,7 @@ var Ie = class {
 	_pinch;
 	_pinched = !1;
 	_hoverTimer;
+	_keySeek;
 	constructor() {
 		super(), this.events = [], this.view = {
 			start: 0,
@@ -595,7 +609,7 @@ var Ie = class {
 		}), this._resize.observe(this));
 	}
 	disconnectedCallback() {
-		super.disconnectedCallback(), this._resize?.disconnect(), clearTimeout(this._hoverTimer);
+		super.disconnectedCallback(), this._resize?.disconnect(), clearTimeout(this._hoverTimer), clearTimeout(this._keySeek);
 	}
 	get _canvas() {
 		return this.renderRoot.querySelector("canvas");
@@ -722,12 +736,21 @@ var Ie = class {
 		clearTimeout(this._hoverTimer), this._emit("rv-hover-end", {});
 	}
 	_onKey(e) {
-		let t = {
-			ArrowLeft: () => {
-				this.pan(-.25);
+		let t = this._keyTime ?? this.cursor ?? this.view.start + this.view.span / 2, n = Ue(this.view.span), { start: r, end: i } = this._bounds, a = {
+			ArrowLeft: t - n,
+			ArrowDown: t - n,
+			ArrowRight: t + n,
+			ArrowUp: t + n,
+			PageDown: t - 6 * n,
+			PageUp: t + 6 * n,
+			Home: r,
+			End: Math.min(i, this.day?.now ?? i)
+		}, o = {
+			Enter: () => {
+				this._seekNow(t);
 			},
-			ArrowRight: () => {
-				this.pan(.25);
+			" ": () => {
+				this._seekNow(t);
 			},
 			"+": () => {
 				this.zoom(1);
@@ -738,8 +761,21 @@ var Ie = class {
 			"-": () => {
 				this.zoom(-1);
 			}
-		}[e.key];
-		t && (e.preventDefault(), t());
+		}, s = a[e.key], c = o[e.key];
+		s === void 0 ? c && (e.preventDefault(), c()) : (e.preventDefault(), this._keyTo(Math.min(Math.max(s, r), i)));
+	}
+	_keyTo(e) {
+		this._keyTime = e;
+		let { start: t, span: n } = this.view, r = n * .1;
+		(e < t + r || e > t + n - r) && this._setView({
+			start: e - n / 2,
+			span: n
+		}), this._emit("rv-scrub", { time: e }), clearTimeout(this._keySeek), this._keySeek = setTimeout(() => {
+			this._seekNow(e);
+		}, 500);
+	}
+	_seekNow(e) {
+		clearTimeout(this._keySeek), this._keyTime = void 0, this._emit("rv-seek", { time: e });
 	}
 	_draw() {
 		let e = this._canvas;
@@ -792,10 +828,11 @@ var Ie = class {
       role="slider"
       tabindex="0"
       aria-label="Recording timeline"
+      aria-describedby="keys"
       aria-valuemin=${this.day?.start ?? 0}
       aria-valuemax=${this.day?.end ?? 0}
       aria-valuenow=${this.cursor ?? 0}
-      aria-valuetext=${this.cursor === void 0 ? "no position" : o(this.cursor, this.timeZone, !0)}
+      aria-valuetext=${this._valueText()}
       @wheel=${(e) => {
 			this._onWheel(e);
 		}}
@@ -817,12 +854,34 @@ var Ie = class {
       @keydown=${(e) => {
 			this._onKey(e);
 		}}
-    ></canvas>`;
+      @blur=${() => {
+			this._keyTime = void 0;
+		}}
+    ></canvas>
+    <span id="keys" class="hidden">
+      Arrow keys move the time, Page Up and Page Down further, Home and End to the start and end of the
+      day. It plays from there; Enter plays at once. Plus and minus zoom.
+    </span>`;
+	}
+	_valueText() {
+		let e = this._keyTime ?? this.cursor;
+		if (e === void 0) return "no time chosen";
+		let t = this.day?.segments.some((t) => t.start <= e && e < t.end) ?? !1;
+		return `${o(e, this.timeZone, this._keyTime !== void 0)}, ${t ? "recorded" : "nothing recorded"}`;
 	}
 	static styles = x`
     :host {
       display: block;
       position: relative;
+    }
+    /* For screen readers only. */
+    .hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
     }
     canvas {
       display: block;
@@ -848,10 +907,10 @@ function B(e, t, n) {
 		n ? e?.setPointerCapture(t) : e?.releasePointerCapture(t);
 	} catch {}
 }
-customElements.get("rv-timeline") || customElements.define("rv-timeline", He);
+customElements.get("rv-timeline") || customElements.define("rv-timeline", We);
 //#endregion
 //#region src/playback/explain.ts
-function Ue(e, t) {
+function Ge(e, t) {
 	return t.offline ? {
 		text: `${t.name} is offline, so the recordings on its SD card cannot be read.`,
 		advice: "They come back when it does."
@@ -895,7 +954,7 @@ function V(e) {
 }
 //#endregion
 //#region src/components/playback.ts
-var H = 6e4, We = 3e3, U = 1e4, Ge = 3, W = 86400, Ke = 10 * C, qe = 10, G = 8e3, K = 3 * C, Je = 6e4, Ye = 60, q = 1e3, Xe = 6e4, J = "reolink-viewer-check-setup", Y = "reolink-viewer-player", X = !1, Z = class extends p {
+var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * C, Ye = 10, G = 8e3, K = 3 * C, Xe = 6e4, Ze = 60, q = 1e3, Qe = 6e4, J = "reolink-viewer-check-setup", Y = "reolink-viewer-player", X = !1, Z = class extends p {
 	static properties = {
 		hass: { attribute: !1 },
 		deviceId: { attribute: !1 },
@@ -963,7 +1022,7 @@ var H = 6e4, We = 3e3, U = 1e4, Ge = 3, W = 86400, Ke = 10 * C, qe = 10, G = 8e3
 		}, this._monthDays = /* @__PURE__ */ new Set(), this._monthLoading = !1, this._stream = "sub", this._hd = {
 			main: !1,
 			reason: "checking…"
-		}, this._thumbs = /* @__PURE__ */ new Map(), this._metrics = {}, this._checkText = "", this._checkRunning = !1, this._checkSetup = tt(), this._checkSession = !1, this._checkHdPart = P(this._checkSetup), this._rate = 1, this._mode = nt();
+		}, this._thumbs = /* @__PURE__ */ new Map(), this._metrics = {}, this._checkText = "", this._checkRunning = !1, this._checkSetup = rt(), this._checkSession = !1, this._checkHdPart = P(this._checkSetup), this._rate = 1, this._mode = it();
 	}
 	get _zone() {
 		return this.hass?.config?.time_zone;
@@ -1088,7 +1147,7 @@ var H = 6e4, We = 3e3, U = 1e4, Ge = 3, W = 86400, Ke = 10 * C, qe = 10, G = 8e3
 	}
 	_warmLongRecording(e) {
 		let t = this.hass, n = this._cursor === void 0 ? e.segments.at(-1) : j(e.segments, this._cursor);
-		!t || !n || n.end - n.start < Ke || v(t, this._ref(n)).catch(() => void 0);
+		!t || !n || n.end - n.start < Je || v(t, this._ref(n)).catch(() => void 0);
 	}
 	_ref(e, t = this._stream) {
 		return {
@@ -1129,7 +1188,7 @@ var H = 6e4, We = 3e3, U = 1e4, Ge = 3, W = 86400, Ke = 10 * C, qe = 10, G = 8e3
 				stream: l.stream,
 				cache: l.cache,
 				codec: l.media?.codec ?? null,
-				delivery: e ? `MSE (${w() ?? "?"})${l.cache.complete ? ", cached" : ""}` : et(r, this._progressive, l.cache.complete)
+				delivery: e ? `MSE (${w() ?? "?"})${l.cache.complete ? ", cached" : ""}` : tt(r, this._progressive, l.cache.complete)
 			};
 			let u = Math.max(0, o - l.start);
 			await this._player?.play(this._toItem(l), u, t), this._showDownload(l, a), this._schedulePreload(i.segment, a, o);
@@ -1141,7 +1200,7 @@ var H = 6e4, We = 3e3, U = 1e4, Ge = 3, W = 86400, Ke = 10 * C, qe = 10, G = 8e3
 	}
 	_seekWithin(e, t, n) {
 		let r = this._player, i = r?.current;
-		return !r?.mse || !this._useMse(this._stream) || !i || i.segmentId !== e.id || this._playing?.stream !== this._stream || i.end < e.end && t > i.end - Xe ? !1 : (this._metrics = {
+		return !r?.mse || !this._useMse(this._stream) || !i || i.segmentId !== e.id || this._playing?.stream !== this._stream || i.end < e.end && t > i.end - Qe ? !1 : (this._metrics = {
 			...this._metrics,
 			urlMs: 0,
 			firstFrameMs: void 0,
@@ -1196,7 +1255,7 @@ var H = 6e4, We = 3e3, U = 1e4, Ge = 3, W = 86400, Ke = 10 * C, qe = 10, G = 8e3
 		let n = this.hass, r = s(e.base ?? e.url ?? "");
 		if (!n || !r || e.cache.complete) return;
 		let i = () => t === this._playSeq && this._metrics.firstFrameMs === void 0 && !this._playFailure;
-		for (; i() && (await Ze(q), i());) try {
+		for (; i() && (await $e(q), i());) try {
 			let t = await we(n, r);
 			if (!i() || !t.cache || t.cache.complete || t.cache.error) break;
 			let a = e.stream === "main" ? "HD " : "";
@@ -1298,7 +1357,7 @@ var H = 6e4, We = 3e3, U = 1e4, Ge = 3, W = 86400, Ke = 10 * C, qe = 10, G = 8e3
 		this._rate = e;
 	}
 	_setMode(e) {
-		this._mode = e, this._mseFailed.clear(), rt(e);
+		this._mode = e, this._mseFailed.clear(), at(e);
 		let t = this._player?.time ?? this._cursor;
 		this._playing && t !== void 0 && this.playAt(t);
 	}
@@ -1347,7 +1406,7 @@ var H = 6e4, We = 3e3, U = 1e4, Ge = 3, W = 86400, Ke = 10 * C, qe = 10, G = 8e3
 		if (t && n.length) {
 			n.forEach((e) => this._thumbsRequested.add(e));
 			try {
-				let e = await a(t, this.deviceId, n, qe), r = this._date;
+				let e = await a(t, this.deviceId, n, Ye), r = this._date;
 				e.urls.forEach((e, t) => {
 					let i = n[t] ?? e.time;
 					this.thumbLoader.load(e.url).then((t) => {
@@ -1459,7 +1518,7 @@ var H = 6e4, We = 3e3, U = 1e4, Ge = 3, W = 86400, Ke = 10 * C, qe = 10, G = 8e3
             aria-labelledby="check-setup"
             ?disabled=${e}
             @change=${(e) => {
-			this._checkSetup = e.target.value, this._checkHdPart = P(this._checkSetup), it(this._checkSetup);
+			this._checkSetup = e.target.value, this._checkHdPart = P(this._checkSetup), ot(this._checkSetup);
 		}}
           >
             ${F.map((e) => d`<option .value=${e} ?selected=${e === this._checkSetup}>${e}</option>`)}
@@ -1514,7 +1573,10 @@ var H = 6e4, We = 3e3, U = 1e4, Ge = 3, W = 86400, Ke = 10 * C, qe = 10, G = 8e3
             </button>`}
         <button @click=${() => void this._loadReports()}>Saved reports</button>
       </div>
-      ${t ? d`<rv-findings .summary=${t}></rv-findings>` : A}
+      <!-- What it finds is said as it finds it, while it runs. -->
+      <div aria-live=${e ? "polite" : "off"}>
+        ${t ? d`<rv-findings .summary=${t}></rv-findings>` : A}
+      </div>
       ${this._checkText ? d`<details class="support">
             <summary class="small">Details for support${M("chevronDown")}</summary>
             <div class="actions">
@@ -1567,7 +1629,7 @@ var H = 6e4, We = 3e3, U = 1e4, Ge = 3, W = 86400, Ke = 10 * C, qe = 10, G = 8e3
       </div>
       <div class="group" role="group" aria-label="Zoom">
         <button aria-label="Zoom out" ?disabled=${i(e, -1) === void 0} @click=${() => this._timeline?.zoom(-1)}>${M("minus")}</button>
-        <span class="zoom">${at(this._view.span)}</span>
+        <span class="zoom">${st(this._view.span)}</span>
         <button
           aria-label="Zoom in"
           ?disabled=${i(e, 1) === void 0}
@@ -1667,7 +1729,7 @@ var H = 6e4, We = 3e3, U = 1e4, Ge = 3, W = 86400, Ke = 10 * C, qe = 10, G = 8e3
         <dt>Stream</dt>
         <dd>${e.stream ?? this._stream}${e.codec ? ` · ${e.codec}` : ""}</dd>
         <dt>Cache</dt>
-        <dd>${e.cache ? $(e.cache) : "–"}</dd>
+        <dd>${e.cache ? nt(e.cache) : "–"}</dd>
         <dt>HD</dt>
         <dd>${this._hd.reason}</dd>
         <dt>Delivery</dt>
@@ -1676,7 +1738,7 @@ var H = 6e4, We = 3e3, U = 1e4, Ge = 3, W = 86400, Ke = 10 * C, qe = 10, G = 8e3
         </dd>
         <dt>Player</dt>
         <dd>
-          ${$e(this._player)}
+          ${et(this._player)}
           <select
             aria-label="Player"
             @change=${(e) => {
@@ -1706,7 +1768,7 @@ var H = 6e4, We = 3e3, U = 1e4, Ge = 3, W = 86400, Ke = 10 * C, qe = 10, G = 8e3
             .rate=${this._rate}
             .note=${this._note}
             @rv-first-frame=${(e) => {
-			let t = this._metrics.codec ?? Qe(this._player?.mseStats?.mime);
+			let t = this._metrics.codec ?? $(this._player?.mseStats?.mime);
 			this._metrics = {
 				...this._metrics,
 				firstFrameMs: e.detail.ms,
@@ -1752,7 +1814,7 @@ var H = 6e4, We = 3e3, U = 1e4, Ge = 3, W = 86400, Ke = 10 * C, qe = 10, G = 8e3
             </span>
           </div>
           ${this._renderStorage()}
-          ${this._error ? S(Ue(this._error, {
+          ${this._error ? S(Ge(this._error, {
 			name: this.cameraName || "This camera",
 			offline: this.offline
 		}), `Could not load recordings: ${this._error}`) : A}
@@ -2104,13 +2166,13 @@ var H = 6e4, We = 3e3, U = 1e4, Ge = 3, W = 86400, Ke = 10 * C, qe = 10, G = 8e3
         font-size: 15px;
       }
     `];
-}, Ze = (e) => new Promise((t) => {
+}, $e = (e) => new Promise((t) => {
 	setTimeout(t, e);
 }), Q = (e) => `${Math.round(e / 1e6)} MB`;
-function Qe(e) {
+function $(e) {
 	return /codecs="?([^",]+)/.exec(e ?? "")?.[1] ?? null;
 }
-function $e(e) {
+function et(e) {
 	let t = e?.mseStats;
 	return t ? [
 		t.api,
@@ -2120,40 +2182,40 @@ function $e(e) {
 		`${t.trims} trims`
 	].join(" · ") : e?.current ? "file player" : "–";
 }
-function et(e, t, n) {
+function tt(e, t, n) {
 	return n ? "cached file (Range)" : e ? "progressive" : t ? "whole file first (to seek)" : "whole file first (WebKit)";
 }
-function $(e) {
+function nt(e) {
 	let t = `${(e.bytes / 1e6).toFixed(1)} MB`;
 	return e.error ? `failed: ${e.error}` : e.complete ? `cached (${t})` : `filling (${t} so far)`;
 }
-function tt() {
+function rt() {
 	try {
 		let e = window.localStorage.getItem(J);
 		if (e && F.includes(e)) return e;
 	} catch {}
 	return ke(navigator.userAgent);
 }
-function nt() {
+function it() {
 	try {
 		return window.localStorage.getItem(Y) === "file" ? "file" : "auto";
 	} catch {
 		return "auto";
 	}
 }
-function rt(e) {
+function at(e) {
 	try {
 		window.localStorage.setItem(Y, e);
 	} catch {}
 }
-function it(e) {
+function ot(e) {
 	try {
 		window.localStorage.setItem(J, e);
 	} catch {}
 }
-function at(e) {
+function st(e) {
 	return e >= 36e5 ? `${Math.round(e / 36e5)} h` : `${Math.round(e / C)} min`;
 }
 customElements.get("rv-playback") || customElements.define("rv-playback", Z);
 //#endregion
-export { Ye as CHECK_SESSION_MIN, Ge as EVENTS_RETRIES, U as EVENTS_RETRY_MS, K as PRELOAD_LEAD_MS, We as PROGRESSIVE_SEEK_LIMIT_MS, q as PROGRESS_EVERY_MS, Je as RECOVER_EVERY_MS, Z as RvPlayback, W as STALE_TODAY_S, G as THUMB_PAUSE_MAX_MS, H as TODAY_REFRESH_MS, et as deliveryOf, $ as describeCache, $e as describePlayer, Qe as videoCodec };
+export { Ze as CHECK_SESSION_MIN, qe as EVENTS_RETRIES, U as EVENTS_RETRY_MS, K as PRELOAD_LEAD_MS, Ke as PROGRESSIVE_SEEK_LIMIT_MS, q as PROGRESS_EVERY_MS, Xe as RECOVER_EVERY_MS, Z as RvPlayback, W as STALE_TODAY_S, G as THUMB_PAUSE_MAX_MS, H as TODAY_REFRESH_MS, tt as deliveryOf, nt as describeCache, et as describePlayer, $ as videoCodec };

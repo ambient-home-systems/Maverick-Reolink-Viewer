@@ -295,7 +295,11 @@ describe("rv-live-grid", () => {
     const routes: Route[] = [];
     el.addEventListener("rv-navigate", (e) => routes.push((e as CustomEvent<Route>).detail));
     tileBox(doorbell).click();
-    tileBox(doorbell).dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
+    // The tile is a button for the keyboard and screen readers, named for what it does.
+    const open = doorbell.shadowRoot?.querySelector<HTMLButtonElement>("button.open");
+    expect(open?.getAttribute("aria-label")).toBe("Open Doorbell");
+    expect(open?.getAttribute("aria-describedby")).toBe("state status");
+    open?.click();
     expect(routes).toEqual([
       { view: "device", id: "cam2", tab: "live" },
       { view: "device", id: "cam2", tab: "live" },

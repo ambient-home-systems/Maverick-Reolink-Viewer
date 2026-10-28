@@ -8,7 +8,7 @@ import { PAGE, type RvEventList } from "./event-list";
 import "./player";
 import type { RvPlayer } from "./player";
 import "./timeline";
-import { HOVER_DEBOUNCE_MS, type RvTimeline } from "./timeline";
+import { HOVER_DEBOUNCE_MS, KEY_SEEK_MS, keyStep, type RvTimeline } from "./timeline";
 import { DAY, HOUR, MINUTE } from "./timeline-math";
 
 const T0 = Date.UTC(2026, 9, 17, 4, 0);
@@ -256,6 +256,52 @@ describe("rv-timeline", () => {
     expect(views).toHaveLength(count);
   });
 
+  it("is a slider of the time for the keyboard: arrows move it, it plays once they rest", async () => {
+    vi.useFakeTimers();
+    const el = await timeline();
+    el.cursor = T0 + HOUR + 30 * MINUTE;
+    el.timeZone = "America/New_York";
+    await el.updateComplete;
+    const canvas = el.renderRoot.querySelector("canvas");
+    const scrubs = collect(el, "rv-scrub") as { time: number }[];
+    const seeks = collect(el, "rv-seek") as { time: number }[];
+    const views = collect(el, "rv-view-change") as { view: { start: number; span: number } }[];
+    const key = (k: string) => canvas?.dispatchEvent(new KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true }));
+    // A whole day shown: half an hour a key.
+    expect(keyStep(DAY)).toBe(30 * MINUTE);
+    expect(keyStep(HOUR)).toBe(5 * MINUTE);
+    key("ArrowRight");
+    key("ArrowRight");
+    expect(scrubs.map((s) => s.time)).toEqual([T0 + 2 * HOUR, T0 + 2 * HOUR + 30 * MINUTE]);
+    expect(seeks).toHaveLength(0);
+    vi.advanceTimersByTime(KEY_SEEK_MS);
+    expect(seeks).toEqual([{ time: T0 + 2 * HOUR + 30 * MINUTE }]);
+    // A screen reader hears the time and whether it was recorded.
+    el.cursor = T0 + 90 * MINUTE;
+    await el.updateComplete;
+    expect(canvas?.getAttribute("aria-valuetext")).toBe("01:30, recorded");
+    key("PageUp");
+    await el.updateComplete;
+    expect(canvas?.getAttribute("aria-valuetext")).toBe("04:30:00, nothing recorded");
+    // Home and End: the day's start, and now (nothing is recorded after it).
+    key("End");
+    expect(scrubs.at(-1)?.time).toBe(T0 + 12 * HOUR);
+    key("Home");
+    expect(scrubs.at(-1)?.time).toBe(T0);
+    key("ArrowLeft"); // not before the day
+    expect(scrubs.at(-1)?.time).toBe(T0);
+    // Enter plays at once.
+    key("Enter");
+    expect(seeks.at(-1)).toEqual({ time: T0 });
+    // Zoomed in, the view follows the time out of it.
+    el.view = { start: T0, span: HOUR };
+    el.cursor = T0 + 55 * MINUTE;
+    await el.updateComplete;
+    key("ArrowRight");
+    expect(views.at(-1)?.view).toEqual({ start: T0 + 30 * MINUTE, span: HOUR });
+    vi.useRealTimers();
+  });
+
   it("pinches to zoom and slides two fingers to pan; one finger still scrubs", async () => {
     const el = await timeline();
     const canvas = el.renderRoot.querySelector("canvas");
@@ -380,6 +426,60 @@ describe("rv-calendar", () => {
     el.loading = true;
     await el.updateComplete;
     expect(el.renderRoot.textContent).toContain("…");
+  });
+
+  it("is one keyboard stop: arrows move by day and week, Page keys by month", async () => {
+    const el = await mount("rv-calendar");
+    el.year = 2026;
+    el.month = 10;
+    el.days = new Set([17]);
+    el.today = "2026-10-17";
+    el.selected = "2026-10-14";
+    el.firstDay = 0;
+    await el.updateComplete;
+    const stops = () =>
+      [...el.renderRoot.querySelectorAll<HTMLButtonElement>("button.day")].filter((d) => d.tabIndex === 0).map((d) => d.dataset.day);
+    const focused = () => (el.renderRoot as ShadowRoot).activeElement?.getAttribute("data-day");
+    const key = (k: string) => {
+      ((el.renderRoot as ShadowRoot).activeElement ?? el.renderRoot.querySelector('button[tabindex="0"]'))?.dispatchEvent(
+        new KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true }),
+      );
+      return el.updateComplete;
+    };
+    // The chosen day is the one stop, named in words, rows of weeks around it.
+    expect(stops()).toEqual(["14"]);
+    const day = (n: number) => el.renderRoot.querySelector(`button[data-day="${String(n)}"]`);
+    expect(day(14)?.getAttribute("aria-selected")).toBe("true");
+    expect(day(17)?.getAttribute("aria-label")).toBe("Saturday, October 17, has recordings");
+    expect(day(17)?.getAttribute("aria-current")).toBe("date");
+    expect(el.renderRoot.querySelectorAll('[role="row"]')).toHaveLength(6); // the names, then 5 weeks
+    await key("ArrowRight");
+    expect(focused()).toBe("15");
+    expect(stops()).toEqual(["15"]);
+    await key("ArrowUp");
+    expect(focused()).toBe("8");
+    await key("Home");
+    expect(focused()).toBe("4"); // Sunday
+    await key("End");
+    expect(focused()).toBe("10");
+    await key("ArrowDown");
+    await key("ArrowDown");
+    expect(focused()).toBe("17");
+    await key("ArrowRight"); // tomorrow: nothing recorded yet
+    expect(focused()).toBe("17");
+    // Page Up: the same day of the month before, once it shows.
+    const months = collect(el, "rv-month");
+    await key("PageUp");
+    expect(months).toEqual([{ year: 2026, month: 9 }]);
+    el.month = 9;
+    await el.updateComplete;
+    expect(focused()).toBe("17");
+    // Before the 1st: the month before that.
+    await key("Home"); // Sunday the 13th
+    await key("ArrowUp");
+    await key("ArrowUp");
+    await key("ArrowLeft");
+    expect(months.at(-1)).toEqual({ year: 2026, month: 8 });
   });
 });
 

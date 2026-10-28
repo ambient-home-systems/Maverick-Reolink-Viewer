@@ -65,7 +65,7 @@ describe("rv-settings", () => {
 
   it("groups entities by category in catalog order and hides disabled ones", async () => {
     const el = await mount(makeHass(okDevices()));
-    const titles = [...root(el).querySelectorAll("section.category h3")].map((h) => h.textContent);
+    const titles = [...root(el).querySelectorAll("section.category h2")].map((h) => h.textContent);
     expect(titles).toEqual([
       "Detection tuning",
       "Image",

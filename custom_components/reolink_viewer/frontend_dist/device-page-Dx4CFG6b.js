@@ -1,4 +1,4 @@
-import { Ct as e, F as t, Jt as n, Kt as r, St as i, Wt as a, Yt as o, i as s, it as c, qt as l, yt as u } from "./home-CRi9TKP3.js";
+import { Ct as e, F as t, Jt as n, Kt as r, St as i, Wt as a, Yt as o, i as s, it as c, qt as l, yt as u } from "./home-U1fpKtN8.js";
 //#region src/render-filter.ts
 function d(e, t, n) {
 	if (e === t) return !1;
@@ -9,9 +9,9 @@ function d(e, t, n) {
 //#endregion
 //#region src/components/device-page.ts
 var f = {
-	overview: () => import("./overview-Pg-tbnII.js"),
-	playback: () => import("./playback-C5Vhy_6H.js"),
-	settings: () => import("./settings-C9XJKXhM.js")
+	overview: () => import("./overview-CCLLnG9g.js"),
+	playback: () => import("./playback-BXjscqwf.js"),
+	settings: () => import("./settings-CqDtKYUv.js")
 }, p = 1e3, m = class extends r {
 	static properties = {
 		hass: { attribute: !1 },
@@ -47,6 +47,12 @@ var f = {
 	}
 	willUpdate(e) {
 		(e.has("deviceId") || e.has("hass") && !this._device && !this._error) && this.hass && this._load(), e.has("hass") && this.hass && this.isConnected && !this._unsubRegistry && this._subscribeRegistry(this.hass), (e.has("tab") || e.has("_device")) && this._device && this._loadTab(h(this.tab, this._device));
+	}
+	_onTabKey(e, t) {
+		let n = [...this.renderRoot.querySelectorAll("[role=\"tab\"]")], r = n.findIndex((e) => e === this.renderRoot.activeElement);
+		if (r < 0) return;
+		let i = e.key === "ArrowRight" ? (r + 1) % t.length : e.key === "ArrowLeft" ? (r - 1 + t.length) % t.length : e.key === "Home" ? 0 : e.key === "End" ? t.length - 1 : void 0;
+		i !== void 0 && (e.preventDefault(), n[i]?.focus());
 	}
 	_loadTab(e) {
 		e !== "live" && e !== "no-recordings" && (this._tabError = void 0, f[e]().catch((e) => {
@@ -97,10 +103,20 @@ var f = {
               <h1>${r.name ?? "Reolink device"}</h1>
               <p class="kind muted">${y(e)}</p>
             </div>
-            <div class="tabs" role="tablist">
+            <div
+              class="tabs"
+              role="tablist"
+              aria-label=${r.name ?? "Device"}
+              @keydown=${(t) => {
+			this._onTabKey(t, C(e));
+		}}
+            >
               ${C(e).map((e) => n`<button
                   role="tab"
+                  id=${`tab-${e}`}
+                  aria-controls="tab-panel"
                   aria-selected=${this.tab === e ? "true" : "false"}
+                  tabindex=${this.tab === e ? "0" : "-1"}
                   class=${this.tab === e ? "active" : ""}
                   @click=${() => {
 			t(this, {
@@ -123,6 +139,7 @@ var f = {
                     Try again
                   </button>
                 </div>` : l}
+            <div class="panel" role="tabpanel" id="tab-panel" aria-labelledby=${`tab-${this.tab}`}>
             ${h(this.tab, e) === "live" ? n`<rv-live-camera .hass=${this.hass} .deviceId=${r.id}></rv-live-camera>` : h(this.tab, e) === "playback" ? n`<rv-playback
                   .hass=${this.hass}
                   .deviceId=${r.id}
@@ -141,7 +158,8 @@ var f = {
                   .device=${e}
                   .catalog=${this._catalog}
                   @rv-entity-enabled=${() => void this.reload()}
-                ></rv-settings>`}` : this._error ? l : n`<p class="muted">Loading…</p>`}
+                ></rv-settings>`}
+            </div>` : this._error ? l : n`<p class="muted">Loading…</p>`}
     `;
 	}
 	static styles = [c, o`
@@ -152,6 +170,9 @@ var f = {
       }
       .back {
         padding-left: 0;
+      }
+      .panel {
+        min-width: 0;
       }
       .title {
         display: flex;

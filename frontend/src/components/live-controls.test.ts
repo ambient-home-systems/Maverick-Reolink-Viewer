@@ -153,6 +153,14 @@ describe("rv-live-controls", () => {
     await settle(el);
     expect(calls).toEqual([]);
     expect(el.shadowRoot?.querySelector(".confirm")?.textContent).toContain("Sound the siren on Garage?");
+    // The safe answer has the focus; Escape is No.
+    expect(el.shadowRoot?.activeElement?.textContent.trim()).toBe("Cancel");
+    el.shadowRoot?.querySelector(".confirm")?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    await settle(el);
+    expect(el.shadowRoot?.querySelector(".confirm")).toBeNull();
+    expect(el.shadowRoot?.activeElement?.textContent.trim()).toBe("Siren");
+    byText("Siren").click();
+    await settle(el);
     byText("Cancel").click();
     await settle(el);
     expect(el.shadowRoot?.querySelector(".confirm")).toBeNull();

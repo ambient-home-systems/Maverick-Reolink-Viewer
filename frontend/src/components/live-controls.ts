@@ -1,4 +1,4 @@
-import { LitElement, css, html, nothing, svg, type TemplateResult } from "lit";
+import { LitElement, css, html, nothing, svg, type PropertyValues, type TemplateResult } from "lit";
 
 import { toError } from "../api";
 import { icon } from "../icons";
@@ -195,9 +195,28 @@ export class RvLiveControls extends LitElement {
     </div>`;
   }
 
+  protected override updated(changed: PropertyValues<this>): void {
+    if (!changed.has("_confirmSiren")) return;
+    // Asked: the safe answer has the focus. Answered: back to the siren button.
+    const target = this._confirmSiren ? ".confirm button" : "button.siren";
+    if (this._confirmSiren || changed.get("_confirmSiren") === true) {
+      this.renderRoot.querySelector<HTMLElement>(target)?.focus();
+    }
+  }
+
   private _renderConfirm(): TemplateResult {
     const siren = this.controls?.siren;
-    return html`<div class="confirm" role="alertdialog" aria-labelledby="siren-title">
+    return html`<div
+      class="confirm"
+      role="alertdialog"
+      aria-labelledby="siren-title"
+      @keydown=${(e: KeyboardEvent) => {
+        if (e.key === "Escape") {
+          e.stopPropagation();
+          this._confirmSiren = false;
+        }
+      }}
+    >
       <strong id="siren-title">Sound the siren on ${this.cameraName}?</strong>
       <span class="small">It is loud, and keeps sounding until you stop it.</span>
       <span class="actions">

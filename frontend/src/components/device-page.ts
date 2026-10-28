@@ -112,6 +112,26 @@ export class RvDevicePage extends LitElement {
     if ((changed.has("tab") || changed.has("_device")) && this._device) this._loadTab(shownTab(this.tab, this._device));
   }
 
+  /** The tabs are one keyboard stop: arrows, Home and End move between them, Enter opens one. */
+  private _onTabKey(event: KeyboardEvent, tabs: Tab[]): void {
+    const buttons = [...this.renderRoot.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+    const at = buttons.findIndex((b) => b === (this.renderRoot as ShadowRoot).activeElement);
+    if (at < 0) return;
+    const to =
+      event.key === "ArrowRight"
+        ? (at + 1) % tabs.length
+        : event.key === "ArrowLeft"
+          ? (at - 1 + tabs.length) % tabs.length
+          : event.key === "Home"
+            ? 0
+            : event.key === "End"
+              ? tabs.length - 1
+              : undefined;
+    if (to === undefined) return;
+    event.preventDefault();
+    buttons[to]?.focus();
+  }
+
   private _loadTab(shown: Shown): void {
     if (shown === "live" || shown === "no-recordings") return;
     this._tabError = undefined;
@@ -191,11 +211,21 @@ export class RvDevicePage extends LitElement {
               <h1>${node.name ?? "Reolink device"}</h1>
               <p class="kind muted">${kindLine(device)}</p>
             </div>
-            <div class="tabs" role="tablist">
+            <div
+              class="tabs"
+              role="tablist"
+              aria-label=${node.name ?? "Device"}
+              @keydown=${(e: KeyboardEvent) => {
+                this._onTabKey(e, tabsFor(device));
+              }}
+            >
               ${tabsFor(device).map(
                 (tab) => html`<button
                   role="tab"
+                  id=${`tab-${tab}`}
+                  aria-controls="tab-panel"
                   aria-selected=${this.tab === tab ? "true" : "false"}
+                  tabindex=${this.tab === tab ? "0" : "-1"}
                   class=${this.tab === tab ? "active" : ""}
                   @click=${() => {
                     navigate(this, { view: "device", id: this.deviceId, tab });
@@ -217,6 +247,7 @@ export class RvDevicePage extends LitElement {
                   </button>
                 </div>`
               : nothing}
+            <div class="panel" role="tabpanel" id="tab-panel" aria-labelledby=${`tab-${this.tab}`}>
             ${shownTab(this.tab, device) === "live"
               ? html`<rv-live-camera .hass=${this.hass} .deviceId=${node.id}></rv-live-camera>`
               : shownTab(this.tab, device) === "playback"
@@ -243,7 +274,8 @@ export class RvDevicePage extends LitElement {
                   .device=${device}
                   .catalog=${this._catalog}
                   @rv-entity-enabled=${() => void this.reload()}
-                ></rv-settings>`}`
+                ></rv-settings>`}
+            </div>`
         : this._error
           ? nothing
           : html`<p class="muted">Loading…</p>`}
@@ -260,6 +292,9 @@ export class RvDevicePage extends LitElement {
       }
       .back {
         padding-left: 0;
+      }
+      .panel {
+        min-width: 0;
       }
       .title {
         display: flex;

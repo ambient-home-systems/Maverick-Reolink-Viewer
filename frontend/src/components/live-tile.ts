@@ -460,22 +460,9 @@ export class RvLiveTile extends LitElement {
     const interactive = !this._full && (this.openable || !this._wanted);
     return html`<div class="frame">
       <div
-        class="tile ${playing ? "playing" : ""} ${this.hdShown ? "hd-on" : ""}"
-        role=${interactive ? "button" : nothing}
-        tabindex=${interactive ? "0" : nothing}
-        aria-label=${interactive
-          ? this._wanted
-            ? `Open ${name}`
-            : `Watch ${name}`
-          : nothing}
+        class="tile ${playing ? "playing" : ""} ${this.hdShown ? "hd-on" : ""} ${interactive ? "interactive" : ""}"
         @click=${() => {
           this._activate();
-        }}
-        @keydown=${(e: KeyboardEvent) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            this._activate();
-          }
         }}
       >
         ${this.image
@@ -501,6 +488,14 @@ export class RvLiveTile extends LitElement {
               @webkitpresentationmodechanged=${this._onPipChange}
             ></video>`
           : nothing}
+        ${interactive
+          ? // The whole tile is this button (its click is the tile's); it says what the tile shows.
+            html`<button
+              class="open"
+              aria-label=${this._wanted ? `Open ${name}` : `Watch ${name}`}
+              aria-describedby="state status"
+            ></button>`
+          : nothing}
         ${this.number !== undefined && !this._full
           ? html`<span class="num" aria-hidden="true">${this.number}</span>`
           : nothing}
@@ -521,6 +516,10 @@ export class RvLiveTile extends LitElement {
             .info=${this._debugInfo(name)}
             @rv-live-debug-close=${() => {
               this._debug = false;
+              // Back to the button that opened it.
+              void this.updateComplete.then(() => {
+                this.renderRoot.querySelector<HTMLElement>(".corner-button.info")?.focus();
+              });
             }}
           ></rv-live-debug>`
         : nothing}
@@ -627,7 +626,7 @@ export class RvLiveTile extends LitElement {
       // Since today: the time; since before: the date too.
       const since = Date.now() - offline < 12 * 3_600_000 ? formatClock(offline, zone) : formatStamp(offline, zone);
       return html`${stateChip("Offline", html`<i class="dot fault"></i>`)}
-        <div class="status center offline" role="status">
+        <div class="status center offline" id="status" role="status">
           <span class="what">Offline since ${since}</span>
           <span class="small">Home Assistant cannot reach this camera. It plays again when it is back.</span>
         </div>`;
@@ -647,10 +646,11 @@ export class RvLiveTile extends LitElement {
       case "waiting": {
         const why = explainLive(state.error, this.connection.is_battery);
         return html`${stateChip("Retrying")}
-          <div class="status center" role="alert">
+          <div class="status center" id="status" role="status">
             <span class="what">${why.text}</span>
             ${why.advice ? html`<span class="small">${why.advice}</span>` : nothing}
             <button
+              aria-label=${`Retry now: ${this.camera?.name ?? "camera"}`}
               @click=${(e: Event) => {
                 e.stopPropagation();
                 this._player?.retryNow();
@@ -719,12 +719,37 @@ export class RvLiveTile extends LitElement {
         overflow: hidden;
         color: #f4f4f1;
       }
-      .tile[role="button"] {
+      .tile.interactive {
         cursor: pointer;
       }
-      .tile:focus-visible {
+      /* Over the picture, under what the tile says: the tile as a button. */
+      .open {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        min-height: 0;
+        margin: 0;
+        padding: 0;
+        border: none;
+        border-radius: 0;
+        background: transparent;
+        cursor: pointer;
+      }
+      .open:hover:not(:disabled) {
+        background: transparent;
+      }
+      .open:focus-visible {
         outline: 2px solid #f4f4f1;
-        outline-offset: -2px;
+        outline-offset: -4px;
+      }
+      /* What the tile says lets a press through to it, but for its own buttons. */
+      .num,
+      .state,
+      .status {
+        pointer-events: none;
+      }
+      .status button {
+        pointer-events: auto;
       }
       .poster,
       video {
@@ -1009,7 +1034,8 @@ export class RvLiveTile extends LitElement {
         }
       }
       @media (prefers-reduced-motion: reduce) {
-        video {
+        video,
+        .corner-button {
           transition: none;
         }
       }
@@ -1018,7 +1044,7 @@ export class RvLiveTile extends LitElement {
 }
 
 function stateChip(label: string, mark?: TemplateResult): TemplateResult {
-  return html`<span class="state">${mark ?? nothing}${label}</span>`;
+  return html`<span class="state" id="state">${mark ?? nothing}${label}</span>`;
 }
 
 if (!customElements.get("rv-live-tile")) {

@@ -85,7 +85,8 @@ describe("rv-timetable", () => {
     expect(first?.querySelector(".ev")?.textContent).toContain("New");
     expect(first?.querySelector(".cam")?.textContent).toContain("1Doorbell");
     expect(first?.querySelector(".len")?.textContent).toBe("1:25");
-    expect(first?.getAttribute("aria-label")).toBe("Person · Doorbell, Doorbell, 20:58, new: play the recording");
+    // Named by what it shows, so a voice user can say what they see.
+    expect(first?.hasAttribute("aria-label")).toBe(false);
     expect(rows().at(2)?.classList.contains("new")).toBe(false);
     // Thumbnails of the rows on show, per camera.
     expect(sentOf(hass, "reolink_viewer/thumbnail/urls").map((m) => m.device_id).sort()).toEqual(["door", "yard"]);

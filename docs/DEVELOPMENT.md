@@ -86,7 +86,8 @@ scripts/             # setup_dev.sh, probe_to_matrix.py, make_mse_sample.py (wri
                      # playback_check.js and inspect_recording.js (paste into the browser console);
                      # desktop-check/ runs the playback check in Chrome without clicking;
                      # scrub_check.cjs drags the preview's timeline and counts long
-                     # tasks, then pinches it with touch on a phone-sized page
+                     # tasks, then pinches it with touch on a phone-sized page;
+                     # a11y_check.cjs checks every view with axe-core and the keyboard
 ```
 
 ## Environment
@@ -171,6 +172,22 @@ Phase 4 step 2 set three limits; the first two run in CI.
 - **Time to first frame** is measured on the owner's hardware by the live check and
   the playback check; the figures are in `docs/IMPLEMENTATION_PLAN.md` (Phase 4,
   "Step 2: the performance budget").
+
+## Accessibility
+
+Every view meets WCAG 2.1 AA and works from the keyboard (Phase 4 step 5); CI checks
+it in its own job. With the design preview built:
+
+```bash
+cd frontend && NODE_PATH="$(npm root -g)" node ../scripts/a11y_check.cjs [--tabs]
+```
+
+runs axe-core (WCAG 2.1 A and AA, through the shadow roots, contrast included) on
+every view and state, light and dark, desktop and phone, then presses Tab through
+each view: whatever it reaches must have a name and show its focus. `--tabs`
+prints each view's Tab order with the names a screen reader reads.
+`src/motion.test.ts` fails if a component animates without a
+`prefers-reduced-motion` rule that stops it.
 
 ## Tests
 
