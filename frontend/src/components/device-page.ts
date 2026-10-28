@@ -10,11 +10,14 @@ import "./live-grid";
 import type { BoardCamera } from "./live-grid";
 import { navigate, type Tab } from "./navigation";
 
-/** What a tab shows: the camera live, its recordings, its overview or its settings. */
-type Shown = "live" | "playback" | "overview" | "settings";
+/**
+ * What a tab shows: the camera live, its recordings (or why there are none to
+ * play), its overview or its settings.
+ */
+type Shown = "live" | "playback" | "no-recordings" | "overview" | "settings";
 
 /** Each tab's elements load the first time it is shown (Live is the home view's). */
-const TAB_LOADERS: Record<Exclude<Shown, "live">, () => Promise<unknown>> = {
+const TAB_LOADERS: Record<Exclude<Shown, "live" | "no-recordings">, () => Promise<unknown>> = {
   overview: () => import("./overview"),
   playback: () => import("./playback"),
   settings: () => import("./settings"),
@@ -110,7 +113,7 @@ export class RvDevicePage extends LitElement {
   }
 
   private _loadTab(shown: Shown): void {
-    if (shown === "live") return;
+    if (shown === "live" || shown === "no-recordings") return;
     this._tabError = undefined;
     TAB_LOADERS[shown]().catch((err: unknown) => {
       this._tabError = toError(err).message;
@@ -228,7 +231,12 @@ export class RvDevicePage extends LitElement {
                   .deviceId=${node.id}
                   .cameraName=${node.name ?? ""}
                   .at=${this.at}
+                  .offline=${playbackOffline(device)}
+                  .storage=${node.kind === "camera" ? (node.recordings?.storage ?? null) : null}
+                  .recorder=${playbackRecorder(device)}
                 ></rv-playback>`
+              : shownTab(this.tab, device) === "no-recordings"
+              ? noRecordings(device)
               : shownTab(this.tab, device) === "overview"
               ? html`<rv-overview
                   .hass=${this.hass}
@@ -291,6 +299,20 @@ export class RvDevicePage extends LitElement {
         font-weight: 600;
         line-height: 1;
       }
+      /* A tab with nothing to show: why, and what to do, as plain prose. */
+      .empty-tab {
+        max-width: 64ch;
+        padding: 20px 0;
+      }
+      .empty-tab h2 {
+        margin: 0 0 8px;
+        font-family: var(--rv-font-cond);
+        font-size: 22px;
+        font-weight: 600;
+      }
+      .empty-tab p {
+        margin: 0 0 8px;
+      }
       .tabs {
         display: flex;
         gap: 4px;
@@ -326,8 +348,56 @@ export class RvDevicePage extends LitElement {
 /** What a tab shows for this device: a tab it does not have shows the overview. */
 export function shownTab(tab: Tab, device: DeviceResponse): Shown {
   if (tab === "live") return hasLive(device) ? "live" : "overview";
-  if (tab === "playback") return hasPlayback(device) ? "playback" : "overview";
+  if (tab === "playback") {
+    if (hasPlayback(device)) return "playback";
+    return device.node.kind === "camera" ? "no-recordings" : "overview";
+  }
   return tab;
+}
+
+/** What keeps the recordings played: the camera's SD card or an NVR. */
+export function playbackRecorder(device: DeviceResponse): "camera" | "nvr" {
+  const source = device.node.kind === "camera" ? device.node.connections.find((c) => c.playback_source) : undefined;
+  return source?.via === "nvr" ? "nvr" : "camera";
+}
+
+/**
+ * The recordings played are on the camera's own SD card, and Home Assistant
+ * cannot reach it now (an NVR keeps its recordings while a camera is away).
+ */
+export function playbackOffline(device: DeviceResponse): boolean {
+  return device.node.kind === "camera" && playbackRecorder(device) === "camera" && device.node.status.online === false;
+}
+
+/** The Playback tab of a camera with nothing to play here: why, and what to do. */
+function noRecordings(device: DeviceResponse): TemplateResult {
+  const node = device.node;
+  const name = node.name ?? "This camera";
+  const where = node.kind === "camera" ? node.recordings?.where : undefined;
+  if (device.degraded) {
+    return html`<div class="empty-tab">
+      <h2>No playback in degraded mode</h2>
+      <p>The Reolink integration's internals changed in this Home Assistant release, so its recordings cannot be read. Update Reolink Viewer when a new version is out.</p>
+    </div>`;
+  }
+  if (where === "elsewhere") {
+    // On an NVR, the NVR keeps them; else its own SD card does.
+    const nvr = node.kind === "camera" ? node.connections.find((c) => c.via === "nvr") : undefined;
+    return html`<div class="empty-tab">
+      <h2>Recordings kept where they cannot be played here</h2>
+      <p>
+        ${nvr
+          ? `${name}'s recordings are on ${nvr.host_name ?? "its NVR"}, which cannot send them to Home Assistant.`
+          : `${name} records to its SD card, but cannot send its recordings to Home Assistant.`}
+        Play them in the Reolink app.
+      </p>
+    </div>`;
+  }
+  return html`<div class="empty-tab">
+    <h2>No recordings to play</h2>
+    <p>${name} keeps no recordings: it has no SD card, and it is not on a Reolink NVR in Home Assistant.</p>
+    <p class="muted">To record, put a microSD card in it and format it in the Reolink app, or add it to a Reolink NVR. Its live view and pictures work either way.</p>
+  </div>`;
 }
 
 /** "Camera · CX410 · on the NVR and added directly". */
@@ -366,7 +436,8 @@ export function tabsFor(device: DeviceResponse): Tab[] {
   return [
     "overview",
     ...(hasLive(device) ? (["live"] as const) : []),
-    ...(hasPlayback(device) ? (["playback"] as const) : []),
+    // Every camera: one with nothing to play says why there.
+    ...(device.node.kind === "camera" ? (["playback"] as const) : []),
     "settings",
   ];
 }

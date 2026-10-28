@@ -11,6 +11,7 @@ import type {
   DevicesResponse,
   HomeAssistant,
   HostDetails,
+  StorageInfo,
 } from "../types";
 import "./device-list";
 import type { BoardCamera } from "./live-grid";
@@ -163,6 +164,7 @@ export class RvOverview extends LitElement {
             Details are unavailable${device.degraded ? " in degraded mode" : ""}.
           </p>`
         : html`
+            ${conn.via === "direct" || !isCamera ? storageWarning(details.host) : nothing}
             ${details.channel ? renderChannel(details.channel) : nothing}
             ${conn.via === "direct" || !isCamera ? renderHost(details.host) : nothing}
           `}
@@ -238,6 +240,15 @@ export class RvOverview extends LitElement {
         flex-wrap: wrap;
         gap: 4px;
       }
+      .connections .banner {
+        margin: 8px 0 4px;
+      }
+      .storage {
+        display: block;
+      }
+      .storage.fault {
+        color: var(--rv-fault-ink);
+      }
     `,
   ];
 }
@@ -312,13 +323,18 @@ function renderHost(host: HostDetails): TemplateResult {
     <dd>
       ${host.storage.length
         ? host.storage.map(
-            (s, i) =>
-              html`${i ? html`<br />` : nothing}${s.type ?? "disk"} ${s.index + 1}:
-              ${s.used_percent !== null ? `${s.used_percent}% used` : "?"}${s.available === false
-                ? " (not available)"
-                : ""}`,
+            (s) => html`<span class="storage ${s.available === false ? "fault" : ""}"
+              >${storageName(s, host.storage.length)}:
+              ${s.available === false
+                ? "not ready (not formatted, or failed)"
+                : s.used_percent !== null
+                  ? `${String(s.used_percent)}% used`
+                  : "in use"}</span
+            >`,
           )
-        : "none"}
+        : host.device_type === "camera"
+          ? "None: no SD card, so it keeps no recordings of its own"
+          : "None: no hard disk, so it keeps no recordings"}
     </dd>
     ${host.cpu_usage !== null
       ? html`<dt>CPU</dt>
@@ -329,6 +345,25 @@ function renderHost(host: HostDetails): TemplateResult {
           <dd class="chips">${host.capabilities.map((c) => html`<span class="badge">${c}</span>`)}</dd>`
       : nothing}
   </dl>`;
+}
+
+/** "SD card", "Hard disk 2". */
+function storageName(storage: StorageInfo, count: number): string {
+  const type = storage.type?.toUpperCase();
+  const kind = type === "SD" ? "SD card" : type === "HDD" ? "Hard disk" : "Disk";
+  return count > 1 ? `${kind} ${String(storage.index + 1)}` : kind;
+}
+
+/** A disk or SD card that is not ready: recordings may not be kept, and what to do. */
+function storageWarning(host: HostDetails): TemplateResult | typeof nothing {
+  const failing = host.storage.filter((s) => s.available === false);
+  if (!failing.length) return nothing;
+  const names = failing.map((s) => storageName(s, host.storage.length)).join(" and ");
+  return html`<div class="banner warning" role="status">
+    <strong>${names} ${failing.length === 1 ? "is" : "are"} not ready</strong>: not formatted, or failed, so
+    recordings may not be kept. Format ${failing.length === 1 ? "it" : "them"} in the Reolink app, or replace
+    ${failing.length === 1 ? "it" : "them"}.
+  </div>`;
 }
 
 function networkLabel(network: { connection: string; wifi_signal_dbm: number | null }): string {

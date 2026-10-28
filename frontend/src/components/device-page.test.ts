@@ -161,26 +161,62 @@ describe("rv-device-page", () => {
     expect(playback?.deviceId).toBe("dev-cam");
     expect(playback?.cameraName).toBe("Front Yard");
 
-    // A camera that records nowhere (e.g. the E1 Zoom): no Playback tab, Overview instead.
+    // A camera that records nowhere (e.g. the E1 Zoom): its Playback tab says why, and what to do.
     const nvrConnection = makeCamera().connections.at(0);
     if (!nvrConnection) throw new Error("fixture has no connection");
     const snapshotOnly = makeDevice({
-      node: makeCamera({ connections: [{ ...nvrConnection, playback_source: false }] }),
+      node: makeCamera({
+        connections: [{ ...nvrConnection, playback_source: false }],
+        recordings: { where: "none", storage: null },
+      }),
     });
     hass.responses["reolink_viewer/device"] = snapshotOnly;
     expect(hasPlayback(snapshotOnly)).toBe(false);
-    expect(tabsFor(snapshotOnly)).toEqual(["overview", "live", "settings"]);
+    expect(tabsFor(snapshotOnly)).toEqual(["overview", "live", "playback", "settings"]);
     await el.reload();
     await el.updateComplete;
-    expect(tabs()).toEqual(["Overview", "Live", "Settings"]);
+    expect(tabs()).toEqual(["Overview", "Live", "Playback", "Settings"]);
     expect(el.shadowRoot?.querySelector("rv-playback")).toBeNull();
-    expect(el.shadowRoot?.querySelector("rv-overview")).not.toBeNull();
+    const why = () => el.shadowRoot?.querySelector(".empty-tab")?.textContent ?? "";
+    expect(why()).toContain("No recordings to play");
+    expect(why()).toContain("it has no SD card, and it is not on a Reolink NVR");
+    expect(why()).toContain("put a microSD card in it");
+    // Kept where they cannot be played here: on an NVR, or the battery Doorbell's SD card.
+    hass.responses["reolink_viewer/device"] = makeDevice({
+      node: makeCamera({
+        connections: [{ ...nvrConnection, playback_source: false }],
+        recordings: { where: "elsewhere", storage: "ready" },
+      }),
+    });
+    await el.reload();
+    await el.updateComplete;
+    expect(why()).toContain("Front Yard's recordings are on Garage NVR, which cannot send them to Home Assistant.");
+    expect(why()).toContain("Play them in the Reolink app");
+    hass.responses["reolink_viewer/device"] = makeDevice({
+      node: makeCamera({
+        connections: [{ ...nvrConnection, via: "direct", host_id: null, host_name: null, playback_source: false }],
+        recordings: { where: "elsewhere", storage: "ready" },
+      }),
+    });
+    await el.reload();
+    await el.updateComplete;
+    expect(why()).toContain("Front Yard records to its SD card, but cannot send its recordings to Home Assistant.");
+    hass.responses["reolink_viewer/device"] = snapshotOnly;
+    await el.reload();
+    await el.updateComplete;
 
     // The Live tab watches the camera; degraded mode has no live service.
     el.tab = "live";
     await el.updateComplete;
     expect(el.shadowRoot?.querySelector("rv-live-camera")?.deviceId).toBe("dev-cam");
-    expect(tabsFor({ ...snapshotOnly, degraded: true })).toEqual(["overview", "settings"]);
+    // Degraded mode: no live service, and its Playback tab says why there is none.
+    const degraded = { ...snapshotOnly, degraded: true };
+    expect(tabsFor(degraded)).toEqual(["overview", "playback", "settings"]);
+    hass.responses["reolink_viewer/device"] = degraded;
+    el.tab = "playback";
+    await el.reload();
+    await el.updateComplete;
+    expect(why()).toContain("No playback in degraded mode");
   });
 
   it("reloads after an entity registry change of its own entities", async () => {
@@ -252,8 +288,25 @@ describe("rv-overview", () => {
     expect(text).toContain("person, animal");
     expect(text).toContain("Wi-Fi, -52 dBm");
     expect(text).toContain("RTSP on (554) · RTMP off (1935) · ONVIF on (8000)");
-    expect(text).toContain("SD 1: 42% used");
+    expect(text).toContain("SD card: 42% used");
     expect(text).toContain("Floodlight");
+  });
+
+  it("warns, in plain words, about a disk that is not ready, and says when there is none", async () => {
+    const failing = { ...DETAILS, host: { ...DETAILS.host, storage: [{ index: 0, type: "SD", used_percent: null, available: false }] } };
+    const direct = makeConnection({ via: "direct", details: failing });
+    let el = await overview(makeHass(okDevices()), makeDevice({ connections: [direct] }));
+    let text = deepText(el);
+    expect(text).toContain("SD card: not ready (not formatted, or failed)");
+    expect(text).toContain("SD card is not ready");
+    expect(text).toContain("Format it in the Reolink app, or replace it.");
+    document.body.innerHTML = "";
+
+    const bare = { ...DETAILS, host: { ...DETAILS.host, storage: [] } };
+    el = await overview(makeHass(okDevices()), makeDevice({ connections: [makeConnection({ via: "direct", details: bare })] }));
+    text = deepText(el);
+    expect(text).toContain("None: no SD card, so it keeps no recordings of its own");
+    expect(text).not.toContain("not ready");
   });
 
   it("makes the snapshot the main view of a camera that does not record", async () => {

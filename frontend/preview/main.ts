@@ -1,6 +1,7 @@
 // The design preview: the real panel, mounted with a fake Home Assistant and
 // Home Assistant's default theme (light or dark). Query: ?theme=dark&admin=0,
-// &offline=cam-fyr,cam-dogs for cameras Home Assistant cannot reach;
+// &offline=cam-fyr,cam-dogs for cameras Home Assistant cannot reach,
+// &disk=cam-door,dev-nvr for an SD card or the NVR's disk that is not ready;
 // the view is the URL hash, as in Home Assistant (none for Live, #devices,
 // #device/cam-fyr/playback).
 import "../src/reolink-viewer-panel";
@@ -54,6 +55,7 @@ panel.hass = fakeHass({
   admin: params.get("admin") !== "0",
   dark: params.get("theme") === "dark",
   offline: (params.get("offline") ?? "").split(",").filter(Boolean),
+  disks: (params.get("disk") ?? "").split(",").filter(Boolean),
 });
 panel.narrow = window.innerWidth < 870;
 document.body.appendChild(panel);

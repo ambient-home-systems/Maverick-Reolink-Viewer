@@ -4657,11 +4657,11 @@ function vi(e) {
 //#endregion
 //#region src/views.ts
 var yi = {
-	events: () => import("./events-view-XAzdJ--b.js"),
-	list: () => import("./device-list-vxyeYvu8.js"),
-	device: () => import("./device-page-CnWkm2q4.js"),
-	"live-check": () => import("./live-check-DvCiALOK.js"),
-	soak: () => import("./live-soak-D7da3H71.js")
+	events: () => import("./events-view-BAdlGkPC.js"),
+	list: () => import("./device-list-QGj1Cbr7.js"),
+	device: () => import("./device-page-Dm9lzFyh.js"),
+	"live-check": () => import("./live-check-aLSs0z_0.js"),
+	soak: () => import("./live-soak-BTX8psSk.js")
 }, bi = /* @__PURE__ */ new Map();
 function xi(e) {
 	let t = yi[e];

@@ -772,6 +772,20 @@ class ReolinkHostHandle:
         api = self._api
         return bool(api.is_nvr) or bool(_safe(lambda: api.hdd_list))
 
+    def storage_state(self) -> str:
+        """Return whether this host's storage keeps recordings now.
+
+        "ready" (every disk or SD card formatted and mounted), "not_ready" (one
+        is not: unformatted, or failed) or "none" (no disk or SD card at all).
+        """
+        api = self._api
+        disks = _safe(lambda: api.hdd_list) or []
+        if not disks:
+            return "none"
+        if all(_safe(api.hdd_available, index) for index in disks):
+            return "ready"
+        return "not_ready"
+
     def _fingerprints(self, channel: int) -> frozenset[str]:
         """Return identifiers of the camera on a channel (secret: never output)."""
         api = self._api

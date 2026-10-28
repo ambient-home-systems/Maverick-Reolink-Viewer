@@ -259,6 +259,24 @@ async def test_stores_recordings_without_replay(
     assert host.records_locally(0) is False
 
 
+async def test_storage_state(
+    hass: HomeAssistant, reolink_host: MagicMock, loaded_reolink: MockConfigEntry
+) -> None:
+    """Whether the disks or SD card keep recordings now: all ready, one not, none."""
+    (host,) = bridge.async_get_hosts(hass)
+    reolink_host.hdd_list = []
+    assert host.storage_state() == "none"
+    reolink_host.hdd_list = [0, 1]
+    reolink_host.hdd_available.side_effect = lambda index: True
+    assert host.storage_state() == "ready"
+    # One unformatted (or failed) disk: not ready.
+    reolink_host.hdd_available.side_effect = lambda index: index == 0
+    assert host.storage_state() == "not_ready"
+    # A disk whose information is missing counts as not ready.
+    reolink_host.hdd_available.side_effect = KeyError("format")
+    assert host.storage_state() == "not_ready"
+
+
 async def test_get_host(hass: HomeAssistant, loaded_reolink: MockConfigEntry) -> None:
     """Lookup by entry id."""
     assert bridge.async_get_host(hass, loaded_reolink.entry_id).entry_id == (

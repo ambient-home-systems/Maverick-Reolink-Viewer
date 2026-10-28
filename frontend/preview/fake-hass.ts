@@ -91,6 +91,14 @@ const NVR: HostNode = {
   disabled_entities: 9,
 };
 
+/** Disks that are not ready: "dev-nvr" for the NVR's, or a camera's id for its SD card (?disk=). */
+let badDisks: readonly string[] = [];
+
+/** Whether the disk keeping a camera's recordings is ready. */
+function diskOf(cam: Cam): "ready" | "not_ready" {
+  return badDisks.includes(cam.channel === null ? cam.id : "dev-nvr") ? "not_ready" : "ready";
+}
+
 function cameraNode(cam: Cam): CameraNode {
   const connections: CameraNode["connections"] = [];
   if (cam.channel !== null) {
@@ -116,13 +124,14 @@ function cameraNode(cam: Cam): CameraNode {
     connections,
     status: { online: true, sleeping: false, is_battery: cam.battery === true, is_doorbell: cam.doorbell === true },
     primary_view: cam.snapshot ? "snapshot" : "live",
+    recordings: cam.records ? { where: "playable", storage: diskOf(cam) } : { where: "none", storage: null },
     snapshot_entity_id: `camera.${cam.media.replace(/-/g, "_")}_fluent`,
     entities: connections.reduce((n, c) => n + c.entities, 0),
     disabled_entities: connections.reduce((n, c) => n + c.disabled_entities, 0),
   };
 }
 
-const DEVICES: DevicesResponse = { degraded: false, compat: COMPAT, hosts: [NVR], cameras: CAMS.map(cameraNode) };
+const devices = (): DevicesResponse => ({ degraded: false, compat: COMPAT, hosts: [NVR], cameras: CAMS.map(cameraNode) });
 
 // ---- Settings: a typical camera's entities, keyed as the catalog knows them ----
 
@@ -226,7 +235,7 @@ function device(id: string): DeviceResponse {
           baichuan_only: cam.doorbell === true,
           network: { connection: cam.doorbell ? "wifi" : "lan", wifi_signal_dbm: cam.doorbell ? -52 : null },
           ports: { http: { port: 80, https: false }, rtsp: { enabled: true, port: 554 }, rtmp: { enabled: true, port: 1935 }, onvif: { enabled: true, port: 8000 } },
-          storage: c.via === "nvr" ? [{ index: 0, type: "hdd", used_percent: 87.2, available: true }] : cam.doorbell ? [{ index: 0, type: "sd", used_percent: 47.16, available: true }] : [],
+          storage: c.via === "nvr" ? [{ index: 0, type: "HDD", used_percent: 87.2, available: !badDisks.includes("dev-nvr") }] : cam.doorbell ? [{ index: 0, type: "SD", used_percent: 47.16, available: diskOf(cam) === "ready" }] : [],
           cpu_usage: cam.snapshot ? 60 : null,
           capabilities: [],
         },
@@ -243,7 +252,7 @@ function device(id: string): DeviceResponse {
           wired_power: cam.battery === true,
           is_doorbell: cam.doorbell === true,
           is_dual_lens: cam.model.includes("Duo"),
-          supports_replay: cam.records && cam.channel !== null,
+          supports_replay: cam.records,
           supports_stream: true,
           encodings: { main: cam.main, sub: cam.sub },
           network: { connection: cam.doorbell ? "wifi" : "lan", wifi_signal_dbm: cam.doorbell ? -52 : null },
@@ -428,7 +437,8 @@ function soak(): unknown {
   };
 }
 
-export function fakeHass(options: { admin: boolean; dark: boolean; offline?: readonly string[] }): HomeAssistant {
+export function fakeHass(options: { admin: boolean; dark: boolean; offline?: readonly string[]; disks?: readonly string[] }): HomeAssistant {
+  badDisks = options.disks ?? [];
   const catalog: Catalog = {
     version: settings.version,
     categories: categories.categories,
@@ -436,7 +446,7 @@ export function fakeHass(options: { admin: boolean; dark: boolean; offline?: rea
   } as unknown as Catalog;
   const media = (cam: Cam) => `media/${cam.media}.jpg`;
   const handlers: Partial<Record<string, Handler>> = {
-    "reolink_viewer/devices": () => DEVICES,
+    "reolink_viewer/devices": devices,
     "reolink_viewer/device": (m) => device(String(m.device_id)),
     "reolink_viewer/catalog": () => catalog,
     "reolink_viewer/live/cameras": () => ({ cameras: CAMS.map(liveCamera) }),

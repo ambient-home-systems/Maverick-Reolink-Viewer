@@ -454,6 +454,7 @@ def _camera_dict(
             for c in camera.connections
         ],
         "status": status,
+        "recordings": _recordings(camera),
         "primary_view": "live" if has_playback else "snapshot",
         "snapshot_entity_id": snapshot,
         **_counts([e for ents in per_conn.values() for e in ents]),
@@ -528,6 +529,33 @@ def _live_source(camera: _Camera, conn: _Connection) -> LiveSource | None:
         is_battery=battery,
         records=_records_somewhere(camera),
     )
+
+
+def _recordings(camera: _Camera) -> dict[str, str | None]:
+    """Return where a camera's recordings are, for its Playback tab.
+
+    ``where``: "playable" (here), "elsewhere" (kept where this integration
+    cannot play them, such as a battery camera's SD card) or "none" (no NVR and
+    no SD card). ``storage``: the state of the storage keeping them ("ready",
+    "not_ready", "none"), or None where there is none.
+    """
+    keeping = next(
+        (
+            c
+            for c in camera.connections
+            if c.handle is not None
+            and c.channel is not None
+            and c.handle.stores_recordings(c.channel)
+        ),
+        None,
+    )
+    if keeping is None or keeping.handle is None:
+        return {"where": "none", "storage": None}
+    playable = any(c.playback_source for c in camera.connections)
+    return {
+        "where": "playable" if playable else "elsewhere",
+        "storage": keeping.handle.storage_state(),
+    }
 
 
 def _records_somewhere(camera: _Camera) -> bool:
