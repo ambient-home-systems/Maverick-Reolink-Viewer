@@ -2894,7 +2894,7 @@ redesigned views.
 | 3. Mobile, and networks that cut websockets | **Done** (v0.24.0–v0.26.0), in three parts (see "Step 3: mobile, and networks that cut websockets"). 3.1 built (v0.24.0): a page whose network cuts MSE's websockets switches live view to WebRTC first, and the capacity test sets the cameras kept warm aside and says plainly what else holds the slots, see "Step 3.1: live view that holds up". 3.2 built (v0.25.0): pinch and two-finger pan on the timeline, and picture-in-picture for live and playback, see "Step 3.2: touch, and picture-in-picture". 3.3 built (v0.26.0): full screen stays in the lighter SD away from home or on mobile data, with an HD button remembered per device, see "Step 3.3: away from home, and the iPhone checklist". The iPhone checklist ran in a shorter form on 2026-10-28 (see "Phase 4 exit: the checklist"); v0.32.3 fixes full screen's crop and corners and the timeline's pinch it found. At the work PC the network cut nothing this time, so 3.1's switch is still not seen there, and WebRTC could not start: v0.32.1 then starts over MSE first on that device (see "Step 3.1: live view that holds up" and "Phase 4 exit: the checklist") |
 | 4. Error states | **Done** (v0.27.0–v0.29.0), in three parts (see "Step 4: error states"). 4.1 (v0.27.0): offline cameras on the board from Home Assistant's state, and live errors in plain words, see "Step 4.1: live error states". 4.2 (v0.28.0): cameras with nothing to play say why, disks that are not ready are flagged, and recordings that cannot be read or played say why in plain words, see "Step 4.2: playback and storage error states". 4.3 (v0.29.0): a plain note over every view when Reolink Viewer cannot reach the cameras, plain load errors, and screenshots of every error state, see "Step 4.3: when Reolink Viewer cannot reach the cameras". |
 | 5. Accessibility | **Done** (v0.30.0): every view passes WCAG 2.1 AA (axe-core, light and dark, desktop and phone) and works from the keyboard, checked in CI; the timeline, the calendar and the device tabs are keyboard widgets; reduced motion is honoured and tested. See "Step 5: accessibility". |
-| 6. Packaging and the HA version matrix | **Done** (v0.31.0): releases from a Release workflow (CI, then the package checked and attached, notes from `CHANGELOG.md`); CI tests the oldest supported Home Assistant (2026.10.1: the matrix found 2026.10.0 cannot run it) and the pinned newest (2026.10.4), and the newest weekly. The optional go2rtc app is not built (see "Step 6: packaging"). The first release, [v0.31.0](https://github.com/ambient-home-systems/Maverick-Reolink-Viewer/releases/tag/v0.31.0), was published on 2026-10-28, [v0.32.0](https://github.com/ambient-home-systems/Maverick-Reolink-Viewer/releases/tag/v0.32.0) and [v0.32.1](https://github.com/ambient-home-systems/Maverick-Reolink-Viewer/releases/tag/v0.32.1) the same day. HACS updated the owner's Home Assistant to v0.32.1 (Help says 0.32.1). The install through HACS on a clean Home Assistant, with the hardware checklist (the exit criterion), was not run, see "Phase 4 exit: the checklist" |
+| 6. Packaging and the HA version matrix | **Done** (v0.31.0): releases from a Release workflow (CI, then the package checked and attached, notes from `CHANGELOG.md`); CI tests the oldest supported Home Assistant (2026.10.1: the matrix found 2026.10.0 cannot run it) and the pinned newest (2026.10.4), and the newest weekly. The optional go2rtc app is not built (see "Step 6: packaging"). The first release, [v0.31.0](https://github.com/ambient-home-systems/Maverick-Reolink-Viewer/releases/tag/v0.31.0), was published on 2026-10-28, [v0.32.0](https://github.com/ambient-home-systems/Maverick-Reolink-Viewer/releases/tag/v0.32.0) and [v0.32.1](https://github.com/ambient-home-systems/Maverick-Reolink-Viewer/releases/tag/v0.32.1), [v0.32.2](https://github.com/ambient-home-systems/Maverick-Reolink-Viewer/releases/tag/v0.32.2) and [v0.32.3](https://github.com/ambient-home-systems/Maverick-Reolink-Viewer/releases/tag/v0.32.3) the same day, each through the Release workflow. HACS updated the owner's Home Assistant to each (Help said 0.32.1, 0.32.2, then 0.32.3). The install through HACS on a clean Home Assistant, with the hardware checklist (the exit criterion), was not run, see "Phase 4 exit: the checklist" |
 | 7. Docs | **Done** ([v0.32.0](https://github.com/ambient-home-systems/Maverick-Reolink-Viewer/releases/tag/v0.32.0), 2026-10-28): a user guide, a troubleshooting guide that has every message the panel shows (checked word for word by a test), per-model notes from the hardware matrix, and Help in the panel that opens them for the version installed (checked against the published tag). See "Step 7: docs" |
 
 ### Step 1: the design
@@ -3321,7 +3321,10 @@ stream slots stayed busy". Now:
   Yard's full-resolution stream: it sent no video, even on its own", with what to
   try. Tests: against a real go2rtc, a main that never plays is left out and the
   verdict stays clean (and fails on v0.32.1's test); the summary and the report's
-  lines (unit).
+  lines (unit). Released 2026-10-28 (dry run 40763345891, release 40763971711, on
+  main at 6c66510): the zip is main's `custom_components/reolink_viewer` file for
+  file. On the owner's hardware (run 22) it left out the Back Yard's main, used the
+  Garage's, and the NVR kept up at every level.
 
 Tests: the player's switch, its hour and its giving up (unit, fake sessions);
 the session telling a cut from an end the server explained; the relay setting a
@@ -3406,10 +3409,11 @@ scroll, cancelling the pinch (`pointercancel`) after its first move; Chromium do
 not, which is why `scripts/scrub_check.cjs` passed. v0.32.3 stops the browser
 taking two fingers on the timeline (non-passive `touchstart` and `touchmove` with
 two touches, and WebKit's `gesturestart`, are default-prevented), so the pinch
-keeps following them; one finger still scrolls the page. Not seen on an iPhone yet:
-the cause is read from WebKit's behaviour, not traced on the device. Tests: two
-touches are kept from the page, one is not (unit); the Chromium pinch still zooms
-24 h to 4 h (CI).
+keeps following them; one finger still scrolls the page. The cause was read from
+WebKit's behaviour, not traced on the device. Tests: two touches are kept from the
+page, one is not (unit); the Chromium pinch still zooms 24 h to 4 h (CI). Checked
+on the owner's iPhone on v0.32.3: the pinch follows the fingers, in and out, and
+one finger still scrolls the page.
 
 Also: the device page's tests now wait for a tab's file, which loads on demand
 since step 2 (one passed only when another test had loaded it first); every
@@ -3456,6 +3460,16 @@ preview at a phone's size:
 
 Tests: the tile's stylesheet keeps the crop off full screen and the safe-area
 padding on it (unit; both fail on v0.32.2's).
+
+**Released and checked 2026-10-28.** The dry run (run 40774477103), then the
+release (run 40775106871), on main at 2e8d235, published
+[v0.32.3](https://github.com/ambient-home-systems/Maverick-Reolink-Viewer/releases/tag/v0.32.3): the zip is main's
+`custom_components/reolink_viewer` file for file. On the owner's iPhone, through
+Tailscale and on mobile data: full screen shows the whole picture at once, its
+buttons are clear of the corners, and the pinch follows the fingers. Full screen
+away now started in HD at once: the HD tapped away in check 6 is remembered for
+away on that device, as designed; tapping HD in full screen turns it back to the
+lighter SD ("SD, as chosen on this device").
 
 **The iPhone checklist.** What only the owner's devices can check. For each of
 three setups: the Companion app on home Wi-Fi; with Wi-Fi off, through
@@ -3847,6 +3861,9 @@ Assistant, 2026-10-28):
 
 And the live check again on v0.32.2 (run 22): the capacity test left out the Back
 Yard's main and said so, and the NVR kept up at every level.
+
+7. **v0.32.3 on the iPhone**: full screen's whole picture in SD, its buttons clear
+   of the corners, and the pinch following the fingers: all three fixed.
 
 **H, the work PC (2026-10-28 13:15).** The owner left the Live board open there,
 through Nabu Casa, "playing fine the whole time", and sent the Doorbell tile's ⓘ
