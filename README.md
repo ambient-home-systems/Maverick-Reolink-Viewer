@@ -121,6 +121,10 @@ v0.21.0 makes the checks and reports (the live check, the playback check and the
 report) say what they found in plain words first: a headline, then a line per camera or
 part with how it went (Good, Fine, Slow, Problem) and what to do about it. The full
 measurements stay underneath, under Details for support.
+v0.22.0 finishes the redesign after an independent review: the home view's timetable
+has a camera filter and All events, the board counts the cameras playing, video always
+sits on the dark board, slow and problem results stand out, and Settings speaks plainly.
+The design is written down in [DESIGN.md](DESIGN.md).
 
 Requires Home Assistant 2026.10 or newer with the Reolink integration set up.
 
@@ -134,6 +138,7 @@ Requires Home Assistant 2026.10 or newer with the Reolink integration set up.
 | Document | What it covers |
 | --- | --- |
 | [docs/PLAN.md](docs/PLAN.md) | Evaluation: what the Reolink integration and `reolink-aio` already provide, the recommended architecture, live/playback design, and the Reolink-app (Baichuan) reverse-engineering assessment |
+| [DESIGN.md](DESIGN.md) | The panel's design: the Timetable world, its tokens (light and dark), type, components and rules |
 | [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) | Phased implementation plan with tasks, exit criteria, risks and the testing strategy |
 | [docs/hardware-matrix.md](docs/hardware-matrix.md) | Measured behavior per camera model, filled from the probe |
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Repository layout, dev environment, checks |

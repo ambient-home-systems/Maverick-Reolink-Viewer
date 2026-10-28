@@ -132,6 +132,30 @@ describe("rv-timetable", () => {
   });
 });
 
+describe("rv-timetable on the home view", () => {
+  it("has its own camera filter and a way to every event", async () => {
+    const hass = timetableHass(feed([event(20, 58, "door", ["PERSON"]), event(19, 40, "yard", ["VEHICLE"]), event(18, 5, "yard", ["MOTION"])]));
+    const el = document.createElement("rv-timetable");
+    el.cameras = CAMERAS;
+    el.filters = true;
+    el.hass = hass;
+    document.body.appendChild(el);
+    await flush();
+    await el.updateComplete;
+    const routes: Route[] = [];
+    el.addEventListener("rv-navigate", (e) => routes.push((e as CustomEvent<Route>).detail));
+    const chips = () => [...(el.shadowRoot?.querySelectorAll<HTMLButtonElement>(".pick .chip") ?? [])];
+    expect(chips().map((c) => c.textContent.replace(/\s+/g, ""))).toEqual(["1Doorbell", "2FrontYard"]);
+    chips().at(1)?.click();
+    await el.updateComplete;
+    expect(chips().at(1)?.getAttribute("aria-pressed")).toBe("true");
+    expect(el.shadowRoot?.querySelectorAll("button.row")).toHaveLength(2);
+    expect(el.shadowRoot?.textContent).toContain("2 events on 1 camera");
+    [...(el.shadowRoot?.querySelectorAll<HTMLButtonElement>("button") ?? [])].find((b) => b.textContent.trim() === "All events")?.click();
+    expect(routes).toEqual([{ view: "events" }]);
+  });
+});
+
 describe("rv-timetable on another day", () => {
   it("shows the day whole, without the line at now, and asks again for another day", async () => {
     const hass = timetableHass(feed(Array.from({ length: 10 }, (_, i) => event(20 - i, 0, "yard", ["MOTION"]))));

@@ -60,6 +60,7 @@ export class RvPlayer extends LitElement {
     _active: { state: true },
     _paused: { state: true },
     _waiting: { state: true },
+    _started: { state: true },
   };
 
   declare muted: boolean;
@@ -70,6 +71,8 @@ export class RvPlayer extends LitElement {
   declare _active: 0 | 1;
   declare _paused: boolean;
   declare _waiting: boolean;
+  /** A recording was asked for: until then, no controls on the empty board. */
+  declare _started: boolean;
 
   private _items: [PlayItem | undefined, PlayItem | undefined] = [undefined, undefined];
   private _keys: [string | undefined, string | undefined] = [undefined, undefined];
@@ -87,6 +90,7 @@ export class RvPlayer extends LitElement {
     this._active = 0;
     this._paused = true;
     this._waiting = false;
+    this._started = false;
   }
 
   protected override updated(changed: Map<string, unknown>): void {
@@ -139,6 +143,7 @@ export class RvPlayer extends LitElement {
   /** Play a recording from an offset (ms into the file). */
   async play(item: PlayItem, offsetMs = 0, requestedAt = performance.now()): Promise<void> {
     await this.updateComplete;
+    this._started = true;
     this._requestedAt = requestedAt;
     this._firstOnSeeked = false;
     this._endedAt = undefined;
@@ -414,7 +419,7 @@ export class RvPlayer extends LitElement {
       class=${slot === this._active ? "active" : "hidden"}
       playsinline
       .muted=${this.muted}
-      ?controls=${slot === this._active}
+      ?controls=${slot === this._active && this._started}
       preload="auto"
       @loadedmetadata=${(e: Event) => {
         this._onMetadata(slot, e);
@@ -448,6 +453,7 @@ export class RvPlayer extends LitElement {
     return html`<div class="frame">
       ${this._renderVideo(0)}${this._renderVideo(1)}
       ${note ? html`<div class="note" role="status">${note}</div>` : nothing}
+      ${this._started ? nothing : html`<p class="empty">Pick an event or a time on the timeline to play it.</p>`}
     </div>`;
   }
 
@@ -484,6 +490,18 @@ export class RvPlayer extends LitElement {
       font-weight: 500;
       text-align: center;
       pointer-events: none;
+    }
+    .empty {
+      position: absolute;
+      inset: 0;
+      margin: 0;
+      display: grid;
+      place-items: center;
+      padding: 16px;
+      color: var(--rv-on-board-muted, #a9b0c4);
+      font-family: var(--rv-font, sans-serif);
+      font-size: 15px;
+      text-align: center;
     }
     /* The hidden buffer stays laid out (some browsers do not load hidden video). */
     video.hidden {

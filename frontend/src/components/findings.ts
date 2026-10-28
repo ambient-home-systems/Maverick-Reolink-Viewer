@@ -1,6 +1,6 @@
 import { LitElement, css, html, nothing, type TemplateResult } from "lit";
 
-import { GRADE_WORD, type InShort } from "../plain";
+import { GRADE_MEANING, GRADE_WORD, type Grade, type InShort } from "../plain";
 import { sharedStyles } from "../styles";
 
 /**
@@ -18,6 +18,8 @@ export class RvFindings extends LitElement {
   protected override render(): TemplateResult | typeof nothing {
     const summary = this.summary;
     if (!summary) return nothing;
+    const order: Grade[] = ["good", "fine", "slow", "problem", "pending"];
+    const used = order.filter((g) => summary.findings.some((f) => f.grade === g));
     return html`<p class="headline">${summary.headline}</p>
       ${summary.findings.length
         ? html`<ul>
@@ -30,7 +32,10 @@ export class RvFindings extends LitElement {
                 </span>
               </li>`,
             )}
-          </ul>`
+          </ul>
+          ${used.length > 1
+            ? html`<p class="key">${used.map((g) => `${GRADE_WORD[g]}: ${GRADE_MEANING[g]}`).join(" · ")}</p>`
+            : nothing}`
         : nothing}`;
   }
 
@@ -69,8 +74,13 @@ export class RvFindings extends LitElement {
         font-size: 16px;
         font-weight: 600;
       }
-      .problem .grade {
+      /* What needs a look stands out: a problem in the fault colour, slow ruled in it. */
+      .problem .grade,
+      .slow .grade {
         padding: 0 6px;
+        border: 1.5px solid var(--rv-fault);
+      }
+      .problem .grade {
         background: var(--rv-fault);
         color: var(--rv-on-fault);
       }
@@ -90,6 +100,12 @@ export class RvFindings extends LitElement {
       .advice {
         color: var(--rv-muted);
         font-size: 15px;
+      }
+      .key {
+        margin: 8px 0 0;
+        max-width: none;
+        color: var(--rv-muted);
+        font-size: 13px;
       }
       @media (max-width: 600px) {
         li {

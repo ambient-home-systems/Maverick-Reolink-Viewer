@@ -235,8 +235,8 @@ describe("rv-overview", () => {
       makeDevice({ connections: [makeConnection({ details: DETAILS }), direct] }),
     );
     const text = deepText(el);
-    expect(text).toContain("NVR (Garage NVR)");
-    expect(text).toContain("Direct");
+    expect(text).toContain("Through Garage NVR");
+    expect(text).toContain("Added directly");
     expect(text).toContain("channel 1");
     expect(text).toContain("H.265 · 25 fps · 6144 kbps");
     expect(text).toContain("80% · charging · 21 °C · on wired power");

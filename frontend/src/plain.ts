@@ -28,6 +28,16 @@ export const GRADE_WORD: Record<Grade, string> = {
   pending: "Not yet",
 };
 
+/** What each word means, for the key under a summary. */
+export const GRADE_MEANING: Record<Grade, string> = {
+  good: "as it should be",
+  fine: "a little slower, nothing to do",
+  slow: "works, but worth a look",
+  problem: "something is wrong",
+  note: "for your information",
+  pending: "still to come",
+};
+
 const ADVICE = " What to do: ";
 
 /** "under 0.1 s", "0.4 s", "1.8 s", "12 s". */

@@ -56,7 +56,7 @@ vi.mock("../live/player", () => {
   return { LivePlayer: FakePlayer };
 });
 
-const { boardOrder, tileFit, tileShape } = await import("./live-grid");
+const { boardOrder, playingCount, tileFit, tileShape } = await import("./live-grid");
 const { OFFSCREEN_GRACE_MS } = await import("./live-tile");
 
 const encoding = { codec: "h264", frame_rate: 15, bit_rate: 512 };
@@ -684,6 +684,13 @@ describe("the board", () => {
     expect(tileShape(yard.connections[0])).toBeUndefined();
     expect(tileShape(unknown.connections[0])).toBeUndefined();
     expect(boardOrder([yard, pano, door, unknown]).map((c) => c.id)).toEqual(["door", "yard", "pano", "unknown"]);
+  });
+
+  it("counts the cameras playing, or the cameras while none plays yet", () => {
+    const cameras = [camera("door"), camera("yard"), camera("pano")];
+    expect(playingCount(cameras, new Set())).toBe("3 cameras");
+    expect(playingCount(cameras, new Set(["door", "yard", "gone"]))).toBe("2 of 3 playing");
+    expect(playingCount([camera("door")], new Set())).toBe("1 camera");
   });
 
   it("crops a picture's top and bottom to fill its cell, never its sides", () => {

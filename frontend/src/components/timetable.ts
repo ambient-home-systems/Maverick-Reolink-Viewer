@@ -38,7 +38,9 @@ export class RvTimetable extends LitElement {
     limit: { attribute: false },
     cameraFilter: { attribute: false },
     typeFilter: { attribute: false },
+    filters: { attribute: false },
     _feed: { state: true },
+    _pick: { state: true },
     _error: { state: true },
     _all: { state: true },
     _thumbs: { state: true },
@@ -57,7 +59,11 @@ export class RvTimetable extends LitElement {
   declare cameraFilter: ReadonlySet<string>;
   /** Only events showing one of these types (`shownTypes`; none: all). */
   declare typeFilter: ReadonlySet<string>;
+  /** Its own camera filter and a way to every event (the home view; the Events view has its own). */
+  declare filters: boolean;
   declare _feed: RecentEvents | undefined;
+  /** The cameras picked in its own filter. */
+  declare _pick: ReadonlySet<string>;
   declare _error: string | undefined;
   /** Every event of the day is shown, not only the first rows. */
   declare _all: boolean;
@@ -79,6 +85,8 @@ export class RvTimetable extends LitElement {
     this.limit = FIRST_ROWS;
     this.cameraFilter = new Set();
     this.typeFilter = new Set();
+    this.filters = false;
+    this._pick = new Set();
     this._all = false;
     this._thumbs = new Map();
     this._now = Date.now();
@@ -135,7 +143,7 @@ export class RvTimetable extends LitElement {
       // Cached copies at once, then today searched again behind them.
       void this._load(false).then(() => (this._isToday ? this._load(true) : undefined));
     }
-    if (changed.has("cameraFilter") || changed.has("typeFilter")) void this._loadThumbs();
+    if (changed.has("cameraFilter") || changed.has("typeFilter") || changed.has("_pick")) void this._loadThumbs();
   }
 
   private async _load(background: boolean): Promise<void> {
@@ -161,7 +169,7 @@ export class RvTimetable extends LitElement {
 
   /** The day's events that pass the filters. */
   private get _matching(): RecentEvent[] {
-    const cameras = this.cameraFilter;
+    const cameras = this.cameraFilter.size ? this.cameraFilter : this._pick;
     const types = this.typeFilter;
     return (this._feed?.events ?? []).filter(
       (e) => (!cameras.size || cameras.has(e.camera_id)) && (!types.size || shownTypes(e.types).some((t) => types.has(t))),
@@ -230,7 +238,7 @@ export class RvTimetable extends LitElement {
     const events = this._matching;
     const zone = this.hass?.config?.time_zone;
     const cameras = new Set(events.map((e) => e.camera_id)).size;
-    const filtered = this.cameraFilter.size > 0 || this.typeFilter.size > 0;
+    const filtered = this.cameraFilter.size > 0 || this.typeFilter.size > 0 || this._pick.size > 0;
     const day = this._isToday ? "today's" : "this day's";
     return html`<div class="head">
         ${this.heading ? html`<h2>${this.heading}</h2>` : nothing}
@@ -248,9 +256,37 @@ export class RvTimetable extends LitElement {
         ${(feed?.events ?? []).some((e) => e.new)
           ? html`<button class="text all-seen" @click=${() => void this._allSeen()}>Mark all seen</button>`
           : nothing}
+        ${this.filters
+          ? html`<button class="text with-icon all-events" @click=${() => {
+              navigate(this, { view: "events" });
+            }}>All events${icon("chevron")}</button>`
+          : nothing}
       </div>
+      ${this.filters && feed ? this._renderPick(feed) : nothing}
       ${this._error ? html`<p class="banner error" role="alert">Could not read ${day} events: ${this._error}</p>` : nothing}
       ${feed ? this._renderTable(feed, zone) : this._error ? nothing : html`<p class="muted">Reading ${day} events…</p>`}`;
+  }
+
+  /** The day's cameras, by their number on the board, to show only some. */
+  private _renderPick(feed: RecentEvents): TemplateResult | typeof nothing {
+    const present = new Set(feed.events.map((e) => e.camera_id));
+    const cameras = this.cameras.filter((c) => present.has(c.id) || this._pick.has(c.id));
+    if (cameras.length < 2) return nothing;
+    return html`<div class="pick" role="group" aria-label="Cameras">
+      ${cameras.map(
+        (c) => html`<button
+          class="chip"
+          aria-pressed=${this._pick.has(c.id) ? "true" : "false"}
+          @click=${() => {
+            const pick = new Set(this._pick);
+            if (!pick.delete(c.id)) pick.add(c.id);
+            this._pick = pick;
+          }}
+        >
+          <span class="plat" aria-hidden="true">${c.number}</span>${c.name}
+        </button>`,
+      )}
+    </div>`;
   }
 
   private _renderTable(feed: RecentEvents, zone: string | undefined): TemplateResult {
@@ -345,10 +381,56 @@ export class RvTimetable extends LitElement {
       .all-seen {
         margin-left: auto;
       }
+      .all-events {
+        gap: 2px;
+        padding-right: 0;
+      }
+      .all-seen + .all-events {
+        margin-left: 8px;
+      }
+      .count + .all-events {
+        margin-left: auto;
+      }
+      .all-events svg {
+        width: 18px;
+        height: 18px;
+      }
+      .pick {
+        display: flex;
+        gap: 6px;
+        margin: -2px 0 14px;
+        overflow-x: auto;
+        scrollbar-width: none;
+      }
+      .chip {
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        min-height: 34px;
+        padding: 0 12px 0 5px;
+        border: 1px solid var(--rv-rule);
+        font-size: 15px;
+        font-weight: 500;
+        white-space: nowrap;
+      }
+      .chip .plat {
+        min-width: 22px;
+        height: 22px;
+        font-size: 14px;
+      }
+      .chip[aria-pressed="true"] {
+        background: var(--rv-text);
+        border-color: var(--rv-text);
+        color: var(--rv-ground);
+      }
+      .chip[aria-pressed="true"]:hover {
+        background: var(--rv-text);
+      }
       .cols,
       .row {
         display: grid;
-        grid-template-columns: 96px minmax(0, 1fr) minmax(0, 280px) 80px 104px;
+        grid-template-columns: 96px minmax(0, 1.3fr) minmax(0, 1fr) 80px 104px;
         column-gap: 20px;
         align-items: center;
       }

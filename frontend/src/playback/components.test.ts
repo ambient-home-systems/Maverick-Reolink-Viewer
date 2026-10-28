@@ -46,8 +46,14 @@ describe("rv-player", () => {
     const el = await mount("rv-player");
     const first = collect(el, "rv-first-frame");
     const advanced = collect(el, "rv-advanced");
+    // Nothing asked for yet: the board with a hint, no video controls.
+    expect(el.renderRoot.querySelector(".empty")?.textContent).toContain("Pick an event");
+    expect(videos(el)[0].controls).toBe(false);
     await el.play(item("a"), 0, performance.now() - 100);
+    await el.updateComplete;
+    expect(el.renderRoot.querySelector(".empty")).toBeNull();
     const [a, b] = videos(el);
+    expect(a.controls).toBe(true);
     expect(a.getAttribute("src")).toBe("/api/vod/a");
     a.dispatchEvent(new Event("playing"));
     expect(first).toHaveLength(1);
@@ -283,7 +289,11 @@ describe("rv-event-list", () => {
     await el.updateComplete;
     const playing = el.renderRoot.querySelector<HTMLButtonElement>("button.row.active");
     expect(playing?.getAttribute("aria-current")).toBe("true");
-    expect(playing?.textContent).toContain("Playing");
+    // Selected until a recording is loaded there.
+    expect(playing?.textContent).toContain("Selected");
+    el.playing = true;
+    await el.updateComplete;
+    expect(el.renderRoot.querySelector("button.row.active")?.textContent).toContain("Playing");
     expect(el.renderRoot.textContent).toContain("time ±1 h");
     el.events = [];
     await el.updateComplete;

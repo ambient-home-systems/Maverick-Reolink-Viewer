@@ -128,15 +128,16 @@ export class RvCalendar extends LitElement {
         position: relative;
         padding: 6px 0 10px;
         border: none;
-        border-radius: 6px;
+        border-radius: 0;
         background: transparent;
       }
       .day.today {
         font-weight: 700;
       }
+      /* The chosen day in ink, as a pressed chip; a day with recordings marked in their rail blue. */
       .day.selected {
-        background: var(--primary-color);
-        color: var(--text-primary-color, white);
+        background: var(--rv-text);
+        color: var(--rv-ground);
       }
       .dot {
         position: absolute;
@@ -145,11 +146,10 @@ export class RvCalendar extends LitElement {
         width: 5px;
         height: 5px;
         margin-left: -2.5px;
-        border-radius: 50%;
-        background: var(--primary-color);
+        background: var(--rv-recording);
       }
       .day.selected .dot {
-        background: var(--text-primary-color, white);
+        background: var(--rv-ground);
       }
     `,
   ];

@@ -2889,7 +2889,7 @@ redesigned views.
 
 | Step | Status |
 | --- | --- |
-| 1. Design: the Timetable panel (home view, events, devices, device page, checks) | **In progress.** Direction chosen (2026-10-28), see "Step 1: the design". 1.1 foundations built (v0.16.0, the board's crop fixed in v0.16.1) and checked by the owner on the hardware, see "Step 1.1: foundations". 1.2 the home view's timetable built (v0.17.0), see "Step 1.2: today's timetable". 1.3 the Events view built (v0.18.0), see "Step 1.3: the Events view". 1.4a the device list and the device page's header, Overview and Settings built (v0.19.0), see "Step 1.4a: devices, Overview and Settings". 1.4b the Playback tab built (v0.20.0), see "Step 1.4b: the Playback tab". 1.5 the checks and reports built, in plain words (v0.21.0), see "Step 1.5: checks and reports"; the finish (1.6) is next |
+| 1. Design: the Timetable panel (home view, events, devices, device page, checks) | **Done** (v0.16.0–v0.22.0). Direction chosen (2026-10-28), see "Step 1: the design". 1.1 foundations built (v0.16.0, the board's crop fixed in v0.16.1) and checked by the owner on the hardware, see "Step 1.1: foundations". 1.2 the home view's timetable built (v0.17.0), see "Step 1.2: today's timetable". 1.3 the Events view built (v0.18.0), see "Step 1.3: the Events view". 1.4a the device list and the device page's header, Overview and Settings built (v0.19.0), see "Step 1.4a: devices, Overview and Settings". 1.4b the Playback tab built (v0.20.0), see "Step 1.4b: the Playback tab". 1.5 the checks and reports built, in plain words (v0.21.0), see "Step 1.5: checks and reports"; 1.6 the finish: the design detector, an independent finish review against the contract (verdict: ship after fixes) with every material fix built, and `DESIGN.md` (v0.22.0), see "Step 1.6: the finish". The performance budget (step 2) is next |
 | 2. Performance budget | Not started |
 | 3. Mobile, and networks that cut websockets | Not started |
 | 4. Error states | Not started |
@@ -3119,6 +3119,47 @@ it found in plain words before any measurement.
 - The hardware probe says, in plain words, what it is for (a file to attach when you
   report a problem with a camera model) and what it leaves out.
 - The preview has a saved live check, a saved playback check and a soak run half-way.
+
+### Step 1.6: the finish (v0.22.0)
+
+- **The design detector** (`impeccable detect`): 0 findings over 36 URL scans, every
+  view in light and dark at 1440 and 390. The panel draws in shadow DOM, which the
+  detector sees only in part (it caught gradient text there in a test, but not a
+  side stripe or low contrast), so its clean result is partial evidence.
+- **An independent finish review** against the direction contract, with
+  screenshots of every view: "ship after fixes". Three FIRST VIEWPORT lines were
+  unmet and are now built:
+  - the home timetable has its own camera filter (the day's cameras by their
+    board numbers) and **All events**, to the Events tab;
+  - the board counts what plays: "6 of 8 playing", or the cameras while none plays
+    yet (tiles report starting and stopping, `rv-live-state`);
+  - video always sits on the board's ink: the Live tab and the Overview snapshot
+    in an ink frame with a margin of it, and the Playback player an ink board
+    with a hint ("Pick an event or a time on the timeline to play it.") and no
+    controls until something plays.
+- And its clarity fixes:
+  - the live check's headline names a slow camera ("…; 1 is slow: Back Yard.");
+  - Slow and Problem stand out (Problem filled in the fault amber, Slow ruled
+    in it), and each summary has a key to its words;
+  - the soak report judges the processor load (well within, busy but coping,
+    near its limit);
+  - Settings in plain words: "Asks first", "Read only", "Turned off", "Through
+    Garage NVR · 25 settings", a button named for its action ("Restart"), select
+    options in words ("Black & white");
+  - the Events filter is "Detected" (not "Seen", which is the unseen events');
+  - reports' times on the 24-hour clock in Home Assistant's zone;
+  - the Playback event list says "Selected" until a recording plays there.
+- The timetable's camera column sits closer to the event.
+- Two last parts brought into the rules `DESIGN.md` records: the calendar (the
+  chosen day in ink as a pressed chip, square marks in the recordings' rail blue)
+  and the camera's controls over its video (square, in the board's ink; on in
+  white, the siren in fault amber; the confirm with a fault rule).
+- Known and left: Live and Events use the full width; Devices and the device
+  pages are centred (1100 px at most).
+- **`DESIGN.md`** and `.impeccable/design.json`, written from the built panel.
+- No raster ships: the bundle holds the panel and its fonts (Barlow, OFL). The
+  preview's camera pictures are synthetic (`frontend/preview/make-media.sh`) and not
+  committed.
 
 ### Steps 2–7
 

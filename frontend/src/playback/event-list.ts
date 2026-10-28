@@ -20,6 +20,7 @@ export class RvEventList extends LitElement {
     events: { attribute: false },
     thumbs: { attribute: false },
     current: { attribute: false },
+    playing: { attribute: false },
     timeZone: { attribute: false },
     _shown: { state: true },
   };
@@ -28,6 +29,8 @@ export class RvEventList extends LitElement {
   /** Thumbnail URL by event start time. */
   declare thumbs: ReadonlyMap<number, string>;
   declare current: number | undefined;
+  /** A recording is loaded at `current` (else the row there is only selected). */
+  declare playing: boolean;
   declare timeZone: string | undefined;
   declare _shown: number;
 
@@ -35,6 +38,7 @@ export class RvEventList extends LitElement {
     super();
     this.events = [];
     this.thumbs = new Map();
+    this.playing = false;
     this._shown = PAGE;
   }
 
@@ -61,7 +65,7 @@ export class RvEventList extends LitElement {
       <button
         class="row ${active ? "active" : ""}"
         aria-current=${active ? "true" : "false"}
-        aria-label="${label}, ${clock}${active ? ", playing" : ""}: play"
+        aria-label="${label}, ${clock}${active ? (this.playing ? ", playing" : ", selected") : ""}: play"
         @click=${() => {
           this.dispatchEvent(new CustomEvent("rv-pick", { detail: { event }, bubbles: true, composed: true }));
         }}
@@ -71,7 +75,7 @@ export class RvEventList extends LitElement {
           ${icon(pictogram(event.types))}<span class="label">${label}</span>
         </span>
         <span class="meta">
-          ${active ? html`<span class="tag">Playing</span>` : nothing}
+          ${active ? html`<span class="tag">${this.playing ? "Playing" : "Selected"}</span>` : nothing}
           <span>${formatLength(event.end - event.start)}</span>
           ${event.ambiguous
             ? html`<span title="Recorded in the hour repeated when clocks went back">time ±1 h</span>`

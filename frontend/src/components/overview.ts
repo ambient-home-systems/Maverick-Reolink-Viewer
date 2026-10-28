@@ -197,10 +197,13 @@ export class RvOverview extends LitElement {
       .snapshot.primary {
         max-width: none;
       }
+      /* The picture sits on the board's ink, with a margin of it. */
       .frame {
         aspect-ratio: 16 / 9;
         display: grid;
         place-items: center;
+        padding: 10px;
+        box-sizing: border-box;
         background: var(--rv-board);
         color: var(--rv-on-board-muted);
       }
@@ -208,6 +211,7 @@ export class RvOverview extends LitElement {
         display: block;
         width: 100%;
         height: 100%;
+        min-height: 0;
         object-fit: contain;
       }
       .none {
