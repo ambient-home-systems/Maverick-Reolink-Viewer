@@ -30,6 +30,15 @@ async function mount(hass: FakeHass, tab: Tab = "overview"): Promise<RvDevicePag
   await flush();
   await flush();
   await el.updateComplete;
+  // A tab's elements load on demand: wait for the shown tab's, then for it.
+  for (const tag of ["rv-overview", "rv-playback", "rv-settings"]) {
+    const shown = el.shadowRoot?.querySelector(tag);
+    if (!shown) continue;
+    await customElements.whenDefined(tag);
+    await flush();
+    await (shown as HTMLElement & { updateComplete?: Promise<unknown> }).updateComplete;
+    await flush();
+  }
   return el;
 }
 

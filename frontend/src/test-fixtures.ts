@@ -342,3 +342,60 @@ export function deepQueryAll<T extends Element = HTMLElement>(root: Node, select
   walk(root);
   return found;
 }
+
+/**
+ * The browser's picture-in-picture, faked: one video at a time, the enter and
+ * leave events, and `refuse` to make the next request fail (as a browser does
+ * without a click). `restore()` takes it away again.
+ */
+export function fakePip(): {
+  element: () => HTMLVideoElement | null;
+  requested: HTMLVideoElement[];
+  refuse: (yes: boolean) => void;
+  restore: () => void;
+} {
+  let current: HTMLVideoElement | null = null;
+  let refusing = false;
+  const requested: HTMLVideoElement[] = [];
+  const proto = HTMLVideoElement.prototype as unknown as Record<string, unknown>;
+  const before = proto.requestPictureInPicture;
+  const leave = () => {
+    const was = current;
+    current = null;
+    was?.dispatchEvent(new Event("leavepictureinpicture"));
+  };
+  const request = (video: HTMLVideoElement) => {
+    requested.push(video);
+    if (refusing) return Promise.reject(new DOMException("Not allowed", "NotAllowedError"));
+    if (current !== video) leave();
+    current = video;
+    video.dispatchEvent(new Event("enterpictureinpicture"));
+    return Promise.resolve({});
+  };
+  proto.requestPictureInPicture = function (this: HTMLVideoElement) {
+    return request(this);
+  };
+  Object.defineProperty(document, "pictureInPictureEnabled", { value: true, configurable: true });
+  Object.defineProperty(document, "pictureInPictureElement", { get: () => current, configurable: true });
+  Object.defineProperty(document, "exitPictureInPicture", {
+    value: () => {
+      leave();
+      return Promise.resolve();
+    },
+    configurable: true,
+  });
+  return {
+    element: () => current,
+    requested,
+    refuse: (yes) => {
+      refusing = yes;
+    },
+    restore: () => {
+      leave();
+      proto.requestPictureInPicture = before;
+      for (const name of ["pictureInPictureEnabled", "pictureInPictureElement", "exitPictureInPicture"]) {
+        Reflect.deleteProperty(document, name);
+      }
+    },
+  };
+}

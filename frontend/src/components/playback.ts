@@ -46,7 +46,6 @@ import type { HoverDetail, RvTimeline, TimeDetail } from "../playback/timeline";
 import {
   DAY,
   MINUTE,
-  ZOOM_LEVELS,
   centreOn,
   clampView,
   filterEvents,
@@ -56,12 +55,13 @@ import {
   previousEvent,
   segmentAt,
   shownTypes,
+  stepZoom,
   thumbBucket,
   typeLabel,
-  zoomIndex,
   type View,
 } from "../playback/timeline-math";
 import { icon } from "../icons";
+import { pipSupported } from "../pip";
 import { parseInShort } from "../plain";
 import { sharedStyles } from "../styles";
 import type { CacheStatus, HomeAssistant, PlaybackUrl, Segment, Stream, TimelineDay, Timing } from "../types";
@@ -1048,7 +1048,7 @@ export class RvPlayback extends LitElement {
   // ---- Rendering ----
 
   private _renderToolbar(): TemplateResult {
-    const zoom = zoomIndex(this._view.span);
+    const span = this._view.span;
     return html`<div class="toolbar">
       <div class="group transport">
         <button aria-label="Previous event" title="Previous event" @click=${() => {
@@ -1071,11 +1071,11 @@ export class RvPlayback extends LitElement {
         }}>${icon("next")}</button>
       </div>
       <div class="group" role="group" aria-label="Zoom">
-        <button aria-label="Zoom out" ?disabled=${zoom === 0} @click=${() => this._timeline?.zoom(-1)}>${icon("minus")}</button>
+        <button aria-label="Zoom out" ?disabled=${stepZoom(span, -1) === undefined} @click=${() => this._timeline?.zoom(-1)}>${icon("minus")}</button>
         <span class="zoom">${zoomLabel(this._view.span)}</span>
         <button
           aria-label="Zoom in"
-          ?disabled=${zoom === ZOOM_LEVELS.length - 1}
+          ?disabled=${stepZoom(span, 1) === undefined}
           @click=${() => this._timeline?.zoom(1)}
         >${icon("plus")}</button>
       </div>
@@ -1109,6 +1109,16 @@ export class RvPlayback extends LitElement {
             ${RATES.map((rate) => html`<option .value=${String(rate)} ?selected=${rate === this._rate}>${rate}×</option>`)}
           </select></label
         >
+        ${this._playing && pipSupported()
+          ? html`<button
+              class="pip"
+              aria-pressed=${this._player?.pip ? "true" : "false"}
+              title="Keep watching in a small window over other windows and apps"
+              @click=${() => void this._player?.togglePip()}
+            >
+              ${icon("pip")}Picture in picture
+            </button>`
+          : nothing}
         ${this._playing
           ? html`<a class="download" href=${this._playing.clip_url} download>${icon("download")}Download clip</a>`
           : nothing}
@@ -1243,6 +1253,9 @@ export class RvPlayback extends LitElement {
             }}
             @rv-player-error=${(e: CustomEvent<PlayerErrorDetail>) => {
               this._onPlayerError(e.detail);
+            }}
+            @rv-pip=${() => {
+              this.requestUpdate(); // the toolbar's button shows it
             }}
           ></rv-player>
           <div class="dayline">
@@ -1495,6 +1508,21 @@ export class RvPlayback extends LitElement {
       }
       .speed select {
         min-height: 36px;
+      }
+      button.pip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-left: 6px;
+      }
+      button.pip svg {
+        width: 18px;
+        height: 18px;
+      }
+      button.pip[aria-pressed="true"] {
+        background: var(--rv-text);
+        border-color: var(--rv-text);
+        color: var(--rv-ground);
       }
       .download {
         display: inline-flex;

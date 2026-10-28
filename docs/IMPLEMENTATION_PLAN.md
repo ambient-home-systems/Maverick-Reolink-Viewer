@@ -20,7 +20,7 @@ put on it:
 | 1 | Device details and every setting, with explanations | Standard (catalog) / High (panel shell) | 2–3 wk | Done (2026-10-17) |
 | 2 | Event timeline, thumbnails, smooth playback | High (backend) / Very high (player) | 3–5 wk | Done (2026-10-21, v0.3.2). 2A (2026-10-20, v0.2.7): timeline 105–287 ms, first frame 0.6–1.1 s, auto-advance 6–7 ms on hardware. 2B: MSE player; uncached deep starts are the NVR's download up to the target (6.9–13.0 s in hour-long recordings, up to 84 s before), speeds 0.5–8×, HD/SD at the same moment, one-hour sessions within the caps, the iPhone app on Wi-Fi, Tailscale and Nabu Casa |
 | 3 | Live view via go2rtc, grid, fullscreen, PTZ | High | 3–4 wk | Done (2026-10-27, v0.15.1). Our own go2rtc and the live check (v0.4.0, runs 5–13); the key-frame cache, the image cache, the Live grid and Live tab, keep warm, full-screen HD, PTZ and the camera's controls, the picture first, battery cameras on wired power, a debug view per tile and the soak report (v0.5.0–v0.15.1). Exit runs: the soak passed (run 15), every tile's first image in a median 0.02 s on the iPhone and the Mac (runs 16–17), and the Phase 2 playback criteria held with live view running (runs 18–19) |
-| 4 | Design, performance, mobile, packaging, first release | Standard | 3–4 wk | In progress. Step 1, the design (the Timetable), done in v0.16.0–v0.22.0; step 2, the performance budget, done in v0.23.0; step 3.1 built in v0.24.0. See "Phase 4 status" |
+| 4 | Design, performance, mobile, packaging, first release | Standard | 3–4 wk | In progress. Step 1, the design (the Timetable), done in v0.16.0–v0.22.0; step 2, the performance budget, done in v0.23.0; steps 3.1–3.2 built in v0.24.0–v0.25.0. See "Phase 4 status" |
 | 5 | Optional R&D: Baichuan live/playback | Very high | 4–8 wk, time-boxed with gates | Not started |
 
 Phases 1 and 2 can overlap once Phase 0 is done. Phase 5 can start any time after
@@ -2891,7 +2891,7 @@ redesigned views.
 | --- | --- |
 | 1. Design: the Timetable panel (home view, events, devices, device page, checks) | **Done** (v0.16.0–v0.22.0). Direction chosen (2026-10-28), see "Step 1: the design". 1.1 foundations built (v0.16.0, the board's crop fixed in v0.16.1) and checked by the owner on the hardware, see "Step 1.1: foundations". 1.2 the home view's timetable built (v0.17.0), see "Step 1.2: today's timetable". 1.3 the Events view built (v0.18.0), see "Step 1.3: the Events view". 1.4a the device list and the device page's header, Overview and Settings built (v0.19.0), see "Step 1.4a: devices, Overview and Settings". 1.4b the Playback tab built (v0.20.0), see "Step 1.4b: the Playback tab". 1.5 the checks and reports built, in plain words (v0.21.0), see "Step 1.5: checks and reports"; 1.6 the finish: the design detector, an independent finish review against the contract (verdict: ship after fixes) with every material fix built, and `DESIGN.md` (v0.22.0), see "Step 1.6: the finish". |
 | 2. Performance budget | **Done** (v0.23.0): the home view's first download is 40.9 KB gzipped (budget 200 KB) with every other view loaded on demand; no long tasks while scrubbing the timeline; time to first frame for live and playback on every setup. The first two run in CI. See "Step 2: the performance budget". Mobile (step 3) is next |
-| 3. Mobile, and networks that cut websockets | In progress, in three parts (see "Step 3: mobile, and networks that cut websockets"). 3.1 built (v0.24.0): a page whose network cuts MSE's websockets switches live view to WebRTC first, and the capacity test sets the cameras kept warm aside and says plainly what else holds the slots, see "Step 3.1: live view that holds up". 3.2 (touch) is next |
+| 3. Mobile, and networks that cut websockets | In progress, in three parts (see "Step 3: mobile, and networks that cut websockets"). 3.1 built (v0.24.0): a page whose network cuts MSE's websockets switches live view to WebRTC first, and the capacity test sets the cameras kept warm aside and says plainly what else holds the slots, see "Step 3.1: live view that holds up". 3.2 built (v0.25.0): pinch and two-finger pan on the timeline, and picture-in-picture for live and playback, see "Step 3.2: touch, and picture-in-picture". 3.3 (away from home, and the iPhone checklist) is next |
 | 4. Error states | Not started |
 | 5. Accessibility | Not started |
 | 6. Packaging and the HA version matrix | Not started |
@@ -3259,7 +3259,7 @@ Built in three parts, as step 1 was:
 
 - **3.1 live view that holds up** (v0.24.0): networks that cut long-lived
   websockets, and the capacity test while cameras are kept warm.
-- **3.2 touch:** gestures on the timeline, and picture-in-picture.
+- **3.2 touch** (v0.25.0): gestures on the timeline, and picture-in-picture.
 - **3.3 away from home:** lighter streams on cellular and remote links, and the
   Companion app checklist on the owner's iPhone.
 
@@ -3314,6 +3314,49 @@ the session telling a cut from an end the server explained; the relay setting a
 host's feeds aside and opening them again (unit); and, against a real go2rtc,
 the capacity test with a camera kept warm (set aside, warm again after) and with
 a camera being watched (the plain reason).
+
+### Step 3.2: touch, and picture-in-picture (v0.25.0)
+
+**The timeline under fingers.** One finger still scrubs and a tap still seeks,
+as with a mouse, so the same gestures work everywhere. Now:
+
+- **Two fingers pinch to zoom and slide to pan.** The time between the fingers
+  stays between them, so the moment you are zooming in on stays under your
+  fingers. Any span between 5 minutes and the whole day, not only the five
+  levels; the − and + buttons step from there to the next level.
+- Fingers almost on top of each other (under 24 px apart) only pan: their
+  distance says too little to zoom by.
+- A second finger after a scrub ends the scrub where it was (a seek), as
+  lifting the finger would, then the pinch begins; lifting one finger ends
+  the pinch without a seek, and the finger left does not scrub.
+- One finger moving up and down still scrolls the page; no long-press menu or
+  text selection on the timeline.
+- A trackpad pinch on the Mac (ctrl+wheel) zooms smoothly too, around the
+  pointer, instead of one level per wheel event.
+- Checked in Chromium with its own touch input on a phone-sized page
+  (`scripts/scrub_check.cjs`, in CI): two fingers 40 px apart spreading to
+  240 px took the timeline from 24 h to 4 h, with no long tasks.
+
+**Picture-in-picture**, where the browser has it (Chrome, Edge and Safari on
+the Mac through the standard API; the iPhone and iPad through WebKit's
+presentation mode; Firefox has its own button on videos and no API, so the
+panel shows none):
+
+- **Live:** a button beside full screen, on a camera in full screen and on its
+  own Live tab, while it plays. It takes the video showing (HD in full
+  screen). The stream in the small window keeps playing while the tile is
+  scrolled away or the page is hidden, when HD replaces it on the tile, and
+  when another camera goes full screen. It ends when the tile goes away
+  (leaving the Live board or the camera).
+- **Playback:** "Picture in picture" in the toolbar (the video's own controls
+  have one too). The window moves with the player's swap to the next file,
+  where the browser allows it without a click (Chrome does); otherwise it
+  closes rather than show nothing.
+- Not yet tried on the owner's devices: on the iPhone app (3.3's checklist).
+
+Also: the device page's tests now wait for a tab's file, which loads on demand
+since step 2 (one passed only when another test had loaded it first); every
+test file passes on its own.
 
 ### Steps 2–7
 

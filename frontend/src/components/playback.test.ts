@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { makeHass, okDevices, type FakeHass } from "../test-fixtures";
+import { fakePip, makeHass, okDevices, type FakeHass } from "../test-fixtures";
 import type { PlaybackUrl, TimelineDay } from "../types";
 import { playsProgressive } from "../playback/codec";
 import { ThumbLoader } from "../playback/thumb-loader";
@@ -183,6 +183,8 @@ describe("rv-playback", () => {
     expect(el._metrics.urlMs).toBeGreaterThanOrEqual(0);
     const clip = el.renderRoot.querySelector<HTMLAnchorElement>("a[download]");
     expect(clip?.getAttribute("href")).toContain("/clip/s1");
+    // No picture-in-picture in this browser: no button for it.
+    expect(el.renderRoot.querySelector("button.pip")).toBeNull();
 
     // First frame on screen, then the end of the file: swap to s2.
     videos?.[0]?.dispatchEvent(new Event("playing"));
@@ -194,6 +196,30 @@ describe("rv-playback", () => {
     expect(el._cursor).toBe(T0 + 62 * MIN);
     // s2 is the last recording: nothing more to preload.
     expect(sentOf(hass, "reolink_viewer/playback/url")).toHaveLength(2);
+  });
+
+  it("offers picture-in-picture where the browser has it, and shows when it is on", async () => {
+    const pip = fakePip();
+    try {
+      const hass = playbackHass();
+      const el = await mount(hass);
+      expect(el.renderRoot.querySelector("button.pip")).toBeNull(); // nothing playing yet
+      const event = el._day?.events[0];
+      if (!event) throw new Error("no event");
+      await el.playAt(event.start);
+      await flush();
+      await el.updateComplete;
+      const button = el.renderRoot.querySelector<HTMLButtonElement>("button.pip");
+      expect(button?.textContent).toContain("Picture in picture");
+      expect(button?.getAttribute("aria-pressed")).toBe("false");
+      button?.click();
+      await flush();
+      await el.updateComplete;
+      expect(pip.element()).not.toBeNull();
+      expect(button?.getAttribute("aria-pressed")).toBe("true");
+    } finally {
+      pip.restore();
+    }
   });
 
   it("steps between events, filters types and toasts when nothing is left", async () => {

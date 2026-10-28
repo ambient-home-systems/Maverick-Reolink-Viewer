@@ -8,6 +8,9 @@
 // CI runs it without the preview's synthetic pictures (make-media.sh), so
 // there the thumbnails are empty frames.
 //
+// Then, on a phone with touch (step 3.2), two fingers spread on the timeline
+// must zoom it in (judged), and the long tasks while they do are reported.
+//
 //   node scripts/scrub_check.cjs [preview-dir]
 const { chromium } = require("playwright");
 const http = require("node:http");
@@ -17,6 +20,7 @@ const path = require("node:path");
 const LONG_TASK_MS = 50;
 const ROOT = path.resolve(process.argv[2] ?? path.join(__dirname, "..", "frontend", ".preview"));
 const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".jpg": "image/jpeg", ".woff2": "font/woff2" };
+const tasks = (n) => `${n} long ${n === 1 ? "task" : "tasks"}`;
 const RUNS = [
   { label: "desktop", viewport: { width: 1440, height: 900 }, cpu: 1, judged: true },
   { label: "desktop, CPU 4× slower", viewport: { width: 1440, height: 900 }, cpu: 4, judged: false },
@@ -63,6 +67,29 @@ async function scrub(page) {
   await page.waitForTimeout(500);
 }
 
+/** Two fingers spreading on the timeline, through Chromium's own touch input. */
+async function pinch(page) {
+  const box = await page.locator("rv-timeline canvas").boundingBox();
+  if (!box) throw new Error("no timeline on the Playback tab");
+  const y = box.y + box.height / 2;
+  const mid = box.x + box.width / 2;
+  const fingers = (half) => [
+    { x: mid - half, y, id: 1 },
+    { x: mid + half, y, id: 2 },
+  ];
+  const cdp = await page.context().newCDPSession(page);
+  const span = () => page.locator("rv-timeline").evaluate((el) => el.view.span);
+  const before = await span();
+  await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: fingers(20) });
+  for (let half = 25; half <= 120; half += 5) {
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: fingers(half) });
+    await page.waitForTimeout(16);
+  }
+  await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  await page.waitForTimeout(300);
+  return { before, after: await span() };
+}
+
 async function main() {
   const server = await serve();
   const origin = `http://127.0.0.1:${server.address().port}`;
@@ -88,12 +115,38 @@ async function main() {
       const long = await page.evaluate(() => window.__longTasks);
       const worst = long.length ? Math.max(...long) : 0;
       console.log(
-        `${run.label}: ${long.length} long tasks${long.length ? `, the longest ${worst} ms` : ""}${run.judged ? "" : " (reported, not judged)"}`,
+        `${run.label}: ${tasks(long.length)}${long.length ? `, the longest ${worst} ms` : ""}${run.judged ? "" : " (reported, not judged)"}`,
       );
       if (errors.length) console.log(`  page errors: ${errors.join("; ")}`);
       if (run.judged && (long.length || errors.length)) failed = true;
       await page.close();
     }
+    const phone = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+    const page = await phone.newPage();
+    const errors = [];
+    page.on("pageerror", (err) => errors.push(String(err)));
+    await page.goto(`${origin}/index.html?theme=light#device/cam-fyr/playback`);
+    await page.locator("rv-timeline canvas").waitFor({ timeout: 15_000 });
+    await page.waitForTimeout(1000);
+    await page.evaluate(() => {
+      window.__longTasks = [];
+      new PerformanceObserver((list) => {
+        for (const entry of list.getEntries()) window.__longTasks.push(Math.round(entry.duration));
+      }).observe({ type: "longtask" });
+    });
+    const { before, after } = await pinch(page);
+    const long = await page.evaluate(() => window.__longTasks);
+    const hours = (ms) => `${(ms / 3_600_000).toFixed(ms < 3_600_000 ? 2 : 1)} h`;
+    console.log(
+      `phone, pinch: the timeline went from ${hours(before)} to ${hours(after)}; ${tasks(long.length)}${long.length ? `, the longest ${Math.max(...long)} ms` : ""}`,
+    );
+    if (errors.length) console.log(`  page errors: ${errors.join("; ")}`);
+    // Fingers 40 px apart spread to 240 px: about six times closer in.
+    if (!(after <= before / 3) || errors.length) {
+      console.error("Two fingers spreading on the timeline did not zoom it in.");
+      failed = true;
+    }
+    await phone.close();
   } finally {
     await browser.close();
     server.close();

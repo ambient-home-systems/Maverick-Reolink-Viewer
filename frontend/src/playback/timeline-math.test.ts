@@ -28,8 +28,8 @@ import {
   timeToX,
   typeLabel,
   xToTime,
+  stepZoom,
   zoomAt,
-  zoomIndex,
 } from "./timeline-math";
 
 const T0 = Date.UTC(2026, 9, 17, 4, 0); // midnight EDT
@@ -77,7 +77,14 @@ describe("time <-> pixels", () => {
     expect(zoomed.span).toBe(HOUR);
     expect(timeToX(anchor, zoomed, 1000)).toBeCloseTo(250);
     expect(centreOn(zoomed, T0 + 12 * HOUR, BOUNDS).start).toBe(T0 + 11.5 * HOUR);
-    expect(zoomIndex(50 * MINUTE)).toBe(2);
+    // The next level from any span: a pinch leaves spans between levels.
+    expect(stepZoom(50 * MINUTE, 1)).toBe(15 * MINUTE);
+    expect(stepZoom(50 * MINUTE, -1)).toBe(HOUR);
+    expect(stepZoom(HOUR, 1)).toBe(15 * MINUTE);
+    expect(stepZoom(HOUR, -1)).toBe(6 * HOUR);
+    expect(stepZoom(5 * MINUTE, 1)).toBeUndefined();
+    expect(stepZoom(DAY, -1)).toBeUndefined();
+    expect(stepZoom(25 * HOUR, -1)).toBeUndefined(); // a long day shown whole
     expect(ZOOM_LEVELS[0]).toBe(DAY);
     expect(ZOOM_LEVELS[ZOOM_LEVELS.length - 1]).toBe(5 * MINUTE);
   });

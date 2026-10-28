@@ -1,11 +1,11 @@
-import { Bt as e, Ht as t, Q as n, Vt as r, a as i, ft as a, i as o, o as s, r as c, zt as l } from "./home-CkkHTxZF.js";
-import "./device-list-D4yJ8c1U.js";
+import { Gt as e, Kt as t, Wt as n, _t as r, a as i, i as a, o, qt as s, r as c, rt as l } from "./home-D5-WNgzo.js";
+import "./device-list-CErJp_jc.js";
 //#region src/components/overview.ts
 var u = 3e4, d = {
 	people: "person",
 	dog_cat: "animal",
 	"non-motor_vehicle": "bicycle"
-}, f = class extends l {
+}, f = class extends n {
 	static properties = {
 		hass: { attribute: !1 },
 		device: { attribute: !1 },
@@ -41,18 +41,18 @@ var u = 3e4, d = {
 	}
 	render() {
 		let e = this.device;
-		if (!e) return r``;
-		let t = e.node;
-		return r`
-      ${t.kind === "camera" ? this._renderSnapshot(t) : this._renderCameras()}
+		if (!e) return t``;
+		let n = e.node;
+		return t`
+      ${n.kind === "camera" ? this._renderSnapshot(n) : this._renderCameras()}
       <div class="connections">${e.connections.map((t) => this._renderConnection(t, e))}</div>
     `;
 	}
-	_renderSnapshot(t) {
-		let n = this.snapshotUrl(), i = t.primary_view === "snapshot";
-		return r`<figure class="snapshot ${i ? "primary" : ""}">
+	_renderSnapshot(n) {
+		let i = this.snapshotUrl(), a = n.primary_view === "snapshot";
+		return t`<figure class="snapshot ${a ? "primary" : ""}">
       <div class="frame">
-        ${n ? r`<img src=${n} alt="Latest snapshot of ${t.name ?? "the camera"}" />` : r`<p class="none">
+        ${i ? t`<img src=${i} alt="Latest snapshot of ${n.name ?? "the camera"}" />` : t`<p class="none">
               No snapshot: enable one of this camera's stream entities (for example
               <em>Fluent</em>) in the Settings tab.
             </p>`}
@@ -61,51 +61,51 @@ var u = 3e4, d = {
         <span>Latest snapshot</span>
         <button
           class="text with-icon"
-          ?disabled=${!n}
+          ?disabled=${!i}
           @click=${() => {
 			this._stamp = Date.now();
 		}}
         >
-          ${a("refresh")}Refresh
+          ${r("refresh")}Refresh
         </button>
       </figcaption>
-      ${i ? r`<p class="muted small">
+      ${a ? t`<p class="muted small">
             This camera does not record, so snapshots are its main view. The picture refreshes
             every ${u / 1e3} seconds while this page is open.
           </p>` : e}
     </figure>`;
 	}
 	_renderCameras() {
-		let t = this.device?.node;
-		if (t?.kind === "camera") return e;
-		let n = t?.camera_ids.length ?? 0;
-		return r`<section class="card">
+		let n = this.device?.node;
+		if (n?.kind === "camera") return e;
+		let r = n?.camera_ids.length ?? 0;
+		return t`<section class="card">
       <h2>Cameras</h2>
-      ${this.devices && t ? r`<rv-device-list .devices=${this.devices} .cameras=${this.cameras} .hostId=${t.id}></rv-device-list>` : r`<p class="muted">
-            ${n} ${n === 1 ? "camera" : "cameras"} on this ${o(t?.kind ?? "nvr")}.
+      ${this.devices && n ? t`<rv-device-list .devices=${this.devices} .cameras=${this.cameras} .hostId=${n.id}></rv-device-list>` : t`<p class="muted">
+            ${r} ${r === 1 ? "camera" : "cameras"} on this ${a(n?.kind ?? "nvr")}.
           </p>`}
     </section>`;
 	}
-	_renderConnection(t, n) {
-		let i = t.details, a = n.node.kind === "camera", o = [t.channel !== void 0 && t.channel !== null && t.via === "nvr" ? `channel ${String(t.channel + 1)}` : void 0, t.playback_source ? "playback source" : void 0].filter((e) => e !== void 0);
-		return r`<section class="card">
+	_renderConnection(n, r) {
+		let i = n.details, a = r.node.kind === "camera", o = [n.channel !== void 0 && n.channel !== null && n.via === "nvr" ? `channel ${String(n.channel + 1)}` : void 0, n.playback_source ? "playback source" : void 0].filter((e) => e !== void 0);
+		return t`<section class="card">
       <div class="header">
-        <h2>${a ? c(t) : "Device"}</h2>
-        ${o.length ? r`<span class="muted">${o.join(" · ")}</span>` : e}
+        <h2>${a ? c(n) : "Device"}</h2>
+        ${o.length ? t`<span class="muted">${o.join(" · ")}</span>` : e}
       </div>
-      ${i === null ? r`<p class="muted">
-            Details are unavailable${n.degraded ? " in degraded mode" : ""}.
-          </p>` : r`
+      ${i === null ? t`<p class="muted">
+            Details are unavailable${r.degraded ? " in degraded mode" : ""}.
+          </p>` : t`
             ${i.channel ? p(i.channel) : e}
-            ${t.via === "direct" || !a ? m(i.host) : e}
+            ${n.via === "direct" || !a ? m(i.host) : e}
           `}
       <p class="muted small">
-        ${t.entities.length} entities
-        (${t.entities.filter((e) => e.disabled_by !== null).length} disabled)
+        ${n.entities.length} entities
+        (${n.entities.filter((e) => e.disabled_by !== null).length} disabled)
       </p>
     </section>`;
 	}
-	static styles = [n, t`
+	static styles = [l, s`
       :host {
         display: flex;
         flex-direction: column;
@@ -170,67 +170,67 @@ var u = 3e4, d = {
       }
     `];
 };
-function p(t) {
-	let n = t.online ? t.sleeping ? "Asleep" : "Online" : "Offline";
-	return r`<dl class="facts">
+function p(n) {
+	let r = n.online ? n.sleeping ? "Asleep" : "Online" : "Offline";
+	return t`<dl class="facts">
     <dt>Model</dt>
-    <dd>${t.model}${t.model_id ? r` <span class="muted">(${t.model_id})</span>` : e}</dd>
+    <dd>${n.model}${n.model_id ? t` <span class="muted">(${n.model_id})</span>` : e}</dd>
     <dt>Hardware</dt>
-    <dd>${t.hardware_version}</dd>
+    <dd>${n.hardware_version}</dd>
     <dt>Firmware</dt>
-    <dd>${t.firmware_version}</dd>
+    <dd>${n.firmware_version}</dd>
     <dt>Status</dt>
-    <dd>${n}</dd>
+    <dd>${r}</dd>
     <dt>Clear stream</dt>
-    <dd>${i(t.encodings.main)}</dd>
+    <dd>${i(n.encodings.main)}</dd>
     <dt>Fluent stream</dt>
-    <dd>${i(t.encodings.sub)}</dd>
+    <dd>${i(n.encodings.sub)}</dd>
     <dt>Network</dt>
-    <dd>${h(t.network)}</dd>
-    ${t.battery ? r`<dt>Battery</dt>
+    <dd>${h(n.network)}</dd>
+    ${n.battery ? t`<dt>Battery</dt>
           <dd>
-            ${t.battery.percent ?? "?"}%${t.battery.status ? ` · ${t.battery.status}` : ""}${t.battery.temperature_c === null ? "" : ` · ${t.battery.temperature_c} °C`}${t.wired_power ? " · on wired power" : ""}
+            ${n.battery.percent ?? "?"}%${n.battery.status ? ` · ${n.battery.status}` : ""}${n.battery.temperature_c === null ? "" : ` · ${n.battery.temperature_c} °C`}${n.wired_power ? " · on wired power" : ""}
           </dd>` : e}
     <dt>Recordings</dt>
-    <dd>${t.supports_replay ? "Playback supported" : "No playback"}</dd>
-    ${t.ai_types.length ? r`<dt>AI detection</dt>
-          <dd>${t.ai_types.map((e) => d[e] ?? e).join(", ")}</dd>` : e}
-    ${t.capabilities.length ? r`<dt>Features</dt>
-          <dd class="chips">${t.capabilities.map((e) => r`<span class="badge">${e}</span>`)}</dd>` : e}
+    <dd>${n.supports_replay ? "Playback supported" : "No playback"}</dd>
+    ${n.ai_types.length ? t`<dt>AI detection</dt>
+          <dd>${n.ai_types.map((e) => d[e] ?? e).join(", ")}</dd>` : e}
+    ${n.capabilities.length ? t`<dt>Features</dt>
+          <dd class="chips">${n.capabilities.map((e) => t`<span class="badge">${e}</span>`)}</dd>` : e}
   </dl>`;
 }
-function m(t) {
-	let n = t.ports;
-	return r`<dl class="facts">
-    ${t.device_type === "camera" ? e : r`<dt>Model</dt>
-          <dd>${t.model ?? "?"}${t.model_id ? r` <span class="muted">(${t.model_id})</span>` : e}</dd>
+function m(n) {
+	let r = n.ports;
+	return t`<dl class="facts">
+    ${n.device_type === "camera" ? e : t`<dt>Model</dt>
+          <dd>${n.model ?? "?"}${n.model_id ? t` <span class="muted">(${n.model_id})</span>` : e}</dd>
           <dt>Hardware</dt>
-          <dd>${t.hardware_version ?? "?"}</dd>
+          <dd>${n.hardware_version ?? "?"}</dd>
           <dt>Firmware</dt>
-          <dd>${t.firmware_version ?? "?"}</dd>
+          <dd>${n.firmware_version ?? "?"}</dd>
           <dt>Channels</dt>
-          <dd>${t.channels}</dd>`}
+          <dd>${n.channels}</dd>`}
     <dt>Connection</dt>
     <dd>
-      ${h(t.network)} · ${n.http.https ? "HTTPS" : "HTTP"}${n.http.port ? ` port ${n.http.port}` : ""}${t.baichuan_only ? " · Baichuan only" : ""}
+      ${h(n.network)} · ${r.http.https ? "HTTPS" : "HTTP"}${r.http.port ? ` port ${r.http.port}` : ""}${n.baichuan_only ? " · Baichuan only" : ""}
     </dd>
     <dt>Protocols</dt>
     <dd>
-      RTSP ${s(n.rtsp.enabled)}${n.rtsp.port ? ` (${n.rtsp.port})` : ""} · RTMP
-      ${s(n.rtmp.enabled)}${n.rtmp.port ? ` (${n.rtmp.port})` : ""} · ONVIF
-      ${s(n.onvif.enabled)}${n.onvif.port ? ` (${n.onvif.port})` : ""}
+      RTSP ${o(r.rtsp.enabled)}${r.rtsp.port ? ` (${r.rtsp.port})` : ""} · RTMP
+      ${o(r.rtmp.enabled)}${r.rtmp.port ? ` (${r.rtmp.port})` : ""} · ONVIF
+      ${o(r.onvif.enabled)}${r.onvif.port ? ` (${r.onvif.port})` : ""}
     </dd>
     <dt>HA stream protocol</dt>
-    <dd>${t.stream_protocol ?? "?"}</dd>
+    <dd>${n.stream_protocol ?? "?"}</dd>
     <dt>Storage</dt>
     <dd>
-      ${t.storage.length ? t.storage.map((t, n) => r`${n ? r`<br />` : e}${t.type ?? "disk"} ${t.index + 1}:
-              ${t.used_percent === null ? "?" : `${t.used_percent}% used`}${t.available === !1 ? " (not available)" : ""}`) : "none"}
+      ${n.storage.length ? n.storage.map((n, r) => t`${r ? t`<br />` : e}${n.type ?? "disk"} ${n.index + 1}:
+              ${n.used_percent === null ? "?" : `${n.used_percent}% used`}${n.available === !1 ? " (not available)" : ""}`) : "none"}
     </dd>
-    ${t.cpu_usage === null ? e : r`<dt>CPU</dt>
-          <dd>${t.cpu_usage}%</dd>`}
-    ${t.capabilities.length ? r`<dt>Host features</dt>
-          <dd class="chips">${t.capabilities.map((e) => r`<span class="badge">${e}</span>`)}</dd>` : e}
+    ${n.cpu_usage === null ? e : t`<dt>CPU</dt>
+          <dd>${n.cpu_usage}%</dd>`}
+    ${n.capabilities.length ? t`<dt>Host features</dt>
+          <dd class="chips">${n.capabilities.map((e) => t`<span class="badge">${e}</span>`)}</dd>` : e}
   </dl>`;
 }
 function h(e) {

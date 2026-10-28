@@ -133,6 +133,9 @@ v0.24.0 keeps live view steady on networks that keep cutting its video connectio
 (some work and school networks do): after two cuts the page switches its cameras to
 the other way of streaming (WebRTC) for an hour. The live check's capacity test now
 runs while cameras are kept warm, and when it cannot, it says what is in the way.
+v0.25.0 makes the recordings timeline work under your fingers: pinch to zoom in on a
+moment and slide two fingers to move along the day. Live view and playback can go
+picture-in-picture, to keep watching a camera in a small window over other apps.
 
 Requires Home Assistant 2026.10 or newer with the Reolink integration set up.
 

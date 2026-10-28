@@ -5,6 +5,7 @@ import type { DebugPlayer, TileDebug } from "../live/debug";
 import { chooseHd, type HdChoice } from "../live/hd";
 import { LivePlayer, pageCuts, type PlayerState } from "../live/player";
 import { formatClock } from "../playback/time";
+import { enterPip, exitPip, inPip, pipSupported } from "../pip";
 import { sharedStyles } from "../styles";
 import type {
   HomeAssistant,
@@ -47,6 +48,11 @@ export interface LiveCountDetail {
  * sub stream then stops). If HD ends, the sub stream plays again until HD is
  * back. Full screen uses the Fullscreen API where the browser has it for any
  * element, and fills the window otherwise (the iPhone has it only for video).
+ *
+ * Picture-in-picture (in full screen, and on the camera's own view) takes the
+ * video showing. The stream in it keeps playing while the tile is off screen
+ * or the page is hidden, and when HD replaces it or another tile goes full
+ * screen: someone is watching it. It ends when the tile goes away.
  */
 export class RvLiveTile extends LitElement {
   static override properties = {
@@ -71,6 +77,7 @@ export class RvLiveTile extends LitElement {
     _hd: { state: true },
     _hdState: { state: true },
     _debug: { state: true },
+    _pip: { state: true },
   };
 
   declare hass: HomeAssistant | undefined;
@@ -104,6 +111,8 @@ export class RvLiveTile extends LitElement {
   declare _hdState: PlayerState;
   /** Its debug view is shown. */
   declare _debug: boolean;
+  /** Which of its videos is in picture-in-picture. */
+  declare _pip: "sub" | "hd" | undefined;
 
   private _player: LivePlayer | undefined;
   private _hdPlayer: LivePlayer | undefined;
@@ -156,9 +165,37 @@ export class RvLiveTile extends LitElement {
     this._observer?.disconnect();
     this._observer = undefined;
     clearTimeout(this._offscreenTimer);
+    void exitPip(this._pipVideo).catch(() => undefined);
+    this._pip = undefined;
     this._player?.stop();
     this._hdPlayer?.stop();
     this.exitFull();
+  }
+
+  private _video(which: "sub" | "hd"): HTMLVideoElement | null {
+    return this.renderRoot.querySelector<HTMLVideoElement>(`video.${which}`);
+  }
+
+  /** The video in picture-in-picture, if one is. */
+  private get _pipVideo(): HTMLVideoElement | null {
+    return this._pip ? this._video(this._pip) : null;
+  }
+
+  private readonly _onPipChange = (): void => {
+    this._pip = inPip(this._video("sub")) ? "sub" : inPip(this._video("hd")) ? "hd" : undefined;
+  };
+
+  /** Into picture-in-picture with the video showing, or out of it. */
+  private async _togglePip(): Promise<void> {
+    try {
+      if (this._pip) await exitPip(this._pipVideo);
+      else {
+        const video = this._video(this.hdShown ? "hd" : "sub");
+        if (video) await enterPip(video);
+      }
+    } catch {
+      // Refused (no video yet, or the browser said no): nothing changes.
+    }
   }
 
   private readonly _onVisibility = (): void => {
@@ -275,7 +312,7 @@ export class RvLiveTile extends LitElement {
     const player = this._ensurePlayer();
     if (!player) return;
     player.options.warm = this.warm ?? this.connection?.streams[this.stream]?.warm === true;
-    if (this.shouldPlay && !this.hdShown) {
+    if ((this.shouldPlay && !this.hdShown) || this._pip === "sub") {
       clearTimeout(this._offscreenTimer);
       this._offscreenTimer = undefined;
       this._start(player);
@@ -286,8 +323,8 @@ export class RvLiveTile extends LitElement {
         this._offscreenTimer ??= setTimeout(() => {
           this._offscreenTimer = undefined;
           if (!this.shouldPlay) {
-            this._player?.stop();
-            this._hdPlayer?.stop();
+            if (this._pip !== "sub") this._player?.stop();
+            if (this._pip !== "hd") this._hdPlayer?.stop();
           }
         }, OFFSCREEN_GRACE_MS);
       }
@@ -296,7 +333,7 @@ export class RvLiveTile extends LitElement {
 
   private _driveHd(): void {
     const connection = this.connection;
-    const wanted = this._full && this.shouldPlay;
+    const wanted = (this._full && this.shouldPlay) || this._pip === "hd";
     if (wanted && connection && !this._hd && this._hdChoosing !== connection) {
       this._hdChoosing = connection;
       void chooseHd(connection).then((choice) => {
@@ -407,9 +444,25 @@ export class RvLiveTile extends LitElement {
         ${this.image
           ? html`<img class="poster" src=${this.image.url} alt="" />`
           : nothing}
-        <video class="sub" muted playsinline aria-label=${`${name} live`}></video>
+        <video
+          class="sub"
+          muted
+          playsinline
+          aria-label=${`${name} live`}
+          @enterpictureinpicture=${this._onPipChange}
+          @leavepictureinpicture=${this._onPipChange}
+          @webkitpresentationmodechanged=${this._onPipChange}
+        ></video>
         ${this._hd?.stream
-          ? html`<video class="hd" muted playsinline aria-label=${`${name} live in HD`}></video>`
+          ? html`<video
+              class="hd"
+              muted
+              playsinline
+              aria-label=${`${name} live in HD`}
+              @enterpictureinpicture=${this._onPipChange}
+              @leavepictureinpicture=${this._onPipChange}
+              @webkitpresentationmodechanged=${this._onPipChange}
+            ></video>`
           : nothing}
         ${this.number !== undefined && !this._full
           ? html`<span class="num" aria-hidden="true">${this.number}</span>`
@@ -451,6 +504,17 @@ export class RvLiveTile extends LitElement {
             .controls=${this.controls}
             .cameraName=${name}
           ></rv-live-controls>`
+        : nothing}
+      ${(this._full || !this.openable) && (playing || this.hdShown || this._pip) && pipSupported()
+        ? html`<button
+            class="corner-button pip"
+            aria-label=${this._pip ? "Leave picture in picture" : `${name} in picture in picture`}
+            aria-pressed=${this._pip ? "true" : "false"}
+            title=${this._pip ? "Leave picture in picture" : "Picture in picture: keep watching in a small window"}
+            @click=${() => void this._togglePip()}
+          >
+            ${icon("pip")}
+          </button>`
         : nothing}
       <button
         class="corner-button full"
@@ -728,6 +792,13 @@ export class RvLiveTile extends LitElement {
         background: var(--rv-action);
         color: var(--rv-on-action);
         opacity: 1;
+      }
+      .corner-button.pip {
+        right: 44px;
+      }
+      .corner-button.pip[aria-pressed="true"] {
+        background: var(--rv-action);
+        color: var(--rv-on-action);
       }
       .corner-button svg {
         width: 22px;

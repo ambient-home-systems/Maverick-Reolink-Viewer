@@ -53,6 +53,7 @@ frontend/            # Lit + TypeScript panel, built with Vite
                      # components/findings.ts and written at the top of each report
   src/views.ts       # the views loaded on demand (the home view is the only one in
                      # the first download; see Performance budget)
+  src/pip.ts         # picture-in-picture (the standard API, else WebKit's)
   scripts/bundle-budget.mjs  # the home view's size against its budget (npm run budget)
   preview/           # the design preview: the panel on a fake hass (see Design preview)
   src/components/    # device list, device page, overview, settings, playback tab,
@@ -78,7 +79,8 @@ scripts/             # setup_dev.sh, probe_to_matrix.py, make_mse_sample.py (wri
                      # fetch_go2rtc.py (the pinned go2rtc for the tests);
                      # playback_check.js and inspect_recording.js (paste into the browser console);
                      # desktop-check/ runs the playback check in Chrome without clicking;
-                     # scrub_check.cjs drags the preview's timeline and counts long tasks
+                     # scrub_check.cjs drags the preview's timeline and counts long
+                     # tasks, then pinches it with touch on a phone-sized page
 ```
 
 ## Environment
@@ -152,7 +154,9 @@ Phase 4 step 2 set three limits; the first two run in CI.
 
   drags along the Playback timeline and hovers over it in Chromium, and counts the
   long tasks. It fails on any on a desktop; with the processor slowed 4× (desktop
-  and phone sizes) it reports them only, as shared CI machines vary.
+  and phone sizes) it reports them only, as shared CI machines vary. Then it pinches
+  the timeline with two fingers (Chromium's touch input, phone size) and fails if it
+  did not zoom in.
 - **Time to first frame** is measured on the owner's hardware by the live check and
   the playback check; the figures are in `docs/IMPLEMENTATION_PLAN.md` (Phase 4,
   "Step 2: the performance budget").

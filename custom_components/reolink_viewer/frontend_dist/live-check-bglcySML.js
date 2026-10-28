@@ -1,7 +1,7 @@
-import { Bt as e, Ht as t, I as n, L as r, Lt as i, Q as a, V as o, Vt as s, bt as c, ct as l, ft as u, nt as d, wt as f, zt as p } from "./home-CkkHTxZF.js";
-import { i as m, m as h, v as g } from "./findings-DHMHFT4a.js";
-import { n as _, r as v } from "./check-DK9rn0jG.js";
-import { r as y } from "./check-C_C1d58I.js";
+import { Gt as e, Ht as t, I as n, K as r, Kt as i, L as a, Tt as o, Wt as s, _t as c, kt as l, pt as u, qt as d, rt as f, st as p } from "./home-D5-WNgzo.js";
+import { i as m, m as h, v as g } from "./findings-CjZkQ2Pp.js";
+import { n as _, r as v } from "./check-B7M3bovy.js";
+import { r as y } from "./check-O1kqbi0u.js";
 //#region src/types.ts
 var b = [
 	"sub",
@@ -15,7 +15,7 @@ var b = [
 function C(e) {
 	return !/Tailscale|Nabu Casa/.test(e);
 }
-var w = class extends p {
+var w = class extends s {
 	static properties = {
 		hass: { attribute: !1 },
 		_status: { state: !0 },
@@ -48,10 +48,10 @@ var w = class extends p {
 		let e = this.hass;
 		if (e) {
 			try {
-				let [t, n] = await Promise.all([f(e), c(e)]);
+				let [t, n] = await Promise.all([l(e), o(e)]);
 				this._status = t, this._cameras = n.cameras;
 			} catch (e) {
-				this._error = i(e).message;
+				this._error = t(e).message;
 			}
 			this._loadReports();
 		}
@@ -59,7 +59,7 @@ var w = class extends p {
 	async _loadReports() {
 		if (this.hass) try {
 			let { reports: e } = await y(this.hass);
-			this._reports = e.filter((e) => e.setup.startsWith(d));
+			this._reports = e.filter((e) => e.setup.startsWith(p));
 		} catch {
 			this._reports = [];
 		}
@@ -89,14 +89,14 @@ var w = class extends p {
 		}
 	}
 	async _refreshStatus() {
-		this.hass && (this._status = await f(this.hass).catch(() => this._status));
+		this.hass && (this._status = await l(this.hass).catch(() => this._status));
 	}
 	async _copy(e, t) {
-		await r(e) ? this._copied = t : (this._copied = void 0, this._shown = t, n(this, "Copying is blocked here: select the text instead, or copy it from Saved reports on a computer", "error"));
+		await a(e) ? this._copied = t : (this._copied = void 0, this._shown = t, n(this, "Copying is blocked here: select the text instead, or copy it from Saved reports on a computer", "error"));
 	}
 	render() {
-		let t = this._check?.running === !0;
-		return s`<p class="intro">
+		let n = this._check?.running === !0;
+		return i`<p class="intro">
         How quickly each camera's live video starts on this device. The check plays each camera in turn
         for a few seconds, so it takes a few minutes: keep this page open and in front. It only watches;
         it changes no camera setting.
@@ -112,34 +112,34 @@ var w = class extends p {
           <select
             aria-labelledby="setup"
             .value=${this._setup}
-            ?disabled=${t}
+            ?disabled=${n}
             @change=${(e) => {
 			this._setup = e.target.value, E(this._setup);
 		}}
           >
-            ${_.map((e) => s`<option value=${e} ?selected=${e === this._setup}>${e}</option>`)}
+            ${_.map((e) => i`<option value=${e} ?selected=${e === this._setup}>${e}</option>`)}
           </select>
         </div>
         <span class="label" id="cameras">Cameras</span>
         <div class="field">
           <select
             aria-labelledby="cameras"
-            ?disabled=${t}
+            ?disabled=${n}
             @change=${(e) => {
 			this._camera = e.target.value;
 		}}
           >
             <option value="">All cameras</option>
-            ${(this._cameras ?? []).map((e) => s`<option value=${e.id} ?selected=${e.id === this._camera}>${e.name}</option>`)}
+            ${(this._cameras ?? []).map((e) => i`<option value=${e.id} ?selected=${e.id === this._camera}>${e.name}</option>`)}
           </select>
         </div>
         <span class="label">Video quality</span>
         <div class="field" role="group" aria-label="Video quality">
-          ${b.map((e) => s`<label class="option"
+          ${b.map((e) => i`<label class="option"
               ><input
                 type="checkbox"
                 .checked=${this._streams.includes(e)}
-                ?disabled=${t}
+                ?disabled=${n}
                 @change=${(t) => {
 			let n = t.target.checked;
 			this._streams = b.filter((t) => t === e ? n : this._streams.includes(t));
@@ -153,17 +153,17 @@ var w = class extends p {
             ><input
               type="checkbox"
               .checked=${this._stock}
-              ?disabled=${t}
+              ?disabled=${n}
               @change=${(e) => {
 			this._stock = e.target.checked;
 		}}
             />Compare with Home Assistant's own camera view</label
           >
-          ${this._admin ? s`<label class="option"
+          ${this._admin ? i`<label class="option"
                   ><input
                     type="checkbox"
                     .checked=${this._warm}
-                    ?disabled=${t}
+                    ?disabled=${n}
                     @change=${(e) => {
 			this._warm = e.target.checked;
 		}}
@@ -173,7 +173,7 @@ var w = class extends p {
                   ><input
                     type="checkbox"
                     .checked=${this._capacity}
-                    ?disabled=${t}
+                    ?disabled=${n}
                     @change=${(e) => {
 			this._capacity = e.target.checked;
 		}}
@@ -181,29 +181,29 @@ var w = class extends p {
                 >` : e}
         </div>
       </div>
-      ${g(this._setup, navigator.userAgent) ? s`<div class="banner warning" role="alert">
+      ${g(this._setup, navigator.userAgent) ? i`<div class="banner warning" role="alert">
             “${this._setup}” is for another kind of device: pick the one for this device, so the report is
             filed under it.
           </div>` : e}
       <div class="actions run">
-        ${t ? s`<button @click=${() => this._check?.stop()}>Stop</button>` : s`<button
+        ${n ? i`<button @click=${() => this._check?.stop()}>Stop</button>` : i`<button
               class="primary"
               ?disabled=${!this._streams.length || !this._cameras}
               @click=${() => {
 			this.runCheck({ setup: this._setup }).catch((e) => {
-				this._error = i(e).message;
+				this._error = t(e).message;
 			});
 		}}
             >
               ${this._check ? "Run it again" : "Run live check"}
             </button>`}
       </div>
-      ${t && this._checkStatus ? s`<p class="progress" aria-live="polite">${this._checkStatus}…</p>` : e}
-      ${this._error ? s`<div class="banner error" role="alert">${this._error}</div>` : e}
-      <div class="stage" ?hidden=${!t} aria-label="Live video being measured"></div>
-      ${this._check ? s`<rv-findings class="result" .summary=${this._check.inShort()}></rv-findings>` : e}
-      ${this._checkText ? s`<details class="support">
-            <summary>Details for support${u("chevronDown")}</summary>
+      ${n && this._checkStatus ? i`<p class="progress" aria-live="polite">${this._checkStatus}…</p>` : e}
+      ${this._error ? i`<div class="banner error" role="alert">${this._error}</div>` : e}
+      <div class="stage" ?hidden=${!n} aria-label="Live video being measured"></div>
+      ${this._check ? i`<rv-findings class="result" .summary=${this._check.inShort()}></rv-findings>` : e}
+      ${this._checkText ? i`<details class="support">
+            <summary>Details for support${c("chevronDown")}</summary>
             <p class="muted small">Every measurement, for a bug report or to compare devices.</p>
             <div class="actions">
               <button @click=${() => void this._copy(this._checkText, "current")}>
@@ -218,28 +218,28 @@ var w = class extends p {
 		let t = this._status;
 		if (!t) return e;
 		let n = t.go2rtc;
-		return s`<p class="small service">
+		return i`<p class="small service">
         <span class="muted">Video service (go2rtc):</span>
-        ${n.state}${n.version ? `, version ${n.version}` : ""}${n.error ? s` · <span class="error">${n.error}</span>` : e}
-        ${n.state === "stopped" ? s`<span class="muted">(it starts with the first live video)</span>` : e}
+        ${n.state}${n.version ? `, version ${n.version}` : ""}${n.error ? i` · <span class="error">${n.error}</span>` : e}
+        ${n.state === "stopped" ? i`<span class="muted">(it starts with the first live video)</span>` : e}
       </p>
-      ${n.log?.length ? s`<details>
-            <summary class="small">Its log${u("chevronDown")}</summary>
+      ${n.log?.length ? i`<details>
+            <summary class="small">Its log${c("chevronDown")}</summary>
             <pre class="report">${n.log.join("\n")}</pre>
           </details>` : e}`;
 	}
 	_renderReports() {
 		let t = this._reports;
-		return t?.length ? s`<details class="saved">
-      <summary>Saved reports (${t.length})${u("chevronDown")}</summary>
+		return t?.length ? i`<details class="saved">
+      <summary>Saved reports (${t.length})${c("chevronDown")}</summary>
       <ul class="reports">
-        ${t.map((t) => s`<li>
+        ${t.map((t) => i`<li>
             <div class="report-row">
               <span class="when"
                 >${[
-			o(Date.parse(t.updated), this.hass?.config?.time_zone),
-			t.setup.slice(d.length),
-			l(t.text)
+			r(Date.parse(t.updated), this.hass?.config?.time_zone),
+			t.setup.slice(p.length),
+			u(t.text)
 		].filter(Boolean).join(" · ")}${t.done ? "" : " (not finished)"}</span
               >
               <button class="text" @click=${() => void this._copy(t.text, t.id)}>
@@ -262,13 +262,13 @@ var w = class extends p {
 	}
 	_renderSaved(e) {
 		let t = m(e);
-		return t ? s`<rv-findings .summary=${t}></rv-findings>
+		return t ? i`<rv-findings .summary=${t}></rv-findings>
       <details>
-        <summary class="small">Details for support${u("chevronDown")}</summary>
+        <summary class="small">Details for support${c("chevronDown")}</summary>
         <pre class="report">${e}</pre>
-      </details>` : s`<pre class="report">${e}</pre>`;
+      </details>` : i`<pre class="report">${e}</pre>`;
 	}
-	static styles = [a, t`
+	static styles = [f, d`
       :host {
         display: flex;
         flex-direction: column;
