@@ -70,7 +70,8 @@ frontend/            # Lit + TypeScript panel, built with Vite
                      # websocket (session.ts); the player that keeps one playing
                      # (player.ts); what the live views share (data.ts); which stream
                      # full screen plays in HD (hd.ts); a tile's debug text
-                     # (debug.ts); the soak report's text (soak.ts) and what a page
+                     # (debug.ts); why video cannot play, in plain words (explain.ts);
+                     # the soak report's text (soak.ts) and what a page
                      # counts for the soak run (soak-tally.ts); the live check
 tests/               # pytest-homeassistant-custom-component; test_mse_browser.py and
                      # test_live_browser.py drive Playwright's Chromium (mse_append.cjs,
@@ -124,7 +125,8 @@ python -m script.hassfest --action validate \
 
 The panel without Home Assistant or cameras, for designing and checking every view:
 `frontend/preview/` mounts the real panel on a fake `hass` with the owner's eight
-cameras, every setting and a day of events. Its pictures are synthetic.
+cameras, every setting and a day of events. Its pictures are synthetic. Add
+`?offline=cam-dogs,cam-garage` for cameras Home Assistant cannot reach.
 
 ```bash
 frontend/preview/make-media.sh                     # once: the synthetic pictures (ffmpeg)

@@ -172,6 +172,8 @@ async def test_live_controls(
 ) -> None:
     """A camera's enabled controls; never the NVR's own siren or a disabled entity."""
     (camera,) = devices.async_live_cameras(hass)
+    # An entity whose state says whether Home Assistant reaches the camera.
+    assert camera["connections"][0]["status_entity"] == "camera.test_reolink_cam_fluent"
     controls = camera["controls"]
     assert set(controls) == {"ptz", "preset", "zoom", "focus", "siren", "floodlight"}
     assert controls["siren"] == "siren.test_reolink_cam_siren"
@@ -199,6 +201,19 @@ async def test_live_controls(
     (camera,) = devices.async_live_cameras(hass)
     assert "ptz" not in camera["controls"]
     assert camera["controls"]["preset"] == "select.test_reolink_cam_ptz_preset"
+
+    # Without an enabled camera entity, another of its entities says it.
+    for entry in er.async_entries_for_device(
+        ent_reg, camera["connections"][0]["connection_id"]
+    ):
+        if entry.domain == "camera":
+            ent_reg.async_update_entity(
+                entry.entity_id, disabled_by=er.RegistryEntryDisabler.USER
+            )
+    (camera,) = devices.async_live_cameras(hass)
+    status = camera["connections"][0]["status_entity"]
+    assert status is not None
+    assert not status.startswith("camera.")
 
 
 async def test_host_device(

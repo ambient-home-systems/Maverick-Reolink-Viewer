@@ -173,7 +173,7 @@ function entities(prefix: string, deviceId: string): EntityInfo[] {
   }));
 }
 
-function states(): HassEntities {
+function states(offline: readonly string[] = []): HassEntities {
   const out: HassEntities = {};
   for (const cam of CAMS) {
     const prefix = cam.media.replace(/-/g, "_");
@@ -188,7 +188,10 @@ function states(): HassEntities {
       out[entityId] = { entity_id: entityId, state, attributes, last_changed: "", last_updated: "" };
     }
     const snapshot = `camera.${prefix}_fluent`;
-    out[snapshot] = { entity_id: snapshot, state: "idle", attributes: { entity_picture: `media/${cam.media}.jpg` }, last_changed: "", last_updated: "" };
+    out[snapshot] = offline.includes(cam.id)
+      ? // Home Assistant cannot reach it: since 25 minutes ago.
+        { entity_id: snapshot, state: "unavailable", attributes: {}, last_changed: new Date(Date.now() - 25 * 60_000).toISOString(), last_updated: "" }
+      : { entity_id: snapshot, state: "idle", attributes: { entity_picture: `media/${cam.media}.jpg` }, last_changed: "", last_updated: "" };
     if (cam.warm || cam.channel !== null) {
       const id = `switch.${prefix}_keep_live_view_warm`;
       out[id] = { entity_id: id, state: cam.warm ? "on" : "off", attributes: {}, last_changed: "", last_updated: "" };
@@ -262,6 +265,7 @@ function liveCamera(cam: Cam): LiveCamera {
     via,
     entry_title: via === "nvr" ? "NVR" : cam.name,
     is_battery: false,
+    status_entity: `camera.${cam.media.replace(/-/g, "_")}_fluent`,
     streams: {
       sub: { encoding: cam.sub, entity_id: `camera.${cam.media.replace(/-/g, "_")}_fluent`, warm: cam.warm && via === "nvr" },
       main: { encoding: cam.main, entity_id: `camera.${cam.media.replace(/-/g, "_")}_clear`, warm: false },
@@ -424,7 +428,7 @@ function soak(): unknown {
   };
 }
 
-export function fakeHass(options: { admin: boolean; dark: boolean }): HomeAssistant {
+export function fakeHass(options: { admin: boolean; dark: boolean; offline?: readonly string[] }): HomeAssistant {
   const catalog: Catalog = {
     version: settings.version,
     categories: categories.categories,
@@ -482,7 +486,7 @@ export function fakeHass(options: { admin: boolean; dark: boolean }): HomeAssist
       },
       subscribeEvents: () => Promise.resolve(() => Promise.resolve()),
     },
-    states: states(),
+    states: states(options.offline),
     user: { is_admin: options.admin, name: "Owner" },
     themes: { darkMode: options.dark },
     config: { time_zone: "America/Chicago" },

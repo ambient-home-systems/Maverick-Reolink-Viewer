@@ -1,7 +1,7 @@
-import { At as e, Ct as t, Dt as n, Et as r, Ht as i, J as a, Tt as o, Ut as s, Vt as c, X as l, Y as u, Z as d, _t as f, ct as p, dt as m, et as h, ft as g, gt as _, ht as v, kt as y, lt as b, pt as x, st as S, tt as C, ut as w, zt as T } from "./home-B--azFjF.js";
-import { a as E, l as D, n as O, o as k, r as A, t as j } from "./findings-DhmRFsiX.js";
+import { At as e, Ct as t, Dt as n, Et as r, Ht as i, J as a, Tt as o, Ut as s, Vt as c, X as l, Y as u, Z as d, _t as f, ct as p, dt as m, et as h, ft as g, gt as _, ht as v, kt as y, lt as b, pt as x, st as S, tt as C, ut as w, zt as T } from "./home-DAQTHR3q.js";
+import { a as E, l as D, n as O, o as k, r as A, t as j } from "./findings-BvbHjz_j.js";
 //#region src/live/check.ts
-var M = "0.26.0", N = [
+var M = "0.27.0", N = [
 	"Desktop Chrome, LAN",
 	"Desktop Chrome, Tailscale",
 	"Desktop Chrome, Nabu Casa",

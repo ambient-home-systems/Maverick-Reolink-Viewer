@@ -139,6 +139,8 @@ picture-in-picture, to keep watching a camera in a small window over other apps.
 v0.26.0 saves data away from home: full screen stays in the lighter SD through Nabu
 Casa, Tailscale or mobile data, with an HD button one tap away, and remembers your
 choice on each device.
+v0.27.0 shows a camera Home Assistant cannot reach as offline, since when, instead of
+trying to play it, and says in plain words why live video cannot play and what to do.
 
 Requires Home Assistant 2026.10 or newer with the Reolink integration set up.
 

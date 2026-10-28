@@ -2,10 +2,12 @@ import { LitElement, css, html, nothing, type PropertyValues, type TemplateResul
 
 import { icon } from "../icons";
 import type { DebugPlayer, TileDebug } from "../live/debug";
+import { offlineSince } from "../live/data";
+import { explainLive } from "../live/explain";
 import { chooseHd, type HdChoice } from "../live/hd";
 import { LivePlayer, pageCuts, type PlayerState } from "../live/player";
 import { currentLink, fullScreenHd, rememberFullScreenHd, type Link } from "../network";
-import { formatClock } from "../playback/time";
+import { formatClock, formatStamp } from "../playback/time";
 import { enterPip, exitPip, inPip, pipSupported } from "../pip";
 import { sharedStyles } from "../styles";
 import type {
@@ -50,6 +52,11 @@ export interface LiveCountDetail {
  * back. Away from home or on mobile data it stays in the lighter SD, with an
  * HD button; the choice either way is remembered on the device (network.ts). Full screen uses the Fullscreen API where the browser has it for any
  * element, and fills the window otherwise (the iPhone has it only for video).
+ *
+ * A camera Home Assistant cannot reach (its entities unavailable) shows its
+ * last picture as offline, since when, and does not try to play until it is
+ * back. When video cannot play, the tile says why in plain words and what to
+ * do (live/explain.ts); the technical text is in its debug view.
  *
  * Picture-in-picture (in full screen, and on the camera's own view) takes the
  * video showing. The stream in it keeps playing while the tile is off screen
@@ -241,8 +248,14 @@ export class RvLiveTile extends LitElement {
       !this.suspended &&
       this._pageVisible &&
       this._onScreen &&
+      this.offlineSince === undefined &&
       this.connection?.streams[this.stream] !== undefined
     );
+  }
+
+  /** Since when Home Assistant cannot reach the camera (epoch ms), if it cannot. */
+  get offlineSince(): number | undefined {
+    return offlineSince(this.hass, this.connection);
   }
 
   /** Video only when tapped: a battery camera, or one watched for its picture. */
@@ -588,7 +601,7 @@ export class RvLiveTile extends LitElement {
         ? "SD, as chosen on this device. Tap HD for full quality."
         : `Lighter SD ${this._link.why}. Tap HD for full quality.`;
     } else if (this.hdShown) detail = undefined;
-    else if (hdState.kind === "waiting") detail = `HD cannot play: ${hdState.error}`;
+    else if (hdState.kind === "waiting") detail = `HD cannot play: ${explainLive(hdState.error).text}`;
     else detail = "HD starting…";
     return html`<div class="hd-status" title=${hd.reason}>
       <button
@@ -608,6 +621,17 @@ export class RvLiveTile extends LitElement {
 
   /** What the tile is doing, in a fixed set of words, top right. */
   private _renderStatus(state: PlayerState): TemplateResult | typeof nothing {
+    const offline = this.offlineSince;
+    if (offline !== undefined) {
+      const zone = this.hass?.config?.time_zone;
+      // Since today: the time; since before: the date too.
+      const since = Date.now() - offline < 12 * 3_600_000 ? formatClock(offline, zone) : formatStamp(offline, zone);
+      return html`${stateChip("Offline", html`<i class="dot fault"></i>`)}
+        <div class="status center offline" role="status">
+          <span class="what">Offline since ${since}</span>
+          <span class="small">Home Assistant cannot reach this camera. It plays again when it is back.</span>
+        </div>`;
+    }
     if (!this._wanted) {
       if (this.connection?.is_battery) return stateChip("Asleep");
       // Watched for its picture: show it as it is, with when it was taken.
@@ -620,10 +644,12 @@ export class RvLiveTile extends LitElement {
         return stateChip("Live", html`<i class="dot"></i>`);
       case "starting":
         return stateChip("Starting");
-      case "waiting":
+      case "waiting": {
+        const why = explainLive(state.error, this.connection.is_battery);
         return html`${stateChip("Retrying")}
           <div class="status center" role="alert">
-            <span class="small">Cannot play: ${state.error}</span>
+            <span class="what">${why.text}</span>
+            ${why.advice ? html`<span class="small">${why.advice}</span>` : nothing}
             <button
               @click=${(e: Event) => {
                 e.stopPropagation();
@@ -633,6 +659,7 @@ export class RvLiveTile extends LitElement {
               Retry now
             </button>
           </div>`;
+      }
       default:
         return nothing;
     }
@@ -762,6 +789,10 @@ export class RvLiveTile extends LitElement {
         width: 7px;
         height: 7px;
         background: currentColor;
+      }
+      /* Amber is a fault: a camera Home Assistant cannot reach. */
+      .state .dot.fault {
+        background: var(--rv-fault);
       }
       .state svg {
         width: 16px;
@@ -894,6 +925,27 @@ export class RvLiveTile extends LitElement {
         padding: 40px 12px 12px;
         background: rgba(17, 20, 24, 0.55);
       }
+      .status.center .what {
+        max-width: 34ch;
+        color: #f4f4f1;
+        font-family: var(--rv-font-cond);
+        font-size: 17px;
+        font-weight: 600;
+        line-height: 1.25;
+      }
+      .status.center .small {
+        max-width: 42ch;
+        color: rgba(244, 244, 241, 0.85);
+      }
+      .status.center.offline {
+        background: rgba(17, 20, 24, 0.7);
+      }
+      /* The tile's number, state and name stay readable over a message. */
+      .num,
+      .state,
+      .label {
+        z-index: 1;
+      }
       .status.center button {
         color: #f4f4f1;
         border-color: #f4f4f1;
@@ -925,6 +977,17 @@ export class RvLiveTile extends LitElement {
           font-size: 12px;
         }
         .corner-button.info {
+          display: none;
+        }
+        /* A small tile says what happened; what to do is on the camera's own view. */
+        .status.center {
+          padding: 32px 8px 8px;
+          gap: 6px;
+        }
+        .status.center .what {
+          font-size: 14px;
+        }
+        .status.center .small {
           display: none;
         }
       }
