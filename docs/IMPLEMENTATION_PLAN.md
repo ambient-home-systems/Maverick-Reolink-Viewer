@@ -20,7 +20,7 @@ put on it:
 | 1 | Device details and every setting, with explanations | Standard (catalog) / High (panel shell) | 2–3 wk | Done (2026-10-17) |
 | 2 | Event timeline, thumbnails, smooth playback | High (backend) / Very high (player) | 3–5 wk | Done (2026-10-21, v0.3.2). 2A (2026-10-20, v0.2.7): timeline 105–287 ms, first frame 0.6–1.1 s, auto-advance 6–7 ms on hardware. 2B: MSE player; uncached deep starts are the NVR's download up to the target (6.9–13.0 s in hour-long recordings, up to 84 s before), speeds 0.5–8×, HD/SD at the same moment, one-hour sessions within the caps, the iPhone app on Wi-Fi, Tailscale and Nabu Casa |
 | 3 | Live view via go2rtc, grid, fullscreen, PTZ | High | 3–4 wk | Done (2026-10-27, v0.15.1). Our own go2rtc and the live check (v0.4.0, runs 5–13); the key-frame cache, the image cache, the Live grid and Live tab, keep warm, full-screen HD, PTZ and the camera's controls, the picture first, battery cameras on wired power, a debug view per tile and the soak report (v0.5.0–v0.15.1). Exit runs: the soak passed (run 15), every tile's first image in a median 0.02 s on the iPhone and the Mac (runs 16–17), and the Phase 2 playback criteria held with live view running (runs 18–19) |
-| 4 | Performance, mobile, packaging, first release | Standard | 2–3 wk | Not started |
+| 4 | Design, performance, mobile, packaging, first release | Standard | 3–4 wk | In progress. Design direction chosen (2026-10-28): the Timetable, see "Step 1: the design" |
 | 5 | Optional R&D: Baichuan live/playback | Very high | 4–8 wk, time-boxed with gates | Not started |
 
 Phases 1 and 2 can overlap once Phase 0 is done. Phase 5 can start any time after
@@ -2878,13 +2878,111 @@ the home network the Mac had one drop in 7.7 hours. The owner attributes
 it to the work network's filtering. Phase 4 can switch a tile to WebRTC
 once its MSE keeps being cut this way.
 
-## Phase 4 — Performance, mobile, packaging, release (difficulty: Standard, 2–3 wk)
+## Phase 4 — Design, performance, mobile, packaging, release (difficulty: Standard, 3–4 wk)
 
-1. **Performance budget:**
-   - initial panel JS under 200 KB gzipped, with other tabs code-split
+The owner asked for the panel to get a proper design, not only a polish, in
+this phase. It currently works but is plain. The design comes first, because
+error states, accessibility, mobile and the bundle budget all land in the
+redesigned views.
+
+### Phase 4 status
+
+| Step | Status |
+| --- | --- |
+| 1. Design: the Timetable panel (home view, events, devices, device page, checks) | **Direction chosen** (2026-10-28); building next, see "Step 1: the design" |
+| 2. Performance budget | Not started |
+| 3. Mobile, and networks that cut websockets | Not started |
+| 4. Error states | Not started |
+| 5. Accessibility | Not started |
+| 6. Packaging and the HA version matrix | Not started |
+| 7. Docs | Not started |
+
+### Step 1: the design
+
+**The brief** (the owner, 2026-10-28):
+
+- It is for any Reolink owner on HACS, not only this setup.
+- The two jobs are glancing at the live cameras and reviewing events and
+  recordings. The phone (Companion app) and the desktop are used about
+  equally.
+- The home view is live with recent events: every camera live on top,
+  today's events below, one tap from video, and devices and settings one
+  step away.
+- It would be wrong if it looked like a generic dashboard. Nothing of the
+  current look needs to stay, Home Assistant's theme colours included.
+
+`PRODUCT.md` holds the product record.
+
+**The preview harness** shows the panel with no Home Assistant and no
+cameras, so every view can be designed and checked from screenshots.
+
+- `frontend/preview/` mounts the real panel on a fake `hass`
+  (`fake-hass.ts`). It has the owner's eight cameras on the NVR or added
+  directly, every setting entity, and one day of 13 events and recordings.
+- `make-media.sh` draws synthetic pictures with ffmpeg; they are not footage.
+- `scripts/preview_capture.cjs` captures each view in light and dark, on a
+  1440 × 900 desktop and a 390 × 844 phone.
+- Build it with `cd frontend && npx vite build -c vite.preview.config.ts`.
+
+**The direction: Timetable** (chosen 2026-10-28 from four sketches:
+Timetable, Contact sheet, Night chart, and Home Assistant refined as the
+baseline). The house runs on a timetable:
+
+- **The live board.** The cameras play on a dark board, packed by shape:
+  the doorbell runs tall and panoramas run wide. Each tile has a square
+  number chip, its state at top right and its name.
+- **The timetable.** Today's events come in below as departures. Each row
+  has a big tabular time, a drawn pictogram and the detection type, the
+  camera's numbered "platform", the length and a thumbnail. A red "now"
+  line sits above the newest event.
+- **Unseen events stay lit.** An event not yet opened shows in red.
+- **Colour.** The band is railway blue. The timetable is paper by day and
+  departure-board navy in Home Assistant's dark mode. Signal red means only
+  "now" and "new". One action blue marks what can be pressed. The panel
+  does not take Home Assistant's theme colours.
+- **Type.** Barlow and Barlow Semi Condensed (SIL Open Font License),
+  served from the integration rather than a font CDN, so the panel works
+  without internet access.
+- **The contract.** `.impeccable/surfaces/frontend-src-reolink-viewer-panel-ts.md`
+  holds the direction contract the build is reviewed against.
+
+**What it needs from the server: one feed of events across cameras.** The
+timeline is per camera today. A new command, `events/recent`, returns the
+latest events of every recording camera for the home view and the Events
+view. It goes through the scheduler like every other read. "Seen" is kept
+per Home Assistant user on the server, so the phone and the desktop agree.
+
+**Order of work** (a PR each, each version checked by the owner on the
+iPhone and the Mac):
+
+1. **Foundations.** Tokens for light and dark, the served fonts, the band
+   with its Live, Events and Devices tabs and the clock, the pictograms, and
+   the tile states (Live, Starting, Picture hh:mm, Asleep, Offline, Waiting
+   for a slot).
+2. **The home view.** The live board and today's timetable, with
+   `events/recent` and "seen". A row opens that recording; a tile goes full
+   screen.
+3. **The Events view.** The whole timetable, with a day picker and camera
+   and type filters.
+4. **Devices and the device page.** The overview, settings, playback and
+   Live tab, rebuilt in the same world.
+5. **The checks and reports.** The live check, the playback check and the
+   soak report.
+6. **Finish.**
+   - Screenshots of every view, light and dark, desktop and phone.
+   - The design detector, then an independent finish review against the
+     contract, acted on.
+   - `DESIGN.md`, written from the built panel.
+
+### Steps 2–7
+
+2. **Performance budget:**
+   - initial panel JS under 200 KB gzipped, with the other views
+     code-split. The whole panel is about 80 KB gzipped today (v0.15.1), so the
+     split is about keeping it that way as the design adds weight.
    - no long tasks over 50 ms during timeline scrubbing
    - documented time-to-first-frame figures for live and playback
-2. **Mobile:** HA Companion app testing, touch gestures on the timeline,
+3. **Mobile:** HA Companion app testing, touch gestures on the timeline,
    picture-in-picture, lower default bitrates on cellular. Networks that cut
    long-lived websockets (Phase 3's soak, run 15: about every 5½ minutes
    from a filtered work network through Nabu Casa): switch a tile to WebRTC
@@ -2893,14 +2991,14 @@ once its MSE keeps being cut this way.
    cannot run while cameras are kept warm (run 16): say so, instead of "the
    host's stream slots stayed busy", or set the warm feeds aside while it
    runs.
-3. **Error states:** camera offline, battery asleep, no storage, unsupported codec,
+4. **Error states:** camera offline, battery asleep, no storage, unsupported codec,
    Reolink integration internals changed (bridge banner).
-4. **Accessibility:** keyboard navigation and labels; respect reduced-motion.
-5. **Packaging:**
+5. **Accessibility:** keyboard navigation and labels; respect reduced-motion.
+6. **Packaging:**
    - HACS releases with a built frontend
    - an HA version compatibility matrix
    - optional HA app repository for go2rtc and hardware transcoding
-6. **Docs:** user guide, troubleshooting, per-model notes from the hardware matrix.
+7. **Docs:** user guide, troubleshooting, per-model notes from the hardware matrix.
 
 Exit criteria: first tagged release installs via HACS on a clean HA instance and
 passes the hardware-in-the-loop checklist.
