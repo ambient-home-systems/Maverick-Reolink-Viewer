@@ -65,7 +65,7 @@ import { icon } from "../icons";
 import { parseInShort } from "../plain";
 import { sharedStyles } from "../styles";
 import type { CacheStatus, HomeAssistant, PlaybackUrl, Segment, Stream, TimelineDay, Timing } from "../types";
-import { LIVE_REPORT_PREFIX } from "../live/check";
+import { LIVE_REPORT_PREFIX } from "../live/check-util";
 import { dayLabel, shortDay } from "./events-view";
 import "./findings";
 import { toast } from "./navigation";

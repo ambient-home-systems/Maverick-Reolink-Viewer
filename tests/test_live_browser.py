@@ -172,6 +172,9 @@ async def test_chromium_starts_the_live_grid(
     result = json.loads(stdout.decode().strip().splitlines()[-1])
     assert "error" not in result, result
     assert result["pageErrors"] == [], result
+    # Each view beyond the home page is its own file, served beside the panel's.
+    assert set(result["views"]) == {"events", "list", "device", "live-check", "soak"}
+    assert all(isinstance(ms, int) for ms in result["views"].values()), result
     assert result["tiles"] >= 1, result
     # The picture from the image cache (a signed URL, from memory).
     assert result["pictureWidth"] == 64, result

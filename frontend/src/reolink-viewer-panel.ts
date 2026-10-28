@@ -9,12 +9,7 @@ import {
   warmTimelines,
   type ProbeRun,
 } from "./api";
-import "./components/device-list";
-import "./components/device-page";
-import "./components/live-check";
 import "./components/live-grid";
-import "./components/events-view";
-import "./components/live-soak";
 import "./components/timetable";
 import { boardCameras, type BoardCamera } from "./components/live-grid";
 import {
@@ -32,6 +27,10 @@ import { icon } from "./icons";
 import { formatClock } from "./playback/time";
 import { sharedStyles, themeTokens } from "./styles";
 import type { DevicesResponse, HomeAssistant, ProbeReport } from "./types";
+import { loadView } from "./views";
+
+// Scripts and the browser tests load a view's elements without opening it.
+export { loadView };
 
 const MAX_LOG_LINES = 8;
 const TOAST_MS = 6_000;
@@ -61,6 +60,7 @@ export class ReolinkViewerPanel extends LitElement {
     _copied: { state: true },
     _route: { state: true },
     _toast: { state: true },
+    _viewError: { state: true },
   };
 
   declare hass: HomeAssistant | undefined;
@@ -81,6 +81,8 @@ export class ReolinkViewerPanel extends LitElement {
   declare _playbackStreams: number;
   declare _copied: boolean;
   declare _route: Route;
+  /** The current view's file could not be loaded. */
+  declare _viewError: string | undefined;
   declare _toast: ToastDetail | undefined;
 
   private _run: ProbeRun | undefined;
@@ -141,9 +143,16 @@ export class ReolinkViewerPanel extends LitElement {
     }, 60_000 - (this._now % 60_000) + 50);
   }
 
-  protected override willUpdate(): void {
+  protected override willUpdate(changed: PropertyValues<this>): void {
     // Home Assistant's dark mode picks the timetable's paper or navy.
     this.toggleAttribute("dark", this.hass?.themes?.darkMode === true);
+    if (changed.has("_route")) {
+      const view = this._route.view;
+      this._viewError = undefined;
+      loadView(view).catch((err: unknown) => {
+        if (this._route.view === view) this._viewError = toError(err).message;
+      });
+    }
   }
 
   protected override updated(changed: PropertyValues<this>): void {
@@ -244,6 +253,21 @@ export class ReolinkViewerPanel extends LitElement {
 
   private _renderView(): TemplateResult {
     const route = this._route;
+    if (this._viewError) {
+      return html`<div class="banner error" role="alert">
+        Could not load this page: ${this._viewError}. Check the connection to Home Assistant, then
+        <button
+          @click=${() => {
+            this._viewError = undefined;
+            loadView(route.view).catch((err: unknown) => {
+              this._viewError = toError(err).message;
+            });
+          }}
+        >
+          Try again
+        </button>
+      </div>`;
+    }
     switch (route.view) {
       case "live":
         return html`<rv-live-grid

@@ -5,7 +5,9 @@
 // when the page shows. The server keeps the run, so a reload carries on too.
 import { sendSoakCounts, type SoakDelta } from "../api";
 import type { HomeAssistant, SoakCounts } from "../types";
-import { SOAK_REPORT_MS } from "./soak";
+
+/** How often an open grid reports what it counted. */
+export const SOAK_REPORT_MS = 60_000;
 
 export type CountKind = keyof SoakCounts;
 

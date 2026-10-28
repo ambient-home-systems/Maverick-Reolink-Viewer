@@ -9,9 +9,16 @@ import type { Catalog, DeviceResponse, DevicesResponse, HassEntities, HomeAssist
 import "./live-grid";
 import type { BoardCamera } from "./live-grid";
 import { navigate, type Tab } from "./navigation";
-import "./overview";
-import "./playback";
-import "./settings";
+
+/** What a tab shows: the camera live, its recordings, its overview or its settings. */
+type Shown = "live" | "playback" | "overview" | "settings";
+
+/** Each tab's elements load the first time it is shown (Live is the home view's). */
+const TAB_LOADERS: Record<Exclude<Shown, "live">, () => Promise<unknown>> = {
+  overview: () => import("./overview"),
+  playback: () => import("./playback"),
+  settings: () => import("./settings"),
+};
 
 /** Wait this long after a registry change before reloading (changes come in bursts). */
 const REGISTRY_DEBOUNCE_MS = 1_000;
@@ -37,6 +44,7 @@ export class RvDevicePage extends LitElement {
     _device: { state: true },
     _catalog: { state: true },
     _error: { state: true },
+    _tabError: { state: true },
   };
 
   declare hass: HomeAssistant | undefined;
@@ -51,6 +59,8 @@ export class RvDevicePage extends LitElement {
   declare _device: DeviceResponse | undefined;
   declare _catalog: Catalog | undefined;
   declare _error: string | undefined;
+  /** The shown tab's file could not be loaded. */
+  declare _tabError: string | undefined;
 
   /** Number of renders; used by tests and the debug readout. */
   renderCount = 0;
@@ -96,6 +106,15 @@ export class RvDevicePage extends LitElement {
     if (changed.has("hass") && this.hass && this.isConnected && !this._unsubRegistry) {
       this._subscribeRegistry(this.hass);
     }
+    if ((changed.has("tab") || changed.has("_device")) && this._device) this._loadTab(shownTab(this.tab, this._device));
+  }
+
+  private _loadTab(shown: Shown): void {
+    if (shown === "live") return;
+    this._tabError = undefined;
+    TAB_LOADERS[shown]().catch((err: unknown) => {
+      this._tabError = toError(err).message;
+    });
   }
 
   protected override updated(): void {
@@ -189,16 +208,28 @@ export class RvDevicePage extends LitElement {
                   missing. Settings still work.
                 </div>`
               : nothing}
-            ${this.tab === "live" && hasLive(device)
+            ${this._tabError
+              ? html`<div class="banner error" role="alert">
+                  Could not load this tab: ${this._tabError}.
+                  <button
+                    @click=${() => {
+                      this._loadTab(shownTab(this.tab, device));
+                    }}
+                  >
+                    Try again
+                  </button>
+                </div>`
+              : nothing}
+            ${shownTab(this.tab, device) === "live"
               ? html`<rv-live-camera .hass=${this.hass} .deviceId=${node.id}></rv-live-camera>`
-              : this.tab === "playback" && hasPlayback(device)
+              : shownTab(this.tab, device) === "playback"
               ? html`<rv-playback
                   .hass=${this.hass}
                   .deviceId=${node.id}
                   .cameraName=${node.name ?? ""}
                   .at=${this.at}
                 ></rv-playback>`
-              : this.tab === "overview" || this.tab === "playback" || this.tab === "live"
+              : shownTab(this.tab, device) === "overview"
               ? html`<rv-overview
                   .hass=${this.hass}
                   .device=${device}
@@ -290,6 +321,13 @@ export class RvDevicePage extends LitElement {
       }
     `,
   ];
+}
+
+/** What a tab shows for this device: a tab it does not have shows the overview. */
+export function shownTab(tab: Tab, device: DeviceResponse): Shown {
+  if (tab === "live") return hasLive(device) ? "live" : "overview";
+  if (tab === "playback") return hasPlayback(device) ? "playback" : "overview";
+  return tab;
 }
 
 /** "Camera · CX410 · on the NVR and added directly". */

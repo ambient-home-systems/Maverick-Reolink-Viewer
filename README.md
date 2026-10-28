@@ -125,6 +125,10 @@ v0.22.0 finishes the redesign after an independent review: the home view's timet
 has a camera filter and All events, the board counts the cameras playing, video always
 sits on the dark board, slow and problem results stand out, and Settings speaks plainly.
 The design is written down in [DESIGN.md](DESIGN.md).
+v0.23.0 makes the panel open faster: the first download is the home view alone
+(about 41 KB compressed, less than half of before), and every other page loads the
+first time you open it. Dragging along a recording's timeline stays smooth, and CI
+now checks both.
 
 Requires Home Assistant 2026.10 or newer with the Reolink integration set up.
 

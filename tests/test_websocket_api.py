@@ -109,7 +109,7 @@ async def test_probe(
     assert events[0]["type"] == "progress"
     report = events[-1]["report"]
     assert report["ffmpeg_version"] == "7.1"
-    assert report["integration_version"] == "0.22.0"
+    assert report["integration_version"] == "0.23.0"
     assert report["options"]["concurrency_test"] is False
     assert report["hosts"][0]["channels"][0]["live"]["rtsp"]["sub"]["ok"] is True
     text = str(report)

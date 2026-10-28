@@ -10,6 +10,8 @@
 // reported, and says, for each criterion, whether it held. Any device can
 // read it.
 import { count, inShortLines, type Finding, type InShort } from "../plain";
+
+export { SOAK_REPORT_MS } from "./soak-tally";
 import type { SoakRun, SoakSample } from "../types";
 
 export interface SoakInput {
@@ -32,8 +34,6 @@ export interface SoakInput {
 export const SERVER_HOURS = 24;
 /** The grid's half: how long it must be visible in all (tiles pause while it is hidden). */
 export const GRID_HOURS = 8;
-/** How often an open grid reports what it counted. */
-export const SOAK_REPORT_MS = 60_000;
 
 type Mark = "✓" | "✗" | "⚠" | "–";
 

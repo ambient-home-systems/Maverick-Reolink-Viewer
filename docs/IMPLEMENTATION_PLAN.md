@@ -20,7 +20,7 @@ put on it:
 | 1 | Device details and every setting, with explanations | Standard (catalog) / High (panel shell) | 2–3 wk | Done (2026-10-17) |
 | 2 | Event timeline, thumbnails, smooth playback | High (backend) / Very high (player) | 3–5 wk | Done (2026-10-21, v0.3.2). 2A (2026-10-20, v0.2.7): timeline 105–287 ms, first frame 0.6–1.1 s, auto-advance 6–7 ms on hardware. 2B: MSE player; uncached deep starts are the NVR's download up to the target (6.9–13.0 s in hour-long recordings, up to 84 s before), speeds 0.5–8×, HD/SD at the same moment, one-hour sessions within the caps, the iPhone app on Wi-Fi, Tailscale and Nabu Casa |
 | 3 | Live view via go2rtc, grid, fullscreen, PTZ | High | 3–4 wk | Done (2026-10-27, v0.15.1). Our own go2rtc and the live check (v0.4.0, runs 5–13); the key-frame cache, the image cache, the Live grid and Live tab, keep warm, full-screen HD, PTZ and the camera's controls, the picture first, battery cameras on wired power, a debug view per tile and the soak report (v0.5.0–v0.15.1). Exit runs: the soak passed (run 15), every tile's first image in a median 0.02 s on the iPhone and the Mac (runs 16–17), and the Phase 2 playback criteria held with live view running (runs 18–19) |
-| 4 | Design, performance, mobile, packaging, first release | Standard | 3–4 wk | In progress. Design direction chosen (2026-10-28): the Timetable, see "Step 1: the design" |
+| 4 | Design, performance, mobile, packaging, first release | Standard | 3–4 wk | In progress. Step 1, the design (the Timetable), done in v0.16.0–v0.22.0; step 2, the performance budget, done in v0.23.0. See "Phase 4 status" |
 | 5 | Optional R&D: Baichuan live/playback | Very high | 4–8 wk, time-boxed with gates | Not started |
 
 Phases 1 and 2 can overlap once Phase 0 is done. Phase 5 can start any time after
@@ -2889,8 +2889,8 @@ redesigned views.
 
 | Step | Status |
 | --- | --- |
-| 1. Design: the Timetable panel (home view, events, devices, device page, checks) | **Done** (v0.16.0–v0.22.0). Direction chosen (2026-10-28), see "Step 1: the design". 1.1 foundations built (v0.16.0, the board's crop fixed in v0.16.1) and checked by the owner on the hardware, see "Step 1.1: foundations". 1.2 the home view's timetable built (v0.17.0), see "Step 1.2: today's timetable". 1.3 the Events view built (v0.18.0), see "Step 1.3: the Events view". 1.4a the device list and the device page's header, Overview and Settings built (v0.19.0), see "Step 1.4a: devices, Overview and Settings". 1.4b the Playback tab built (v0.20.0), see "Step 1.4b: the Playback tab". 1.5 the checks and reports built, in plain words (v0.21.0), see "Step 1.5: checks and reports"; 1.6 the finish: the design detector, an independent finish review against the contract (verdict: ship after fixes) with every material fix built, and `DESIGN.md` (v0.22.0), see "Step 1.6: the finish". The performance budget (step 2) is next |
-| 2. Performance budget | Not started |
+| 1. Design: the Timetable panel (home view, events, devices, device page, checks) | **Done** (v0.16.0–v0.22.0). Direction chosen (2026-10-28), see "Step 1: the design". 1.1 foundations built (v0.16.0, the board's crop fixed in v0.16.1) and checked by the owner on the hardware, see "Step 1.1: foundations". 1.2 the home view's timetable built (v0.17.0), see "Step 1.2: today's timetable". 1.3 the Events view built (v0.18.0), see "Step 1.3: the Events view". 1.4a the device list and the device page's header, Overview and Settings built (v0.19.0), see "Step 1.4a: devices, Overview and Settings". 1.4b the Playback tab built (v0.20.0), see "Step 1.4b: the Playback tab". 1.5 the checks and reports built, in plain words (v0.21.0), see "Step 1.5: checks and reports"; 1.6 the finish: the design detector, an independent finish review against the contract (verdict: ship after fixes) with every material fix built, and `DESIGN.md` (v0.22.0), see "Step 1.6: the finish". |
+| 2. Performance budget | **Done** (v0.23.0): the home view's first download is 40.9 KB gzipped (budget 200 KB) with every other view loaded on demand; no long tasks while scrubbing the timeline; time to first frame for live and playback on every setup. The first two run in CI. See "Step 2: the performance budget". Mobile (step 3) is next |
 | 3. Mobile, and networks that cut websockets | Not started |
 | 4. Error states | Not started |
 | 5. Accessibility | Not started |
@@ -3160,6 +3160,98 @@ it found in plain words before any measurement.
 - No raster ships: the bundle holds the panel and its fonts (Barlow, OFL). The
   preview's camera pictures are synthetic (`frontend/preview/make-media.sh`) and not
   committed.
+
+### Step 2: the performance budget (v0.23.0)
+
+All three limits are met. The first two now run in CI on every change.
+
+**1. The first download: 40.9 KB gzipped, against a budget of 200 KB.** Before
+this step the panel was one 97.3 KB file. Now the entry imports one file with the
+home view (the band, the live board and today's timetable). Every other view is
+its own file, loaded the first time it is shown:
+
+| View | Adds (gzipped) |
+| --- | --- |
+| Devices | 2.1 KB |
+| A device page | 2.7 KB, then Overview 5.1 KB, Playback 37.4 KB, Settings 6.5 KB |
+| Events | 3.5 KB |
+| Live check | 28.1 KB |
+| Soak report | 16.0 KB |
+| Every file together | 108.7 KB in 13 files |
+
+- The home view is two requests, not a chain: Rolldown's `codeSplitting` group
+  (`vite.config.ts`) puts everything the entry needs in one file.
+- `src/views.ts` loads a view when the route first asks for it, and the device
+  page loads each tab the same way. A view that fails to load says so ("Could
+  not load this page: … Check the connection to Home Assistant, then Try
+  again"), and the next try fetches it again.
+- The files have hashed names, so a new version never mixes with a cached old
+  one; the entry's `?v=` changes with them.
+- CI: `npm run budget` (`frontend/scripts/bundle-budget.mjs`) prints the sizes
+  above and fails over 200 KB. The Chromium test (`tests/live_grid_browser.cjs`)
+  loads every view through Home Assistant's static path.
+
+**2. Scrubbing the timeline: no long tasks.** `scripts/scrub_check.cjs` opens the
+Playback tab of the design preview in Chromium, drags the playhead across the
+timeline and back three times, then hovers along it (the thumbnails), while a
+`PerformanceObserver` records every task over 50 ms. Six runs of each:
+
+| Run | Long tasks over 50 ms |
+| --- | --- |
+| Desktop (1440 px) | none (judged: CI fails on any) |
+| Desktop, processor slowed 4× | none (reported only) |
+| Phone (390 px), processor slowed 4× | one of 53 ms in one run, none in the other five (reported only) |
+
+The preview plays no video, so this covers the timeline, its thumbnails and the
+page, not the browser's own seeking. Seeking was measured on the hardware in
+Phase 2B ("Scrub": 5 of 5 points from the buffer, median 4 ms in Chrome and
+287–339 ms on the iPhone, where WebKit's `fastSeek` lands on the nearest key
+frame).
+
+**3. Time to first frame.** The live check and the playback check measure it on
+the owner's hardware; these are the latest figures for each setup. The media
+paths have not changed since v0.15.1; the redesign changed what draws the page,
+not how video arrives.
+
+Live (the grid, the Live tab):
+
+| Setup | Run | The picture | A kept-warm camera plays | A camera not kept warm plays |
+| --- | --- | --- | --- | --- |
+| Mac, Safari, at home | 17 (v0.15.1) | median 0.02 s (8 of 8 in 7–36 ms) | median 0.05 s (MSE, 6 cameras) | Doorbell 0.39–0.40 s (WebRTC) |
+| iPhone app, home Wi-Fi | 16 (v0.15.1) | median 0.02 s (8 of 8 in 8–31 ms) | median 0.09 s | Doorbell 0.39–0.40 s |
+| iPhone app, Tailscale | 12 (v0.5.5) | not measured (before the image cache) | sub streams median 0.40 s | sub streams median 2.16 s |
+| iPhone app, Nabu Casa | 13 (v0.5.5) | not measured (before the image cache) | sub streams 0.30–0.58 s | sub streams 1.21–4.26 s, median 1.76 s |
+
+- A camera not kept warm waits for its next key frame, so its time depends on the
+  camera (1–4 s on most). The Laundry Room's E1 Zoom, which records nowhere,
+  shows its picture first and plays when tapped: 3.5–3.8 s cold.
+- Full screen swaps the HD stream in on its first frame, so the picture never
+  goes blank: warm mains a median 0.17 s on Wi-Fi (run 11), 1.12 s through
+  Tailscale and 0.95 s through Nabu Casa (runs 12–13).
+- Home Assistant's own snapshot took a median 0.50–0.55 s at home (runs 16–17)
+  and 0.77 s through Nabu Casa (run 13).
+
+Playback (the Playback tab, sub stream):
+
+| Setup | Run | Timeline | Event → first frame | Deep in an hour's recording, not cached |
+| --- | --- | --- | --- | --- |
+| Mac, Safari, at home, live view running | 18 (v0.15.1) | 48–168 ms | 199–493 ms (two not cached) | not run |
+| iPhone app, at home, live view running | 19 (v0.15.1) | 57–831 ms | 165–338 ms | not run |
+| Mac, Chrome, Nabu Casa | 2B desktop 6 (v0.3.2) | 120–554 ms | 93–452 ms | 13.0 s (57 of 60 min) |
+| iPhone app, Wi-Fi | 2B iPhone 5 (v0.3.2) | 126–178 ms | 210 ms; 1.3 s not cached | 9.5 s (57 of 60 min), 5.1 s (30 of 40 min) |
+| iPhone app, Tailscale | 2B iPhone 6 (v0.3.2) | 165–277 ms | 325–719 ms | 9.2 s (55 of 60 min, a 14 Mbit/s link) |
+| iPhone app, Nabu Casa | 2B iPhone 7 (v0.3.2) | 85–234 ms | 205–232 ms; 3.0 s not cached | 6.9 s (41 of 60 min) |
+
+- A recording not yet on Home Assistant waits for the NVR's download up to the
+  point asked for, and nothing more, whatever the link: about 0.2 s per minute
+  into the recording on this camera (Front Yard Right), at the NVR's
+  150–210 Mbit/s.
+- Moving on to the next file: gaps of 2–26 ms. Switching to HD and back keeps
+  the moment (within 0.03 s); HD itself is 0.4 s cached and 4.6–13.8 s cold
+  (the server fetches the whole main recording).
+
+To refresh these on a new version, run the live check and the playback check
+on each setup; their "In short" says how each start went.
 
 ### Steps 2–7
 
