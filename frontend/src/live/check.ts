@@ -666,6 +666,17 @@ export class LiveCheck {
           advice: "Keep fewer of its cameras warm, or watch fewer of them in full screen at the same time.",
         });
       }
+      const left = (report.main_left_out ?? []).map((m) => m.camera);
+      if (left.length) {
+        findings.push({
+          grade: "note",
+          text:
+            left.length === 1
+              ? `${host}'s capacity test left out ${left.join("")}'s full-resolution stream: it sent no video, even on its own.`
+              : `${host}'s capacity test left out the full-resolution streams of ${joinNames(left)}: they sent no video, even on their own.`,
+          advice: `If ${left.length === 1 ? "its full picture does" : "their full pictures do"} not play in the Reolink app either, restart ${left.length === 1 ? "the camera" : "those cameras"}.`,
+        });
+      }
     }
     for (const { host, message, advice } of this._capacityFailed) {
       findings.push({
@@ -786,6 +797,11 @@ export function describe(result: SessionResult): string {
   const details = [steps.join(", "), path, media].filter(Boolean).join("; ");
   if (!result.ok) return `✗ ${result.error ?? "failed"}${details ? ` (${details})` : ""}`;
   return `${seconds(result.firstFrameMs)}${details ? ` (${details})` : ""}`;
+}
+
+/** "A", "A and B", "A, B and C". */
+function joinNames(names: string[]): string {
+  return names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names.at(-1) ?? ""}`;
 }
 
 function countBy(values: string[]): string {

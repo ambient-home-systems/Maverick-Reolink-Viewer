@@ -8,7 +8,10 @@ adding one at a time and keeping the earlier ones open:
 
 1. the sub stream of each channel, one more per level (all of them: the grid);
 2. then the main stream of the channel whose main has the highest bitrate
-   (full screen);
+   (full screen), of those that play on their own: each is tried alone first,
+   up to ``MAIN_TRIES``, and one that sends no video is left out, and said so
+   (run 20: the Duo 3's 16 MP main sent none, to Home Assistant's own view
+   too, so its "no frame" at level 7 said nothing about the NVR);
 3. then a recording download at full speed (a playback fill).
 
 Before the streams, the download runs alone for a baseline. At each level it
@@ -50,6 +53,8 @@ from .streams import LiveStream
 _LOGGER = logging.getLogger(__name__)
 
 FIRST_FRAME_TIMEOUT = 15.0
+# Mains tried alone, heaviest first, for the main level.
+MAIN_TRIES = 3
 MEASURE_S = 6.0
 FILL_ALONE_S = 4.0
 FPS_SHARE = 0.85
@@ -286,8 +291,11 @@ class CapacityTest:
                 report["fill_alone_mbit_s"] = alone.get("mbit_s")
             plan = [(s, "sub") for s in self._sources]
             if self._include_main:
-                heaviest = max(self._sources, key=lambda s: _bitrate(host, s, "main"))
-                plan.append((heaviest, "main"))
+                main, left_out = await self._playing_main(host)
+                if left_out:
+                    report["main_left_out"] = left_out
+                if main is not None:
+                    plan.append((main, "main"))
             for number, (source, kind) in enumerate(plan, 1):
                 self._progress(f"level {number}: + {source.name} {kind}")
                 report["levels"].append(await self._add(host, number, source, kind))
@@ -308,30 +316,62 @@ class CapacityTest:
     async def _add(
         self, host: bridge.ReolinkHostHandle, number: int, source: LiveSource, kind: str
     ) -> dict[str, Any]:
-        stream = LiveStream(source, kind)
-        url = await host.async_live_url(source.channel, stream.protocol, kind)
-        if url is None:
+        opened = await self._open(host, source, kind)
+        if opened is None:
             return {
                 "level": number,
                 "added": f"{source.name} {kind}",
                 "error": "no URL",
             }
+        reader, task = opened
+        self._readers.append(reader)
+        self._tasks.append(task)
+        await _first_frame(reader)
+        level = await self._measure(host, number, reader.label)
+        level["first_frame_s"] = _round(reader.first_frame_s())
+        return level
+
+    async def _open(
+        self, host: bridge.ReolinkHostHandle, source: LiveSource, kind: str
+    ) -> tuple[Reader, asyncio.Task[None]] | None:
+        """Start reading a stream through go2rtc; None when it has no URL."""
+        stream = LiveStream(source, kind)
+        url = await host.async_live_url(source.channel, stream.protocol, kind)
+        if url is None:
+            return None
         await self._server.async_set_stream(
             stream.name, url.value + ("#backchannel=0" if kind != "ext" else "")
         )
         reader = Reader(
             f"{source.name} {kind}", stream.name, _frame_rate(host, source, kind)
         )
-        self._readers.append(reader)
-        self._tasks.append(asyncio.create_task(reader.run(self._server)))
-        end = time.monotonic() + FIRST_FRAME_TIMEOUT
-        while reader.first_frame is None and not reader.ended:
-            if time.monotonic() > end:
-                break
-            await asyncio.sleep(0.05)
-        level = await self._measure(host, number, reader.label)
-        level["first_frame_s"] = _round(reader.first_frame_s())
-        return level
+        return reader, asyncio.create_task(reader.run(self._server))
+
+    async def _playing_main(
+        self, host: bridge.ReolinkHostHandle
+    ) -> tuple[LiveSource | None, list[dict[str, str]]]:
+        """Return the heaviest main that plays on its own, and those that did not."""
+        left_out: list[dict[str, str]] = []
+        heaviest = sorted(
+            self._sources, key=lambda s: _bitrate(host, s, "main"), reverse=True
+        )
+        for source in heaviest[:MAIN_TRIES]:
+            self._progress(f"{source.name} main on its own")
+            opened = await self._open(host, source, "main")
+            if opened is None:
+                left_out.append({"camera": source.name, "why": "no URL"})
+                continue
+            reader, task = opened
+            try:
+                await _first_frame(reader)
+            finally:
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
+            if reader.first_frame is not None:
+                return source, left_out
+            why = reader.error or f"no frame in {round(FIRST_FRAME_TIMEOUT)} s"
+            left_out.append({"camera": source.name, "why": why})
+        return None, left_out
 
     async def _with_fill(
         self, host: bridge.ReolinkHostHandle, number: int, channel: int, file: VodFile
@@ -408,6 +448,15 @@ class CapacityTest:
             "ttfb_ms": result.ttfb_ms,
             **({"error": result.error} if result.error else {}),
         }
+
+
+async def _first_frame(reader: Reader) -> None:
+    """Wait for a reader's first frame, its end or FIRST_FRAME_TIMEOUT."""
+    end = time.monotonic() + FIRST_FRAME_TIMEOUT
+    while reader.first_frame is None and not reader.ended:
+        if time.monotonic() > end:
+            break
+        await asyncio.sleep(0.05)
 
 
 def verdict(report: dict[str, Any], fill_alone: float | None) -> dict[str, Any]:

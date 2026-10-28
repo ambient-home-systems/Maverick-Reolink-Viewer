@@ -20,7 +20,7 @@ put on it:
 | 1 | Device details and every setting, with explanations | Standard (catalog) / High (panel shell) | 2–3 wk | Done (2026-10-17) |
 | 2 | Event timeline, thumbnails, smooth playback | High (backend) / Very high (player) | 3–5 wk | Done (2026-10-21, v0.3.2). 2A (2026-10-20, v0.2.7): timeline 105–287 ms, first frame 0.6–1.1 s, auto-advance 6–7 ms on hardware. 2B: MSE player; uncached deep starts are the NVR's download up to the target (6.9–13.0 s in hour-long recordings, up to 84 s before), speeds 0.5–8×, HD/SD at the same moment, one-hour sessions within the caps, the iPhone app on Wi-Fi, Tailscale and Nabu Casa |
 | 3 | Live view via go2rtc, grid, fullscreen, PTZ | High | 3–4 wk | Done (2026-10-27, v0.15.1). Our own go2rtc and the live check (v0.4.0, runs 5–13); the key-frame cache, the image cache, the Live grid and Live tab, keep warm, full-screen HD, PTZ and the camera's controls, the picture first, battery cameras on wired power, a debug view per tile and the soak report (v0.5.0–v0.15.1). Exit runs: the soak passed (run 15), every tile's first image in a median 0.02 s on the iPhone and the Mac (runs 16–17), and the Phase 2 playback criteria held with live view running (runs 18–19) |
-| 4 | Design, performance, mobile, packaging, first release | Standard | 3–4 wk | Done (2026-10-28, v0.32.1). Step 1, the design (the Timetable), in v0.16.0–v0.22.0; step 2, the performance budget, in v0.23.0; step 3, mobile, in v0.24.0–v0.26.0; step 4, error states, in v0.27.0–v0.29.0; step 5, accessibility, in v0.30.0; step 6, packaging, in v0.31.0, the first release; step 7, docs, in v0.32.0, released the same day; v0.32.1 starts live video sooner where WebRTC cannot connect, from the work PC's check. The rest of the exit checklist was not run: the owner closed the phase on v0.32.0 working in daily use. See "Phase 4 status" |
+| 4 | Design, performance, mobile, packaging, first release | Standard | 3–4 wk | Done (2026-10-28, v0.32.2). Step 1, the design (the Timetable), in v0.16.0–v0.22.0; step 2, the performance budget, in v0.23.0; step 3, mobile, in v0.24.0–v0.26.0; step 4, error states, in v0.27.0–v0.29.0; step 5, accessibility, in v0.30.0; step 6, packaging, in v0.31.0, the first release; step 7, docs, in v0.32.0, released the same day; v0.32.1 starts live video sooner where WebRTC cannot connect, from the work PC's check, and v0.32.2 keeps the capacity test from blaming the NVR for a stream that plays no video, from the owner's live check. The rest of the exit checklist was not run: the owner closed the phase on v0.32.0 working in daily use. See "Phase 4 status" |
 | 5 | Optional R&D: Baichuan live/playback | Very high | 4–8 wk, time-boxed with gates | Not started |
 
 Phases 1 and 2 can overlap once Phase 0 is done. Phase 5 can start any time after
@@ -3308,6 +3308,20 @@ stream slots stayed busy". Now:
   screens and let playback finish, then run the check again."
 - Any other reason the test could not run is in the summary too (it was only in
   the details).
+- **Seen on the hardware** (run 20, 2026-10-28, v0.32.1): the test set the six
+  cameras kept warm aside and ran every level.
+- **A main that plays no video (v0.32.2).** Run 20's level 7, the Back Yard's 16 MP
+  main, sent no frame, and the verdict blamed the NVR ("struggled with 7 video
+  streams at once": keep fewer cameras warm), though every other stream kept its
+  rate and the download then ran faster than alone. That main sent no video in any
+  part of the run, to Home Assistant's own view too. Now the test opens the heaviest
+  main on its own first, before the levels, and uses the next heaviest if it sends
+  nothing (up to `MAIN_TRIES`, 3); the report lists those left out
+  (`main_left_out`), and the summary says "RLN36's capacity test left out Back
+  Yard's full-resolution stream: it sent no video, even on its own", with what to
+  try. Tests: against a real go2rtc, a main that never plays is left out and the
+  verdict stays clean (and fails on v0.32.1's test); the summary and the report's
+  lines (unit).
 
 Tests: the player's switch, its hour and its giving up (unit, fake sessions);
 the session telling a cut from an end the server explained; the relay setting a
@@ -3774,9 +3788,23 @@ they point to is in the tag's docs.
 ### Phase 4 exit: the checklist
 
 **Not run.** On 2026-10-28 the owner closed Phase 4 without it: v0.32.0 works in
-daily use. So none of A–G is measured: the install through HACS on a clean Home
-Assistant, the live and playback checks there, and the iPhone checklist (step 3.3).
-The steps stay here for a later check.
+daily use. So none of A–G is measured as written: the install through HACS on a
+clean Home Assistant, the live and playback checks there, and the iPhone checklist
+(step 3.3). The steps stay here for a later check.
+
+**Simpler checks instead** (the virtual machine was too much; the owner's own Home
+Assistant, 2026-10-28):
+
+1. **HACS update** to v0.32.1: done; Help says 0.32.1.
+2. **The work PC** on v0.32.1: after a reload the Doorbell started over MSE first in
+   1.00 s (see H below).
+3. **The live check** on the Mac (run 20): every camera started, typically in under
+   0.1 s; first images 0.02 s; ours faster than Home Assistant's view on 18 of 18;
+   the capacity test ran with the warm feeds set aside. Its verdict wrongly blamed
+   the NVR for the Back Yard main, which plays no video: fixed in v0.32.2.
+4. **The playback check** on Front Yard Right (run 21): every part good; a deep
+   start not cached 9.0 s, cached 0.1 s; HD 4.7 s ("Fine").
+5. **The iPhone at home**, and 6. **away**: not yet.
 
 **H, the work PC (2026-10-28 13:15).** The owner left the Live board open there,
 through Nabu Casa, "playing fine the whole time", and sent the Doorbell tile's ⓘ

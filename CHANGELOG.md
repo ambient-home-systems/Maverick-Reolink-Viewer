@@ -3,6 +3,19 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.32.2
+
+The live check's NVR capacity test no longer blames the NVR for a camera stream that
+does not play:
+
+- The test adds, last, the full-resolution stream of the camera that sends the most.
+  When that stream sent no video at all, even on its own, the check said the NVR
+  struggled with that many streams and suggested keeping fewer cameras warm. Now the
+  test first checks that the stream plays on its own, uses the next camera's if not,
+  and says which camera's full-resolution stream sent no video, and what to try.
+
+Tested on Home Assistant 2026.10.1 to 2026.10.4.
+
 ## 0.32.1
 
 Live video starts sooner on networks that block one of its two ways of streaming:

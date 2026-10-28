@@ -598,6 +598,54 @@ async def test_capacity_test(
     assert msg["error"]["code"] == "not_found"
 
 
+async def test_capacity_test_leaves_out_a_main_that_plays_no_video(
+    hass: HomeAssistant,
+    hass_ws_client: WebSocketGenerator,
+    live: MockConfigEntry,
+    reolink_host: MagicMock,
+    fake_camera: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A main that sends no video on its own is not the host's limit: left out, said why.
+
+    Run 20: the Duo 3's 16 MP main sent none (to Home Assistant's own view too),
+    and the test called it the NVR struggling with 7 streams.
+    """
+    monkeypatch.setattr(capacity, "MEASURE_S", 1.5)
+    monkeypatch.setattr(capacity, "FILL_ALONE_S", 0.5)
+    monkeypatch.setattr(capacity, "FIRST_FRAME_TIMEOUT", 3.0)
+    camera = fake_camera.removeprefix("rtsp://")
+    reolink_host.get_rtsp_stream_source = AsyncMock(
+        side_effect=lambda ch, stream=None, check=True: (
+            # Nothing listens on port 9: the main never plays.
+            f"rtsp://admin:{SECRET}@127.0.0.1:9/cam"
+            if stream == "main"
+            else f"rtsp://admin:{SECRET}@{camera}/cam"
+        )
+    )
+    client = await hass_ws_client(hass)
+    msg = await _ws(client, {"type": "reolink_viewer/devices"})
+    host_id = msg["result"]["hosts"][0]["id"]
+    await client.send_json_auto_id(
+        {"type": "reolink_viewer/live/capacity", "host_id": host_id}
+    )
+    events = await _events(client, "result", timeout=60)
+    report = events[-1]["report"]
+    sub = report["levels"][0]["added"]
+    name = sub.removesuffix(" sub")
+    assert [level["added"] for level in report["levels"]] == [
+        sub,
+        "recording download",
+    ]
+    (left_out,) = report["main_left_out"]
+    assert left_out["camera"] == name
+    assert left_out["why"]
+    assert SECRET not in left_out["why"]
+    assert report["verdict"] == {"first_failing_level": None, "reasons": []}
+    progress = [e["message"] for e in events if e["type"] == "progress"]
+    assert f"{name} main on its own" in progress
+
+
 async def test_capacity_test_says_what_holds_the_slots(
     hass: HomeAssistant,
     hass_ws_client: WebSocketGenerator,

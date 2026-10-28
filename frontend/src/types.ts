@@ -661,6 +661,8 @@ export interface CapacityReport {
   verdict: { first_failing_level: number | null; reasons: string[] };
   /** The cameras kept warm on the host, set aside while the test ran. */
   warm_set_aside?: number;
+  /** Mains left out of the main level: they sent no video on their own. */
+  main_left_out?: { camera: string; why: string }[];
 }
 
 export type CapacityEvent =

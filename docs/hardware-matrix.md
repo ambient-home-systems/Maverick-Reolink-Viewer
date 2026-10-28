@@ -22,7 +22,9 @@ v0.15.1) the whole soak, passed. Run 16 (2026-10-27, v0.15.1) is the live
 check on the iPhone app at home, and run 17 (2026-10-27, v0.15.1) on the
 Mac in Safari, for the first images from the image cache. Runs 18 and 19
 (2026-10-27, v0.15.1) are the playback check on the Mac and the iPhone with
-live view running, Phase 3's last exit run.
+live view running, Phase 3's last exit run. Run 20 (2026-10-28, v0.32.1) is the
+live check on the Mac in Chrome, the capacity test with the cameras kept warm set
+aside, and run 21 the playback check on Front Yard Right, both for Phase 4.
 
 ## Setup probed
 
@@ -682,6 +684,73 @@ minutes:
   connecting, a reload started the Doorbell over MSE first, with no WebRTC try:
   first frame in 1.00 s (720×720, avc1.640029), its feed 23 s old, a key frame
   every 3.97 s.
+
+Run 20, 2026-10-28 15:53: the live check (v0.32.1) on the Mac in Chrome 155 on the
+LAN, the page on its own domain over http. MSE through `MediaSource` (H.264 and
+H.265); WebRTC receives VP8, VP9, H.264, AV1 and H.265. The six NVR sub streams were
+kept warm.
+
+| Measure | Median (range) |
+| --- | --- |
+| **First image, ours** (the image cache) | **0.02 s** (9–20 ms, 8 of 8), taken about 75 s before |
+| First image, Home Assistant's snapshot | 0.53 s (14 of 19; it failed on Dogs' sub, both Laundry Room and both Doorbell streams), slowest 1.19 s |
+| First image, go2rtc's frame | 1.99 s (27 of 29), slowest 2.59 s |
+| Warm MSE, sub | 0.06 s (0.05–0.68 s, 10 of 10) |
+| Warm MSE, main and ext | 0.09 s (0.06–1.19 s, 18 of 19) |
+| Cold WebRTC, sub | 1.32 s (0.30–3.36 s); main and ext 1.80 s (18 of 19) |
+| Cold MSE, sub | 0.24 s (the kept-warm subs are not cold); main and ext 1.50 s (18 of 19) |
+| Warm WebRTC, sub | 3.93 s (it waits for a key frame); main and ext 1.88 s |
+| Home Assistant's view | 1.54 s, 18 of 19; ours, the better of cold and warm, faster on 18 of 18 |
+
+WebRTC connected in 58 of 58 sessions, all host/udp ↔ host/udp. Full screen chose
+every main (Chrome on this Mac plays the H.265 mains smoothly) except the Back
+Yard's, wider than 4096 pixels (its ext). Two MSE starts were slow in getting their
+signed URL (Back Yard's sub 2.40 s, its ext 1.11 s), as in runs 16–17.
+
+**The Back Yard's main (Duo 3, 7680×2160 H.265) sent no video** in any part of this
+run: cold over WebRTC and MSE, warm (no key frame in 15 s), Home Assistant's own
+WebRTC, and go2rtc's frame, though Home Assistant's snapshot of it (7680×2160) came in
+0.78 s. In runs 16–17 it played. Its ext stream played (cold 1.51–2.12 s, warm
+0.08–1.49 s), so full screen was not affected.
+
+**The capacity test ran** with the cameras kept warm, for the first time: it set
+the six aside while it ran. Clients logged in (GetOnline): 2 before and after.
+
+| Level | Added | First frame | Frames per second (measured / set) | Download |
+| --- | --- | --- | --- | --- |
+| alone | download (ch23, 60 min main) | | | 368.8 Mbit/s |
+| 1 | Back Yard sub | 0.82 s | 20.2/20 | |
+| 2 | Garage sub | 2.40 s | all at their rate | |
+| 3 | Hallway sub | 3.67 s | all at their rate | |
+| 4 | Front Yard Right sub | 0.78 s | all at their rate | |
+| 5 | Dogs sub | 2.92 s | all at their rate | |
+| 6 | Front Yard Left sub | 2.71 s | Front Yard Left 14.5/15, the rest at their rate | |
+| 7 | Back Yard main | none | Back Yard main 0/20; the six subs at their rate | |
+| 8 | download | | the six subs at their rate | 421.6 Mbit/s |
+
+The NVR kept every stream at its rate, with a download faster than alone. Level 7's
+"no frame" was the Back Yard's main sending nothing, as everywhere else in the run,
+but the verdict called it the NVR struggling with 7 streams ("Keep fewer of its
+cameras warm"). v0.32.2 tries the heaviest main on its own first and leaves out one
+that sends no video, saying so.
+
+Run 21, 2026-10-28 16:08: the playback check (v0.3.2, in integration v0.32.1) on
+Front Yard Right (CX410, records continuously; sub and main avc1.640033 2560×1440),
+on the Mac in Chrome 155 on the LAN, through `MediaSource`, over http/1.1.
+
+| Part | Result |
+| --- | --- |
+| Timeline: today, a past day, again, today again | 147, 106, 168, 388 ms |
+| Events → first frame (sub) | 1703 ms (not cached: the server fetched the 8.2 min recording, 33.8 MB at 158 Mbit/s), then 55 and 30 ms (same recording) |
+| Deep start (D), 54.0 min into a 60.0 min recording | 9012 ms not cached (the NVR's download up to there: 248 MB at 196 Mbit/s); 108 ms cached |
+| Auto-advance | gap 9 ms (preloaded) |
+| Rates 0.5×, 1×, 2×, 4×, 8× | on pace, 0 stalls; painted 7, 15, 30, 55, 54 fps; longest gaps 217, 100, 67, 50, 34 ms |
+| Scrub | 5 of 5 from the buffer, median 5 ms |
+| HD switch | 4.7 s: the server fetched the 2.39 GB main recording at 418 Mbit/s; kept the moment (0.02 s); back to SD 161 ms |
+| Link | 454 Mbit/s |
+
+Every part judged well, the HD switch "Fine". The deep start is within Phase 2's
+6.9–13.0 s for hour-long recordings not cached.
 
 ## Findings
 
