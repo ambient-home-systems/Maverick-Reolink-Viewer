@@ -118,7 +118,7 @@ export class RvLiveGrid extends LitElement {
     const cameras = this._data.cameras;
     if (cameras && cameras !== this._announced) {
       this._announced = cameras;
-      const board: BoardCamera[] = boardOrder(cameras).map((c, i) => ({ id: c.id, name: c.name, number: i + 1 }));
+      const board = boardCameras(cameras);
       this.dispatchEvent(
         new CustomEvent<{ cameras: BoardCamera[] }>(BOARD_EVENT, { detail: { cameras: board }, bubbles: true, composed: true }),
       );
@@ -266,6 +266,11 @@ export class RvLiveGrid extends LitElement {
       }
     `,
   ];
+}
+
+/** The board's cameras, numbered as its tiles are. */
+export function boardCameras(cameras: LiveCamera[]): BoardCamera[] {
+  return boardOrder(cameras).map((c, i) => ({ id: c.id, name: c.name, number: i + 1 }));
 }
 
 /**

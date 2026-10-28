@@ -5,7 +5,7 @@
 //   node scripts/preview_capture.cjs <out-dir> [view ...]
 //
 // A view is one of the names below, or any hash (#device/cam-fyl/live).
-// Views: live (home), devices, overview, live-tab, settings, playback, live-check, soak.
+// Views: live (home), events, devices, overview, live-tab, settings, playback, live-check, soak.
 // The pictures are synthetic (frontend/preview/make-media.sh).
 const { chromium } = require("playwright");
 const http = require("node:http");
@@ -15,6 +15,7 @@ const path = require("node:path");
 const ROOT = path.join(__dirname, "..", "frontend", ".preview");
 const VIEWS = {
   live: "",
+  events: "#events",
   devices: "#devices",
   overview: "#device/cam-fyr/overview",
   "live-tab": "#device/cam-fyr/live",

@@ -5,6 +5,7 @@ export type Tab = "overview" | "live" | "settings" | "playback";
 export type Route =
   | { view: "list" }
   | { view: "live" }
+  | { view: "events"; date?: string }
   | { view: "live-check" }
   | { view: "soak" }
   | { view: "device"; id: string; tab: Tab; at?: number };
@@ -38,6 +39,7 @@ export function routeToHash(route: Route): string {
   if (route.view === "live-check") return "#live-check";
   if (route.view === "soak") return "#soak";
   if (route.view === "list") return "#devices";
+  if (route.view === "events") return route.date ? `#events/${route.date}` : "#events";
   if (route.view === "live") return "";
   const at = route.tab === "playback" && route.at !== undefined ? `/${route.at}` : "";
   return `#device/${encodeURIComponent(route.id)}/${route.tab}${at}`;
@@ -47,6 +49,9 @@ export function routeFromHash(hash: string): Route {
   if (hash === "#live-check") return { view: "live-check" };
   if (hash === "#soak") return { view: "soak" };
   if (hash === "#devices") return { view: "list" };
+  if (hash === "#events") return { view: "events" };
+  const day = /^#events\/(\d{4}-\d{2}-\d{2})$/.exec(hash);
+  if (day?.[1]) return { view: "events", date: day[1] };
   const match = /^#device\/([^/]+)(?:\/(overview|live|settings|playback)(?:\/(\d+))?)?$/.exec(hash);
   if (!match?.[1]) return { view: "live" };
   const tab = match[2];

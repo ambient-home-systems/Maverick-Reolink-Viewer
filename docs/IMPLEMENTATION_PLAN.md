@@ -2889,7 +2889,7 @@ redesigned views.
 
 | Step | Status |
 | --- | --- |
-| 1. Design: the Timetable panel (home view, events, devices, device page, checks) | **In progress.** Direction chosen (2026-10-28), see "Step 1: the design". 1.1 foundations built (v0.16.0, the board's crop fixed in v0.16.1) and checked by the owner on the hardware, see "Step 1.1: foundations". 1.2 the home view's timetable built (v0.17.0), see "Step 1.2: today's timetable"; the Events view is next |
+| 1. Design: the Timetable panel (home view, events, devices, device page, checks) | **In progress.** Direction chosen (2026-10-28), see "Step 1: the design". 1.1 foundations built (v0.16.0, the board's crop fixed in v0.16.1) and checked by the owner on the hardware, see "Step 1.1: foundations". 1.2 the home view's timetable built (v0.17.0), see "Step 1.2: today's timetable". 1.3 the Events view built (v0.18.0), see "Step 1.3: the Events view"; devices and the device page are next |
 | 2. Performance budget | Not started |
 | 3. Mobile, and networks that cut websockets | Not started |
 | 4. Error states | Not started |
@@ -3026,6 +3026,22 @@ iPhone and the Mac):
   is the time, what was seen over the camera and length, and the thumbnail.
 - The board tells the page how it numbers its cameras (`rv-board`), so the
   timetable's numbers match the tiles'.
+
+### Step 1.3: the Events view (v0.18.0)
+
+- **An Events tab** in the band, between Live and Devices: `#events` is today,
+  `#events/YYYY-MM-DD` any other day.
+- **A day picker:** the day before and the day after, and a calendar (the playback
+  tab's) whose dots mark the days with recordings on any camera (`events/days`, each
+  camera's month search, cached as the playback tab's).
+- **Filters:** the day's cameras (by their number on the board) and what was seen
+  (a person, a vehicle, the doorbell, …, and motion on its own: the same types a row
+  shows). None chosen shows every event; filters stay as the day changes.
+- **The timetable** takes a `date`, every row and the filters; another day has no
+  line at the time now and is not refreshed. `events/recent` takes a `date`.
+- The panel reads the board's numbering itself (`live/cameras`), so the Events view
+  numbers the cameras as the board does without the board open.
+- The calendar's month arrows are drawn icons.
 
 ### Steps 2–7
 

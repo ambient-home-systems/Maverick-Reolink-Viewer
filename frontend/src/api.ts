@@ -171,19 +171,29 @@ export const fetchTimelineDay = (
   });
 
 /**
- * Today's events of every recording camera, newest first. `maxAge` (s):
+ * A day's events of every recording camera (by default each one's today),
+ * newest first. `maxAge` (s):
  * accept cached copies of today that old; `background`: a refresh nobody
  * waits for (it yields to what someone asked for).
  */
 export const fetchRecentEvents = (
   hass: HomeAssistant,
-  options: { maxAge?: number; background?: boolean } = {},
+  options: { date?: string; maxAge?: number; background?: boolean } = {},
 ): Promise<RecentEvents> =>
   hass.callWS<RecentEvents>({
     type: "reolink_viewer/events/recent",
+    ...(options.date ? { date: options.date } : {}),
     ...(options.maxAge ? { max_age: options.maxAge } : {}),
     ...(options.background ? { background: true } : {}),
   });
+
+/** The days of a month with recordings on any camera. */
+export const fetchEventDays = (
+  hass: HomeAssistant,
+  year: number,
+  month: number,
+): Promise<{ days: number[]; failed: { camera_id: string; error: string }[] }> =>
+  hass.callWS({ type: "reolink_viewer/events/days", year, month });
 
 /** This user opened an event. */
 export const markEventSeen = (hass: HomeAssistant, cameraId: string, start: number): Promise<unknown> =>

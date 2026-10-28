@@ -108,6 +108,9 @@ newest first under a red line at the time now, each with its time, what was seen
 camera's number on the board, its length and a thumbnail. An event you have not opened
 yet stays lit in red, per Home Assistant user, until you open it (a row plays the
 recording in the camera's Playback tab) or mark everything seen.
+v0.18.0 adds an **Events** tab: any day's events from every camera as the same
+timetable, with the day before and after, a calendar marking the days with
+recordings, and filters by camera and by what was seen.
 
 Requires Home Assistant 2026.10 or newer with the Reolink integration set up.
 

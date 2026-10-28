@@ -132,6 +132,31 @@ describe("rv-timetable", () => {
   });
 });
 
+describe("rv-timetable on another day", () => {
+  it("shows the day whole, without the line at now, and asks again for another day", async () => {
+    const hass = timetableHass(feed(Array.from({ length: 10 }, (_, i) => event(20 - i, 0, "yard", ["MOTION"]))));
+    const el = document.createElement("rv-timetable");
+    el.cameras = CAMERAS;
+    el.date = "2026-10-25";
+    el.limit = Number.POSITIVE_INFINITY;
+    el.hass = hass;
+    document.body.appendChild(el);
+    await flush();
+    await el.updateComplete;
+    // A past day is not refreshed.
+    expect(sentOf(hass, "reolink_viewer/events/recent")).toEqual([
+      { type: "reolink_viewer/events/recent", date: "2026-10-25", max_age: 3600 },
+    ]);
+    expect(el.shadowRoot?.querySelector(".now")).toBeNull();
+    expect(el.shadowRoot?.querySelectorAll("button.row")).toHaveLength(10);
+    expect(el.shadowRoot?.textContent).not.toContain("Show all");
+    el.date = "2026-10-24";
+    await el.updateComplete;
+    await flush();
+    expect(sentOf(hass, "reolink_viewer/events/recent").at(-1)).toMatchObject({ date: "2026-10-24" });
+  });
+});
+
 describe("event labels", () => {
   it("names what was seen, motion only when nothing more is known", () => {
     expect(eventLabel(["MOTION", "PERSON"])).toBe("Person");

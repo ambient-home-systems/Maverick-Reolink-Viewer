@@ -1,5 +1,6 @@
 import { LitElement, css, html, nothing, type TemplateResult } from "lit";
 
+import { icon } from "../icons";
 import { sharedStyles } from "../styles";
 import { addMonths, isoDate, monthGrid } from "./timeline-math";
 
@@ -66,11 +67,11 @@ export class RvCalendar extends LitElement {
     return html`<div class="head">
         <button class="text" aria-label="Previous month" @click=${() => {
           this._move(-1);
-        }}>‹</button>
+        }}>${icon("chevronBack")}</button>
         <span class="title">${title}${this.loading ? html` <span class="muted small">…</span>` : nothing}</span>
         <button class="text" aria-label="Next month" ?disabled=${future} @click=${() => {
           this._move(1);
-        }}>›</button>
+        }}>${icon("chevron")}</button>
       </div>
       <div class="grid" role="grid">
         ${names.map((n) => html`<span class="dow" role="columnheader">${n}</span>`)}
