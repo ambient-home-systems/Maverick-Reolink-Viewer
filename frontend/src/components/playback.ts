@@ -61,10 +61,10 @@ import {
   type View,
 } from "../playback/timeline-math";
 import { icon } from "../icons";
-import type { Explained } from "../live/explain";
 import { explainPlayback, explainRecordings } from "../playback/explain";
 import { pipSupported } from "../pip";
 import { parseInShort } from "../plain";
+import { problem } from "../problem";
 import { sharedStyles } from "../styles";
 import type { CacheStatus, HomeAssistant, PlaybackUrl, Segment, Stream, TimelineDay, Timing } from "../types";
 import { LIVE_REPORT_PREFIX } from "../live/check-util";
@@ -1368,19 +1368,22 @@ export class RvPlayback extends LitElement {
                 </span>`
               : nothing}
           </div>
-          <rv-event-list
-            .events=${this._events}
-            .thumbs=${this._thumbs}
-            .current=${this._cursor}
-            .playing=${this._playing !== undefined}
-            .timeZone=${zone}
-            @rv-pick=${(e: CustomEvent<{ event: { start: number } }>) => {
-              this._cursor = e.detail.event.start;
-              if (this._day) this._view = centreOn(this._view, e.detail.event.start, this._day);
-              void this.playAt(e.detail.event.start);
-            }}
-            @rv-thumbs-needed=${(e: CustomEvent<{ times: number[] }>) => void this._loadThumbs(e.detail.times)}
-          ></rv-event-list>
+          ${!day
+            ? // Not "no events": none could be read yet.
+              html`<p class="muted">${this._error ? "This day's events could not be read." : "Reading this day's events…"}</p>`
+            : html`<rv-event-list
+                .events=${this._events}
+                .thumbs=${this._thumbs}
+                .current=${this._cursor}
+                .playing=${this._playing !== undefined}
+                .timeZone=${zone}
+                @rv-pick=${(e: CustomEvent<{ event: { start: number } }>) => {
+                  this._cursor = e.detail.event.start;
+                  if (this._day) this._view = centreOn(this._view, e.detail.event.start, this._day);
+                  void this.playAt(e.detail.event.start);
+                }}
+                @rv-thumbs-needed=${(e: CustomEvent<{ times: number[] }>) => void this._loadThumbs(e.detail.times)}
+              ></rv-event-list>`}
         </div>
       </div>
     `;
@@ -1536,15 +1539,6 @@ export class RvPlayback extends LitElement {
       }
       .speed select {
         min-height: 36px;
-      }
-      /* A problem's technical text, for support, under its plain words. */
-      .problem details {
-        margin-top: 6px;
-        font-size: 13px;
-      }
-      .problem summary {
-        cursor: pointer;
-        font-weight: 500;
       }
       button.pip {
         display: inline-flex;
@@ -1756,17 +1750,6 @@ function rememberSetup(setup: string): void {
   } catch {
     // Not remembered.
   }
-}
-
-/** A problem in plain words, what to do, and the technical text under Details. */
-function problem(explained: Explained, technical: string): TemplateResult {
-  return html`<div class="banner error problem" role="alert">
-    <strong>${explained.text}</strong>${explained.advice ? html` ${explained.advice}` : nothing}
-    <details>
-      <summary>Details</summary>
-      ${technical}
-    </details>
-  </div>`;
 }
 
 function zoomLabel(span: number): string {

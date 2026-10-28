@@ -1,5 +1,5 @@
-import { Ft as e, J as t, Ut as n, Wt as r, bt as i, jt as a } from "./home-DANJK4HC.js";
-import { S as o, a as s, b as c, c as l, d as u, f as d, g as f, h as p, l as m, m as h, n as g, o as _, r as v, s as y, t as b, u as ee, v as x, x as S, y as C } from "./findings-ZtDSUEOW.js";
+import { Gt as e, It as t, J as n, Mt as r, Wt as i, xt as a } from "./home-CRi9TKP3.js";
+import { S as o, a as s, b as c, c as l, d as u, f as d, g as f, h as p, l as m, m as h, n as g, o as _, r as v, s as y, t as b, u as ee, v as x, x as S, y as C } from "./findings-BZqo8VrU.js";
 //#region src/playback/mse-sample.ts
 var w = {
 	h264: {
@@ -189,7 +189,7 @@ var H = (e) => new Date(e).toLocaleTimeString(), fe = class {
 			this._log(""), this._log("Summary:");
 			for (let e of this._summary) this._log(`- ${e}`);
 		} catch (e) {
-			this._log(e instanceof R ? "Stopped." : `Check failed: ${n(e).message}`);
+			this._log(e instanceof R ? "Stopped." : `Check failed: ${i(e).message}`);
 		} finally {
 			this._t.player?.pause(), this.running = !1, this._log(`Done at ${(/* @__PURE__ */ new Date()).toLocaleTimeString()}.`), await this._save(!0), _e(this.id);
 		}
@@ -230,8 +230,8 @@ var H = (e) => new Date(e).toLocaleTimeString(), fe = class {
 		for (; performance.now() < t;) this._checkStopped(), await z(Math.min(250, t - performance.now()));
 	}
 	async _header() {
-		let e = this._t, n = navigator.connection;
-		this._log(`Reolink Viewer playback check v${ie} · ${this.options.setup} · ${e.cameraName} · ${(/* @__PURE__ */ new Date()).toLocaleString()}`), this._log(`Browser: ${m(navigator.userAgent)} · page ${t(location.hostname)} over ${location.protocol.replace(":", "")} · screen ${screen.width}×${screen.height} @${window.devicePixelRatio}x` + (n?.effectiveType ? ` · network ${n.effectiveType}, ${n.downlink ?? "?"} Mbit/s (browser estimate)` : ""));
+		let e = this._t, t = navigator.connection;
+		this._log(`Reolink Viewer playback check v${ie} · ${this.options.setup} · ${e.cameraName} · ${(/* @__PURE__ */ new Date()).toLocaleString()}`), this._log(`Browser: ${m(navigator.userAgent)} · page ${n(location.hostname)} over ${location.protocol.replace(":", "")} · screen ${screen.width}×${screen.height} @${window.devicePixelRatio}x` + (t?.effectiveType ? ` · network ${t.effectiveType}, ${t.downlink ?? "?"} Mbit/s (browser estimate)` : ""));
 		let r = performance.getEntriesByType("navigation")[0];
 		this._log(`User agent: ${navigator.userAgent}`), this._log(`Connection: page loaded over ${r?.nextHopProtocol || "? (from the app's cache)"}; each video request line gives its own (h2/h3 share one connection; http/1.1 allows 6 at once)`), this._log(`Player: ${e.mode} · file player delivery: ${e.progressive ? "progressive" : "whole file first (WebKit)"}`), this._summary.push(`Player: ${e.mode}`), await this._wait(() => !!e.day && !e.loading, 3e4);
 	}
@@ -330,34 +330,34 @@ var H = (e) => new Date(e).toLocaleTimeString(), fe = class {
 		}
 	}
 	async _fillReport() {
-		let e = this._t.playing, t = r(e?.base ?? e?.url ?? "");
-		if (!t) return "server: nothing played";
-		let n = e?.file === "plain", a = null;
+		let t = this._t.playing, n = e(t?.base ?? t?.url ?? "");
+		if (!n) return "server: nothing played";
+		let r = t?.file === "plain", i = null;
 		for (let e = 0; e < 90; e += 1) {
 			try {
-				a = (await i(this._t.hass, t)).cache;
+				i = (await a(this._t.hass, n)).cache;
 			} catch {
-				a = null;
+				i = null;
 			}
-			if (!a || a.error || a.complete && (!n || a.flat !== void 0)) break;
+			if (!i || i.error || i.complete && (!r || i.flat !== void 0)) break;
 			await this._pause(1e3);
 		}
-		if (!a) return "server: not cached (or its URL expired)";
-		let o = [a.cache === "disk" ? "from disk" : `fill (${G(a.priority)})`];
+		if (!i) return "server: not cached (or its URL expired)";
+		let o = [i.cache === "disk" ? "from disk" : `fill (${G(i.priority)})`];
 		for (let [e, t] of [
 			["wait_ms", "queue"],
 			["headers_ms", "NVR headers"],
 			["ttfb_ms", "NVR first byte"],
 			["fill_ms", "download"]
-		]) typeof a[e] == "number" && o.push(`${t} ${f(a[e])}`);
-		return typeof a.mbit_s == "number" && o.push(`${a.mbit_s} Mbit/s`), o.push(p(a.bytes)), a.indexed !== void 0 && o.push(`index ${G(a.indexed)}`), (n || a.flat !== void 0) && o.push(`plain MP4 ${a.flat === void 0 ? "not yet" : G(a.flat)}`), typeof a.flat_ms == "number" && o.push(`rewrite ${f(a.flat_ms)}`), typeof a.flat_moov_bytes == "number" && o.push(`moov ${p(a.flat_moov_bytes)}`), a.error && o.push(`error ${a.error}`), `server: ${o.join(", ")}`;
+		]) typeof i[e] == "number" && o.push(`${t} ${f(i[e])}`);
+		return typeof i.mbit_s == "number" && o.push(`${i.mbit_s} Mbit/s`), o.push(p(i.bytes)), i.indexed !== void 0 && o.push(`index ${G(i.indexed)}`), (r || i.flat !== void 0) && o.push(`plain MP4 ${i.flat === void 0 ? "not yet" : G(i.flat)}`), typeof i.flat_ms == "number" && o.push(`rewrite ${f(i.flat_ms)}`), typeof i.flat_moov_bytes == "number" && o.push(`moov ${p(i.flat_moov_bytes)}`), i.error && o.push(`error ${i.error}`), `server: ${o.join(", ")}`;
 	}
 	async _findLong() {
-		let t = this._t, n = t.today, r = Number(n.slice(8, 10)), i = [n, ...[...t.monthDays].filter((e) => e < r).sort((e, t) => t - e).slice(0, de).map((e) => `${n.slice(0, 8)}${String(e).padStart(2, "0")}`)], a = 0, o;
+		let e = this._t, n = e.today, r = Number(n.slice(8, 10)), i = [n, ...[...e.monthDays].filter((e) => e < r).sort((e, t) => t - e).slice(0, de).map((e) => `${n.slice(0, 8)}${String(e).padStart(2, "0")}`)], a = 0, o;
 		for (let n of i) {
 			let r;
 			try {
-				r = n === t.date && t.day ? t.day : await e(t.hass, t.deviceId, n);
+				r = n === e.date && e.day ? e.day : await t(e.hass, e.deviceId, n);
 			} catch {
 				continue;
 			}
@@ -592,15 +592,15 @@ var H = (e) => new Date(e).toLocaleTimeString(), fe = class {
 			this._log("L  skipped: nothing played");
 			return;
 		}
-		let t = performance.now(), r = new AbortController(), i = setTimeout(() => {
-			r.abort();
+		let t = performance.now(), n = new AbortController(), r = setTimeout(() => {
+			n.abort();
 		}, le);
 		try {
-			let n = await fetch(e, {
+			let r = await fetch(e, {
 				headers: { Range: "bytes=0-33554431" },
 				cache: "no-store",
-				signal: r.signal
-			}), i = performance.now() - t, a = 0, o = n.body?.getReader();
+				signal: n.signal
+			}), i = performance.now() - t, a = 0, o = r.body?.getReader();
 			try {
 				for (;;) {
 					let e = await o?.read();
@@ -609,23 +609,23 @@ var H = (e) => new Date(e).toLocaleTimeString(), fe = class {
 				}
 			} catch {}
 			let s = performance.now() - t, c = a * 8 / ((s - i) * 1e3);
-			this._log(`L  Link to Home Assistant: ${p(a)} of the cached recording in ${f(s - i)} after the answer = ${c.toFixed(1)} Mbit/s (answer ${f(i)}, HTTP ${n.status})`), this._summary.push(`Link: ${c.toFixed(1)} Mbit/s`), this._plain.push({
+			this._log(`L  Link to Home Assistant: ${p(a)} of the cached recording in ${f(s - i)} after the answer = ${c.toFixed(1)} Mbit/s (answer ${f(i)}, HTTP ${r.status})`), this._summary.push(`Link: ${c.toFixed(1)} Mbit/s`), this._plain.push({
 				grade: c >= 16 ? "good" : c >= 4 ? "fine" : "slow",
 				text: `Recordings come from Home Assistant at ${c.toFixed(0)} Mbit/s: ` + (c >= 16 ? "plenty for HD." : c >= 4 ? "enough for SD; HD may pause to load." : "SD may pause to load.")
 			});
 		} catch (e) {
-			this._log(`L  Link test failed: ${n(e).message}`);
+			this._log(`L  Link test failed: ${i(e).message}`);
 		} finally {
-			clearTimeout(i);
+			clearTimeout(r);
 		}
 	}
 	async _capabilities() {
 		let e = this._t, t = {};
 		try {
-			t = await a(e.hass, e.deviceId);
+			t = await r(e.hass, e.deviceId);
 		} catch {}
-		let n = t.sub?.codec, r = t.main?.codec, i = (e) => [["sub", n], ["main", r]].map(([t, n]) => n ? `${t} ${n} ${U(D(e, n))}` : `${t} codec unknown (not cached yet)`).join(", "), o = ["MediaSource", "ManagedMediaSource"];
-		this._log(`MSE: ${o.map((e) => E(e) ? `${e} present (${i(e)})` : `${e} absent`).join(" · ")}`);
+		let n = t.sub?.codec, i = t.main?.codec, a = (e) => [["sub", n], ["main", i]].map(([t, n]) => n ? `${t} ${n} ${U(D(e, n))}` : `${t} codec unknown (not cached yet)`).join(", "), o = ["MediaSource", "ManagedMediaSource"];
+		this._log(`MSE: ${o.map((e) => E(e) ? `${e} present (${a(e)})` : `${e} absent`).join(" · ")}`);
 		let s = [];
 		for (let e of o) {
 			if (!E(e)) continue;
@@ -640,7 +640,7 @@ var H = (e) => new Date(e).toLocaleTimeString(), fe = class {
 		}
 		this._summary.push(`MSE: ${s.join(", ") || "neither MediaSource nor ManagedMediaSource"}`);
 		let c = document.createElement("video"), l = (e) => e ? `"${c.canPlayType(`video/mp4; codecs="${e}"`)}"` : "unknown";
-		this._log(`Video: canPlayType sub ${l(n)}, main ${l(r)} · getVideoPlaybackQuality ${U("getVideoPlaybackQuality" in c)} · requestVideoFrameCallback ${U("requestVideoFrameCallback" in c)} · performance.memory ${U(K() !== void 0)}`), this._log(`HD as the tab opened: ${e.hd.reason}${this._hdPlayed ? " (played in H above)" : ""}`), t.main?.width && t.main.height && r && this._log(`HD decodingInfo for ${r} at ${t.main.width}×${t.main.height}: ${await X(r, t.main.width, t.main.height)}`), this._hdPlayed || this._summary.push(`HD: ${e.hd.main ? "offered" : "not offered"} (${e.hd.reason})`), e.hd.main || this._plain.push({
+		this._log(`Video: canPlayType sub ${l(n)}, main ${l(i)} · getVideoPlaybackQuality ${U("getVideoPlaybackQuality" in c)} · requestVideoFrameCallback ${U("requestVideoFrameCallback" in c)} · performance.memory ${U(K() !== void 0)}`), this._log(`HD as the tab opened: ${e.hd.reason}${this._hdPlayed ? " (played in H above)" : ""}`), t.main?.width && t.main.height && i && this._log(`HD decodingInfo for ${i} at ${t.main.width}×${t.main.height}: ${await X(i, t.main.width, t.main.height)}`), this._hdPlayed || this._summary.push(`HD: ${e.hd.main ? "offered" : "not offered"} (${e.hd.reason})`), e.hd.main || this._plain.push({
 			grade: "note",
 			text: `HD is not offered on this device: ${e.hd.reason}.`
 		});
@@ -781,24 +781,24 @@ function Y(e, t) {
 	}), o = i.length > 10 ? ` | … ${i.length - 10} more` : "", s = r.length - i.length, c = [...new Set(i.map((e) => e.nextHopProtocol).filter(Boolean))].join("/");
 	return `requests${c ? ` (${c})` : ""}: ${i.length} sent${s ? `, ${s} cancelled before sending` : ""}: ${a.join(" | ")}${o}`;
 }
-async function X(e, t, r) {
-	let i = navigator.mediaCapabilities;
-	if (!i?.decodingInfo) return "MediaCapabilities absent";
+async function X(e, t, n) {
+	let r = navigator.mediaCapabilities;
+	if (!r?.decodingInfo) return "MediaCapabilities absent";
 	let a = [];
 	for (let o of ["file", "media-source"]) try {
-		let n = await i.decodingInfo({
+		let i = await r.decodingInfo({
 			type: o,
 			video: {
 				contentType: `video/mp4; codecs="${e}"`,
 				width: t,
-				height: r,
+				height: n,
 				bitrate: 8e6,
 				framerate: 25
 			}
 		});
-		a.push(`${o}: ${n.supported ? "supported" : "not supported"}${n.supported ? `, ${n.smooth ? "smooth" : "not smooth"}, ${n.powerEfficient ? "power efficient" : "not power efficient"}` : ""}`);
+		a.push(`${o}: ${i.supported ? "supported" : "not supported"}${i.supported ? `, ${i.smooth ? "smooth" : "not smooth"}, ${i.powerEfficient ? "power efficient" : "not power efficient"}` : ""}`);
 	} catch (e) {
-		a.push(`${o}: ${n(e).message}`);
+		a.push(`${o}: ${i(e).message}`);
 	}
 	return a.join(" · ");
 }

@@ -570,6 +570,9 @@ describe("rv-playback", () => {
       "The recorder did not answer when asked for this day's recordings.",
     );
     expect(banner?.querySelector("details")?.textContent).toContain("Could not load recordings: day search failed");
+    // Not "no events": none could be read.
+    expect(el.renderRoot.querySelector("rv-event-list")).toBeNull();
+    expect(el.renderRoot.textContent).toContain("This day's events could not be read.");
   });
 
   it("says a camera that is offline is why its SD card cannot be read", async () => {

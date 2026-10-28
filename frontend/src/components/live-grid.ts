@@ -2,8 +2,10 @@ import { LitElement, css, html, nothing, type TemplateResult } from "lit";
 
 import { toError } from "../api";
 import { icon } from "../icons";
+import { explainLoad } from "../integration";
 import { LiveData, cameraFor, isWarm, liveConnection, offlineSince } from "../live/data";
 import { soakTally } from "../live/soak-tally";
+import { problem } from "../problem";
 import { sharedStyles } from "../styles";
 import type { HomeAssistant, LiveCamera, LiveConnection } from "../types";
 import "./live-tile";
@@ -153,16 +155,15 @@ export class RvLiveGrid extends LitElement {
           : nothing}
       </div>
       ${data.error
-        ? html`<div class="banner error" role="alert">
-            Could not load live view: ${data.error}
-            <button
+        ? problem(explainLoad(data.error, "Live view"), data.error, {
+            action: html`<button
               @click=${() => {
                 data.reload();
               }}
             >
-              Retry
-            </button>
-          </div>`
+              Try again
+            </button>`,
+          })
         : nothing}
       ${cameras === undefined
         ? data.error

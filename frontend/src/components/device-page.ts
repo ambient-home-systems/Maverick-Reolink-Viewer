@@ -205,12 +205,6 @@ export class RvDevicePage extends LitElement {
                 </button>`,
               )}
             </div>
-            ${device.degraded
-              ? html`<div class="banner warning small">
-                  Degraded mode: the Reolink integration's internals changed, so device details are
-                  missing. Settings still work.
-                </div>`
-              : nothing}
             ${this._tabError
               ? html`<div class="banner error" role="alert">
                   Could not load this tab: ${this._tabError}.
@@ -375,9 +369,15 @@ function noRecordings(device: DeviceResponse): TemplateResult {
   const name = node.name ?? "This camera";
   const where = node.kind === "camera" ? node.recordings?.where : undefined;
   if (device.degraded) {
+    // The panel says why above, and what to do.
     return html`<div class="empty-tab">
-      <h2>No playback in degraded mode</h2>
-      <p>The Reolink integration's internals changed in this Home Assistant release, so its recordings cannot be read. Update Reolink Viewer when a new version is out.</p>
+      <h2>Recordings cannot be played right now</h2>
+      <p>
+        ${device.compat.ok
+          ? `Home Assistant's Reolink integration is not running, so ${name}'s recordings cannot be read.`
+          : `Reolink Viewer needs an update to read ${name}'s recordings since Home Assistant's last update.`}
+        Whatever it has recorded plays here again once this is fixed.
+      </p>
     </div>`;
   }
   if (where === "elsewhere") {

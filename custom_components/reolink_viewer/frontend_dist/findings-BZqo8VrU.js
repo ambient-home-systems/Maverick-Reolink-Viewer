@@ -1,4 +1,4 @@
-import { Gt as e, Jt as t, Kt as n, it as r, qt as i } from "./home-DANJK4HC.js";
+import { Jt as e, Kt as t, Yt as n, it as r, qt as i } from "./home-CRi9TKP3.js";
 //#region src/playback/check-util.ts
 var a = (e) => /iPhone|iPad|iPod/.test(e);
 function o(e) {
@@ -150,31 +150,31 @@ function M(e) {
 }
 //#endregion
 //#region src/components/findings.ts
-var N = class extends e {
+var N = class extends t {
 	static properties = { summary: { attribute: !1 } };
 	render() {
-		let e = this.summary;
-		if (!e) return n;
-		let t = [
+		let t = this.summary;
+		if (!t) return i;
+		let n = [
 			"good",
 			"fine",
 			"slow",
 			"problem",
 			"pending"
-		].filter((t) => e.findings.some((e) => e.grade === t));
-		return i`<p class="headline">${e.headline}</p>
-      ${e.findings.length ? i`<ul>
-            ${e.findings.map((e) => i`<li class=${e.grade}>
-                <span class="grade">${C[e.grade]}</span>
+		].filter((e) => t.findings.some((t) => t.grade === e));
+		return e`<p class="headline">${t.headline}</p>
+      ${t.findings.length ? e`<ul>
+            ${t.findings.map((t) => e`<li class=${t.grade}>
+                <span class="grade">${C[t.grade]}</span>
                 <span class="what">
-                  <span>${e.text}</span>
-                  ${e.advice ? i`<span class="advice">${e.advice}</span>` : n}
+                  <span>${t.text}</span>
+                  ${t.advice ? e`<span class="advice">${t.advice}</span>` : i}
                 </span>
               </li>`)}
           </ul>
-          ${t.length > 1 ? i`<p class="key">${t.map((e) => `${C[e]}: ${w[e]}`).join(" · ")}</p>` : n}` : n}`;
+          ${n.length > 1 ? e`<p class="key">${n.map((e) => `${C[e]}: ${w[e]}`).join(" · ")}</p>` : i}` : i}`;
 	}
-	static styles = [r, t`
+	static styles = [r, n`
       :host {
         display: block;
       }

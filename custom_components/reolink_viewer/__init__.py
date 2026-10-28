@@ -111,8 +111,9 @@ async def async_setup_entry(
     else:
         _LOGGER.error(
             "Reolink Viewer cannot use the Reolink integration's internals (reolink-aio"
-            " %s): %s. Running in degraded mode: the panel lists devices from the"
-            " device registry only and the probe is disabled",
+            " %s): %s. Running in degraded mode: live view, recordings and events"
+            " are off, the panel lists devices from the device registry only and the"
+            " probe is disabled",
             compat.reolink_aio_version,
             "; ".join(compat.errors),
         )

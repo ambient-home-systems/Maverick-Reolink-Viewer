@@ -24,7 +24,9 @@ import { downloadJson } from "./download";
 import { loadFonts } from "./fonts";
 import { probeFilename } from "./format";
 import { icon } from "./icons";
+import { explainLoad, integrationProblem, type IntegrationProblem } from "./integration";
 import { formatClock } from "./playback/time";
+import { problem } from "./problem";
 import { sharedStyles, themeTokens } from "./styles";
 import type { DevicesResponse, HomeAssistant, ProbeReport } from "./types";
 import { loadView } from "./views";
@@ -268,8 +270,13 @@ export class ReolinkViewerPanel extends LitElement {
         </button>
       </div>`;
     }
+    // Reolink Viewer cannot reach the cameras: said over every view, instead
+    // of the board and the events, which cannot work meanwhile.
+    const trouble = integrationProblem(this._devices);
+    const note = trouble ? this._renderIntegration(trouble) : nothing;
     switch (route.view) {
       case "live":
+        if (trouble) return html`<div class="wide-note">${note}</div>`;
         return html`<rv-live-grid
             .hass=${this.hass}
             @rv-board=${(e: CustomEvent<{ cameras: BoardCamera[] }>) => {
@@ -278,9 +285,10 @@ export class ReolinkViewerPanel extends LitElement {
           ></rv-live-grid>
           <rv-timetable .hass=${this.hass} .cameras=${this._board} .filters=${true}></rv-timetable>`;
       case "events":
+        if (trouble) return html`<div class="wide-note">${note}</div>`;
         return html`<rv-events .hass=${this.hass} .cameras=${this._board} .date=${route.date}></rv-events>`;
       case "device":
-        return html`<rv-device-page
+        return html`${note}<rv-device-page
           .hass=${this.hass}
           .cameras=${this._board}
           .devices=${this._devices}
@@ -291,10 +299,12 @@ export class ReolinkViewerPanel extends LitElement {
       case "live-check":
         return html`${this._renderBack()}
           <h1>Live check</h1>
+          ${note}
           <rv-live-check .hass=${this.hass}></rv-live-check>`;
       case "soak":
         return html`${this._renderBack()}
           <h1>Soak report</h1>
+          ${note}
           <rv-live-soak .hass=${this.hass}></rv-live-soak>`;
       case "list":
         return html`<div class="heading">
@@ -321,20 +331,33 @@ export class ReolinkViewerPanel extends LitElement {
 
   private _renderBanner(): TemplateResult | typeof nothing {
     if (this._loadError) {
-      return html`<div class="banner error" role="alert">
-        Could not load devices: ${this._loadError}
-      </div>`;
+      return problem(explainLoad(this._loadError, "Your devices"), this._loadError, {
+        action: html`<button @click=${() => void this._load()} ?disabled=${this._loading}>Try again</button>`,
+      });
     }
-    const devices = this._devices;
-    if (!devices?.degraded) return nothing;
-    return html`<div class="banner warning" role="alert">
-      <strong>Degraded mode.</strong> The Reolink integration's internals changed in this
-      Home Assistant release, so only the device registry's information is shown, duplicate
-      cameras are not merged and the probe is disabled. Settings still work.
-      <ul>
-        ${devices.compat.errors.map((e) => html`<li>${e}</li>`)}
-      </ul>
-    </div>`;
+    const trouble = integrationProblem(this._devices);
+    // With no devices at all, the list says how to set them up.
+    if (!trouble || trouble.kind === "none") return nothing;
+    return this._renderIntegration(trouble);
+  }
+
+  /** Why Reolink Viewer cannot reach the cameras, what still works, and what to do. */
+  private _renderIntegration(trouble: IntegrationProblem): TemplateResult {
+    const fault = trouble.kind !== "none";
+    return html`<section class="integration ${fault ? "fault" : ""}" role=${fault ? "alert" : "status"}>
+      <h2>${trouble.title}</h2>
+      <p class="what">${trouble.text}</p>
+      <p>${trouble.advice}</p>
+      <button class="check" @click=${() => void this._load()} ?disabled=${this._loading}>
+        ${icon("refresh")}${this._loading ? "Checking…" : "Check again"}
+      </button>
+      ${trouble.technical
+        ? html`<details>
+            <summary>Details</summary>
+            <span class="technical">${trouble.technical}</span>
+          </details>`
+        : nothing}
+    </section>`;
   }
 
   /** How live view does on this device, and how it held up over a day. */
@@ -681,6 +704,66 @@ export class ReolinkViewerPanel extends LitElement {
       main {
         flex: 1;
         min-width: 0;
+      }
+      /* Over the board and the events, when neither can work. */
+      .wide-note {
+        max-width: 760px;
+        padding: 24px;
+      }
+      :host([narrow]) .wide-note {
+        padding: 14px 16px;
+      }
+      /* Reolink Viewer cannot reach the cameras: why, what still works, what to do. */
+      .integration {
+        padding: 18px 20px;
+        background: var(--rv-ground-2);
+      }
+      .integration.fault {
+        background: var(--rv-fault);
+        color: var(--rv-on-fault);
+      }
+      .integration h2 {
+        margin: 0 0 6px;
+        font-family: var(--rv-font-cond);
+        font-size: 24px;
+        font-weight: 600;
+        line-height: 1.15;
+      }
+      .integration p {
+        margin: 0 0 8px;
+        max-width: 64ch;
+      }
+      .integration .what {
+        font-weight: 600;
+      }
+      .integration .check {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 4px;
+      }
+      .integration.fault .check {
+        border-color: var(--rv-on-fault);
+        color: var(--rv-on-fault);
+      }
+      .integration .check svg {
+        width: 18px;
+        height: 18px;
+      }
+      .integration details {
+        margin-top: 12px;
+        font-size: 13px;
+      }
+      .integration summary {
+        cursor: pointer;
+        font-weight: 500;
+      }
+      .integration .technical {
+        display: block;
+        margin-top: 4px;
+        font-family: var(--rv-mono);
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
       }
       main.page {
         width: 100%;

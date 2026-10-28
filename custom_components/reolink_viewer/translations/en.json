@@ -12,8 +12,8 @@
   },
   "issues": {
     "reolink_incompatible": {
-      "description": "Reolink Viewer could not use the Reolink integration's internals, which changed in this Home Assistant release: {errors}\n\nThe Reolink panel still lists your devices from the device registry, but the hardware probe is disabled. Update Reolink Viewer, or report the error at the project's issue tracker.",
-      "title": "Reolink Viewer is running in degraded mode"
+      "description": "A Home Assistant update changed its Reolink integration, and this version of Reolink Viewer cannot work with it.\n\nUntil Reolink Viewer is updated, its panel still shows your devices and their settings, but live view, recordings and events are off. Your cameras keep recording, and the Reolink app still works.\n\nUpdate Reolink Viewer in HACS when a new version is out. If none is out yet, report this at the project's issue tracker with these details: {errors}",
+      "title": "Reolink Viewer needs an update"
     }
   },
   "entity": {

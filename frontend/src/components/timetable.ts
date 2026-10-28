@@ -2,8 +2,10 @@ import { LitElement, css, html, nothing, type PropertyValues, type TemplateResul
 
 import { fetchRecentEvents, fetchThumbnailUrls, markAllEventsSeen, markEventSeen, toError } from "../api";
 import { icon, type IconName } from "../icons";
+import { explainLoad } from "../integration";
 import { dateIn, formatClock } from "../playback/time";
 import { primaryType, shownTypes, typeLabel } from "../playback/timeline-math";
+import { problem } from "../problem";
 import { sharedStyles } from "../styles";
 import type { HomeAssistant, RecentEvent, RecentEvents } from "../types";
 import type { BoardCamera } from "./live-grid";
@@ -263,7 +265,11 @@ export class RvTimetable extends LitElement {
           : nothing}
       </div>
       ${this.filters && feed ? this._renderPick(feed) : nothing}
-      ${this._error ? html`<p class="banner error" role="alert">Could not read ${day} events: ${this._error}</p>` : nothing}
+      ${this._error
+        ? problem(explainLoad(this._error, this._isToday ? "Today's events" : "This day's events"), this._error, {
+            action: html`<button @click=${() => void this._load(false)}>Try again</button>`,
+          })
+        : nothing}
       ${feed ? this._renderTable(feed, zone) : this._error ? nothing : html`<p class="muted">Reading ${day} events…</p>`}`;
   }
 

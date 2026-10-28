@@ -144,6 +144,10 @@ trying to play it, and says in plain words why live video cannot play and what t
 v0.28.0 does the same for recordings: a camera without an SD card says why it has
 nothing to play, an SD card or NVR disk that is not formatted or has failed is
 flagged with what to do, and a recording that cannot play says why in plain words.
+v0.29.0 explains, on every page, when the panel cannot reach your cameras: a Home
+Assistant update changed the Reolink integration (Reolink Viewer needs an update), the
+Reolink integration is not running, or no cameras are set up yet, with what still works
+and what to do.
 
 Requires Home Assistant 2026.10 or newer with the Reolink integration set up.
 
