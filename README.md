@@ -141,6 +141,9 @@ Casa, Tailscale or mobile data, with an HD button one tap away, and remembers yo
 choice on each device.
 v0.27.0 shows a camera Home Assistant cannot reach as offline, since when, instead of
 trying to play it, and says in plain words why live video cannot play and what to do.
+v0.28.0 does the same for recordings: a camera without an SD card says why it has
+nothing to play, an SD card or NVR disk that is not formatted or has failed is
+flagged with what to do, and a recording that cannot play says why in plain words.
 
 Requires Home Assistant 2026.10 or newer with the Reolink integration set up.
 

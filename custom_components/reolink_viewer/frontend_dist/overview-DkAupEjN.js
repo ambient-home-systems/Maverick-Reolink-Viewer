@@ -1,5 +1,5 @@
-import { Gt as e, Jt as t, Kt as n, a as r, i, it as a, o, qt as s, r as c, vt as l } from "./home-DAQTHR3q.js";
-import "./device-list-vxyeYvu8.js";
+import { Gt as e, Jt as t, Kt as n, a as r, i, it as a, o, qt as s, r as c, vt as l } from "./home-DANJK4HC.js";
+import "./device-list-QGj1Cbr7.js";
 //#region src/components/overview.ts
 var u = 3e4, d = {
 	people: "person",
@@ -96,6 +96,7 @@ var u = 3e4, d = {
       ${r === null ? s`<p class="muted">
             Details are unavailable${t.degraded ? " in degraded mode" : ""}.
           </p>` : s`
+            ${e.via === "direct" || !i ? g(r.host) : n}
             ${r.channel ? p(r.channel) : n}
             ${e.via === "direct" || !i ? m(r.host) : n}
           `}
@@ -168,6 +169,15 @@ var u = 3e4, d = {
         flex-wrap: wrap;
         gap: 4px;
       }
+      .connections .banner {
+        margin: 8px 0 4px;
+      }
+      .storage {
+        display: block;
+      }
+      .storage.fault {
+        color: var(--rv-fault-ink);
+      }
     `];
 };
 function p(e) {
@@ -186,7 +196,7 @@ function p(e) {
     <dt>Fluent stream</dt>
     <dd>${r(e.encodings.sub)}</dd>
     <dt>Network</dt>
-    <dd>${h(e.network)}</dd>
+    <dd>${_(e.network)}</dd>
     ${e.battery ? s`<dt>Battery</dt>
           <dd>
             ${e.battery.percent ?? "?"}%${e.battery.status ? ` · ${e.battery.status}` : ""}${e.battery.temperature_c === null ? "" : ` · ${e.battery.temperature_c} °C`}${e.wired_power ? " · on wired power" : ""}
@@ -212,7 +222,7 @@ function m(e) {
           <dd>${e.channels}</dd>`}
     <dt>Connection</dt>
     <dd>
-      ${h(e.network)} · ${t.http.https ? "HTTPS" : "HTTP"}${t.http.port ? ` port ${t.http.port}` : ""}${e.baichuan_only ? " · Baichuan only" : ""}
+      ${_(e.network)} · ${t.http.https ? "HTTPS" : "HTTP"}${t.http.port ? ` port ${t.http.port}` : ""}${e.baichuan_only ? " · Baichuan only" : ""}
     </dd>
     <dt>Protocols</dt>
     <dd>
@@ -224,8 +234,10 @@ function m(e) {
     <dd>${e.stream_protocol ?? "?"}</dd>
     <dt>Storage</dt>
     <dd>
-      ${e.storage.length ? e.storage.map((e, t) => s`${t ? s`<br />` : n}${e.type ?? "disk"} ${e.index + 1}:
-              ${e.used_percent === null ? "?" : `${e.used_percent}% used`}${e.available === !1 ? " (not available)" : ""}`) : "none"}
+      ${e.storage.length ? e.storage.map((t) => s`<span class="storage ${t.available === !1 ? "fault" : ""}"
+              >${h(t, e.storage.length)}:
+              ${t.available === !1 ? "not ready (not formatted, or failed)" : t.used_percent === null ? "in use" : `${String(t.used_percent)}% used`}</span
+            >`) : e.device_type === "camera" ? "None: no SD card, so it keeps no recordings of its own" : "None: no hard disk, so it keeps no recordings"}
     </dd>
     ${e.cpu_usage === null ? n : s`<dt>CPU</dt>
           <dd>${e.cpu_usage}%</dd>`}
@@ -233,7 +245,21 @@ function m(e) {
           <dd class="chips">${e.capabilities.map((e) => s`<span class="badge">${e}</span>`)}</dd>` : n}
   </dl>`;
 }
-function h(e) {
+function h(e, t) {
+	let n = e.type?.toUpperCase(), r = n === "SD" ? "SD card" : n === "HDD" ? "Hard disk" : "Disk";
+	return t > 1 ? `${r} ${String(e.index + 1)}` : r;
+}
+function g(e) {
+	let t = e.storage.filter((e) => e.available === !1);
+	if (!t.length) return n;
+	let r = t.map((t) => h(t, e.storage.length)).join(" and ");
+	return s`<div class="banner warning" role="status">
+    <strong>${r} ${t.length === 1 ? "is" : "are"} not ready</strong>: not formatted, or failed, so
+    recordings may not be kept. Format ${t.length === 1 ? "it" : "them"} in the Reolink app, or replace
+    ${t.length === 1 ? "it" : "them"}.
+  </div>`;
+}
+function _(e) {
 	return e.connection === "wifi" ? e.wifi_signal_dbm === null ? "Wi-Fi" : `Wi-Fi, ${e.wifi_signal_dbm} dBm` : "Ethernet";
 }
 customElements.get("rv-overview") || customElements.define("rv-overview", f);

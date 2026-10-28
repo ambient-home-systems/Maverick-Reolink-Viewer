@@ -165,6 +165,31 @@ async def test_a_camera_records_without_playback(
             assert source.records is False
 
 
+async def test_where_a_cameras_recordings_are(
+    hass: HomeAssistant,
+    reolink_host: MagicMock,
+    loaded_with_entities: MockConfigEntry,
+) -> None:
+    """Playable here, kept where they cannot be played, or nowhere; and the storage."""
+
+    def recordings() -> dict[str, Any]:
+        (camera,) = devices.async_device_list(hass, degraded=False)["cameras"]
+        return dict(camera["recordings"])
+
+    reolink_host.hdd_list = [0]
+    reolink_host.hdd_available.side_effect = lambda index: True
+    assert recordings() == {"where": "playable", "storage": "ready"}
+    reolink_host.hdd_available.side_effect = lambda index: False
+    assert recordings() == {"where": "playable", "storage": "not_ready"}
+    # Kept where they cannot be replayed from (the battery Doorbell's SD card).
+    reolink_host.supported.side_effect = lambda _ch, cap, *_args: cap != "replay"
+    assert recordings()["where"] == "elsewhere"
+    # No NVR and no SD card: nowhere.
+    handle = bridge.ReolinkHostHandle
+    with patch.object(handle, "stores_recordings", return_value=False):
+        assert recordings() == {"where": "none", "storage": None}
+
+
 async def test_live_controls(
     hass: HomeAssistant,
     reolink_host: MagicMock,

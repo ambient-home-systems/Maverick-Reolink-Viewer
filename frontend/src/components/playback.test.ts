@@ -309,6 +309,8 @@ describe("rv-playback", () => {
     const el = await mount(hass);
     el._stream = "main";
     el._cursor = T0 + 61 * MIN;
+    const toasts: string[] = [];
+    el.addEventListener(TOAST_EVENT, (e) => toasts.push((e as CustomEvent<{ message: string }>).detail.message));
     el.renderRoot
       .querySelector("rv-player")
       ?.dispatchEvent(
@@ -316,6 +318,7 @@ describe("rv-playback", () => {
       );
     await flush();
     expect(el._stream).toBe("sub");
+    expect(toasts).toContain("HD could not play: This browser cannot play this recording. Back to SD.");
     // Replayed on the sub stream (then the next recording is preloaded).
     expect(sentOf(hass, "reolink_viewer/playback/url")[0]).toMatchObject({ stream: "sub", segment_id: "s1" });
   });
@@ -329,7 +332,11 @@ describe("rv-playback", () => {
         new CustomEvent("rv-player-error", { detail: { message: "no supported streams" }, bubbles: true, composed: true }),
       );
     await el.updateComplete;
-    expect(el.renderRoot.textContent).toContain("Playback failed: no supported streams");
+    // Plain words first; the player's own words under Details, for support.
+    const banner = el.renderRoot.querySelector(".problem");
+    expect(banner?.querySelector("strong")?.textContent).toBe("This browser cannot play this recording.");
+    expect(banner?.textContent).toContain("Try Chrome or Safari, or play it in SD.");
+    expect(banner?.querySelector("details")?.textContent).toContain("Playback failed: no supported streams");
     await el.playAt(T0 + 61 * MIN);
     await el.updateComplete;
     expect(el._playFailure).toBeUndefined();
@@ -558,7 +565,47 @@ describe("rv-playback", () => {
           Promise.reject({ code: "search_failed", message: "day search failed" })
         : base<T>(message);
     const el = await mount(hass);
-    expect(el.renderRoot.textContent).toContain("Could not load recordings: day search failed");
+    const banner = el.renderRoot.querySelector(".problem");
+    expect(banner?.querySelector("strong")?.textContent).toBe(
+      "The recorder did not answer when asked for this day's recordings.",
+    );
+    expect(banner?.querySelector("details")?.textContent).toContain("Could not load recordings: day search failed");
+  });
+
+  it("says a camera that is offline is why its SD card cannot be read", async () => {
+    const hass = playbackHass();
+    const base = hass.callWS.bind(hass);
+    hass.callWS = <T,>(message: Record<string, unknown>) =>
+      message.type === "reolink_viewer/timeline/day"
+        ? // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
+          Promise.reject({ code: "search_failed", message: "camera unreachable" })
+        : base<T>(message);
+    const el = document.createElement("rv-playback");
+    el.offline = true;
+    el.hass = hass;
+    el.deviceId = "dev-cam";
+    el.cameraName = "Front Yard";
+    document.body.appendChild(el);
+    for (let i = 0; i < 4; i += 1) await flush();
+    await el.updateComplete;
+    const banner = el.renderRoot.querySelector(".problem");
+    expect(banner?.querySelector("strong")?.textContent).toBe(
+      "Front Yard is offline, so the recordings on its SD card cannot be read.",
+    );
+    expect(banner?.textContent).toContain("They come back when it does.");
+  });
+
+  it("warns when the disk keeping the recordings is not ready", async () => {
+    const el = await mount(playbackHass());
+    expect(el.renderRoot.querySelector(".banner.warning")).toBeNull();
+    el.storage = "not_ready";
+    await el.updateComplete;
+    expect(el.renderRoot.querySelector(".banner.warning")?.textContent).toContain("Front Yard's SD card is not ready");
+    el.recorder = "nvr";
+    await el.updateComplete;
+    const warning = el.renderRoot.querySelector(".banner.warning")?.textContent ?? "";
+    expect(warning).toContain("The NVR's hard disk is not ready");
+    expect(warning).toContain("Format it in the Reolink app, or replace it.");
   });
 });
 

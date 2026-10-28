@@ -61,6 +61,8 @@ import {
   type View,
 } from "../playback/timeline-math";
 import { icon } from "../icons";
+import type { Explained } from "../live/explain";
+import { explainPlayback, explainRecordings } from "../playback/explain";
 import { pipSupported } from "../pip";
 import { parseInShort } from "../plain";
 import { sharedStyles } from "../styles";
@@ -149,6 +151,9 @@ export class RvPlayback extends LitElement {
     deviceId: { attribute: false },
     cameraName: { attribute: false },
     at: { attribute: false },
+    offline: { attribute: false },
+    storage: { attribute: false },
+    recorder: { attribute: false },
     _date: { state: true },
     _day: { state: true },
     _error: { state: true },
@@ -183,6 +188,12 @@ export class RvPlayback extends LitElement {
   declare cameraName: string;
   /** A time to play once its day is loaded (an event opened from the timetable). */
   declare at: number | undefined;
+  /** Its recordings are on its own SD card, and Home Assistant cannot reach it. */
+  declare offline: boolean;
+  /** The disk or SD card keeping its recordings: not ready is said above the timeline. */
+  declare storage: "ready" | "not_ready" | "none" | null;
+  /** What keeps the recordings: its own SD card or an NVR. */
+  declare recorder: "camera" | "nvr";
   declare _date: string;
   declare _day: TimelineDay | undefined;
   declare _error: string | undefined;
@@ -248,6 +259,9 @@ export class RvPlayback extends LitElement {
     this._date = "";
     this._loading = false;
     this._view = { start: 0, span: DAY };
+    this.offline = false;
+    this.storage = null;
+    this.recorder = "camera";
     this._only = new Set();
     const now = new Date();
     this._month = { year: now.getFullYear(), month: now.getMonth() + 1 };
@@ -701,12 +715,12 @@ export class RvPlayback extends LitElement {
         hdFailures: (this._metrics.hdFailures ?? 0) + 1,
         lastHdFailure: message,
       };
-      toast(this, `HD failed (${message}); back to the sub stream`, "error");
+      toast(this, `HD could not play: ${explainPlayback(message).text} Back to SD.`, "error");
       if (this._cursor !== undefined) void this.playAt(this._cursor);
       return;
     }
     this._playFailure = message;
-    toast(this, `Playback failed: ${message}`, "error");
+    toast(this, explainPlayback(message).text, "error");
   }
 
   private _onTime(time: number): void {
@@ -1047,6 +1061,16 @@ export class RvPlayback extends LitElement {
 
   // ---- Rendering ----
 
+  /** The disk or SD card keeping the recordings is not ready: newer ones may be missing. */
+  private _renderStorage(): TemplateResult | typeof nothing {
+    if (this.storage !== "not_ready") return nothing;
+    const what = this.recorder === "nvr" ? "The NVR's hard disk" : `${this.cameraName || "The camera"}'s SD card`;
+    return html`<div class="banner warning" role="status">
+      <strong>${what} is not ready</strong>: not formatted, or failed, so recent recordings may be
+      missing. Format it in the Reolink app, or replace it.
+    </div>`;
+  }
+
   private _renderToolbar(): TemplateResult {
     const span = this._view.span;
     return html`<div class="toolbar">
@@ -1280,11 +1304,15 @@ export class RvPlayback extends LitElement {
               ${this._cursor !== undefined ? formatClock(this._cursor, zone, true) : "--:--:--"}
             </span>
           </div>
+          ${this._renderStorage()}
           ${this._error
-            ? html`<div class="banner error" role="alert">Could not load recordings: ${this._error}</div>`
+            ? problem(
+                explainRecordings(this._error, { name: this.cameraName || "This camera", offline: this.offline }),
+                `Could not load recordings: ${this._error}`,
+              )
             : nothing}
           ${this._playFailure
-            ? html`<div class="banner error" role="alert">Playback failed: ${this._playFailure}</div>`
+            ? problem(explainPlayback(this._playFailure), `Playback failed: ${this._playFailure}`)
             : nothing}
           <div class="timeline-wrap">
             ${this._renderHover()}
@@ -1509,6 +1537,15 @@ export class RvPlayback extends LitElement {
       .speed select {
         min-height: 36px;
       }
+      /* A problem's technical text, for support, under its plain words. */
+      .problem details {
+        margin-top: 6px;
+        font-size: 13px;
+      }
+      .problem summary {
+        cursor: pointer;
+        font-weight: 500;
+      }
       button.pip {
         display: inline-flex;
         align-items: center;
@@ -1719,6 +1756,17 @@ function rememberSetup(setup: string): void {
   } catch {
     // Not remembered.
   }
+}
+
+/** A problem in plain words, what to do, and the technical text under Details. */
+function problem(explained: Explained, technical: string): TemplateResult {
+  return html`<div class="banner error problem" role="alert">
+    <strong>${explained.text}</strong>${explained.advice ? html` ${explained.advice}` : nothing}
+    <details>
+      <summary>Details</summary>
+      ${technical}
+    </details>
+  </div>`;
 }
 
 function zoomLabel(span: number): string {

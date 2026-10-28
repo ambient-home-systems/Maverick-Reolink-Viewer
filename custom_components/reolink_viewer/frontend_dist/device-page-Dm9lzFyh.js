@@ -1,4 +1,4 @@
-import { F as e, Gt as t, Jt as n, Kt as r, St as i, Ut as a, i as o, it as s, qt as c, vt as l, xt as u } from "./home-DAQTHR3q.js";
+import { F as e, Gt as t, Jt as n, Kt as r, St as i, Ut as a, i as o, it as s, qt as c, vt as l, xt as u } from "./home-DANJK4HC.js";
 //#region src/render-filter.ts
 function d(e, t, n) {
 	if (e === t) return !1;
@@ -9,9 +9,9 @@ function d(e, t, n) {
 //#endregion
 //#region src/components/device-page.ts
 var f = {
-	overview: () => import("./overview-CpBlRLeH.js"),
-	playback: () => import("./playback-B9zUBjGe.js"),
-	settings: () => import("./settings-DX_hVx1k.js")
+	overview: () => import("./overview-DkAupEjN.js"),
+	playback: () => import("./playback-D2rLMXgs.js"),
+	settings: () => import("./settings-JPCJCEbV.js")
 }, p = 1e3, m = class extends t {
 	static properties = {
 		hass: { attribute: !1 },
@@ -49,7 +49,7 @@ var f = {
 		(e.has("deviceId") || e.has("hass") && !this._device && !this._error) && this.hass && this._load(), e.has("hass") && this.hass && this.isConnected && !this._unsubRegistry && this._subscribeRegistry(this.hass), (e.has("tab") || e.has("_device")) && this._device && this._loadTab(h(this.tab, this._device));
 	}
 	_loadTab(e) {
-		e !== "live" && (this._tabError = void 0, f[e]().catch((e) => {
+		e !== "live" && e !== "no-recordings" && (this._tabError = void 0, f[e]().catch((e) => {
 			this._tabError = a(e).message;
 		}));
 	}
@@ -67,7 +67,7 @@ var f = {
 		try {
 			let [e, r] = await Promise.all([i(t, this.deviceId), u(t)]);
 			if (n !== this._loadSeq) return;
-			this._catalog = r, this._device = e, this._error = void 0, this._watched = x(e);
+			this._catalog = r, this._device = e, this._error = void 0, this._watched = w(e);
 		} catch (e) {
 			if (n !== this._loadSeq) return;
 			this._error = a(e).message;
@@ -95,10 +95,10 @@ var f = {
       ${n ? c`<div class="title">
               ${this._number(n.id) === void 0 ? r : c`<span class="plat" aria-hidden="true">${this._number(n.id)}</span>`}
               <h1>${n.name ?? "Reolink device"}</h1>
-              <p class="kind muted">${g(t)}</p>
+              <p class="kind muted">${y(t)}</p>
             </div>
             <div class="tabs" role="tablist">
-              ${b(t).map((t) => c`<button
+              ${C(t).map((t) => c`<button
                   role="tab"
                   aria-selected=${this.tab === t ? "true" : "false"}
                   class=${this.tab === t ? "active" : ""}
@@ -110,7 +110,7 @@ var f = {
 			});
 		}}
                 >
-                  ${_[t]}
+                  ${b[t]}
                 </button>`)}
             </div>
             ${t.degraded ? c`<div class="banner warning small">
@@ -132,7 +132,10 @@ var f = {
                   .deviceId=${n.id}
                   .cameraName=${n.name ?? ""}
                   .at=${this.at}
-                ></rv-playback>` : h(this.tab, t) === "overview" ? c`<rv-overview
+                  .offline=${_(t)}
+                  .storage=${n.kind === "camera" ? n.recordings?.storage ?? null : null}
+                  .recorder=${g(t)}
+                ></rv-playback>` : h(this.tab, t) === "no-recordings" ? v(t) : h(this.tab, t) === "overview" ? c`<rv-overview
                   .hass=${this.hass}
                   .device=${t}
                   .devices=${this.devices}
@@ -186,6 +189,20 @@ var f = {
         font-weight: 600;
         line-height: 1;
       }
+      /* A tab with nothing to show: why, and what to do, as plain prose. */
+      .empty-tab {
+        max-width: 64ch;
+        padding: 20px 0;
+      }
+      .empty-tab h2 {
+        margin: 0 0 8px;
+        font-family: var(--rv-font-cond);
+        font-size: 22px;
+        font-weight: 600;
+      }
+      .empty-tab p {
+        margin: 0 0 8px;
+      }
       .tabs {
         display: flex;
         gap: 4px;
@@ -217,9 +234,37 @@ var f = {
     `];
 };
 function h(e, t) {
-	return e === "live" ? y(t) ? "live" : "overview" : e === "playback" ? v(t) ? "playback" : "overview" : e;
+	return e === "live" ? S(t) ? "live" : "overview" : e === "playback" ? x(t) ? "playback" : t.node.kind === "camera" ? "no-recordings" : "overview" : e;
 }
 function g(e) {
+	return (e.node.kind === "camera" ? e.node.connections.find((e) => e.playback_source) : void 0)?.via === "nvr" ? "nvr" : "camera";
+}
+function _(e) {
+	return e.node.kind === "camera" && g(e) === "camera" && e.node.status.online === !1;
+}
+function v(e) {
+	let t = e.node, n = t.name ?? "This camera", r = t.kind === "camera" ? t.recordings?.where : void 0;
+	if (e.degraded) return c`<div class="empty-tab">
+      <h2>No playback in degraded mode</h2>
+      <p>The Reolink integration's internals changed in this Home Assistant release, so its recordings cannot be read. Update Reolink Viewer when a new version is out.</p>
+    </div>`;
+	if (r === "elsewhere") {
+		let e = t.kind === "camera" ? t.connections.find((e) => e.via === "nvr") : void 0;
+		return c`<div class="empty-tab">
+      <h2>Recordings kept where they cannot be played here</h2>
+      <p>
+        ${e ? `${n}'s recordings are on ${e.host_name ?? "its NVR"}, which cannot send them to Home Assistant.` : `${n} records to its SD card, but cannot send its recordings to Home Assistant.`}
+        Play them in the Reolink app.
+      </p>
+    </div>`;
+	}
+	return c`<div class="empty-tab">
+    <h2>No recordings to play</h2>
+    <p>${n} keeps no recordings: it has no SD card, and it is not on a Reolink NVR in Home Assistant.</p>
+    <p class="muted">To record, put a microSD card in it and format it in the Reolink app, or add it to a Reolink NVR. Its live view and pictures work either way.</p>
+  </div>`;
+}
+function y(e) {
 	let t = e.node, n = [o(t.kind), t.model ?? void 0];
 	if (t.kind === "camera" && t.connections.length > 1) {
 		let e = new Set(t.connections.map((e) => e.via));
@@ -227,30 +272,30 @@ function g(e) {
 	}
 	return n.filter(Boolean).join(" · ");
 }
-var _ = {
+var b = {
 	overview: "Overview",
 	live: "Live",
 	playback: "Playback",
 	settings: "Settings"
 };
-function v(e) {
+function x(e) {
 	return e.node.kind === "camera" && e.node.connections.some((e) => e.playback_source);
 }
-function y(e) {
+function S(e) {
 	return e.node.kind === "camera" && !e.degraded;
 }
-function b(e) {
+function C(e) {
 	return [
 		"overview",
-		...y(e) ? ["live"] : [],
-		...v(e) ? ["playback"] : [],
+		...S(e) ? ["live"] : [],
+		...e.node.kind === "camera" ? ["playback"] : [],
 		"settings"
 	];
 }
-function x(e) {
+function w(e) {
 	let t = e.connections.flatMap((e) => e.entities.map((e) => e.entity_id));
 	return e.node.kind === "camera" && e.node.snapshot_entity_id && t.push(e.node.snapshot_entity_id), t;
 }
 customElements.get("rv-device-page") || customElements.define("rv-device-page", m);
 //#endregion
-export { m as RvDevicePage, y as hasLive, v as hasPlayback, g as kindLine, h as shownTab, b as tabsFor, x as watchedEntities };
+export { m as RvDevicePage, S as hasLive, x as hasPlayback, y as kindLine, _ as playbackOffline, g as playbackRecorder, h as shownTab, C as tabsFor, w as watchedEntities };

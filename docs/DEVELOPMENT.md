@@ -65,7 +65,8 @@ frontend/            # Lit + TypeScript panel, built with Vite
                      # (live-debug.ts) over them; the soak report (live-soak.ts)
   src/playback/      # timeline canvas + math, calendar, event list, player (MSE feeder in
                      # mse-feeder.ts, else a file URL), codec checks, the playback check
-                     # (check.ts) and its MSE probe (mse-probe.ts, mse-sample.ts)
+                     # (check.ts) and its MSE probe (mse-probe.ts, mse-sample.ts); why
+                     # recordings cannot be read or played, in plain words (explain.ts)
   src/live/          # the live sessions: WebRTC (ours and HA's), MSE over the signed
                      # websocket (session.ts); the player that keeps one playing
                      # (player.ts); what the live views share (data.ts); which stream
@@ -126,7 +127,8 @@ python -m script.hassfest --action validate \
 The panel without Home Assistant or cameras, for designing and checking every view:
 `frontend/preview/` mounts the real panel on a fake `hass` with the owner's eight
 cameras, every setting and a day of events. Its pictures are synthetic. Add
-`?offline=cam-dogs,cam-garage` for cameras Home Assistant cannot reach.
+`?offline=cam-dogs,cam-garage` for cameras Home Assistant cannot reach, and
+`?disk=cam-door,dev-nvr` for the Doorbell's SD card or the NVR's disk not ready.
 
 ```bash
 frontend/preview/make-media.sh                     # once: the synthetic pictures (ffmpeg)

@@ -1,4 +1,4 @@
-import { Gt as e, I as t, Jt as n, Kt as r, Ut as i, it as a, qt as o, r as s, vt as c, yt as l } from "./home-DAQTHR3q.js";
+import { Gt as e, I as t, Jt as n, Kt as r, Ut as i, it as a, qt as o, r as s, vt as c, yt as l } from "./home-DANJK4HC.js";
 //#region src/catalog.ts
 var u = {
 	id: "other",

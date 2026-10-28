@@ -133,6 +133,12 @@ export interface CameraNode extends RegistryInfo, EntityCounts {
   host_id: string | null;
   connections: Connection[];
   status: CameraStatus;
+  /**
+   * Where its recordings are: playable here, kept where this cannot play
+   * them (a battery camera's SD card), or nowhere; and the state of the disk
+   * or SD card keeping them.
+   */
+  recordings?: { where: "playable" | "elsewhere" | "none"; storage: "ready" | "not_ready" | "none" | null };
   primary_view: "live" | "snapshot";
   snapshot_entity_id: string | null;
 }

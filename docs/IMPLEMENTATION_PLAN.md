@@ -20,7 +20,7 @@ put on it:
 | 1 | Device details and every setting, with explanations | Standard (catalog) / High (panel shell) | 2–3 wk | Done (2026-10-17) |
 | 2 | Event timeline, thumbnails, smooth playback | High (backend) / Very high (player) | 3–5 wk | Done (2026-10-21, v0.3.2). 2A (2026-10-20, v0.2.7): timeline 105–287 ms, first frame 0.6–1.1 s, auto-advance 6–7 ms on hardware. 2B: MSE player; uncached deep starts are the NVR's download up to the target (6.9–13.0 s in hour-long recordings, up to 84 s before), speeds 0.5–8×, HD/SD at the same moment, one-hour sessions within the caps, the iPhone app on Wi-Fi, Tailscale and Nabu Casa |
 | 3 | Live view via go2rtc, grid, fullscreen, PTZ | High | 3–4 wk | Done (2026-10-27, v0.15.1). Our own go2rtc and the live check (v0.4.0, runs 5–13); the key-frame cache, the image cache, the Live grid and Live tab, keep warm, full-screen HD, PTZ and the camera's controls, the picture first, battery cameras on wired power, a debug view per tile and the soak report (v0.5.0–v0.15.1). Exit runs: the soak passed (run 15), every tile's first image in a median 0.02 s on the iPhone and the Mac (runs 16–17), and the Phase 2 playback criteria held with live view running (runs 18–19) |
-| 4 | Design, performance, mobile, packaging, first release | Standard | 3–4 wk | In progress. Step 1, the design (the Timetable), done in v0.16.0–v0.22.0; step 2, the performance budget, done in v0.23.0; step 3 built in v0.24.0–v0.26.0, its iPhone checklist with the owner; step 4.1 built in v0.27.0. See "Phase 4 status" |
+| 4 | Design, performance, mobile, packaging, first release | Standard | 3–4 wk | In progress. Step 1, the design (the Timetable), done in v0.16.0–v0.22.0; step 2, the performance budget, done in v0.23.0; step 3 built in v0.24.0–v0.26.0, its iPhone checklist with the owner; steps 4.1–4.2 built in v0.27.0–v0.28.0. See "Phase 4 status" |
 | 5 | Optional R&D: Baichuan live/playback | Very high | 4–8 wk, time-boxed with gates | Not started |
 
 Phases 1 and 2 can overlap once Phase 0 is done. Phase 5 can start any time after
@@ -2892,7 +2892,7 @@ redesigned views.
 | 1. Design: the Timetable panel (home view, events, devices, device page, checks) | **Done** (v0.16.0–v0.22.0). Direction chosen (2026-10-28), see "Step 1: the design". 1.1 foundations built (v0.16.0, the board's crop fixed in v0.16.1) and checked by the owner on the hardware, see "Step 1.1: foundations". 1.2 the home view's timetable built (v0.17.0), see "Step 1.2: today's timetable". 1.3 the Events view built (v0.18.0), see "Step 1.3: the Events view". 1.4a the device list and the device page's header, Overview and Settings built (v0.19.0), see "Step 1.4a: devices, Overview and Settings". 1.4b the Playback tab built (v0.20.0), see "Step 1.4b: the Playback tab". 1.5 the checks and reports built, in plain words (v0.21.0), see "Step 1.5: checks and reports"; 1.6 the finish: the design detector, an independent finish review against the contract (verdict: ship after fixes) with every material fix built, and `DESIGN.md` (v0.22.0), see "Step 1.6: the finish". |
 | 2. Performance budget | **Done** (v0.23.0): the home view's first download is 40.9 KB gzipped (budget 200 KB) with every other view loaded on demand; no long tasks while scrubbing the timeline; time to first frame for live and playback on every setup. The first two run in CI. See "Step 2: the performance budget". Mobile (step 3) is next |
 | 3. Mobile, and networks that cut websockets | In progress, in three parts (see "Step 3: mobile, and networks that cut websockets"). 3.1 built (v0.24.0): a page whose network cuts MSE's websockets switches live view to WebRTC first, and the capacity test sets the cameras kept warm aside and says plainly what else holds the slots, see "Step 3.1: live view that holds up". 3.2 built (v0.25.0): pinch and two-finger pan on the timeline, and picture-in-picture for live and playback, see "Step 3.2: touch, and picture-in-picture". 3.3 built (v0.26.0): full screen stays in the lighter SD away from home or on mobile data, with an HD button remembered per device, see "Step 3.3: away from home, and the iPhone checklist". **Waiting on the owner's iPhone checklist** (and the work-PC check from 3.1); the error states (step 4) can start meanwhile |
-| 4. Error states | In progress, in three parts (see "Step 4: error states"). 4.1 built (v0.27.0): offline cameras on the board from Home Assistant's state, and live errors in plain words, see "Step 4.1: live error states". 4.2 (playback and storage) is next |
+| 4. Error states | In progress, in three parts (see "Step 4: error states"). 4.1 built (v0.27.0): offline cameras on the board from Home Assistant's state, and live errors in plain words, see "Step 4.1: live error states". 4.2 built (v0.28.0): cameras with nothing to play say why, disks that are not ready are flagged, and recordings that cannot be read or played say why in plain words, see "Step 4.2: playback and storage error states". 4.3 (the integration changed) is next |
 | 5. Accessibility | Not started |
 | 6. Packaging and the HA version matrix | Not started |
 | 7. Docs | Not started |
@@ -3418,9 +3418,9 @@ Built in three parts:
 
 - **4.1 live** (v0.27.0): a camera Home Assistant cannot reach shows as
   offline, and live errors say what happened and what to do.
-- **4.2 playback and storage:** no SD card, a failed or unformatted disk,
-  recordings out of reach while a camera is offline, and video the browser
-  cannot play.
+- **4.2 playback and storage** (v0.28.0): no SD card, a failed or unformatted
+  disk, recordings out of reach while a camera is offline, and video the
+  browser cannot play.
 - **4.3 the integration changed:** a plain banner when a Home Assistant update
   changes the Reolink integration's internals, and screenshots of every error
   state in the design preview.
@@ -3464,6 +3464,57 @@ to do. Full screen's "HD cannot play" uses the same words.
 
 The design preview takes `?offline=cam-dogs,cam-garage` to show cameras Home
 Assistant cannot reach.
+
+### Step 4.2: playback and storage error states (v0.28.0)
+
+**Where a camera's recordings are.** `devices` now says, for each camera, where
+its recordings are and whether the disk keeping them is ready
+(`recordings: {where, storage}`):
+
+- `where` is `playable` when a connection is its playback source, `elsewhere`
+  when one keeps recordings it cannot send to Home Assistant, and `none` when it
+  keeps none (no SD card, and not on an NVR in Home Assistant).
+- `storage` is `ready`, `not_ready` (a disk or SD card that is not formatted, or
+  has failed) or `none`, from the recorder's disks (`bridge.storage_state`).
+
+**The Playback tab of every camera.** A camera with nothing to play keeps its
+Playback tab, and the tab says why instead of disappearing:
+
+| The camera | Its Playback tab says |
+| --- | --- |
+| no SD card, no NVR | **No recordings to play.** Laundry Room keeps no recordings: it has no SD card, and it is not on a Reolink NVR in Home Assistant. *To record, put a microSD card in it and format it in the Reolink app, or add it to a Reolink NVR. Its live view and pictures work either way.* |
+| records, but cannot send them | **Recordings kept where they cannot be played here.** … Play them in the Reolink app. |
+| degraded mode | **No playback in degraded mode.** The Reolink integration's internals changed in this Home Assistant release … |
+
+**A disk that is not ready.** Over the timeline: "Doorbell's SD card is not
+ready: not formatted, or failed, so recent recordings may be missing. Format it
+in the Reolink app, or replace it." ("The NVR's hard disk is not ready" for a
+camera on an NVR). The Overview says
+the same over the connection's facts, and its Storage row names the disk
+("SD card: 42% used", "Hard disk 2: not ready (not formatted, or failed)",
+"None: no SD card, so it keeps no recordings of its own").
+
+**Recordings in plain words** (`src/playback/explain.ts`). Errors say what
+happened and what to do, in bold over the technical text, which stays under
+Details for support:
+
+| What went wrong | What the Playback tab says |
+| --- | --- |
+| a day's search, while the camera (recording to its SD card) is offline | Front Yard is offline, so the recordings on its SD card cannot be read. *They come back when it does.* |
+| a day's search failed or timed out | The recorder did not answer when asked for this day's recordings. *Try again in a moment. If it stays, check that the NVR or camera is online.* |
+| media error 4, no supported streams, codec, decode | This browser cannot play this recording. *Try Chrome or Safari, or play it in SD.* |
+| no main-stream recording | There is no HD copy of this recording. *Play it in SD.* |
+| unknown segment | This recording is no longer there: the recorder may have recorded over it. *Open the day again.* |
+| 403, 404, expired | The recording's link has expired. *Play it again.* |
+| cache failed, network, 5xx | The recording could not be fetched. *Check the connection to Home Assistant, then play it again.* |
+| Home Assistant's disk full | Home Assistant's disk is too full to fetch this recording. *Free some space on it, then play the recording again.* |
+
+HD falling back to SD says so in the same words: "HD could not play: This
+browser cannot play this recording. Back to SD."
+
+The design preview takes `?disk=cam-door,dev-nvr` to show the Doorbell's SD
+card or the NVR's disk not ready; Laundry Room shows a camera with no
+recordings.
 
 ### Steps 2–7
 
