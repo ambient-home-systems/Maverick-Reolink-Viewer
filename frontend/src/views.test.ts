@@ -43,8 +43,10 @@ describe("views loaded on demand", () => {
     expect(deepText(el)).toContain("Could not load this page");
     // A failed file is not kept: each try fetches it again.
     const first = loadView("live-check");
-    await first.catch(() => undefined);
-    expect(loadView("live-check")).not.toBe(first);
+    await expect(first).rejects.toThrow();
+    const again = loadView("live-check");
+    expect(again).not.toBe(first);
+    await expect(again).rejects.toThrow();
     expect(attempts.count).toBeGreaterThan(0);
   });
 });
