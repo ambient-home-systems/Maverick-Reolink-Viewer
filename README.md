@@ -63,9 +63,9 @@ update"), and your devices and their settings keep working until an update is ou
 ## Status
 
 Phase 4 (design, performance, mobile, release) is built: v0.31.0 was the first
-release, and v0.32.0 adds the guides above. What is left is the owner's install of a
-release through HACS on a clean Home Assistant, with the hardware checklist; see the
-[plan](docs/IMPLEMENTATION_PLAN.md#phase-4-status). Phases 1 to 3 (device details and
+release, and v0.32.0 (released 2026-10-28) adds the guides above. What is left is the
+owner's install of v0.32.0 through HACS on a clean Home Assistant, with the hardware
+checklist; see the [plan](docs/IMPLEMENTATION_PLAN.md#phase-4-exit-the-checklist). Phases 1 to 3 (device details and
 settings, events and recorded-video playback, live view) are done and were verified on
 the owner's hardware: a 24-hour soak, every tile's first image in a median 0.02 s on a
 Mac and an iPhone, and playback holding up with live view running.

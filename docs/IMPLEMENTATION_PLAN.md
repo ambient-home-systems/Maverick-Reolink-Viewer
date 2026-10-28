@@ -20,7 +20,7 @@ put on it:
 | 1 | Device details and every setting, with explanations | Standard (catalog) / High (panel shell) | 2–3 wk | Done (2026-10-17) |
 | 2 | Event timeline, thumbnails, smooth playback | High (backend) / Very high (player) | 3–5 wk | Done (2026-10-21, v0.3.2). 2A (2026-10-20, v0.2.7): timeline 105–287 ms, first frame 0.6–1.1 s, auto-advance 6–7 ms on hardware. 2B: MSE player; uncached deep starts are the NVR's download up to the target (6.9–13.0 s in hour-long recordings, up to 84 s before), speeds 0.5–8×, HD/SD at the same moment, one-hour sessions within the caps, the iPhone app on Wi-Fi, Tailscale and Nabu Casa |
 | 3 | Live view via go2rtc, grid, fullscreen, PTZ | High | 3–4 wk | Done (2026-10-27, v0.15.1). Our own go2rtc and the live check (v0.4.0, runs 5–13); the key-frame cache, the image cache, the Live grid and Live tab, keep warm, full-screen HD, PTZ and the camera's controls, the picture first, battery cameras on wired power, a debug view per tile and the soak report (v0.5.0–v0.15.1). Exit runs: the soak passed (run 15), every tile's first image in a median 0.02 s on the iPhone and the Mac (runs 16–17), and the Phase 2 playback criteria held with live view running (runs 18–19) |
-| 4 | Design, performance, mobile, packaging, first release | Standard | 3–4 wk | In progress. Step 1, the design (the Timetable), done in v0.16.0–v0.22.0; step 2, the performance budget, done in v0.23.0; step 3 built in v0.24.0–v0.26.0, its iPhone checklist with the owner; step 4, error states, built in v0.27.0–v0.29.0; step 5, accessibility, built in v0.30.0; step 6, packaging, built in v0.31.0, the first release (published 2026-10-28); step 7, docs, built in v0.32.0. Left: the owner's HACS install and hardware checklist, and the iPhone checklist. See "Phase 4 status" |
+| 4 | Design, performance, mobile, packaging, first release | Standard | 3–4 wk | In progress. Step 1, the design (the Timetable), done in v0.16.0–v0.22.0; step 2, the performance budget, done in v0.23.0; step 3 built in v0.24.0–v0.26.0, its iPhone checklist with the owner; step 4, error states, built in v0.27.0–v0.29.0; step 5, accessibility, built in v0.30.0; step 6, packaging, built in v0.31.0, the first release (published 2026-10-28); step 7, docs, built and released in v0.32.0 (2026-10-28). Left: the owner's exit checklist (v0.32.0 through HACS on a clean Home Assistant with the live and playback checks, the iPhone checklist, the work-PC check). See "Phase 4 exit: the checklist" |
 | 5 | Optional R&D: Baichuan live/playback | Very high | 4–8 wk, time-boxed with gates | Not started |
 
 Phases 1 and 2 can overlap once Phase 0 is done. Phase 5 can start any time after
@@ -2891,11 +2891,11 @@ redesigned views.
 | --- | --- |
 | 1. Design: the Timetable panel (home view, events, devices, device page, checks) | **Done** (v0.16.0–v0.22.0). Direction chosen (2026-10-28), see "Step 1: the design". 1.1 foundations built (v0.16.0, the board's crop fixed in v0.16.1) and checked by the owner on the hardware, see "Step 1.1: foundations". 1.2 the home view's timetable built (v0.17.0), see "Step 1.2: today's timetable". 1.3 the Events view built (v0.18.0), see "Step 1.3: the Events view". 1.4a the device list and the device page's header, Overview and Settings built (v0.19.0), see "Step 1.4a: devices, Overview and Settings". 1.4b the Playback tab built (v0.20.0), see "Step 1.4b: the Playback tab". 1.5 the checks and reports built, in plain words (v0.21.0), see "Step 1.5: checks and reports"; 1.6 the finish: the design detector, an independent finish review against the contract (verdict: ship after fixes) with every material fix built, and `DESIGN.md` (v0.22.0), see "Step 1.6: the finish". |
 | 2. Performance budget | **Done** (v0.23.0): the home view's first download is 40.9 KB gzipped (budget 200 KB) with every other view loaded on demand; no long tasks while scrubbing the timeline; time to first frame for live and playback on every setup. The first two run in CI. See "Step 2: the performance budget". Mobile (step 3) is next |
-| 3. Mobile, and networks that cut websockets | In progress, in three parts (see "Step 3: mobile, and networks that cut websockets"). 3.1 built (v0.24.0): a page whose network cuts MSE's websockets switches live view to WebRTC first, and the capacity test sets the cameras kept warm aside and says plainly what else holds the slots, see "Step 3.1: live view that holds up". 3.2 built (v0.25.0): pinch and two-finger pan on the timeline, and picture-in-picture for live and playback, see "Step 3.2: touch, and picture-in-picture". 3.3 built (v0.26.0): full screen stays in the lighter SD away from home or on mobile data, with an HD button remembered per device, see "Step 3.3: away from home, and the iPhone checklist". **Waiting on the owner's iPhone checklist** (and the work-PC check from 3.1); the error states (step 4) can start meanwhile |
+| 3. Mobile, and networks that cut websockets | In progress, in three parts (see "Step 3: mobile, and networks that cut websockets"). 3.1 built (v0.24.0): a page whose network cuts MSE's websockets switches live view to WebRTC first, and the capacity test sets the cameras kept warm aside and says plainly what else holds the slots, see "Step 3.1: live view that holds up". 3.2 built (v0.25.0): pinch and two-finger pan on the timeline, and picture-in-picture for live and playback, see "Step 3.2: touch, and picture-in-picture". 3.3 built (v0.26.0): full screen stays in the lighter SD away from home or on mobile data, with an HD button remembered per device, see "Step 3.3: away from home, and the iPhone checklist". **Waiting on the owner's iPhone checklist** (and the work-PC check from 3.1), now part of "Phase 4 exit: the checklist" |
 | 4. Error states | **Built** (v0.27.0–v0.29.0), in three parts (see "Step 4: error states"). 4.1 (v0.27.0): offline cameras on the board from Home Assistant's state, and live errors in plain words, see "Step 4.1: live error states". 4.2 (v0.28.0): cameras with nothing to play say why, disks that are not ready are flagged, and recordings that cannot be read or played say why in plain words, see "Step 4.2: playback and storage error states". 4.3 (v0.29.0): a plain note over every view when Reolink Viewer cannot reach the cameras, plain load errors, and screenshots of every error state, see "Step 4.3: when Reolink Viewer cannot reach the cameras". |
 | 5. Accessibility | **Built** (v0.30.0): every view passes WCAG 2.1 AA (axe-core, light and dark, desktop and phone) and works from the keyboard, checked in CI; the timeline, the calendar and the device tabs are keyboard widgets; reduced motion is honoured and tested. See "Step 5: accessibility". |
-| 6. Packaging and the HA version matrix | **Built and released** (v0.31.0): releases from a Release workflow (CI, then the package checked and attached, notes from `CHANGELOG.md`); CI tests the oldest supported Home Assistant (2026.10.1: the matrix found 2026.10.0 cannot run it) and the pinned newest (2026.10.4), and the newest weekly. The optional go2rtc app is not built (see "Step 6: packaging"). The first release, [v0.31.0](https://github.com/ambient-home-systems/Maverick-Reolink-Viewer/releases/tag/v0.31.0), was published on 2026-10-28. **Waiting on the owner:** installing a release through HACS on a clean Home Assistant, with the hardware checklist (the exit criterion) |
-| 7. Docs | **Built** (v0.32.0): a user guide, a troubleshooting guide that has every message the panel shows (checked word for word by a test), per-model notes from the hardware matrix, and Help in the panel that opens them for the version installed. See "Step 7: docs". Phase 4's exit (the owner's HACS install and hardware checklist) is what remains |
+| 6. Packaging and the HA version matrix | **Built and released** (v0.31.0): releases from a Release workflow (CI, then the package checked and attached, notes from `CHANGELOG.md`); CI tests the oldest supported Home Assistant (2026.10.1: the matrix found 2026.10.0 cannot run it) and the pinned newest (2026.10.4), and the newest weekly. The optional go2rtc app is not built (see "Step 6: packaging"). The first release, [v0.31.0](https://github.com/ambient-home-systems/Maverick-Reolink-Viewer/releases/tag/v0.31.0), was published on 2026-10-28, and [v0.32.0](https://github.com/ambient-home-systems/Maverick-Reolink-Viewer/releases/tag/v0.32.0) the same day. **Waiting on the owner:** installing v0.32.0 through HACS on a clean Home Assistant, with the hardware checklist (the exit criterion), see "Phase 4 exit: the checklist" |
+| 7. Docs | **Built and released** ([v0.32.0](https://github.com/ambient-home-systems/Maverick-Reolink-Viewer/releases/tag/v0.32.0), 2026-10-28): a user guide, a troubleshooting guide that has every message the panel shows (checked word for word by a test), per-model notes from the hardware matrix, and Help in the panel that opens them for the version installed (checked against the published tag). See "Step 7: docs". Phase 4's exit is what remains, see "Phase 4 exit: the checklist" |
 
 ### Step 1: the design
 
@@ -3672,12 +3672,23 @@ say): then an app with the GPU (VAAPI) could transcode them.
    green with "Ready to release v0.31.0" and the notes. Then again without it.
    **Done 2026-10-28:** the dry run (run 40716134102), then the release (run
    40717064888) published v0.31.0 with `reolink_viewer.zip` (60 files, 401 KB), the
-   same files as a build of main.
+   same files as a build of main. v0.32.0 the same way, see "Step 7: docs".
 2. On a clean Home Assistant 2026.10 or newer, with HACS: add this repository as a
-   custom repository (Integration), install Reolink Viewer **0.31.0**, restart, add
-   the integration, and open the Reolink panel.
+   custom repository (Integration), install Reolink Viewer (now **0.32.0**), restart,
+   add the integration, and open the Reolink panel.
 3. With the Reolink integration set up there, run the live check and the playback
    check (the hardware-in-the-loop checklist).
+
+Items 2 and 3 are part A–E of "Phase 4 exit: the checklist".
+
+**Home Assistant 2026.11 replaces HACS.** Its beta (2026.11.0b0, 2026-10-28) ships
+HACS inside Home Assistant as the **Marketplace** (Settings → Marketplace), and
+blocks the HACS custom integration. The Marketplace reads the same `hacs.json`,
+keeps custom repositories ("Add from link") and moves HACS installs over with
+their updates, so Reolink Viewer needs no change to install there; but the
+README's and the user guide's install steps name HACS's menus. Once 2026.11.0 is
+out (expected 2026-11-04), they need the Marketplace's steps beside HACS's, and a
+fresh Home Assistant can no longer test the HACS route.
 
 ### Step 7: docs (v0.32.0)
 
@@ -3719,6 +3730,190 @@ or when a link or picture in the docs leads nowhere.
 
 The README now starts with what Reolink Viewer does, how to install it and where the
 guides are; the history before the first release moved to its end.
+
+**Released 2026-10-28.** The dry run (run 40727160277), then the release (run
+40728332220), on main at c5aca51 with CI green (run 40724800417), published
+[v0.32.0](https://github.com/ambient-home-systems/Maverick-Reolink-Viewer/releases/tag/v0.32.0)
+with `reolink_viewer.zip` (59 files, 401 KB; one fewer than v0.31.0's because the
+build now puts the live and playback checks in one chunk). The zip is the same,
+file for file, as main's `custom_components/reolink_viewer`, at version 0.32.0. The
+Help links the installed panel makes (`blob/v0.32.0/docs/…`) open, and every section
+they point to is in the tag's docs.
+
+### Phase 4 exit: the checklist
+
+What only the owner's devices can do, in the order to do it: one sitting at home
+(about two and a half hours, much of it waiting), then 20 minutes at the work PC.
+Each item says what to send back.
+
+**Before 2026-11-04.** A new Home Assistant OS installs the newest Home Assistant on
+its first start. From 2026.11.0 (expected 2026-11-04) that brings the Marketplace,
+which does not let HACS install (see "Step 6: packaging"). Done later, part C uses
+the Marketplace instead.
+
+**Why a virtual machine, not a container on the Mac.** Docker Desktop runs
+containers inside its own virtual machine, behind its own address translation: the
+Mac reaches them only through published ports, other devices not at all. Reolink
+Viewer's go2rtc offers browsers the addresses it sees for WebRTC (`listen :18556`,
+no fixed candidates), which there are inside Docker's machine. WebRTC, and Home
+Assistant's own camera view, would then fail for a reason a real install does not
+have, and the live check would report it as a problem. Home Assistant OS in
+VirtualBox on a bridged adapter has its own address on the LAN, like a real install
+(and most HACS users run Home Assistant OS); Home Assistant's macOS guide covers it
+on Intel and Apple silicon. Its own address also keeps the NVR from mixing its
+sessions up with the main instance's: the Reolink integration's docs warn that two
+connections from one address can confuse a camera.
+
+**What it costs the NVR.**
+
+- One more login, as the main instance has: an API session, a TCP push connection
+  (port 9000) and polling every minute. The same on the E1 Zoom, which is added too.
+  Recording is not affected, and nothing is written to the devices: the checks only
+  read.
+- Stream slots. Reolink Viewer asks an NVR for at most 7 live videos, but each Home
+  Assistant counts only its own. The test instance keeps 6 NVR cameras warm from the
+  moment it is set up (the default); with the main instance's 6, the NVR would serve
+  12, more than it was ever measured on, and the capacity test, which needs 7 slots,
+  would measure that instead. So the main instance's warm feeds are paused for the
+  test (2): the NVR then carries its daily load, plus the checks. The capacity test
+  opens up to 7 streams one at a time, over a minute or two, then downloads a
+  recording at full speed for a few seconds (run 5: 377 Mbit/s, every stream at its
+  frame rate); the playback check downloads a few recordings, an HD one among them.
+
+**Sitting 1, at home (the Mac and the iPhone)**
+
+A. Get ready, on the main instance (10 minutes).
+
+1. Close Reolink Viewer's panel everywhere, the iPhone app included.
+2. Pause the warm feeds. Settings → Tools → Template:
+
+   ```jinja
+   {{ integration_entities('reolink_viewer') | select('match', 'switch[.]') | select('is_state', 'on') | list }}
+   ```
+
+   Then Settings → Tools → Actions, in YAML mode, with that list pasted as it is:
+
+   ```yaml
+   action: switch.turn_off
+   target:
+     entity_id: ['switch.front_yard_right_keep_live_view_warm', '…']
+   ```
+
+   *Send:* the list (it turns them back on in 18).
+3. On the NVR and the E1 Zoom (the Reolink app or client: the device's user
+   management), add a user for the test, `hatest` say, as an administrator (the
+   Reolink integration needs one). It goes in 17, and nothing the test set up
+   outlives it.
+
+B. A clean Home Assistant (45 minutes, mostly waiting).
+
+4. Install VirtualBox 7.1 or newer. From
+   [Home Assistant OS 18.4](https://github.com/home-assistant/operating-system/releases/tag/18.4),
+   download `haos_generic-aarch64-18.4.vdi.zip` (Apple silicon, 387 MB) or
+   `haos_ova-18.4.vdi.zip` (Intel, 560 MB), and unzip it.
+5. VirtualBox → New: name `HA test`, no ISO image, OS Linux, Oracle Linux (64-bit)
+   (on Apple silicon, Oracle Linux (ARM 64-bit)); 4096 MB of memory (Home Assistant's
+   minimum is 2048) and 2 CPUs; **Use EFI** ticked. Then Settings → Storage: under the
+   controller (SATA, or VirtioSCSI on Apple silicon) remove the empty disk and add the
+   `.vdi`; Settings → Network: **Bridged Adapter**, on the Wi-Fi or Ethernet the Mac
+   uses. Start it.
+6. When the console shows Home Assistant's address (the first start downloads Home
+   Assistant: up to 20 minutes), open `http://<address>:8123` in Chrome on the Mac.
+   Use the number: `homeassistant.local` may be the main instance. Create a user, call
+   the home `HA test`, leave analytics off, and add none of the devices it finds.
+   *Send:* Home Assistant's and the OS's versions (Settings → About).
+
+C. HACS and Reolink Viewer 0.32.0 (20 minutes).
+
+7. HACS, as its docs say for Home Assistant OS: Settings → Apps → Install app → ⋮ →
+   Repositories → add `https://github.com/hacs/addons`. Install **Get HACS**, start
+   it, and follow its log; then restart Home Assistant (Settings → ⋮ → Restart Home
+   Assistant). Settings → Devices & services → Add integration → **HACS** (reload the
+   page if it is not listed), accept, and authorize it on GitHub with the code it
+   shows.
+8. HACS → ⋮ → Custom repositories: `https://github.com/ambient-home-systems/Maverick-Reolink-Viewer`,
+   type **Integration**. Open **Reolink Viewer** → Download: it should offer
+   **0.32.0**. Download it and restart Home Assistant.
+9. Add integration → **Reolink**: the NVR's address, `hatest` and its password. Then
+   the E1 Zoom the same way: the one camera on its own that is not also on the NVR.
+   Leave out the CX410, CX810 and Doorbell on their own: they are on the NVR, so each
+   would only add a session to its camera. (The Doorbell then plays through the NVR,
+   as for most NVR owners, which the main instance never tried.)
+10. Add integration → **Reolink Viewer**. Open **Reolink** in the sidebar (reload if
+    it is not there), then Devices → **Help** → User guide: it opens at an address
+    with `/blob/v0.32.0/`.
+    *Send:* the version HACS offered, anything unexpected in 7–10, whether every
+    camera came onto the board, and the Help page's address.
+
+D. The checks, on the test instance (45–60 minutes).
+
+11. Leave the Live board open for 5 minutes, so the cameras kept warm are warm and
+    each has a last picture.
+12. Devices → **Live check**: "Desktop Chrome, LAN", everything left ticked (all
+    cameras, every quality, Home Assistant's view, kept warm, the NVR capacity test).
+    Run it, with the tab in front until it ends.
+    *Send:* Details for support → **Copy report**.
+13. Devices → **Front Yard Right** (the CX410: it records continuously, so the check
+    starts deep into hour-long recordings, which runs 18–19 on Dogs could not) →
+    Playback → **Details and playback check**: "Desktop Chrome, LAN", "Switch to HD
+    and back" ticked, "Then play for 60 minutes" not. Run it, the tab in front.
+    *Send:* Details for support → **Copy report**.
+
+Send both reports before E: they live in the test instance.
+
+E. Remove it (15 minutes).
+
+14. In the test instance: Settings → Devices & services → Reolink Viewer → ⋮ →
+    Delete, then each Reolink entry (each logs out of its device).
+15. VirtualBox: the VM → Close → Power off, then Remove → **Delete all files**.
+    Delete the zip and the `.vdi`.
+16. GitHub → Settings → Applications → Authorized OAuth Apps → **HACS** → Revoke.
+17. On the NVR and the E1 Zoom: delete `hatest`.
+18. The main instance: Settings → Tools → Actions, `switch.turn_on` with 2's list.
+    Its warm tiles start at once again within a minute or two.
+    *Send:* that it is done, and anything odd on the main instance meanwhile.
+
+The router forgets the VM's address when its lease runs out. VirtualBox's disk image
+has an uninstaller, if VirtualBox is not wanted afterwards.
+
+F. The main instance to 0.32.0 (10 minutes).
+
+19. Settings → Updates should offer Reolink Viewer 0.32.0 from HACS; install it and
+    restart. (If the main instance did not have it from HACS, install it as in 8.)
+    Devices → Help says 0.32.0.
+    *Send:* whether HACS offered it, and how the main instance had it before.
+
+G. The iPhone (step 3.3, 45 minutes).
+
+20. In the Home Assistant app, three times: on home Wi-Fi; with Wi-Fi off, through
+    Tailscale; with Wi-Fi off, through Nabu Casa. Each time, step 3.3's checklist:
+    the board, full screen and HD ("Lighter SD through Tailscale" away), picture in
+    picture, the timeline under fingers, the end of a recording (with picture in
+    picture once), and the live check as "iPhone app, Wi-Fi (local)", "iPhone app,
+    Tailscale" or "iPhone app, Nabu Casa" (away, untick the NVR capacity test: it is
+    for home).
+    *Send:* per setup, lines 1–5 of step 3.3: fine, or what was odd. The three live
+    check reports: on the Mac afterwards, Devices → Live check → Saved reports →
+    **Copy** each (copying in the app can be blocked).
+
+**Sitting 2, the work PC (20 minutes, the panel left open)**
+
+H. The network that cuts video (step 3.1).
+
+21. In Chrome, open the main instance through Nabu Casa, Reolink → Live, and leave it
+    open and in front for 15–20 minutes. About 11 minutes in, the tiles should start
+    again over WebRTC, once, then stop dropping.
+22. Then, on two tiles kept warm (Front Yard Left and the Garage, say): ⓘ →
+    **Copy**. Each should say "Network: it cut MSE's connections twice, so WebRTC
+    goes first until …".
+    *Send:* the two texts, and whether tiles still dropped after the switch.
+
+**Where the results go.** The hardware matrix gets a run each (the clean install's
+live and playback checks, the iPhone's three live checks, the work PC); this plan's
+Phase 4 status gets the outcome, and `docs/cameras.md` what changes for users. A
+failure gets its cause found, a fix with tests and a patch release (`bump_version.py`,
+`CHANGELOG.md`, the Release workflow), and the item runs again on it. Then Phase 4 is
+done, in the phase table and the README, with the date and the release.
 
 ### Steps 2–7
 
