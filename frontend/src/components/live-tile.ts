@@ -4,6 +4,7 @@ import { icon } from "../icons";
 import type { DebugPlayer, TileDebug } from "../live/debug";
 import { chooseHd, type HdChoice } from "../live/hd";
 import { LivePlayer, pageCuts, type PlayerState } from "../live/player";
+import { currentLink, fullScreenHd, rememberFullScreenHd, type Link } from "../network";
 import { formatClock } from "../playback/time";
 import { enterPip, exitPip, inPip, pipSupported } from "../pip";
 import { sharedStyles } from "../styles";
@@ -46,7 +47,8 @@ export interface LiveCountDetail {
  * Full screen plays HD: the stream `chooseHd` picks starts in the background
  * while the sub stream keeps playing, and replaces it on its first frame (the
  * sub stream then stops). If HD ends, the sub stream plays again until HD is
- * back. Full screen uses the Fullscreen API where the browser has it for any
+ * back. Away from home or on mobile data it stays in the lighter SD, with an
+ * HD button; the choice either way is remembered on the device (network.ts). Full screen uses the Fullscreen API where the browser has it for any
  * element, and fills the window otherwise (the iPhone has it only for video).
  *
  * Picture-in-picture (in full screen, and on the camera's own view) takes the
@@ -78,6 +80,7 @@ export class RvLiveTile extends LitElement {
     _hdState: { state: true },
     _debug: { state: true },
     _pip: { state: true },
+    _hdWanted: { state: true },
   };
 
   declare hass: HomeAssistant | undefined;
@@ -113,6 +116,10 @@ export class RvLiveTile extends LitElement {
   declare _debug: boolean;
   /** Which of its videos is in picture-in-picture. */
   declare _pip: "sub" | "hd" | undefined;
+  /** Full screen plays HD (at home, or as chosen on this device). */
+  declare _hdWanted: boolean;
+  /** Where the page was when full screen began, and whether HD there was chosen. */
+  private _link: Link & { chosen: boolean } = { where: "home", why: "at home", chosen: false };
 
   private _player: LivePlayer | undefined;
   private _hdPlayer: LivePlayer | undefined;
@@ -137,6 +144,7 @@ export class RvLiveTile extends LitElement {
     this._wanted = true;
     this._full = false;
     this._debug = false;
+    this._hdWanted = true;
   }
 
   override connectedCallback(): void {
@@ -254,6 +262,10 @@ export class RvLiveTile extends LitElement {
   /** Go full screen, in HD. */
   enterFull(): void {
     if (this._full) return;
+    const link = currentLink();
+    const choice = fullScreenHd(link);
+    this._link = { ...link, chosen: choice.chosen };
+    this._hdWanted = choice.hd;
     this._full = true;
     this._wanted = true; // a camera waiting for a tap: asking for it is watching it
     if (document.fullscreenEnabled && typeof this.requestFullscreen === "function") {
@@ -331,10 +343,19 @@ export class RvLiveTile extends LitElement {
     }
   }
 
+  /** HD on or off in full screen, remembered on this device for here (at home, or away). */
+  private _toggleHd(): void {
+    this._hdWanted = !this._hdWanted;
+    this._link = { ...this._link, chosen: true };
+    rememberFullScreenHd(this._link.where, this._hdWanted);
+  }
+
   private _driveHd(): void {
     const connection = this.connection;
-    const wanted = (this._full && this.shouldPlay) || this._pip === "hd";
-    if (wanted && connection && !this._hd && this._hdChoosing !== connection) {
+    const full = this._full && this.shouldPlay;
+    const wanted = (full && this._hdWanted) || this._pip === "hd";
+    // Choose the HD stream in full screen even in SD: its button needs to know.
+    if (full && connection && !this._hd && this._hdChoosing !== connection) {
       this._hdChoosing = connection;
       void chooseHd(connection).then((choice) => {
         if (this.connection === connection) this._hd = choice;
@@ -343,7 +364,10 @@ export class RvLiveTile extends LitElement {
     const player = this._ensureHdPlayer();
     if (!player) return;
     if (wanted) this._start(player);
-    else if (player.running && (!this._full || !this._pageVisible || this.suspended || !this._wanted)) {
+    else if (
+      player.running &&
+      (!this._full || !this._pageVisible || this.suspended || !this._wanted || !this._hdWanted)
+    ) {
       player.stop();
     }
   }
@@ -547,20 +571,37 @@ export class RvLiveTile extends LitElement {
     };
   }
 
-  /** Full screen: whether HD shows, and why not. */
+  /** Full screen: SD or HD, a button to switch where there is an HD stream, and why. */
   private _renderHd(): TemplateResult | typeof nothing {
     if (!this._full) return nothing;
     const hd = this._hd;
+    if (!hd?.stream) {
+      return html`<div class="hd-status" title=${hd?.reason ?? nothing}>
+        <span class="badge">SD</span>
+        <span class="small">${hd ? hd.reason : "Choosing the HD stream…"}</span>
+      </div>`;
+    }
     const hdState = this._hdState;
-    let label = "SD";
     let detail: string | undefined;
-    if (this.hdShown) label = "HD";
-    else if (!hd) detail = "Choosing the HD stream…";
-    else if (!hd.stream) detail = hd.reason;
+    if (!this._hdWanted) {
+      detail = this._link.chosen
+        ? "SD, as chosen on this device. Tap HD for full quality."
+        : `Lighter SD ${this._link.why}. Tap HD for full quality.`;
+    } else if (this.hdShown) detail = undefined;
     else if (hdState.kind === "waiting") detail = `HD cannot play: ${hdState.error}`;
     else detail = "HD starting…";
-    return html`<div class="hd-status" title=${hd?.reason ?? nothing}>
-      <span class="badge ${this.hdShown ? "accent" : ""}">${label}</span>
+    return html`<div class="hd-status" title=${hd.reason}>
+      <button
+        class="hd-toggle"
+        aria-pressed=${this._hdWanted ? "true" : "false"}
+        aria-label=${this._hdWanted ? "HD on: switch to the lighter SD" : "HD off: switch to HD"}
+        @click=${(e: Event) => {
+          e.stopPropagation();
+          this._toggleHd();
+        }}
+      >
+        HD
+      </button>
       ${detail ? html`<span class="small">${detail}</span>` : nothing}
     </div>`;
   }
@@ -762,8 +803,28 @@ export class RvLiveTile extends LitElement {
         color: #f4f4f1;
         border-color: rgba(244, 244, 241, 0.5);
       }
-      .hd-status .badge.accent {
+      .hd-toggle {
+        min-height: 32px;
+        padding: 0 10px;
+        border: 1.5px solid rgba(244, 244, 241, 0.6);
+        border-radius: 2px;
+        background: rgba(17, 20, 24, 0.6);
+        color: #f4f4f1;
+        font-family: var(--rv-font-cond);
+        font-size: 15px;
+        font-weight: 600;
+        text-shadow: none;
+      }
+      .hd-toggle:hover:not(:disabled) {
+        background: rgba(17, 20, 24, 0.85);
+      }
+      .hd-toggle[aria-pressed="true"] {
         border-color: var(--rv-action);
+        background: var(--rv-action);
+        color: var(--rv-on-action);
+      }
+      .hd-toggle:focus-visible {
+        outline-color: #f4f4f1;
       }
       .corner-button {
         position: absolute;

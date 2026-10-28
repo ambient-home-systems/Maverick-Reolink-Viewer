@@ -54,6 +54,7 @@ frontend/            # Lit + TypeScript panel, built with Vite
   src/views.ts       # the views loaded on demand (the home view is the only one in
                      # the first download; see Performance budget)
   src/pip.ts         # picture-in-picture (the standard API, else WebKit's)
+  src/network.ts     # where the page is (home or away) and HD in full screen there
   scripts/bundle-budget.mjs  # the home view's size against its budget (npm run budget)
   preview/           # the design preview: the panel on a fake hass (see Design preview)
   src/components/    # device list, device page, overview, settings, playback tab,

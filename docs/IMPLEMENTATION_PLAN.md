@@ -20,7 +20,7 @@ put on it:
 | 1 | Device details and every setting, with explanations | Standard (catalog) / High (panel shell) | 2–3 wk | Done (2026-10-17) |
 | 2 | Event timeline, thumbnails, smooth playback | High (backend) / Very high (player) | 3–5 wk | Done (2026-10-21, v0.3.2). 2A (2026-10-20, v0.2.7): timeline 105–287 ms, first frame 0.6–1.1 s, auto-advance 6–7 ms on hardware. 2B: MSE player; uncached deep starts are the NVR's download up to the target (6.9–13.0 s in hour-long recordings, up to 84 s before), speeds 0.5–8×, HD/SD at the same moment, one-hour sessions within the caps, the iPhone app on Wi-Fi, Tailscale and Nabu Casa |
 | 3 | Live view via go2rtc, grid, fullscreen, PTZ | High | 3–4 wk | Done (2026-10-27, v0.15.1). Our own go2rtc and the live check (v0.4.0, runs 5–13); the key-frame cache, the image cache, the Live grid and Live tab, keep warm, full-screen HD, PTZ and the camera's controls, the picture first, battery cameras on wired power, a debug view per tile and the soak report (v0.5.0–v0.15.1). Exit runs: the soak passed (run 15), every tile's first image in a median 0.02 s on the iPhone and the Mac (runs 16–17), and the Phase 2 playback criteria held with live view running (runs 18–19) |
-| 4 | Design, performance, mobile, packaging, first release | Standard | 3–4 wk | In progress. Step 1, the design (the Timetable), done in v0.16.0–v0.22.0; step 2, the performance budget, done in v0.23.0; steps 3.1–3.2 built in v0.24.0–v0.25.0. See "Phase 4 status" |
+| 4 | Design, performance, mobile, packaging, first release | Standard | 3–4 wk | In progress. Step 1, the design (the Timetable), done in v0.16.0–v0.22.0; step 2, the performance budget, done in v0.23.0; step 3 built in v0.24.0–v0.26.0, its iPhone checklist with the owner. See "Phase 4 status" |
 | 5 | Optional R&D: Baichuan live/playback | Very high | 4–8 wk, time-boxed with gates | Not started |
 
 Phases 1 and 2 can overlap once Phase 0 is done. Phase 5 can start any time after
@@ -2891,7 +2891,7 @@ redesigned views.
 | --- | --- |
 | 1. Design: the Timetable panel (home view, events, devices, device page, checks) | **Done** (v0.16.0–v0.22.0). Direction chosen (2026-10-28), see "Step 1: the design". 1.1 foundations built (v0.16.0, the board's crop fixed in v0.16.1) and checked by the owner on the hardware, see "Step 1.1: foundations". 1.2 the home view's timetable built (v0.17.0), see "Step 1.2: today's timetable". 1.3 the Events view built (v0.18.0), see "Step 1.3: the Events view". 1.4a the device list and the device page's header, Overview and Settings built (v0.19.0), see "Step 1.4a: devices, Overview and Settings". 1.4b the Playback tab built (v0.20.0), see "Step 1.4b: the Playback tab". 1.5 the checks and reports built, in plain words (v0.21.0), see "Step 1.5: checks and reports"; 1.6 the finish: the design detector, an independent finish review against the contract (verdict: ship after fixes) with every material fix built, and `DESIGN.md` (v0.22.0), see "Step 1.6: the finish". |
 | 2. Performance budget | **Done** (v0.23.0): the home view's first download is 40.9 KB gzipped (budget 200 KB) with every other view loaded on demand; no long tasks while scrubbing the timeline; time to first frame for live and playback on every setup. The first two run in CI. See "Step 2: the performance budget". Mobile (step 3) is next |
-| 3. Mobile, and networks that cut websockets | In progress, in three parts (see "Step 3: mobile, and networks that cut websockets"). 3.1 built (v0.24.0): a page whose network cuts MSE's websockets switches live view to WebRTC first, and the capacity test sets the cameras kept warm aside and says plainly what else holds the slots, see "Step 3.1: live view that holds up". 3.2 built (v0.25.0): pinch and two-finger pan on the timeline, and picture-in-picture for live and playback, see "Step 3.2: touch, and picture-in-picture". 3.3 (away from home, and the iPhone checklist) is next |
+| 3. Mobile, and networks that cut websockets | In progress, in three parts (see "Step 3: mobile, and networks that cut websockets"). 3.1 built (v0.24.0): a page whose network cuts MSE's websockets switches live view to WebRTC first, and the capacity test sets the cameras kept warm aside and says plainly what else holds the slots, see "Step 3.1: live view that holds up". 3.2 built (v0.25.0): pinch and two-finger pan on the timeline, and picture-in-picture for live and playback, see "Step 3.2: touch, and picture-in-picture". 3.3 built (v0.26.0): full screen stays in the lighter SD away from home or on mobile data, with an HD button remembered per device, see "Step 3.3: away from home, and the iPhone checklist". **Waiting on the owner's iPhone checklist** (and the work-PC check from 3.1); the error states (step 4) can start meanwhile |
 | 4. Error states | Not started |
 | 5. Accessibility | Not started |
 | 6. Packaging and the HA version matrix | Not started |
@@ -3260,8 +3260,8 @@ Built in three parts, as step 1 was:
 - **3.1 live view that holds up** (v0.24.0): networks that cut long-lived
   websockets, and the capacity test while cameras are kept warm.
 - **3.2 touch** (v0.25.0): gestures on the timeline, and picture-in-picture.
-- **3.3 away from home:** lighter streams on cellular and remote links, and the
-  Companion app checklist on the owner's iPhone.
+- **3.3 away from home** (v0.26.0): lighter streams on cellular and remote
+  links, and the Companion app checklist on the owner's iPhone.
 
 ### Step 3.1: live view that holds up (v0.24.0)
 
@@ -3357,6 +3357,60 @@ panel shows none):
 Also: the device page's tests now wait for a tab's file, which loads on demand
 since step 2 (one passed only when another test had loaded it first); every
 test file passes on its own.
+
+### Step 3.3: away from home, and the iPhone checklist (v0.26.0)
+
+**Lighter live video away from home.** The board already plays every camera's
+small (sub) stream, and playback starts in SD everywhere, with HD only when
+pressed. Full screen was the one place that always switched to the camera's
+main stream, several times the data. Now (`src/network.ts`):
+
+- **At home**, full screen plays HD as before.
+- **Away from home** (through Nabu Casa, through Tailscale, or a public
+  address) and **on mobile data, a slow connection or with data saver on**
+  (where the browser says so: Chrome on Android does, the iPhone does not),
+  it stays in the lighter SD. An **HD** button shows above the picture, with
+  the reason in words: "Lighter SD through Nabu Casa. Tap HD for full quality."
+- The choice is **remembered on the device**, separately for at home and for
+  away: tap HD once away, and full screen away plays HD from then on; turn it
+  off at home and home stays SD ("SD, as chosen on this device"). Stored in the
+  browser (a viewing preference, not a camera setting).
+- A name of your own (a domain through a proxy or a tunnel) cannot tell home
+  from away, so it counts as home: HD, with the button to turn it off.
+- Where the camera has no HD stream, full screen says why, as before.
+
+**The iPhone checklist.** What only the owner's devices can check. For each of
+three setups: the Companion app on home Wi-Fi; with Wi-Fi off, through
+Tailscale; and through Nabu Casa. Note for each line whether it worked, and
+anything odd.
+
+1. **The board.** Open Reolink Viewer. Every camera's picture shows at once,
+   then live video; the cameras kept warm start within about a second.
+2. **Full screen.** Open a camera, then full screen.
+   - At home: the HD button is lit (blue) and the picture sharpens within a few
+     seconds.
+   - Away: it says "Lighter SD through Tailscale" (or Nabu Casa). Tap HD: the
+     picture sharpens. Leave full screen and come back: HD is still on.
+3. **Picture-in-picture.** In full screen, tap the picture-in-picture button
+   (beside the full-screen button). Swipe up to the Home Screen, open another
+   app: the camera keeps playing in its small window. Tap the window to come
+   back. Note if the button does not show, or the window freezes.
+4. **The timeline.** On the camera's Playback tab, on the timeline:
+   - pinch with two fingers: it zooms in around your fingers;
+   - slide two fingers sideways: it moves along the day;
+   - drag one finger: the playhead follows; tap: it plays from there;
+   - a long press shows no menu, and the page still scrolls up and down.
+5. **The end of a recording.** Let one play to its end: the next starts by
+   itself. Try it once with picture-in-picture on (the Playback toolbar's
+   button): say whether the small window carried on into the next recording
+   or closed. Both are handled; this tells which the iPhone does.
+6. **The reports (optional).** Run the live check (Devices → Live check) for
+   the setup, and copy its "In short" lines into the hardware matrix.
+
+And from step 3.1, at the work PC: open the Live board for 15 minutes or more.
+After about 11 minutes the tiles should start over WebRTC and stop dropping,
+and a tile's ⓘ view should say "Network: it cut MSE's connections twice, so
+WebRTC goes first until …".
 
 ### Steps 2–7
 

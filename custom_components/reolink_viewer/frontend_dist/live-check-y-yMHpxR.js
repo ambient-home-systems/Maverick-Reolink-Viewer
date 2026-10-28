@@ -1,7 +1,7 @@
-import { Gt as e, Ht as t, I as n, K as r, Kt as i, L as a, Tt as o, Wt as s, _t as c, kt as l, pt as u, qt as d, rt as f, st as p } from "./home-D5-WNgzo.js";
-import { i as m, m as h, v as g } from "./findings-CjZkQ2Pp.js";
-import { n as _, r as v } from "./check-B7M3bovy.js";
-import { r as y } from "./check-O1kqbi0u.js";
+import { At as e, Et as t, Gt as n, I as r, Jt as i, K as a, Kt as o, L as s, Ut as c, ct as l, it as u, mt as d, qt as f, vt as p } from "./home-B--azFjF.js";
+import { _ as m, i as h, p as g } from "./findings-DhmRFsiX.js";
+import { n as _, r as v } from "./check-VdDLaIv_.js";
+import { r as y } from "./check-D6cX30lW.js";
 //#region src/types.ts
 var b = [
 	"sub",
@@ -15,7 +15,7 @@ var b = [
 function C(e) {
 	return !/Tailscale|Nabu Casa/.test(e);
 }
-var w = class extends s {
+var w = class extends n {
 	static properties = {
 		hass: { attribute: !1 },
 		_status: { state: !0 },
@@ -45,13 +45,13 @@ var w = class extends s {
 		this.hass && !this._loaded && (this._loaded = !0, this._load());
 	}
 	async _load() {
-		let e = this.hass;
-		if (e) {
+		let n = this.hass;
+		if (n) {
 			try {
-				let [t, n] = await Promise.all([l(e), o(e)]);
-				this._status = t, this._cameras = n.cameras;
+				let [r, i] = await Promise.all([e(n), t(n)]);
+				this._status = r, this._cameras = i.cameras;
 			} catch (e) {
-				this._error = t(e).message;
+				this._error = c(e).message;
 			}
 			this._loadReports();
 		}
@@ -59,7 +59,7 @@ var w = class extends s {
 	async _loadReports() {
 		if (this.hass) try {
 			let { reports: e } = await y(this.hass);
-			this._reports = e.filter((e) => e.setup.startsWith(p));
+			this._reports = e.filter((e) => e.setup.startsWith(l));
 		} catch {
 			this._reports = [];
 		}
@@ -89,14 +89,14 @@ var w = class extends s {
 		}
 	}
 	async _refreshStatus() {
-		this.hass && (this._status = await l(this.hass).catch(() => this._status));
+		this.hass && (this._status = await e(this.hass).catch(() => this._status));
 	}
 	async _copy(e, t) {
-		await a(e) ? this._copied = t : (this._copied = void 0, this._shown = t, n(this, "Copying is blocked here: select the text instead, or copy it from Saved reports on a computer", "error"));
+		await s(e) ? this._copied = t : (this._copied = void 0, this._shown = t, r(this, "Copying is blocked here: select the text instead, or copy it from Saved reports on a computer", "error"));
 	}
 	render() {
-		let n = this._check?.running === !0;
-		return i`<p class="intro">
+		let e = this._check?.running === !0;
+		return f`<p class="intro">
         How quickly each camera's live video starts on this device. The check plays each camera in turn
         for a few seconds, so it takes a few minutes: keep this page open and in front. It only watches;
         it changes no camera setting.
@@ -112,39 +112,39 @@ var w = class extends s {
           <select
             aria-labelledby="setup"
             .value=${this._setup}
-            ?disabled=${n}
+            ?disabled=${e}
             @change=${(e) => {
 			this._setup = e.target.value, E(this._setup);
 		}}
           >
-            ${_.map((e) => i`<option value=${e} ?selected=${e === this._setup}>${e}</option>`)}
+            ${_.map((e) => f`<option value=${e} ?selected=${e === this._setup}>${e}</option>`)}
           </select>
         </div>
         <span class="label" id="cameras">Cameras</span>
         <div class="field">
           <select
             aria-labelledby="cameras"
-            ?disabled=${n}
+            ?disabled=${e}
             @change=${(e) => {
 			this._camera = e.target.value;
 		}}
           >
             <option value="">All cameras</option>
-            ${(this._cameras ?? []).map((e) => i`<option value=${e.id} ?selected=${e.id === this._camera}>${e.name}</option>`)}
+            ${(this._cameras ?? []).map((e) => f`<option value=${e.id} ?selected=${e.id === this._camera}>${e.name}</option>`)}
           </select>
         </div>
         <span class="label">Video quality</span>
         <div class="field" role="group" aria-label="Video quality">
-          ${b.map((e) => i`<label class="option"
+          ${b.map((t) => f`<label class="option"
               ><input
                 type="checkbox"
-                .checked=${this._streams.includes(e)}
-                ?disabled=${n}
-                @change=${(t) => {
-			let n = t.target.checked;
-			this._streams = b.filter((t) => t === e ? n : this._streams.includes(t));
+                .checked=${this._streams.includes(t)}
+                ?disabled=${e}
+                @change=${(e) => {
+			let n = e.target.checked;
+			this._streams = b.filter((e) => e === t ? n : this._streams.includes(e));
 		}}
-              />${S[e]}</label
+              />${S[t]}</label
             >`)}
         </div>
         <span class="label">Also</span>
@@ -153,17 +153,17 @@ var w = class extends s {
             ><input
               type="checkbox"
               .checked=${this._stock}
-              ?disabled=${n}
+              ?disabled=${e}
               @change=${(e) => {
 			this._stock = e.target.checked;
 		}}
             />Compare with Home Assistant's own camera view</label
           >
-          ${this._admin ? i`<label class="option"
+          ${this._admin ? f`<label class="option"
                   ><input
                     type="checkbox"
                     .checked=${this._warm}
-                    ?disabled=${n}
+                    ?disabled=${e}
                     @change=${(e) => {
 			this._warm = e.target.checked;
 		}}
@@ -173,37 +173,37 @@ var w = class extends s {
                   ><input
                     type="checkbox"
                     .checked=${this._capacity}
-                    ?disabled=${n}
+                    ?disabled=${e}
                     @change=${(e) => {
 			this._capacity = e.target.checked;
 		}}
                   />NVR capacity test: how many streams each NVR serves at once (at home only)</label
-                >` : e}
+                >` : o}
         </div>
       </div>
-      ${g(this._setup, navigator.userAgent) ? i`<div class="banner warning" role="alert">
+      ${m(this._setup, navigator.userAgent) ? f`<div class="banner warning" role="alert">
             “${this._setup}” is for another kind of device: pick the one for this device, so the report is
             filed under it.
-          </div>` : e}
+          </div>` : o}
       <div class="actions run">
-        ${n ? i`<button @click=${() => this._check?.stop()}>Stop</button>` : i`<button
+        ${e ? f`<button @click=${() => this._check?.stop()}>Stop</button>` : f`<button
               class="primary"
               ?disabled=${!this._streams.length || !this._cameras}
               @click=${() => {
 			this.runCheck({ setup: this._setup }).catch((e) => {
-				this._error = t(e).message;
+				this._error = c(e).message;
 			});
 		}}
             >
               ${this._check ? "Run it again" : "Run live check"}
             </button>`}
       </div>
-      ${n && this._checkStatus ? i`<p class="progress" aria-live="polite">${this._checkStatus}…</p>` : e}
-      ${this._error ? i`<div class="banner error" role="alert">${this._error}</div>` : e}
-      <div class="stage" ?hidden=${!n} aria-label="Live video being measured"></div>
-      ${this._check ? i`<rv-findings class="result" .summary=${this._check.inShort()}></rv-findings>` : e}
-      ${this._checkText ? i`<details class="support">
-            <summary>Details for support${c("chevronDown")}</summary>
+      ${e && this._checkStatus ? f`<p class="progress" aria-live="polite">${this._checkStatus}…</p>` : o}
+      ${this._error ? f`<div class="banner error" role="alert">${this._error}</div>` : o}
+      <div class="stage" ?hidden=${!e} aria-label="Live video being measured"></div>
+      ${this._check ? f`<rv-findings class="result" .summary=${this._check.inShort()}></rv-findings>` : o}
+      ${this._checkText ? f`<details class="support">
+            <summary>Details for support${p("chevronDown")}</summary>
             <p class="muted small">Every measurement, for a bug report or to compare devices.</p>
             <div class="actions">
               <button @click=${() => void this._copy(this._checkText, "current")}>
@@ -211,64 +211,64 @@ var w = class extends s {
               </button>
             </div>
             <pre class="report">${this._checkText}</pre>
-          </details>` : e}
+          </details>` : o}
       ${this._renderReports()}`;
 	}
 	_renderStatus() {
-		let t = this._status;
-		if (!t) return e;
-		let n = t.go2rtc;
-		return i`<p class="small service">
+		let e = this._status;
+		if (!e) return o;
+		let t = e.go2rtc;
+		return f`<p class="small service">
         <span class="muted">Video service (go2rtc):</span>
-        ${n.state}${n.version ? `, version ${n.version}` : ""}${n.error ? i` · <span class="error">${n.error}</span>` : e}
-        ${n.state === "stopped" ? i`<span class="muted">(it starts with the first live video)</span>` : e}
+        ${t.state}${t.version ? `, version ${t.version}` : ""}${t.error ? f` · <span class="error">${t.error}</span>` : o}
+        ${t.state === "stopped" ? f`<span class="muted">(it starts with the first live video)</span>` : o}
       </p>
-      ${n.log?.length ? i`<details>
-            <summary class="small">Its log${c("chevronDown")}</summary>
-            <pre class="report">${n.log.join("\n")}</pre>
-          </details>` : e}`;
+      ${t.log?.length ? f`<details>
+            <summary class="small">Its log${p("chevronDown")}</summary>
+            <pre class="report">${t.log.join("\n")}</pre>
+          </details>` : o}`;
 	}
 	_renderReports() {
-		let t = this._reports;
-		return t?.length ? i`<details class="saved">
-      <summary>Saved reports (${t.length})${c("chevronDown")}</summary>
+		let e = this._reports;
+		return e?.length ? f`<details class="saved">
+      <summary>Saved reports (${e.length})${p("chevronDown")}</summary>
       <ul class="reports">
-        ${t.map((t) => i`<li>
+        ${e.map((e) => f`<li>
             <div class="report-row">
               <span class="when"
                 >${[
-			r(Date.parse(t.updated), this.hass?.config?.time_zone),
-			t.setup.slice(p.length),
-			u(t.text)
-		].filter(Boolean).join(" · ")}${t.done ? "" : " (not finished)"}</span
+			a(Date.parse(e.updated), this.hass?.config?.time_zone),
+			e.setup.slice(l.length),
+			d(e.text)
+		].filter(Boolean).join(" · ")}${e.done ? "" : " (not finished)"}</span
               >
-              <button class="text" @click=${() => void this._copy(t.text, t.id)}>
-                ${this._copied === t.id ? "Copied" : "Copy"}
+              <button class="text" @click=${() => void this._copy(e.text, e.id)}>
+                ${this._copied === e.id ? "Copied" : "Copy"}
               </button>
               <button
                 class="text"
-                aria-expanded=${this._shown === t.id ? "true" : "false"}
+                aria-expanded=${this._shown === e.id ? "true" : "false"}
                 @click=${() => {
-			this._shown = this._shown === t.id ? void 0 : t.id;
+			this._shown = this._shown === e.id ? void 0 : e.id;
 		}}
               >
-                ${this._shown === t.id ? "Hide" : "Show"}
+                ${this._shown === e.id ? "Hide" : "Show"}
               </button>
             </div>
-            ${this._shown === t.id ? this._renderSaved(t.text) : e}
+            ${this._shown === e.id ? this._renderSaved(e.text) : o}
           </li>`)}
       </ul>
-    </details>` : e;
+    </details>` : o;
 	}
 	_renderSaved(e) {
-		let t = m(e);
-		return t ? i`<rv-findings .summary=${t}></rv-findings>
+		let t = h(e);
+		return t ? f`<rv-findings .summary=${t}></rv-findings>
       <details>
-        <summary class="small">Details for support${c("chevronDown")}</summary>
+        <summary class="small">Details for support${p("chevronDown")}</summary>
         <pre class="report">${e}</pre>
-      </details>` : i`<pre class="report">${e}</pre>`;
+      </details>` : f`<pre class="report">${e}</pre>`;
 	}
-	static styles = [f, d`
+	static styles = [u, i`
       :host {
         display: flex;
         flex-direction: column;
@@ -354,7 +354,7 @@ function T() {
 		let e = window.localStorage.getItem(x);
 		if (e && _.includes(e)) return e;
 	} catch {}
-	return h(navigator.userAgent);
+	return g(navigator.userAgent);
 }
 function E(e) {
 	try {

@@ -2,25 +2,7 @@
 // reached, what the browser is, and the arithmetic of the report.
 import type { Segment, TimelineEvent } from "../types";
 
-/** How Home Assistant is reached, from the page's host name (never reported). */
-export function classifyHost(hostname: string): string {
-  const host = hostname.toLowerCase();
-  if (host.endsWith(".ui.nabu.casa")) return "Nabu Casa";
-  if (host.endsWith(".ts.net")) return "Tailscale";
-  const ip = /^(\d+)\.(\d+)\.(\d+)\.(\d+)$/.exec(host);
-  if (ip) {
-    const [a = 0, b = 0] = ip.slice(1, 3).map(Number);
-    // Tailscale hands out addresses in 100.64.0.0/10.
-    if (a === 100 && b >= 64 && b < 128) return "Tailscale";
-    if (a === 10 || a === 127 || (a === 192 && b === 168) || (a === 172 && b >= 16 && b < 32)) return "local";
-    return "remote";
-  }
-  if (host === "localhost" || host.endsWith(".local") || host.endsWith(".lan") || !host.includes(".")) {
-    return "local";
-  }
-  // A name of your own: through a proxy, a tunnel or local DNS, it cannot tell.
-  return "own domain";
-}
+export { classifyHost } from "../network";
 
 const isIos = (userAgent: string): boolean => /iPhone|iPad|iPod/.test(userAgent);
 

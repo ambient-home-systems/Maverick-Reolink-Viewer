@@ -1,6 +1,6 @@
-import { Dt as e, Gt as t, Ht as n, Kt as r, L as i, Wt as a, _t as o, at as s, it as c, qt as l, rt as u, zt as d } from "./home-D5-WNgzo.js";
-import { n as f, t as p } from "./findings-CjZkQ2Pp.js";
-import { t as m } from "./check-B7M3bovy.js";
+import { Bt as e, Gt as t, Jt as n, Kt as r, L as i, Ot as a, Ut as o, at as s, it as c, ot as l, qt as u, vt as d } from "./home-B--azFjF.js";
+import { n as f, t as p } from "./findings-DhmRFsiX.js";
+import { t as m } from "./check-VdDLaIv_.js";
 function h(e) {
 	return v(e).text;
 }
@@ -164,7 +164,7 @@ function x(e) {
 }
 //#endregion
 //#region src/components/live-soak.ts
-var S = "rv-live-soak-close", C = class extends a {
+var S = "rv-live-soak-close", C = class extends t {
 	static properties = {
 		hass: { attribute: !1 },
 		closable: { type: Boolean },
@@ -182,51 +182,51 @@ var S = "rv-live-soak-close", C = class extends a {
 		!this._read && this.hass && this.refresh();
 	}
 	async refresh() {
-		let t = this.hass;
-		if (t) {
+		let e = this.hass;
+		if (e) {
 			this._read = !0, this._state = "loading";
 			try {
-				await s.flush(t);
-				let n = await e(t), r = {
+				await l.flush(e);
+				let t = await a(e), n = {
 					version: m,
 					now: Date.now(),
-					sampleS: n.sample_s,
-					keepS: n.keep_s,
-					warmupS: n.warmup_s,
-					startedAt: n.started_at,
-					run: n.run,
-					samples: n.now ? [...n.samples, n.now] : n.samples
+					sampleS: t.sample_s,
+					keepS: t.keep_s,
+					warmupS: t.warmup_s,
+					startedAt: t.started_at,
+					run: t.run,
+					samples: t.now ? [...t.samples, t.now] : t.samples
 				};
 				this._state = {
-					text: h(r),
-					summary: g(r)
+					text: h(n),
+					summary: g(n)
 				};
 			} catch (e) {
-				this._state = { error: n(e).message };
+				this._state = { error: o(e).message };
 			}
 		}
 	}
 	async _startOver() {
-		let e = this.hass;
-		if (this._confirm = !1, e) {
-			s.discard();
+		let t = this.hass;
+		if (this._confirm = !1, t) {
+			l.discard();
 			try {
-				await d(e, c(navigator.userAgent), s.open), await this.refresh();
+				await e(t, s(navigator.userAgent), l.open), await this.refresh();
 			} catch (e) {
-				this._state = { error: n(e).message };
+				this._state = { error: o(e).message };
 			}
 		}
 	}
 	render() {
-		let e = this._state, n = typeof e == "object" && "text" in e ? e : void 0;
-		return r`<div class="soak" role="region" aria-label="Soak report">
+		let e = this._state, t = typeof e == "object" && "text" in e ? e : void 0;
+		return u`<div class="soak" role="region" aria-label="Soak report">
       <p class="intro">
         A day-long test of live view. Home Assistant keeps watch for ${24} hours, and the live board
         counts what happens whenever it is on screen: ${8} hours in all, on any of your devices. It
         tells you whether live video kept playing, whether connections to your cameras piled up, and whether
         battery cameras slept when nobody watched.
       </p>
-      ${e === "loading" ? r`<p class="muted">Reading the soak run…</p>` : "error" in e ? r`<div class="banner error" role="alert">Could not make the soak report: ${e.error}</div>` : r`<rv-findings .summary=${e.summary}></rv-findings>`}
+      ${e === "loading" ? u`<p class="muted">Reading the soak run…</p>` : "error" in e ? u`<div class="banner error" role="alert">Could not make the soak report: ${e.error}</div>` : u`<rv-findings .summary=${e.summary}></rv-findings>`}
       <div class="actions">
         <button
           class="with-icon"
@@ -234,16 +234,16 @@ var S = "rv-live-soak-close", C = class extends a {
 			this.refresh();
 		}}
         >
-          ${o("refresh")}Refresh
+          ${d("refresh")}Refresh
         </button>
-        ${this._confirm ? t : r`<button
+        ${this._confirm ? r : u`<button
               @click=${() => {
 			this._confirm = !0;
 		}}
             >
               Start over…
             </button>`}
-        ${this.closable ? r`<button
+        ${this.closable ? u`<button
               @click=${() => {
 			this.dispatchEvent(new CustomEvent(S, {
 				bubbles: !0,
@@ -252,9 +252,9 @@ var S = "rv-live-soak-close", C = class extends a {
 		}}
             >
               Close
-            </button>` : t}
+            </button>` : r}
       </div>
-      ${this._confirm ? r`<div class="banner warning confirm" role="alert">
+      ${this._confirm ? u`<div class="banner warning confirm" role="alert">
             <span>Start the soak over? What was counted is dropped.</span>
             <button
               class="danger"
@@ -271,28 +271,28 @@ var S = "rv-live-soak-close", C = class extends a {
             >
               Cancel
             </button>
-          </div>` : t}
-      ${n ? r`<details class="support">
-            <summary>Details for support${o("chevronDown")}</summary>
+          </div>` : r}
+      ${t ? u`<details class="support">
+            <summary>Details for support${d("chevronDown")}</summary>
             <div class="actions">
               <button
                 @click=${() => {
-			i(n.text).then((e) => {
+			i(t.text).then((e) => {
 				this._state = {
-					...n,
+					...t,
 					copied: e
 				};
 			});
 		}}
               >
-                ${n.copied === void 0 ? "Copy report" : n.copied ? "Copied" : "Could not copy"}
+                ${t.copied === void 0 ? "Copy report" : t.copied ? "Copied" : "Could not copy"}
               </button>
             </div>
-            <pre class="report">${n.text}</pre>
-          </details>` : t}
+            <pre class="report">${t.text}</pre>
+          </details>` : r}
     </div>`;
 	}
-	static styles = [u, l`
+	static styles = [c, n`
       :host {
         display: block;
       }

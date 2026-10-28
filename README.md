@@ -136,6 +136,9 @@ runs while cameras are kept warm, and when it cannot, it says what is in the way
 v0.25.0 makes the recordings timeline work under your fingers: pinch to zoom in on a
 moment and slide two fingers to move along the day. Live view and playback can go
 picture-in-picture, to keep watching a camera in a small window over other apps.
+v0.26.0 saves data away from home: full screen stays in the lighter SD through Nabu
+Casa, Tailscale or mobile data, with an HD button one tap away, and remembers your
+choice on each device.
 
 Requires Home Assistant 2026.10 or newer with the Reolink integration set up.
 
