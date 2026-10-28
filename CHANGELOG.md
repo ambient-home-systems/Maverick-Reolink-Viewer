@@ -3,6 +3,21 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.32.1
+
+Live video starts sooner on networks that block one of its two ways of streaming:
+
+- On some networks, often at work, a camera that is not kept warm (a doorbell, say)
+  took about 16 seconds to start: Reolink Viewer first tried its quicker way of
+  streaming (WebRTC), which these networks block, and only after 15 seconds used the
+  other. Now, once that happens, the device remembers it for a week for that Home
+  Assistant address, and its cameras start the other way at once. If the quicker way
+  works again, it is used again.
+- A camera's ⓘ view says so: "Network: WebRTC does not connect from here, so MSE goes
+  first until …".
+
+Tested on Home Assistant 2026.10.1 to 2026.10.4.
+
 ## 0.32.0
 
 Guides for everyone who uses the panel, in plain words, and the way to them from the

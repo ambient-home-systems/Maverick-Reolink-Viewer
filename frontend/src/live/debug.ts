@@ -20,6 +20,8 @@ export interface TileDebug {
   hd?: string | undefined;
   /** This page starts over WebRTC first until then (epoch ms): its network cut MSE. */
   webRtcFirstUntil?: number | undefined;
+  /** MSE goes first until then (epoch ms): WebRTC does not connect from this device. */
+  mseFirstUntil?: number | undefined;
 }
 
 /** Per player label: its stream's server state, or why it could not be read. */
@@ -46,6 +48,9 @@ export function debugText(info: TileDebug, states: DebugStates, now: number = Da
   if (info.hd) lines.push(`HD choice: ${info.hd}`);
   if (info.webRtcFirstUntil !== undefined && info.webRtcFirstUntil > now) {
     lines.push(`Network: it cut MSE's connections twice, so WebRTC goes first until ${clock(info.webRtcFirstUntil)}`);
+  }
+  if (info.mseFirstUntil !== undefined && info.mseFirstUntil > now) {
+    lines.push(`Network: WebRTC does not connect from here, so MSE goes first until ${day(info.mseFirstUntil)}`);
   }
   for (const player of info.players) {
     if (!player.events.length) continue;
@@ -109,4 +114,9 @@ function serverLine(state: LiveStreamState | string | undefined): string {
 
 function clock(at: number): string {
   return new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}
+
+/** A time days away: "Wed 13:15". */
+function day(at: number): string {
+  return new Date(at).toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit" });
 }

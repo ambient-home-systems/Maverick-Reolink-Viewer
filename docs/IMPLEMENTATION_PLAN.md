@@ -20,7 +20,7 @@ put on it:
 | 1 | Device details and every setting, with explanations | Standard (catalog) / High (panel shell) | 2–3 wk | Done (2026-10-17) |
 | 2 | Event timeline, thumbnails, smooth playback | High (backend) / Very high (player) | 3–5 wk | Done (2026-10-21, v0.3.2). 2A (2026-10-20, v0.2.7): timeline 105–287 ms, first frame 0.6–1.1 s, auto-advance 6–7 ms on hardware. 2B: MSE player; uncached deep starts are the NVR's download up to the target (6.9–13.0 s in hour-long recordings, up to 84 s before), speeds 0.5–8×, HD/SD at the same moment, one-hour sessions within the caps, the iPhone app on Wi-Fi, Tailscale and Nabu Casa |
 | 3 | Live view via go2rtc, grid, fullscreen, PTZ | High | 3–4 wk | Done (2026-10-27, v0.15.1). Our own go2rtc and the live check (v0.4.0, runs 5–13); the key-frame cache, the image cache, the Live grid and Live tab, keep warm, full-screen HD, PTZ and the camera's controls, the picture first, battery cameras on wired power, a debug view per tile and the soak report (v0.5.0–v0.15.1). Exit runs: the soak passed (run 15), every tile's first image in a median 0.02 s on the iPhone and the Mac (runs 16–17), and the Phase 2 playback criteria held with live view running (runs 18–19) |
-| 4 | Design, performance, mobile, packaging, first release | Standard | 3–4 wk | Done (2026-10-28, v0.32.0). Step 1, the design (the Timetable), in v0.16.0–v0.22.0; step 2, the performance budget, in v0.23.0; step 3, mobile, in v0.24.0–v0.26.0; step 4, error states, in v0.27.0–v0.29.0; step 5, accessibility, in v0.30.0; step 6, packaging, in v0.31.0, the first release; step 7, docs, in v0.32.0, released the same day. The exit checklist was not run: the owner closed the phase on v0.32.0 working in daily use. See "Phase 4 status" |
+| 4 | Design, performance, mobile, packaging, first release | Standard | 3–4 wk | Done (2026-10-28, v0.32.1). Step 1, the design (the Timetable), in v0.16.0–v0.22.0; step 2, the performance budget, in v0.23.0; step 3, mobile, in v0.24.0–v0.26.0; step 4, error states, in v0.27.0–v0.29.0; step 5, accessibility, in v0.30.0; step 6, packaging, in v0.31.0, the first release; step 7, docs, in v0.32.0, released the same day; v0.32.1 starts live video sooner where WebRTC cannot connect, from the work PC's check. The rest of the exit checklist was not run: the owner closed the phase on v0.32.0 working in daily use. See "Phase 4 status" |
 | 5 | Optional R&D: Baichuan live/playback | Very high | 4–8 wk, time-boxed with gates | Not started |
 
 Phases 1 and 2 can overlap once Phase 0 is done. Phase 5 can start any time after
@@ -2891,7 +2891,7 @@ redesigned views.
 | --- | --- |
 | 1. Design: the Timetable panel (home view, events, devices, device page, checks) | **Done** (v0.16.0–v0.22.0). Direction chosen (2026-10-28), see "Step 1: the design". 1.1 foundations built (v0.16.0, the board's crop fixed in v0.16.1) and checked by the owner on the hardware, see "Step 1.1: foundations". 1.2 the home view's timetable built (v0.17.0), see "Step 1.2: today's timetable". 1.3 the Events view built (v0.18.0), see "Step 1.3: the Events view". 1.4a the device list and the device page's header, Overview and Settings built (v0.19.0), see "Step 1.4a: devices, Overview and Settings". 1.4b the Playback tab built (v0.20.0), see "Step 1.4b: the Playback tab". 1.5 the checks and reports built, in plain words (v0.21.0), see "Step 1.5: checks and reports"; 1.6 the finish: the design detector, an independent finish review against the contract (verdict: ship after fixes) with every material fix built, and `DESIGN.md` (v0.22.0), see "Step 1.6: the finish". |
 | 2. Performance budget | **Done** (v0.23.0): the home view's first download is 40.9 KB gzipped (budget 200 KB) with every other view loaded on demand; no long tasks while scrubbing the timeline; time to first frame for live and playback on every setup. The first two run in CI. See "Step 2: the performance budget". Mobile (step 3) is next |
-| 3. Mobile, and networks that cut websockets | **Done** (v0.24.0–v0.26.0), in three parts (see "Step 3: mobile, and networks that cut websockets"). 3.1 built (v0.24.0): a page whose network cuts MSE's websockets switches live view to WebRTC first, and the capacity test sets the cameras kept warm aside and says plainly what else holds the slots, see "Step 3.1: live view that holds up". 3.2 built (v0.25.0): pinch and two-finger pan on the timeline, and picture-in-picture for live and playback, see "Step 3.2: touch, and picture-in-picture". 3.3 built (v0.26.0): full screen stays in the lighter SD away from home or on mobile data, with an HD button remembered per device, see "Step 3.3: away from home, and the iPhone checklist". The iPhone checklist and the work-PC check from 3.1 were not run: the owner closed Phase 4 on daily use (2026-10-28) |
+| 3. Mobile, and networks that cut websockets | **Done** (v0.24.0–v0.26.0), in three parts (see "Step 3: mobile, and networks that cut websockets"). 3.1 built (v0.24.0): a page whose network cuts MSE's websockets switches live view to WebRTC first, and the capacity test sets the cameras kept warm aside and says plainly what else holds the slots, see "Step 3.1: live view that holds up". 3.2 built (v0.25.0): pinch and two-finger pan on the timeline, and picture-in-picture for live and playback, see "Step 3.2: touch, and picture-in-picture". 3.3 built (v0.26.0): full screen stays in the lighter SD away from home or on mobile data, with an HD button remembered per device, see "Step 3.3: away from home, and the iPhone checklist". The iPhone checklist was not run: the owner closed Phase 4 on daily use (2026-10-28). At the work PC the network cut nothing this time, so 3.1's switch is still not seen there, and WebRTC could not start: v0.32.1 then starts over MSE first on that device (see "Step 3.1: live view that holds up" and "Phase 4 exit: the checklist") |
 | 4. Error states | **Done** (v0.27.0–v0.29.0), in three parts (see "Step 4: error states"). 4.1 (v0.27.0): offline cameras on the board from Home Assistant's state, and live errors in plain words, see "Step 4.1: live error states". 4.2 (v0.28.0): cameras with nothing to play say why, disks that are not ready are flagged, and recordings that cannot be read or played say why in plain words, see "Step 4.2: playback and storage error states". 4.3 (v0.29.0): a plain note over every view when Reolink Viewer cannot reach the cameras, plain load errors, and screenshots of every error state, see "Step 4.3: when Reolink Viewer cannot reach the cameras". |
 | 5. Accessibility | **Done** (v0.30.0): every view passes WCAG 2.1 AA (axe-core, light and dark, desktop and phone) and works from the keyboard, checked in CI; the timeline, the calendar and the device tabs are keyboard widgets; reduced motion is honoured and tested. See "Step 5: accessibility". |
 | 6. Packaging and the HA version matrix | **Done** (v0.31.0): releases from a Release workflow (CI, then the package checked and attached, notes from `CHANGELOG.md`); CI tests the oldest supported Home Assistant (2026.10.1: the matrix found 2026.10.0 cannot run it) and the pinned newest (2026.10.4), and the newest weekly. The optional go2rtc app is not built (see "Step 6: packaging"). The first release, [v0.31.0](https://github.com/ambient-home-systems/Maverick-Reolink-Viewer/releases/tag/v0.31.0), was published on 2026-10-28, and [v0.32.0](https://github.com/ambient-home-systems/Maverick-Reolink-Viewer/releases/tag/v0.32.0) the same day. The install through HACS on a clean Home Assistant, with the hardware checklist (the exit criterion), was not run, see "Phase 4 exit: the checklist" |
@@ -3314,6 +3314,26 @@ the session telling a cut from an end the server explained; the relay setting a
 host's feeds aside and opening them again (unit); and, against a real go2rtc,
 the capacity test with a camera kept warm (set aside, warm again after) and with
 a camera being watched (the plain reason).
+
+**Networks that block WebRTC (v0.32.1).** The work PC's check (2026-10-28) found the
+opposite case: there WebRTC could not connect at all, so a camera not kept warm
+(the Doorbell) waited 15 s for it before MSE played in 1 s, at every start and
+every restart after a drop. Now (`WebRtcWatch` in `live/player.ts`):
+
+- **When it counts:** a WebRTC start that failed though go2rtc answered, without
+  ever connecting, after which MSE played the same stream. A camera slow to wake
+  has no answer yet, and one slow to send a frame had connected: neither counts.
+- **Then MSE goes first** for every stream on the page, cold ones and full screen's
+  HD included, with WebRTC as the fallback, for a week. It is remembered on the
+  device for that Home Assistant address (another address, home on the LAN say, is
+  another way in), so a reload does not wait 15 s again.
+- **WebRTC playing** (as the fallback, when MSE fails) forgets it.
+- The tile's ⓘ view says "Network: WebRTC does not connect from here, so MSE goes
+  first until Wed 13:15", and the player's events say when it switched.
+
+A wrong switch costs little: cold MSE started about 0.6 s later than cold WebRTC
+(main and ext, runs 16–17). Tests: when it counts and when not, the week, the
+storage per address, a device that cannot remember (unit, fake sessions).
 
 ### Step 3.2: touch, and picture-in-picture (v0.25.0)
 
@@ -3743,9 +3763,22 @@ they point to is in the tag's docs.
 ### Phase 4 exit: the checklist
 
 **Not run.** On 2026-10-28 the owner closed Phase 4 without it: v0.32.0 works in
-daily use. So none of it is measured: the install through HACS on a clean Home
-Assistant, the live and playback checks there, the iPhone checklist (step 3.3) and
-the network that cuts video (step 3.1). The steps stay here for a later check.
+daily use. So none of A–G is measured: the install through HACS on a clean Home
+Assistant, the live and playback checks there, and the iPhone checklist (step 3.3).
+The steps stay here for a later check.
+
+**H, the work PC (2026-10-28 13:15).** The owner left the Live board open there,
+through Nabu Casa, "playing fine the whole time", and sent the Doorbell tile's ⓘ
+view after about 13 minutes (the hardware matrix has it):
+
+- The network cut nothing this time: the tile's MSE session, begun with its feed
+  (756 s old), never ended, where run 15 saw every one cut about every 5½ minutes. Step 3.1's switch
+  had nothing to switch on, so it is still not seen on that network.
+- WebRTC could not start there: the Doorbell, not kept warm, waited 15 s for a
+  WebRTC frame, then played over MSE in 0.98 s. A camera not kept warm always tries
+  WebRTC first (`live/player.ts`), and the page remembers MSE being cut but not
+  WebRTC failing, so on such a network each cold start, and each restart after a
+  drop, waits those 15 s. Fixed in v0.32.1, see "Step 3.1: live view that holds up".
 
 What only the owner's devices can do, in the order to do it: one sitting at home
 (about two and a half hours, much of it waiting), then 20 minutes at the work PC.

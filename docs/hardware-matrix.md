@@ -665,6 +665,20 @@ painted frames against WebKit's decoded-frame counter, which ran ahead (12,
 painted match the recording's rate, and no gap between them reached what a
 skipped frame would leave: every frame was shown.
 
+The work PC again, 2026-10-28 13:15 (Phase 4 step 3.1's check): the Live board
+open in Chrome on the filtered work network through Nabu Casa, "playing fine the
+whole time" (the owner), with the Doorbell tile's debug view sent after about 13
+minutes:
+
+- **No cut this time.** The tile's MSE session, begun with its feed (756 s old),
+  never ended (run 15 saw every MSE session on this network cut about every 5½
+  minutes), so the page never switched to WebRTC first.
+- **WebRTC could not start.** The Doorbell, not kept warm, tried WebRTC first: no
+  frame within 15 s. MSE then played its 720×720 sub in 0.98 s, so video began
+  about 16 s after the tile started. In run 15, WebRTC tiles held on this network.
+  v0.32.1 remembers it on the device: once WebRTC is answered but never connects
+  and MSE then plays, cameras start over MSE first there for a week.
+
 ## Findings
 
 Live view:
