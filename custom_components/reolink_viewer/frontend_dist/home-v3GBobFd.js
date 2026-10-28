@@ -813,6 +813,7 @@ function Mt(e, t) {
 function Nt(e) {
 	let t = [], n = typeof e.fill == "string" ? e.fill : e.fill ? `ch${e.fill.channel + 1}, ${Math.round(e.fill.duration_s / 60)} min recording` : "not run";
 	e.warm_set_aside && t.push(`  cameras kept warm, set aside while it ran: ${String(e.warm_set_aside)}`), t.push(`  logged-in clients (GetOnline) before: ${e.online_users_before}, after: ${e.online_users_after}`), t.push(`  download: ${n}${e.fill_alone_mbit_s == null ? "" : `, alone ${e.fill_alone_mbit_s} Mbit/s`}`);
+	for (let { camera: n, why: r } of e.main_left_out ?? []) t.push(`  main left out: ${n} main (${r}, on its own)`);
 	for (let n of e.levels) {
 		let e = n.first_frame_s == null ? "" : `, first frame ${n.first_frame_s} s`, r = n.fill ? `, download ${n.fill.mbit_s ?? "?"} Mbit/s${n.fill.error ? ` (${n.fill.error})` : ""}` : "", i = n.streams.map((e) => {
 			let t = e.expected_fps ? `${e.fps}/${e.expected_fps}` : `${e.fps}`, n = e.longest_gap_s > 1 ? ` gap ${e.longest_gap_s} s` : "";
@@ -995,7 +996,7 @@ function Bt(e) {
 }
 //#endregion
 //#region src/version.ts
-var Vt = "0.32.1", Ht = "https://github.com/ambient-home-systems/Maverick-Reolink-Viewer", Ut = {
+var Vt = "0.32.2", Ht = "https://github.com/ambient-home-systems/Maverick-Reolink-Viewer", Ut = {
 	guide: ["user-guide"],
 	troubleshooting: ["troubleshooting"],
 	cameras: ["cameras"],
@@ -4886,11 +4887,11 @@ function Mi(e) {
 //#endregion
 //#region src/views.ts
 var Ni = {
-	events: () => import("./events-view-Cqe7jAHv.js"),
-	list: () => import("./device-list-CDwN-T-J.js"),
-	device: () => import("./device-page-yO1fJcH4.js"),
-	"live-check": () => import("./live-check-xmxtJjV4.js"),
-	soak: () => import("./live-soak-C0J_R5fT.js")
+	events: () => import("./events-view-ChtfuriE.js"),
+	list: () => import("./device-list-DCf2QuFI.js"),
+	device: () => import("./device-page-pM5Rix2l.js"),
+	"live-check": () => import("./live-check-DE8g-zMh.js"),
+	soak: () => import("./live-soak-DPpbZl0E.js")
 }, Pi = /* @__PURE__ */ new Map();
 function $(e) {
 	let t = Ni[e];

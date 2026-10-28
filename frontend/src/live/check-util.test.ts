@@ -136,6 +136,8 @@ describe("live check helpers", () => {
     expect(capacityLines(ok).at(-1)).toBe("  verdict: every level kept up");
     expect(capacityLines(ok)[1]).toBe("  download: no recording in the last 24 h");
     expect(capacityLines({ ...ok, warm_set_aside: 6 })[0]).toBe("  cameras kept warm, set aside while it ran: 6");
+    const left = capacityLines({ ...ok, main_left_out: [{ camera: "Back Yard", why: "no frame in 15 s" }] });
+    expect(left[2]).toBe("  main left out: Back Yard main (no frame in 15 s, on its own)");
   });
 
   it("builds websocket URLs on the page's server", () => {

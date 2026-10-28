@@ -157,6 +157,9 @@ export function capacityLines(report: CapacityReport): string[] {
   lines.push(
     `  download: ${fill}${report.fill_alone_mbit_s != null ? `, alone ${report.fill_alone_mbit_s} Mbit/s` : ""}`,
   );
+  for (const { camera, why } of report.main_left_out ?? []) {
+    lines.push(`  main left out: ${camera} main (${why}, on its own)`);
+  }
   for (const level of report.levels) {
     const first = level.first_frame_s != null ? `, first frame ${level.first_frame_s} s` : "";
     const fillPart = level.fill

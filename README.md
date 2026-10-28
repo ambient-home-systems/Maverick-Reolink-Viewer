@@ -54,7 +54,7 @@ Something not working? Open an issue on the
 ## Home Assistant versions
 
 Each release is tested on every Home Assistant release from the oldest it supports to
-the newest of its day: v0.32.1 on 2026.10.1 to 2026.10.4 (2026.10.0's Reolink library
+the newest of its day: v0.32.2 on 2026.10.1 to 2026.10.4 (2026.10.0's Reolink library
 is too old for its recordings). A weekly check tries each
 new Home Assistant release. If one changes the Reolink integration in a way Reolink
 Viewer cannot read, the panel says so on every page ("Reolink Viewer needs an
@@ -62,9 +62,10 @@ update"), and your devices and their settings keep working until an update is ou
 
 ## Status
 
-Phase 4 (design, performance, mobile, release) is done (2026-10-28, v0.32.1):
-v0.31.0 was the first release, v0.32.0 adds the guides above, and v0.32.1 starts live
-video sooner on networks that block WebRTC; see the
+Phase 4 (design, performance, mobile, release) is done (2026-10-28, v0.32.2):
+v0.31.0 was the first release, v0.32.0 adds the guides above, v0.32.1 starts live
+video sooner on networks that block WebRTC, and v0.32.2 makes the live check's
+capacity test fair to the NVR; see the
 [plan](docs/IMPLEMENTATION_PLAN.md#phase-4-status). Phases 1 to 3 (device details and
 settings, events and recorded-video playback, live view) are done and were verified on
 the owner's hardware: a 24-hour soak, every tile's first image in a median 0.02 s on a
@@ -162,7 +163,7 @@ view is up. Before, a sample taken at start counted go2rtc and the kept-warm fee
 missing. The soak passed on v0.15.1: 24.4 hours of Home Assistant and 8.3 visible hours
 of the grid, with no reconnect loops, no restarts and no growth in camera sessions.
 
-**Phase 4 (v0.32.1, done):** v0.16.0 starts the panel's new design, the Timetable. The
+**Phase 4 (v0.32.2, done):** v0.16.0 starts the panel's new design, the Timetable. The
 **Reolink** panel opens on **Live**: every camera on a dark live board, numbered and
 packed by its shape (a square doorbell runs two rows tall, a panorama two columns
 wide), each saying in a word what it is doing (Live, Starting, Picture 21:22, Asleep,

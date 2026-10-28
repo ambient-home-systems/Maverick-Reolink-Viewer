@@ -332,6 +332,63 @@ describe("LiveCheck", () => {
     expect(await other.run()).toContain("- Note: RLN36's capacity test could not run: go2rtc is not running.");
   });
 
+  it("says a main the capacity test left out sent no video, not that the host struggled", async () => {
+    const level = {
+      level: 1,
+      added: "Garage sub",
+      first_frame_s: 0.8,
+      streams: [{ stream: "Garage sub", fps: 15, expected_fps: 15, longest_gap_s: 0.1 }],
+      online_users: 2,
+    };
+    const { hass } = fakeHass(true, {
+      type: "result",
+      report: {
+        online_users_before: 2,
+        online_users_after: 2,
+        fill: "no recording in the last 24 h",
+        levels: [level],
+        main_left_out: [
+          { camera: "Back Yard", why: "no frame in 15 s" },
+          { camera: "Garage", why: "no URL" },
+        ],
+        verdict: { first_failing_level: null, reasons: [] },
+      },
+    });
+    const check = new LiveCheck(
+      hass,
+      { setup: "Other", streams: ["sub"], warm: false, stock: false, capacity: true, cameraIds: ["cam1"] },
+      document.createElement("div"),
+    );
+    const text = await check.run();
+    expect(text).toContain("- Good: RLN36 kept up with 1 video stream at once.");
+    expect(text).toContain(
+      "- Note: RLN36's capacity test left out the full-resolution streams of Back Yard and Garage: they sent no video, even on their own. " +
+        "What to do: If their full pictures do not play in the Reolink app either, restart those cameras.",
+    );
+    expect(text).toContain("  main left out: Back Yard main (no frame in 15 s, on its own)");
+    expect(text).not.toContain("struggled");
+    // One camera: its stream.
+    const one = new LiveCheck(
+      fakeHass(true, {
+        type: "result",
+        report: {
+          online_users_before: 2,
+          online_users_after: 2,
+          fill: "no recording in the last 24 h",
+          levels: [level],
+          main_left_out: [{ camera: "Back Yard", why: "no frame in 15 s" }],
+          verdict: { first_failing_level: null, reasons: [] },
+        },
+      }).hass,
+      { setup: "Other", streams: ["sub"], warm: false, stock: false, capacity: true, cameraIds: ["cam1"] },
+      document.createElement("div"),
+    );
+    expect(await one.run()).toContain(
+      "- Note: RLN36's capacity test left out Back Yard's full-resolution stream: it sent no video, even on its own. " +
+        "What to do: If its full picture does not play in the Reolink app either, restart the camera.",
+    );
+  });
+
   it("leaves out what a non-admin cannot run, and stops when asked", async () => {
     const { hass, calls } = fakeHass(false);
     const check = new LiveCheck(
