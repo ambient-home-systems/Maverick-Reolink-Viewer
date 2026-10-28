@@ -8,6 +8,7 @@
 // phone can be copied on a desktop, and a run cut short by a page reload (iOS
 // under memory pressure) keeps what it measured.
 import { fetchCacheStatus, fetchMediaInfo, fetchTimelineDay, toError, urlToken } from "../api";
+import { count, inShortLines, middle, secondsText, speed, worst, type Finding, type InShort } from "../plain";
 import type { CacheStatus, HomeAssistant, MediaInfo, PlaybackUrl, Segment, Stream, TimelineDay, Timing } from "../types";
 import {
   browserLabel,
@@ -172,6 +173,7 @@ export class PlaybackCheck {
   private _long: Long | undefined;
   private _hdPlayed = false;
   private readonly _summary: string[] = [];
+  private readonly _plain: Finding[] = [];
 
   constructor(
     private readonly _t: CheckTarget,
@@ -205,6 +207,8 @@ export class PlaybackCheck {
       await this._link();
       await this._capabilities();
       if (this.options.soakMinutes > 0) await this._soak();
+      for (const line of inShortLines(this.inShort(true))) this._log(line);
+      this._log("");
       this._log("Summary:");
       for (const line of this._summary) this._log(`- ${line}`);
     } catch (err) {
@@ -220,6 +224,26 @@ export class PlaybackCheck {
   }
 
   // ---- Reporting ----
+
+  /** What the check found, in plain words; grows as it runs (`final`: it has finished). */
+  inShort(final = !this.running): InShort {
+    const findings = [...this._plain];
+    const problems = findings.filter((f) => f.grade === "problem").length;
+    const slow = findings.filter((f) => f.grade === "slow").length;
+    const camera = this._t.cameraName;
+    const headline = !findings.length
+      ? final
+        ? "Nothing was measured."
+        : "Measuring…"
+      : `${final ? "" : "So far: "}${
+          problems
+            ? `${count(problems, "problem")} found with ${camera}'s recordings on this device.`
+            : slow
+              ? `${camera}'s recordings play on this device, but ${count(slow, "thing")} ${slow === 1 ? "is" : "are"} slow.`
+              : `${camera}'s recordings play well on this device.`
+        }`;
+    return { headline, findings };
+  }
 
   private _log(line: string): void {
     this.lines.push(line);
@@ -310,6 +334,11 @@ export class PlaybackCheck {
     if (pick === undefined) {
       this._log("A2/A3 skipped: no earlier recording day this month");
       this._summary.push(`Timeline: today ${within(a1.timelineMs, 1000)}`);
+      this._plain.push(
+        a1.timelineMs === undefined
+          ? { grade: "problem", text: "Today's recordings did not load." }
+          : { grade: speed(a1.timelineMs, 1000, 3000), text: `Today's recordings appear on the timeline in ${secondsText(a1.timelineMs)}.` },
+      );
       return;
     }
     const pastDate = `${today.slice(0, 8)}${String(pick).padStart(2, "0")}`;
@@ -321,6 +350,21 @@ export class PlaybackCheck {
     const a4 = await this._loadDay(today);
     this._log(`A4 Time to timeline, today again: ${ms(a4.timelineMs)} (server: ${server(a4.timelineServer)})`);
     const cold = a2.timelineServer?.cache === "fresh";
+    const grades = [
+      speed(a1.timelineMs, 1000, 3000),
+      speed(a2.timelineMs, cold ? 3000 : 1000, cold ? 6000 : 3000),
+      speed(a3.timelineMs, 1000, 3000),
+    ];
+    this._plain.push(
+      a1.timelineMs === undefined || a2.timelineMs === undefined || a3.timelineMs === undefined
+        ? { grade: "problem", text: "The timeline of recordings did not always load." }
+        : {
+            grade: worst(grades),
+            text:
+              `Recordings appear on the timeline in ${secondsText(a1.timelineMs)} for today;` +
+              ` an earlier day takes ${secondsText(a2.timelineMs)} the first time and ${secondsText(a3.timelineMs)} after that.`,
+          },
+    );
     this._summary.push(
       `Timeline: today ${within(a1.timelineMs, 1000)}, past day first ${within(a2.timelineMs, cold ? 3000 : 1000)}` +
         ` (${cold ? "cold, < 3 s" : "cached, < 1 s"}), again ${within(a3.timelineMs, 1000)}`,
@@ -373,9 +417,11 @@ export class PlaybackCheck {
     const events = (day?.events ?? []).slice(-3).reverse();
     if (!day || !events.length) {
       this._log("B  skipped: no events today");
+      this._plain.push({ grade: "note", text: "There were no events today to try opening." });
       return;
     }
     const times: string[] = [];
+    const starts: number[] = [];
     for (const ev of events) {
       const seg = day.segments.find((s) => ev.start >= s.start && ev.start < s.end);
       const where = seg ? `${span(ev.start - seg.start)} into a ${span(seg.end - seg.start)} recording` : "no recording";
@@ -383,6 +429,7 @@ export class PlaybackCheck {
       if (played.ok && t.metrics.firstFrameMs !== undefined) {
         // Not on disk yet: the start waited for the recorder's download.
         times.push(`${within(t.metrics.firstFrameMs, 2000)}${played.held?.complete === false ? " (not cached)" : ""}`);
+        starts.push(t.metrics.firstFrameMs);
       }
       this._log(`B  ${ev.types.join("+")} at ${clock(ev.start)} (${where}): ${played.line}`);
       await sleep(300);
@@ -391,6 +438,21 @@ export class PlaybackCheck {
       await this._pause(1500);
     }
     this._summary.push(`Events → first frame (sub): ${times.join(", ") || "none played"}`);
+    const typical = middle(starts);
+    this._plain.push(
+      typical === undefined
+        ? {
+            grade: "problem",
+            text: "Events would not play.",
+            advice: "Run the check again; if it happens again, include the details below in a report.",
+          }
+        : {
+            grade: speed(typical, 2000, 4000),
+            text:
+              `Opening an event starts its video in ${starts.length > 1 ? "about " : ""}${secondsText(typical)}` +
+              `${starts.length < events.length ? `; ${String(events.length - starts.length)} of ${count(events.length, "event")} did not play` : ""}.`,
+          },
+    );
   }
 
   private async _peek(date: string, segmentId: string): Promise<Peek | undefined> {
@@ -527,6 +589,18 @@ export class PlaybackCheck {
       `Deep start (sub, ${length} recording): not cached ${uncachedMs === undefined ? "not measured" : ms(uncachedMs)}` +
         `, cached ${within(cachedMs, 2000)}`,
     );
+    this._plain.push(
+      cachedMs === undefined
+        ? { grade: "problem", text: "Jumping into the middle of a long recording did not play." }
+        : {
+            grade: speed(cachedMs, 2000, 4000),
+            text:
+              `Jumping into the middle of a long recording starts in ${secondsText(cachedMs)}` +
+              (uncachedMs === undefined
+                ? "."
+                : `; the first time, ${secondsText(uncachedMs)}, while the recorder sends it over.`),
+          },
+    );
   }
 
   private async _advance(): Promise<void> {
@@ -576,6 +650,24 @@ export class PlaybackCheck {
           (t.playFailure ? ` FAILED: ${t.playFailure}` : ""),
       );
       this._summary.push(`Auto-advance: ${moved && seen.includes("advanced") ? `gap ${ms(t.metrics.gapMs)}` : how}`);
+      const gap = t.metrics.gapMs ?? 0;
+      this._plain.push(
+        !moved
+          ? {
+              grade: "problem",
+              text: "It did not move on to the next recording by itself.",
+              advice: "Press Next, or tap the timeline, to carry on.",
+            }
+          : seen.includes("advanced")
+            ? {
+                grade: gap < 500 ? "good" : gap < 2000 ? "fine" : "slow",
+                text: `It plays straight on from one recording to the next${gap < 100 ? ", without a noticeable pause" : `, with a pause of ${secondsText(gap)}`}.`,
+              }
+            : {
+                grade: "fine",
+                text: `It moves on to the next recording by itself, after ${secondsText(t.metrics.firstFrameMs ?? 0)} to load it.`,
+              },
+      );
     } finally {
       player?.removeEventListener("rv-advanced", onAdvanced);
       player?.removeEventListener("rv-ended", onEnded);
@@ -617,6 +709,17 @@ export class PlaybackCheck {
     this._summary.push(
       `Rates: ${results.map((r) => `${r.rate}× ${smooth(r) ? "✓" : "✗"}`).join(" ") || "not measured"} (smooth = ${SMOOTH_RULE})`,
     );
+    const rough = results.filter((r) => !smooth(r));
+    if (results.length) {
+      this._plain.push(
+        rough.length
+          ? { grade: "slow", text: `Playback stutters at ${rough.map((r) => `${String(r.rate)}×`).join(", ")} speed.` }
+          : {
+              grade: "good",
+              text: `Slow motion and fast forward (${String(results[0]?.rate)}× to ${String(results.at(-1)?.rate)}×) play smoothly.`,
+            },
+      );
+    }
   }
 
   /**
@@ -667,6 +770,19 @@ export class PlaybackCheck {
         farText,
     );
     this._summary.push(`Scrub: ${shown.length} of ${tried} points in the buffer shown${median === undefined ? "" : ` (median ${ms(median)})`}`);
+    if (tried) {
+      this._plain.push(
+        shown.length === tried
+          ? {
+              grade: speed(median, 500, 1500),
+              text: `Dragging along the timeline shows the video at once (in about ${secondsText(median ?? 0)}).`,
+            }
+          : {
+              grade: "fine",
+              text: `Dragging along the timeline shows the video at ${String(shown.length)} of ${String(tried)} points; elsewhere a thumbnail shows instead.`,
+            },
+      );
+    }
     player.resume();
   }
 
@@ -696,6 +812,11 @@ export class PlaybackCheck {
     if (!hd.ok) {
       this._log(`H  HD at ${clock(hd.at)}${where}: ${hd.line}`);
       this._summary.push(`HD switch: ${hd.line}`);
+      this._plain.push({
+        grade: "problem",
+        text: "HD did not play; the viewer went back to SD.",
+        advice: "SD still works. Include the details below if you report it.",
+      });
       return;
     }
     this._hdPlayed = true;
@@ -705,12 +826,18 @@ export class PlaybackCheck {
     const sd = await this._switchTo("sub");
     this._log(`     Back to SD at ${clock(sd.at)}: ${sd.line}`);
     this._summary.push(`HD switch: to HD ${hd.short}; back to SD ${sd.short}`);
+    this._plain.push({
+      grade: worst([speed(hd.ms, 3000, 8000), hd.kept ? "good" : "fine"]),
+      text:
+        `Switching to HD takes ${secondsText(hd.ms ?? 0)}${hd.kept ? " and keeps your place" : ", but starts at another moment"}` +
+        `${sd.ok ? `; back to SD, ${secondsText(sd.ms ?? 0)}` : ""}.`,
+    });
   }
 
   /** Press SD or HD; wait for the first frame of that stream. */
   private async _switchTo(
     stream: Stream,
-  ): Promise<{ ok: boolean; at: number; line: string; short: string }> {
+  ): Promise<{ ok: boolean; at: number; line: string; short: string; ms?: number; kept?: boolean }> {
     const t = this._t;
     const player = t.player;
     const at = player?.time ?? 0;
@@ -733,6 +860,8 @@ export class PlaybackCheck {
     return {
       ok: true,
       at,
+      ms: first,
+      kept: kept === "kept the moment",
       line: `first frame ${ms(first)}, started ${moved.toFixed(2)} s from where ${stream === "main" ? "SD" : "HD"} was (${kept})`,
       short: `${ms(first)}, ${kept} (${moved.toFixed(2)} s)`,
     };
@@ -833,6 +962,12 @@ export class PlaybackCheck {
           ` = ${mbit.toFixed(1)} Mbit/s (answer ${ms(firstByte)}, HTTP ${response.status})`,
       );
       this._summary.push(`Link: ${mbit.toFixed(1)} Mbit/s`);
+      this._plain.push({
+        grade: mbit >= 16 ? "good" : mbit >= 4 ? "fine" : "slow",
+        text:
+          `Recordings come from Home Assistant at ${mbit.toFixed(0)} Mbit/s: ` +
+          (mbit >= 16 ? "plenty for HD." : mbit >= 4 ? "enough for SD; HD may pause to load." : "SD may pause to load."),
+      });
     } catch (err) {
       this._log(`L  Link test failed: ${toError(err).message}`);
     } finally {
@@ -893,6 +1028,7 @@ export class PlaybackCheck {
       this._log(`HD decodingInfo for ${main} at ${info.main.width}×${info.main.height}: ${await decoding(main, info.main.width, info.main.height)}`);
     }
     if (!this._hdPlayed) this._summary.push(`HD: ${t.hd.main ? "offered" : "not offered"} (${t.hd.reason})`);
+    if (!t.hd.main) this._plain.push({ grade: "note", text: `HD is not offered on this device: ${t.hd.reason}.` });
   }
 
   private async _soak(): Promise<void> {
@@ -986,6 +1122,21 @@ export class PlaybackCheck {
       ` ${t.metrics.recoveries ?? 0} reloads mid-way, ${diskLine}`;
     this._log(`M  Summary: ${line}`);
     this._summary.push(`Session: ${line}`);
+    const dropRate = frames.decoded ? frames.dropped / frames.decoded : 0;
+    const reloads = t.metrics.recoveries ?? 0;
+    this._plain.push({
+      grade: !stalls && !reloads && dropRate < 0.005 ? "good" : stalls <= 2 && dropRate < 0.02 ? "fine" : "slow",
+      text:
+        `Played for ${count(minutes, "minute")}: ` +
+        [
+          stalls ? `it paused to load ${count(stalls, "time")}` : "it never paused to load",
+          frames.decoded ? `${dropRate < 0.001 ? "no" : `${(dropRate * 100).toFixed(1)}% of`} frames skipped` : undefined,
+          reloads ? `reloaded ${count(reloads, "time")}` : undefined,
+        ]
+          .filter(Boolean)
+          .join(", ") +
+        ".",
+    });
   }
 
   private async _stats(): Promise<{ vod: Record<string, number | undefined> } | undefined> {

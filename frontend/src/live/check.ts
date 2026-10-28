@@ -32,6 +32,7 @@ import {
 } from "../api";
 import { browserLabel, classifyHost } from "../playback/check-util";
 import { mseApiName } from "../playback/mse-feeder";
+import { count, inShortLines, middle, secondsText, speed, type Finding, type InShort } from "../plain";
 import type { CapacityReport, HomeAssistant, LiveCamera, LiveConnection, LiveImage, LiveStreamKind } from "../types";
 import {
   cacheLabel,
@@ -47,7 +48,7 @@ import { liveConnection } from "./data";
 import { chooseHd } from "./hd";
 import { OurMse, OurWebRtc, StockWebRtc, type LiveSession, type SessionResult } from "./session";
 
-export const LIVE_CHECK_VERSION = "0.20.0";
+export const LIVE_CHECK_VERSION = "0.21.0";
 /** Saved reports share the playback check's store; this marks a live one. */
 export const LIVE_REPORT_PREFIX = "Live check · ";
 export const LIVE_SETUPS = [
@@ -88,6 +89,7 @@ type Phase = "cold" | "warm" | "stock";
 type Transport = "WebRTC" | "MSE";
 
 interface Measured {
+  cameraId: string;
   camera: string;
   connection: LiveConnection;
   stream: LiveStreamKind;
@@ -100,6 +102,10 @@ class Stopped extends Error {}
 
 type PosterKind = "ours" | "HA snapshot" | "go2rtc frame";
 
+/** Live video starting within this is good; within FINE_START_MS, fine; after, slow. */
+const GOOD_START_MS = 2_000;
+const FINE_START_MS = 4_000;
+
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 export class LiveCheck {
@@ -108,6 +114,8 @@ export class LiveCheck {
   running = false;
   /** What it is doing now (for the panel). */
   status = "";
+  /** The same in plain words ("Measuring Front Yard, camera 2 of 8"). */
+  plainStatus = "";
   /** After a first frame, the session plays this long (the stats settle). */
   afterFrameMs = 300;
   private _stopped = false;
@@ -116,8 +124,9 @@ export class LiveCheck {
   private _saving: Promise<void> = Promise.resolve();
   private _ice: RTCIceServer[] = [];
   private readonly _measured: Measured[] = [];
-  private readonly _posters: { kind: PosterKind; ms: number }[] = [];
+  private readonly _posters: { kind: PosterKind; ms: number; cameraId?: string }[] = [];
   private readonly _capacity: { host: string; report: CapacityReport }[] = [];
+  private _chosen: LiveCamera[] = [];
 
   constructor(
     private readonly _hass: HomeAssistant,
@@ -141,18 +150,25 @@ export class LiveCheck {
   async run(): Promise<string> {
     this.running = true;
     try {
+      this.plainStatus = "Getting ready";
       await this._header();
       const cameras = await this._cameras();
+      this._chosen = cameras;
+      this.plainStatus = "Loading a still picture of each camera";
       await this._ourImages(cameras);
       await this._hdChoices(cameras);
-      for (const camera of cameras) {
+      for (const [index, camera] of cameras.entries()) {
+        this.plainStatus = `Measuring ${camera.name}, camera ${String(index + 1)} of ${String(cameras.length)}`;
         for (const connection of camera.connections) {
           for (const stream of this.options.streams) {
             await this._measureStream(camera, connection, stream);
           }
         }
       }
-      if (this.options.capacity) await this._capacityTests();
+      if (this.options.capacity) {
+        this.plainStatus = "Testing how many streams each NVR serves at once";
+        await this._capacityTests();
+      }
       this._summary(cameras);
     } catch (err) {
       this._log(err instanceof Stopped ? "Stopped." : `Check failed: ${toError(err).message}`);
@@ -161,6 +177,7 @@ export class LiveCheck {
       await this._go2rtcLog();
       this.running = false;
       this.status = "";
+      this.plainStatus = "";
       this._log(`Done at ${new Date().toLocaleTimeString()}.`);
       await this._save(true);
     }
@@ -302,7 +319,7 @@ export class LiveCheck {
         }
         const waited = performance.now() - waitedFrom;
         const result = await loadImage(image.url);
-        if (result.ms !== undefined) this._posters.push({ kind: "ours", ms: listedMs + waited + result.ms });
+        if (result.ms !== undefined) this._posters.push({ kind: "ours", ms: listedMs + waited + result.ms, cameraId: camera.id });
         const age = Math.max(0, Date.now() - image.taken) / 1000;
         this._log(
           `  ${camera.name}: ${result.text}, taken ${age < 100 ? age.toFixed(1) : Math.round(age)} s before` +
@@ -337,7 +354,7 @@ export class LiveCheck {
     this._log(`${camera.name}${camera.model ? ` (${camera.model})` : ""} · ${via} · ${streamLabel(stream, info.encoding)}`);
     const where = `${camera.name} ${via} ${stream}`;
     const record = (phase: Phase, transport: Transport, result: SessionResult) => {
-      this._measured.push({ camera: camera.name, connection, stream, phase, transport, result });
+      this._measured.push({ cameraId: camera.id, camera: camera.name, connection, stream, phase, transport, result });
     };
 
     // Cold: go2rtc is not connected to the camera.
@@ -540,8 +557,127 @@ export class LiveCheck {
 
   // ---- Summary ----
 
+  /**
+   * What the check found, in plain words: how soon each camera's live video
+   * starts (as its tiles play it: its first connection), what would make a
+   * slow one quicker, and how the rest compared. Grows as the check runs
+   * (`final`: it has finished).
+   */
+  inShort(final = !this.running): InShort {
+    const findings: Finding[] = [];
+    const starts: number[] = [];
+    let measured = 0;
+    let failed = 0;
+    const best = (list: Measured[]) => {
+      const times = list.filter((m) => m.result.ok).map((m) => m.result.firstFrameMs ?? 0);
+      return times.length ? Math.min(...times) : undefined;
+    };
+    for (const camera of this._chosen) {
+      const primary = liveConnection(camera);
+      const mine = this._measured.filter((m) => m.cameraId === camera.id && m.connection === primary);
+      const cold = mine.filter((m) => m.phase === "cold");
+      if (!cold.length) continue;
+      measured += 1;
+      // The live board plays the low-quality stream; full screen, the high one.
+      const low = cold.filter((m) => m.stream === "sub");
+      const live = best(low.length ? low : cold);
+      if (live === undefined) {
+        failed += 1;
+        findings.push({
+          grade: "problem",
+          text: `${camera.name}: live video did not start.`,
+          advice: "Check that the camera is online (for example in the Reolink app), then run the check again.",
+        });
+        continue;
+      }
+      starts.push(live);
+      const hd = low.length ? best(cold.filter((m) => m.stream !== "sub")) : undefined;
+      const warm = best(mine.filter((m) => m.phase === "warm" && m.stream === "sub"));
+      const grade = speed(live, GOOD_START_MS, FINE_START_MS);
+      const parts = [`live video starts in ${secondsText(live)}`];
+      if (hd !== undefined) parts.push(`full screen in HD in ${secondsText(hd)}`);
+      if (warm !== undefined) parts.push(`kept warm, in ${secondsText(warm)}`);
+      let advice: string | undefined;
+      if (grade !== "good" && primary?.is_battery) {
+        advice = "Battery cameras wake up before they stream, so a few seconds is normal.";
+      } else if (grade !== "good" && camera.keep_warm_entity && this._hass.states[camera.keep_warm_entity]?.state !== "on") {
+        advice =
+          `Turn on its “keep live view warm” switch in Home Assistant to make it start faster` +
+          (warm !== undefined ? ` (about ${secondsText(warm)} here).` : ".");
+      }
+      findings.push({ grade, text: `${camera.name}: ${parts.join("; ")}.`, ...(advice ? { advice } : {}) });
+    }
+
+    const pictures = this._posters.filter((p) => p.kind === "ours").map((p) => p.ms);
+    const picture = middle(pictures);
+    if (picture !== undefined) {
+      findings.push({
+        grade: speed(picture, 1000, 2500),
+        text: `A still picture of each camera shows in ${picture < 100 ? "" : "about "}${secondsText(picture)}, while its live video starts.`,
+      });
+    }
+
+    // Home Assistant's own camera view, against ours on the same stream.
+    const stock = this._measured.filter((m) => m.phase === "stock");
+    const pairs: [number, number][] = [];
+    for (const s of stock) {
+      const ours = best(this._measured.filter((m) => m.connection === s.connection && m.stream === s.stream && m.phase !== "stock"));
+      if (ours !== undefined && s.result.ok) pairs.push([ours, s.result.firstFrameMs ?? 0]);
+    }
+    if (pairs.length) {
+      const faster = pairs.filter(([ours, theirs]) => ours < theirs).length;
+      const ours = middle(pairs.map(([o]) => o)) ?? 0;
+      const theirs = middle(pairs.map(([, t]) => t)) ?? 0;
+      findings.push({
+        grade: "note",
+        text:
+          `Compared with Home Assistant's own camera view: this viewer was quicker on ${String(faster)} of ${count(pairs.length, "stream")}` +
+          ` (typically ${secondsText(ours)} against ${secondsText(theirs)}).`,
+      });
+    }
+
+    const webrtc = this._measured.filter((m) => m.transport === "WebRTC" && m.phase !== "stock");
+    const mseWorked = this._measured.some((m) => m.transport === "MSE" && m.result.ok);
+    if (webrtc.length && !webrtc.some((m) => "connected" in m.result.steps) && mseWorked) {
+      findings.push({
+        grade: "note",
+        text: "WebRTC could not connect from this device, so live video used the viewer's other way of streaming (MSE), which worked.",
+      });
+    }
+
+    for (const { host, report } of this._capacity) {
+      const failing = report.verdict.first_failing_level;
+      if (failing === null) {
+        const most = Math.max(0, ...report.levels.map((l) => l.streams.length));
+        findings.push({ grade: "good", text: `${host} kept up with ${count(most, "video stream")} at once.` });
+      } else {
+        const at = report.levels.find((l) => l.level === failing)?.streams.length;
+        findings.push({
+          grade: "slow",
+          text: `${host} struggled with ${at === undefined ? "several streams" : count(at, "video stream")} at once.`,
+          advice: "Keep fewer of its cameras warm, or watch fewer of them in full screen at the same time.",
+        });
+      }
+    }
+
+    const typical = middle(starts);
+    const ok = measured - failed;
+    const headline = !measured
+      ? final
+        ? "No camera was measured."
+        : "Measuring…"
+      : `${final ? "" : "So far: "}${
+          failed
+            ? `${String(ok)} of ${count(measured, "camera")} started live video; ${String(failed)} did not.`
+            : `${measured === 1 ? "The camera" : measured === 2 ? "Both cameras" : `All ${count(measured, "camera")}`} started live video`
+        }${!failed && typical !== undefined ? `, typically in ${secondsText(typical)}.` : ""}`;
+    return { headline, findings };
+  }
+
   private _summary(cameras: LiveCamera[]): void {
     const all = this._measured;
+    this._log("");
+    for (const line of inShortLines(this.inShort(true))) this._log(line);
     this._log("");
     this._log("Summary:");
     const webrtc = all.filter((m) => m.transport === "WebRTC" && m.phase !== "stock");

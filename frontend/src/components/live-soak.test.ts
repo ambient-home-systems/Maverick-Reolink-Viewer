@@ -83,10 +83,17 @@ describe("rv-live-soak", () => {
   it("reports Home Assistant's half before a grid has, and starts the run over on request", async () => {
     const fake = fakeHass(null);
     const { el, text, button, labels } = await mount(fake.hass);
-    expect(text()).toContain("No grid has reported yet: open Reolink → Watch live");
+    expect(text()).toContain("No grid has reported yet: open Reolink → Live");
     expect(text()).toContain("Home Assistant's samples: 1 over 0.0 h");
+    // In plain words first; the details for support after.
+    const findings = el.shadowRoot?.querySelector("rv-findings");
+    expect(findings?.summary?.findings).toContainEqual({
+      grade: "pending",
+      text: "The live board has not been on screen yet.",
+      advice: "Open Reolink → Live whenever it suits you; the hours add up across sittings and devices.",
+    });
     // On its own page: no Close.
-    expect(labels()).toEqual(["Copy", "Refresh", "Start over…"]);
+    expect(labels()).toEqual(["Refresh", "Start over…", "Copy report"]);
     button("Start over…").click();
     await el.updateComplete;
     expect(text()).toContain("Start the soak over? What was counted is dropped.");
@@ -122,7 +129,7 @@ describe("rv-live-soak", () => {
     await el.updateComplete;
     expect(fake.sent.filter((m) => m.type === "reolink_viewer/live/soak")).toHaveLength(1);
     expect(text()).toContain("  Garage: 1 · 0 · 0");
-    button("Copy").click();
+    button("Copy report").click();
     await flush();
     await el.updateComplete;
     expect(copied[0]).toContain("Reolink Viewer soak report v");

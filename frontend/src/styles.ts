@@ -254,6 +254,102 @@ export const sharedStyles = css`
     padding-right: 20px;
     color: var(--rv-muted);
   }
+  /* A form: each setting's label in a column, then its controls. */
+  .form {
+    display: grid;
+    grid-template-columns: minmax(0, 12em) minmax(0, 1fr);
+    border-top: 1px solid var(--rv-rule);
+  }
+  .form > .label {
+    padding: 13px 16px 13px 0;
+    border-bottom: 1px solid var(--rv-rule);
+    color: var(--rv-muted);
+    font-size: 15px;
+  }
+  .form > .field {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px 22px;
+    min-width: 0;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--rv-rule);
+  }
+  .form > .field.stack {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .form select {
+    min-height: 36px;
+    max-width: 100%;
+  }
+  label.option {
+    display: inline-flex;
+    align-items: flex-start;
+    gap: 10px;
+    min-height: 32px;
+    padding: 4px 0;
+    box-sizing: border-box;
+    line-height: 1.35;
+  }
+  label.option input {
+    flex: none;
+    margin: 0;
+  }
+  label.option.nested {
+    margin-left: 28px;
+  }
+  @media (max-width: 600px) {
+    .form {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .form > .label {
+      padding: 12px 0 0;
+      border-bottom: none;
+    }
+  }
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+  /* A report to read and copy: a sheet under a rule. */
+  pre.report {
+    margin: 0;
+    padding: 14px 16px;
+    max-height: 480px;
+    overflow: auto;
+    background: var(--rv-ground-2);
+    border-top: 2px solid var(--rv-rule-strong);
+    font-size: 12.5px;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    user-select: text;
+    -webkit-user-select: text;
+  }
+  /* A disclosure: its drawn arrow turns when open. */
+  summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 32px;
+    cursor: pointer;
+    list-style: none;
+    font-weight: 500;
+  }
+  summary::-webkit-details-marker {
+    display: none;
+  }
+  summary svg {
+    flex: none;
+    width: 16px;
+    height: 16px;
+  }
+  details[open] > summary svg {
+    transform: rotate(180deg);
+  }
   * {
     scrollbar-width: thin;
     scrollbar-color: var(--rv-rule) transparent;

@@ -139,7 +139,7 @@ describe("rv-playback", () => {
     expect(hd?.disabled).toBe(true);
     expect(hd?.title).toMatch(/cannot report/);
     expect(el.renderRoot.querySelector("rv-calendar")?.days.has(17)).toBe(true);
-    expect(el.renderRoot.textContent).toContain("Debug");
+    expect(el.renderRoot.textContent).toContain("Details and playback check");
   });
 
   it("opens on the day of a time it is given, and plays from it (an event from the timetable)", async () => {
@@ -477,23 +477,27 @@ describe("rv-playback", () => {
     expect(describeCache({ complete: false, bytes: 0, error: "HTTP 500" })).toBe("failed: HTTP 500");
   });
 
-  it("offers the playback check and its saved reports in the Debug section", async () => {
+  it("offers the playback check and its saved reports under Details", async () => {
     const hass = playbackHass();
     hass.responses["reolink_viewer/playback/check_reports"] = {
-      reports: [{ id: "r1", setup: "iPhone app, Nabu Casa", text: "report text", done: false, updated: "2026-10-17T12:00:00Z" }],
+      reports: [
+        { id: "r1", setup: "iPhone app, Nabu Casa", text: "report text", done: false, updated: "2026-10-17T12:00:00Z" },
+        { id: "l1", setup: "Live check · Desktop Chrome, LAN", text: "live report", done: true, updated: "2026-10-17T12:00:00Z" },
+      ],
     };
     const el = await mount(hass);
     const buttons = () => [...el.renderRoot.querySelectorAll<HTMLButtonElement>(".check button")];
     const named = (name: string) => buttons().find((b) => b.textContent.trim() === name);
     expect(named("Run playback check")).toBeDefined();
-    expect(named("Copy report")?.disabled).toBe(true);
+    // No report yet: nothing to copy.
+    expect(named("Copy report")).toBeUndefined();
     expect([...el.renderRoot.querySelectorAll(".check option")].map((o) => o.textContent)).toContain(
       "iPhone app, Tailscale",
     );
     // HD is on for local setups, off for remote ones (it fetches a main recording).
     const hdBox = () =>
       [...el.renderRoot.querySelectorAll<HTMLLabelElement>(".check label")]
-        .find((l) => l.textContent.includes("with HD"))
+        .find((l) => l.textContent.includes("Switch to HD and back"))
         ?.querySelector("input");
     const setup = el.renderRoot.querySelector<HTMLSelectElement>(".check select");
     if (!setup) throw new Error("no setup select");
@@ -509,10 +513,14 @@ describe("rv-playback", () => {
     await flush();
     await el.updateComplete;
     expect(el.renderRoot.querySelector(".reports")?.textContent).toContain("iPhone app, Nabu Casa · running or cut short");
+    // The live check's reports are not this check's.
+    expect(el.renderRoot.querySelectorAll(".reports li")).toHaveLength(1);
     [...el.renderRoot.querySelectorAll<HTMLButtonElement>(".reports button")].find((b) => b.textContent.trim() === "Show")?.click();
     await el.updateComplete;
-    expect(el.renderRoot.querySelector(".report")?.textContent).toBe("report text");
+    expect(el.renderRoot.querySelector("pre.report")?.textContent).toBe("report text");
     expect(named("Copy report")?.disabled).toBe(false);
+    // A report without a plain summary shows none.
+    expect(el.renderRoot.querySelector(".check rv-findings")).toBeNull();
   });
 
   it("shows load errors", async () => {
@@ -635,7 +643,7 @@ describe("rv-playback with MSE", () => {
     await flush();
     expect(window.localStorage.getItem("reolink-viewer-player")).toBe("file");
     expect(sentOf(hass, "reolink_viewer/playback/url").at(-1)).toMatchObject({ segment_id: "s1" });
-    expect(el._describeMode()).toBe("file player only (Debug setting)");
+    expect(el._describeMode()).toBe("file player only (set under Details)");
   });
 
   it("sets the speed, and shows the recorder's download while a start waits", async () => {

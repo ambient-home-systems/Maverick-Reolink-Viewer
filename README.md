@@ -117,6 +117,10 @@ its Settings in the same style; an NVR's page lists its cameras.
 v0.20.0 brings the Playback tab into the same style: the day's events as timetable
 rows, the timeline in the panel's colours with the time now in red, filters by what
 was seen as in the Events view, and the playhead's time as a large clock.
+v0.21.0 makes the checks and reports (the live check, the playback check and the soak
+report) say what they found in plain words first: a headline, then a line per camera or
+part with how it went (Good, Fine, Slow, Problem) and what to do about it. The full
+measurements stay underneath, under Details for support.
 
 Requires Home Assistant 2026.10 or newer with the Reolink integration set up.
 

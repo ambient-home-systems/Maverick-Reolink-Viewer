@@ -62,9 +62,12 @@ import {
   type View,
 } from "../playback/timeline-math";
 import { icon } from "../icons";
+import { parseInShort } from "../plain";
 import { sharedStyles } from "../styles";
 import type { CacheStatus, HomeAssistant, PlaybackUrl, Segment, Stream, TimelineDay, Timing } from "../types";
+import { LIVE_REPORT_PREFIX } from "../live/check";
 import { dayLabel, shortDay } from "./events-view";
+import "./findings";
 import { toast } from "./navigation";
 import { pictogram } from "./timetable";
 
@@ -516,7 +519,7 @@ export class RvPlayback extends LitElement {
   /** Which player plays recordings, for the check's report. */
   _describeMode(): string {
     const api = mseApiName();
-    if (this._mode === "file") return "file player only (Debug setting)";
+    if (this._mode === "file") return "file player only (set under Details)";
     if (!api) return "file player (this browser has no MSE)";
     if (typeof this.hass?.fetchWithAuth !== "function") return "file player (no authenticated fetch)";
     const failed = [...this._mseFailed];
@@ -918,7 +921,8 @@ export class RvPlayback extends LitElement {
   private async _loadReports(): Promise<void> {
     if (!this.hass) return;
     try {
-      this._reports = (await fetchCheckReports(this.hass)).reports;
+      // The live check's reports share the store: only this check's here.
+      this._reports = (await fetchCheckReports(this.hass)).reports.filter((r) => !r.setup.startsWith(LIVE_REPORT_PREFIX));
     } catch (err) {
       toast(this, `Could not load the reports: ${toError(err).message}`, "error");
     }
@@ -931,18 +935,21 @@ export class RvPlayback extends LitElement {
 
   private _renderCheck(): TemplateResult {
     const running = this._checkRunning;
+    // While it runs, what it found so far; after, the report's own summary (a saved one too).
+    const summary = running ? this._check?.inShort() : parseInShort(this._checkText);
     return html`<div class="check">
-      <strong>Playback check</strong>
-      <p class="small muted">
-        Measures this device: timeline, first frames (events, deep in long recordings, cached and not), auto-advance,
-        playback rates, scrubbing, switching to HD and back, the link and MSE support. The report is saved on the
-        server, so a run on a phone can be copied on a desktop.
+      <h3>Playback check</h3>
+      <p class="small">
+        How quickly ${this.cameraName}'s recordings open and play on this device: the timeline, events,
+        long recordings, fast forward and HD. It takes a few minutes; keep this page open and in front.
+        Each run is saved, so you can read it later on any device.
       </p>
       ${this._checkNote ? html`<div class="banner error" role="alert">${this._checkNote}</div>` : nothing}
-      <div class="row">
-        <label
-          >Setup
+      <div class="form">
+        <span class="label" id="check-setup">This device and network</span>
+        <div class="field">
           <select
+            aria-labelledby="check-setup"
             ?disabled=${running}
             @change=${(e: Event) => {
               this._checkSetup = (e.target as HTMLSelectElement).value;
@@ -952,32 +959,38 @@ export class RvPlayback extends LitElement {
           >
             ${SETUPS.map((setup) => html`<option .value=${setup} ?selected=${setup === this._checkSetup}>${setup}</option>`)}
           </select>
-        </label>
-        <label
-          ><input
-            type="checkbox"
-            .checked=${this._checkSession}
-            ?disabled=${running}
-            @change=${(e: Event) => {
-              this._checkSession = (e.target as HTMLInputElement).checked;
-            }}
-          />
-          then play for ${CHECK_SESSION_MIN} min (memory and disk)</label
-        >
-        <label
-          title="The server fetches the main recording from the NVR (up to 3.8 GB for an hour, over the LAN); this device reads only seconds of it"
-          ><input
-            type="checkbox"
-            .checked=${this._checkHdPart}
-            ?disabled=${running}
-            @change=${(e: Event) => {
-              this._checkHdPart = (e.target as HTMLInputElement).checked;
-            }}
-          />
-          with HD</label
-        >
+        </div>
+        <span class="label">Also</span>
+        <div class="field stack">
+          <label class="option"
+            ><input
+              type="checkbox"
+              .checked=${this._checkHdPart}
+              ?disabled=${running}
+              @change=${(e: Event) => {
+                this._checkHdPart = (e.target as HTMLInputElement).checked;
+              }}
+            /><span
+              >Switch to HD and back
+              <span class="muted">(Home Assistant fetches the high-quality recording from the camera first)</span></span
+            ></label
+          >
+          <label class="option"
+            ><input
+              type="checkbox"
+              .checked=${this._checkSession}
+              ?disabled=${running}
+              @change=${(e: Event) => {
+                this._checkSession = (e.target as HTMLInputElement).checked;
+              }}
+            /><span
+              >Then play for ${CHECK_SESSION_MIN} minutes
+              <span class="muted">(to see that it keeps playing smoothly)</span></span
+            ></label
+          >
+        </div>
       </div>
-      <div class="row">
+      <div class="actions">
         ${running
           ? html`<button
               @click=${() => {
@@ -997,16 +1010,24 @@ export class RvPlayback extends LitElement {
             >
               Run playback check
             </button>`}
-        <button ?disabled=${!this._checkText} @click=${() => void this._copy(this._checkText)}>Copy report</button>
         <button @click=${() => void this._loadReports()}>Saved reports</button>
       </div>
-      ${this._checkText ? html`<pre class="report">${this._checkText}</pre>` : nothing}
+      ${summary ? html`<rv-findings .summary=${summary}></rv-findings>` : nothing}
+      ${this._checkText
+        ? html`<details class="support">
+            <summary class="small">Details for support${icon("chevronDown")}</summary>
+            <div class="actions">
+              <button @click=${() => void this._copy(this._checkText)}>Copy report</button>
+            </div>
+            <pre class="report">${this._checkText}</pre>
+          </details>`
+        : nothing}
       ${this._reports
         ? html`<ul class="reports">
             ${this._reports.length
               ? this._reports.map(
                   (r) => html`<li>
-                    <span>${new Date(r.updated).toLocaleString()} · ${r.setup}${r.done ? "" : " · running or cut short"}</span>
+                    <span class="when">${new Date(r.updated).toLocaleString()} · ${r.setup}${r.done ? "" : " · running or cut short"}</span>
                     <button class="text" @click=${() => void this._copy(r.text)}>Copy</button>
                     <button
                       class="text"
@@ -1018,7 +1039,7 @@ export class RvPlayback extends LitElement {
                     </button>
                   </li>`,
                 )
-              : html`<li class="muted">No saved reports</li>`}
+              : html`<li class="muted">No saved reports yet</li>`}
           </ul>`
         : nothing}
     </div>`;
@@ -1138,8 +1159,11 @@ export class RvPlayback extends LitElement {
     const ms = (v: number | undefined) => (v === undefined ? "–" : `${Math.round(v)} ms`);
     const server = m.timelineServer;
     return html`<details class="debug">
-      <summary class="small muted">Debug${icon("chevronDown")}</summary>
-      <dl class="facts">
+      <summary class="small">Details and playback check${icon("chevronDown")}</summary>
+      ${this._renderCheck()}
+      <details class="tech">
+        <summary class="small">Technical details${icon("chevronDown")}</summary>
+        <dl class="facts">
         <dt>Time to timeline</dt>
         <dd>
           ${ms(m.timelineMs)}
@@ -1188,8 +1212,8 @@ export class RvPlayback extends LitElement {
             ? `${this._day.segments.length} recordings, ${this._day.events.length} events${this._day.complete ? ", final" : ""}${this._day.events_error ? `, event search failed (${this._day.events_error})` : ""}`
             : "–"}
         </dd>
-      </dl>
-      ${this._renderCheck()}
+        </dl>
+      </details>
     </details>`;
   }
 
@@ -1537,24 +1561,7 @@ export class RvPlayback extends LitElement {
       .events-head span {
         font-size: 15px;
       }
-      .debug summary {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        min-height: 28px;
-        cursor: pointer;
-        list-style: none;
-      }
-      .debug summary::-webkit-details-marker {
-        display: none;
-      }
-      .debug summary svg {
-        width: 16px;
-        height: 16px;
-      }
-      .debug[open] summary svg {
-        transform: rotate(180deg);
-      }
+
       @media (max-width: 600px) {
         .clock {
           font-size: 24px;
@@ -1566,38 +1573,46 @@ export class RvPlayback extends LitElement {
       .debug dl {
         font-size: 13px;
       }
+      .tech {
+        margin-top: 12px;
+      }
       .check {
         display: flex;
         flex-direction: column;
-        gap: 6px;
-        border-top: 1px solid var(--divider-color, #ccc);
-        padding-top: 8px;
+        gap: 12px;
+        margin-top: 10px;
+        padding-top: 12px;
+        border-top: 2px solid var(--rv-rule-strong);
       }
-      .check .row {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 8px;
+      .check h3 {
+        margin: 0;
+        font-family: var(--rv-font-cond);
+        font-size: 21px;
       }
       .check p {
         margin: 0;
       }
-      .report {
-        max-height: 50vh;
-        overflow: auto;
-        white-space: pre-wrap;
-        word-break: break-word;
-        font-size: 12px;
-        background: var(--secondary-background-color, #f5f5f5);
-        padding: 8px;
-        border-radius: 4px;
-        user-select: text;
-        -webkit-user-select: text;
+      .check .support > .actions {
+        margin: 6px 0 10px;
       }
       .reports {
+        list-style: none;
         margin: 0;
-        padding-left: 18px;
-        font-size: 13px;
+        padding: 0;
+        border-top: 1px solid var(--rv-rule);
+      }
+      .reports li {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 4px 12px;
+        padding: 6px 0;
+        border-bottom: 1px solid var(--rv-rule);
+      }
+      .reports .when {
+        flex: 1;
+        min-width: 14em;
+        font-size: 15px;
       }
     `,
   ];

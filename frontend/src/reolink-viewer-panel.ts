@@ -265,7 +265,9 @@ export class ReolinkViewerPanel extends LitElement {
           .at=${route.at}
         ></rv-device-page>`;
       case "live-check":
-        return html`${this._renderBack()}<rv-live-check .hass=${this.hass}></rv-live-check>`;
+        return html`${this._renderBack()}
+          <h1>Live check</h1>
+          <rv-live-check .hass=${this.hass}></rv-live-check>`;
       case "soak":
         return html`${this._renderBack()}
           <h1>Soak report</h1>
@@ -289,7 +291,7 @@ export class ReolinkViewerPanel extends LitElement {
     return html`<div>
       <button class="text with-icon back" @click=${() => {
         this.navigate({ view: "list" });
-      }}>${icon("back")}Devices</button>
+      }}>${icon("back")}All devices</button>
     </div>`;
   }
 
@@ -314,27 +316,36 @@ export class ReolinkViewerPanel extends LitElement {
   /** How live view does on this device, and how it held up over a day. */
   private _renderChecks(): TemplateResult | typeof nothing {
     if (!this._devices || this._devices.degraded) return nothing;
+    const check = (name: string, about: string, route: Route) => html`<li>
+      <button
+        class="row"
+        @click=${() => {
+          this.navigate(route);
+        }}
+      >
+        <span class="what"><span class="name">${name}</span><span class="muted">${about}</span></span>
+        ${icon("chevron")}
+      </button>
+    </li>`;
     return html`<section class="card">
       <h2>Checks</h2>
-      <div class="check">
-        <p>
-          <strong>Live check.</strong>
-          <span class="muted">How fast each camera starts on this device, next to Home Assistant's
-          own camera view.</span>
-        </p>
-        <button @click=${() => {
-          this.navigate({ view: "live-check" });
-        }}>Open the live check</button>
-      </div>
-      <div class="check">
-        <p>
-          <strong>Soak report.</strong>
-          <span class="muted">How live view held up with the grid open, from any device.</span>
-        </p>
-        <button @click=${() => {
-          this.navigate({ view: "soak" });
-        }}>Soak report</button>
-      </div>
+      <p class="muted">See how well live view works on your devices, in plain words.</p>
+      <ul class="checks">
+        ${check(
+          "Live check",
+          "How quickly each camera's live video starts on this device. Takes a few minutes.",
+          { view: "live-check" },
+        )}
+        ${check(
+          "Soak report",
+          "Whether live view keeps working through a day of use: video that drops, connections that pile up, battery cameras that stay awake.",
+          { view: "soak" },
+        )}
+      </ul>
+      <p class="muted small">
+        To check recordings, open a camera's Playback tab, then “Details and playback check” under the
+        player.
+      </p>
     </section>`;
   }
 
@@ -344,93 +355,98 @@ export class ReolinkViewerPanel extends LitElement {
     const disabled = running || !this._devices || this._devices.degraded;
     return html`<section class="card">
       <h2>Hardware probe</h2>
-      <p class="muted">
-        Measures which live and recorded-video methods work on each camera and how fast
-        they start. It only reads: it never changes camera settings. The result is a JSON
-        file with passwords, tokens, UIDs, serial numbers and addresses removed.
+      <p>
+        Tests which ways of getting live and recorded video work on each of your cameras, and how fast
+        they are. Run it when you report a problem with a camera model: it makes a file to attach to
+        your report.
       </p>
-      <label>
-        <input
-          type="checkbox"
-          .checked=${this._includeBattery}
-          ?disabled=${running}
-          @change=${(e: Event) => {
-            this._includeBattery = (e.target as HTMLInputElement).checked;
-          }}
-        />
-        Include battery cameras (wakes them and uses battery)
-      </label>
-      <label>
-        <input
-          type="checkbox"
-          .checked=${this._concurrency}
-          ?disabled=${running}
-          @change=${(e: Event) => {
-            this._concurrency = (e.target as HTMLInputElement).checked;
-          }}
-        />
-        Test concurrent streams: opens up to
-        <select
-          .value=${String(this._maxStreams)}
-          ?disabled=${running || !this._concurrency}
-          @change=${(e: Event) => {
-            this._maxStreams = Number((e.target as HTMLSelectElement).value);
-          }}
-        >
-          ${[2, 3, 4, 5, 6].map(
-            (n) =>
-              html`<option value=${n} ?selected=${n === this._maxStreams}>${n}</option>`,
-          )}
-        </select>
-        sub streams at once on one camera per device, stopping at the first failure
-      </label>
-      <label>
-        <input
-          type="checkbox"
-          .checked=${this._playback}
-          ?disabled=${running}
-          @change=${(e: Event) => {
-            this._playback = (e.target as HTMLInputElement).checked;
-          }}
-        />
-        Test recording playback: HTTP range requests, MP4 layout, download speed and a
-        day of file sizes, on one recent recording per camera (main and sub)
-      </label>
-      <label class="nested">
-        <input
-          type="checkbox"
-          .checked=${this._playbackOnly}
-          ?disabled=${running || !this._playback}
-          @change=${(e: Event) => {
-            this._playbackOnly = (e.target as HTMLInputElement).checked;
-          }}
-        />
-        Only this test (skip the live and recorded-video method tests)
-      </label>
-      <label class="nested">
-        <input
-          type="checkbox"
-          .checked=${this._playbackConcurrency}
-          ?disabled=${running || !this._playback}
-          @change=${(e: Event) => {
-            this._playbackConcurrency = (e.target as HTMLInputElement).checked;
-          }}
-        />
-        Test simultaneous playback: plays up to
-        <select
-          .value=${String(this._playbackStreams)}
-          ?disabled=${running || !this._playback || !this._playbackConcurrency}
-          @change=${(e: Event) => {
-            this._playbackStreams = Number((e.target as HTMLSelectElement).value);
-          }}
-        >
-          ${[2, 3, 4, 5, 6].map(
-            (n) =>
-              html`<option value=${n} ?selected=${n === this._playbackStreams}>${n}</option>`,
-          )}
-        </select>
-        recordings at once, one per camera, stopping at the first failure
-      </label>
+      <p class="muted">
+        It only reads from your cameras and changes no settings. Passwords, addresses, serial numbers and
+        other private details are left out of the file.
+      </p>
+      <div class="options">
+        <label class="option">
+          <input
+            type="checkbox"
+            .checked=${this._includeBattery}
+            ?disabled=${running}
+            @change=${(e: Event) => {
+              this._includeBattery = (e.target as HTMLInputElement).checked;
+            }}
+          />
+          <span>Include battery cameras <span class="muted">(this wakes them, which uses some battery)</span></span>
+        </label>
+        <label class="option">
+          <input
+            type="checkbox"
+            .checked=${this._concurrency}
+            ?disabled=${running}
+            @change=${(e: Event) => {
+              this._concurrency = (e.target as HTMLInputElement).checked;
+            }}
+          />
+          <span
+            >Test several live streams at once: up to
+            <select
+              aria-label="Most live streams at once"
+              .value=${String(this._maxStreams)}
+              ?disabled=${running || !this._concurrency}
+              @change=${(e: Event) => {
+                this._maxStreams = Number((e.target as HTMLSelectElement).value);
+              }}
+            >
+              ${[2, 3, 4, 5, 6].map((n) => html`<option value=${n} ?selected=${n === this._maxStreams}>${n}</option>`)}
+            </select>
+            on one camera of each device, stopping at the first that fails</span
+          >
+        </label>
+        <label class="option">
+          <input
+            type="checkbox"
+            .checked=${this._playback}
+            ?disabled=${running}
+            @change=${(e: Event) => {
+              this._playback = (e.target as HTMLInputElement).checked;
+            }}
+          />
+          <span>Test recordings: how they download and play, on one recent recording per camera</span>
+        </label>
+        <label class="option nested">
+          <input
+            type="checkbox"
+            .checked=${this._playbackOnly}
+            ?disabled=${running || !this._playback}
+            @change=${(e: Event) => {
+              this._playbackOnly = (e.target as HTMLInputElement).checked;
+            }}
+          />
+          <span>Only test recordings (skip the live video tests)</span>
+        </label>
+        <label class="option nested">
+          <input
+            type="checkbox"
+            .checked=${this._playbackConcurrency}
+            ?disabled=${running || !this._playback}
+            @change=${(e: Event) => {
+              this._playbackConcurrency = (e.target as HTMLInputElement).checked;
+            }}
+          />
+          <span
+            >Test several recordings at once: up to
+            <select
+              aria-label="Most recordings at once"
+              .value=${String(this._playbackStreams)}
+              ?disabled=${running || !this._playback || !this._playbackConcurrency}
+              @change=${(e: Event) => {
+                this._playbackStreams = Number((e.target as HTMLSelectElement).value);
+              }}
+            >
+              ${[2, 3, 4, 5, 6].map((n) => html`<option value=${n} ?selected=${n === this._playbackStreams}>${n}</option>`)}
+            </select>
+            , one per camera, stopping at the first that fails</span
+          >
+        </label>
+      </div>
       <div class="actions">
         ${running
           ? html`<button @click=${() => {
@@ -455,18 +471,22 @@ export class ReolinkViewerPanel extends LitElement {
         return nothing;
       case "running":
         return html`<div class="progress" aria-live="polite">
-          <p>Probing… this can take several minutes on an NVR.</p>
-          <ol class="log">
-            ${probe.log.map((line) => html`<li>${line}</li>`)}
-          </ol>
+          <p class="now">Testing your cameras… this can take several minutes with an NVR.</p>
+          ${probe.log.length ? html`<p class="muted small">Now: ${probe.log.at(-1)}</p>` : nothing}
+          <details>
+            <summary class="small">Every step so far${icon("chevronDown")}</summary>
+            <ol class="log">
+              ${probe.log.map((line) => html`<li>${line}</li>`)}
+            </ol>
+          </details>
         </div>`;
       case "error":
-        return html`<div class="banner error" role="alert">Probe failed: ${probe.message}</div>`;
+        return html`<div class="banner error" role="alert">The probe stopped: ${probe.message}</div>`;
       case "done":
         return html`<div class="done">
           <p>
-            Done. The report was saved as <code>${probe.filename}</code>. If your browser or
-            the Companion app blocked the download, use Copy JSON instead.
+            <strong>Done.</strong> The file was saved as <code>${probe.filename}</code>. Attach it to your
+            report. If your browser or the Companion app blocked the download, copy it instead.
           </p>
           <div class="actions">
             <button @click=${() => {
@@ -479,8 +499,8 @@ export class ReolinkViewerPanel extends LitElement {
             </button>
           </div>
           <details>
-            <summary>Show report</summary>
-            <pre>${JSON.stringify(probe.report, null, 2)}</pre>
+            <summary class="small">Show what is in the file${icon("chevronDown")}</summary>
+            <pre class="report">${JSON.stringify(probe.report, null, 2)}</pre>
           </details>
         </div>`;
     }
@@ -669,49 +689,82 @@ export class ReolinkViewerPanel extends LitElement {
       .back {
         padding-left: 0;
       }
-      .check {
+      .checks {
+        list-style: none;
+        margin: 10px 0 12px;
+        padding: 0;
+        border-top: 1px solid var(--rv-rule-strong);
+      }
+      .checks li {
+        border-bottom: 1px solid var(--rv-rule);
+      }
+      .checks .row {
         display: flex;
         align-items: center;
         gap: 16px;
-        padding: 10px 0;
-        border-bottom: 1px solid var(--rv-rule);
+        width: 100%;
+        min-height: 64px;
+        padding: 10px 4px;
+        border: none;
+        border-radius: 0;
+        background: transparent;
+        color: inherit;
+        text-align: left;
+        font-weight: 400;
       }
-      .check p {
+      .checks .row:hover:not(:disabled) {
+        background: var(--rv-ground-2);
+      }
+      .checks .row:focus-visible {
+        outline-offset: -2px;
+      }
+      .checks .what {
         flex: 1;
-        margin: 0;
-      }
-      .check button {
-        flex: none;
-      }
-      :host([narrow]) .check {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 8px;
-      }
-      label {
-        display: block;
-        margin: 10px 0;
-      }
-      label.nested {
-        margin-inline-start: 26px;
-      }
-      .actions {
         display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        margin-top: 12px;
+        flex-direction: column;
+        gap: 2px;
       }
-      .log {
-        font-family: var(--rv-mono);
-        font-size: 13px;
+      .checks .name {
+        font-size: 17px;
+        font-weight: 600;
+      }
+      .checks .row svg {
+        flex: none;
+        width: 18px;
+        height: 18px;
         color: var(--rv-muted);
       }
-      pre {
-        max-height: 400px;
-        overflow: auto;
-        font-size: 12px;
-        background: var(--rv-ground-2);
-        padding: 8px;
+      .card > p {
+        margin: 6px 0;
+      }
+      .options {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        margin: 12px 0 14px;
+      }
+      .options select {
+        margin: -4px 4px 0;
+        padding: 2px 6px;
+      }
+      .progress .now {
+        font-family: var(--rv-font-cond);
+        font-size: 19px;
+        font-weight: 600;
+      }
+      .progress,
+      .done {
+        margin-top: 14px;
+      }
+      .done .actions {
+        margin: 10px 0;
+      }
+      .log {
+        margin: 6px 0 0;
+        padding-left: 22px;
+        color: var(--rv-muted);
+        font-family: var(--rv-mono);
+        font-size: 13px;
       }
       .toast {
         position: fixed;

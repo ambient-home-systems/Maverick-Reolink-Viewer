@@ -360,6 +360,70 @@ type Handler = (message: Record<string, unknown>) => unknown;
 
 const pending = <T>(): Promise<T> => new Promise<T>(() => undefined);
 
+// ---- Checks: a live check saved on the iPhone, and a soak run half-way ----
+
+const LIVE_REPORT = [
+  "Reolink Viewer live check v0.21.0 · iPhone app, Wi-Fi (local) · 10/27/2026, 8:10:00 PM",
+  "Browser: iOS 27.0, Companion app 2026.10.1 · page LAN over https · screen 402×874 @3x",
+  "",
+  "In short: All 8 cameras started live video, typically in 1.4 s.",
+  "- Good: Front Yard Right: live video starts in 1.1 s; full screen in HD in 1.6 s.",
+  "- Good: Garage Camera: live video starts in 1.3 s; full screen in HD in 1.9 s.",
+  "- Good: Front Yard Left: live video starts in 1.2 s; full screen in HD in 2.4 s.",
+  "- Slow: Back Yard: live video starts in 4.6 s; full screen in HD in 5.3 s. What to do: Turn on its “keep live view warm” switch in Home Assistant to make it start faster.",
+  "- Good: Dogs: live video starts in 1.4 s; full screen in HD in 1.8 s.",
+  "- Good: Hallway Camera: live video starts in 1.5 s; full screen in HD in 2.0 s.",
+  "- Fine: Laundry Room: live video starts in 2.6 s.",
+  "- Fine: Doorbell: live video starts in 3.1 s. What to do: Battery cameras wake up before they stream, so a few seconds is normal.",
+  "- Good: A still picture of each camera shows in about 0.3 s, while its live video starts.",
+  "- Note: Compared with Home Assistant's own camera view: this viewer was quicker on 7 of 8 streams (typically 1.4 s against 3.2 s).",
+  "",
+  "Summary:",
+  "- WebRTC connected 16 of 16 sessions (16× host/udp ↔ host/udp)",
+].join("\n");
+
+const PLAYBACK_REPORT = [
+  "Reolink Viewer playback check v0.3.2 · iPhone app, Wi-Fi (local) · Front Yard Right · 10/27/2026, 8:30:00 PM",
+  "",
+  "In short: Front Yard Right's recordings play on this device, but 1 thing is slow.",
+  "- Good: Recordings appear on the timeline in 0.3 s for today; an earlier day takes 1.6 s the first time and 0.2 s after that.",
+  "- Good: Opening an event starts its video in about 0.7 s.",
+  "- Slow: Jumping into the middle of a long recording starts in 4.4 s; the first time, 13 s, while the recorder sends it over.",
+  "- Good: It plays straight on from one recording to the next, without a noticeable pause.",
+  "- Good: Slow motion and fast forward (0.5× to 8×) play smoothly.",
+  "- Good: Switching to HD takes 2.1 s and keeps your place; back to SD, 0.3 s.",
+  "- Good: Recordings come from Home Assistant at 48 Mbit/s: plenty for HD.",
+  "",
+  "Summary:",
+  "- Timeline: today 312 ms ✓",
+].join("\n");
+
+function soak(): unknown {
+  const now = Date.now();
+  const started = now - 14 * 3_600_000;
+  const samples = Array.from({ length: 168 }, (_, i) => ({
+    at: started + (i + 1) * 300_000,
+    go2rtc: { state: "running", restarts: 0, memory_kb: 43_008 + (i % 7) * 120 },
+    webrtc_sessions: 0,
+    feeds: { feeds: 6, warm: 6, viewers: i % 12 < 4 ? 6 : 0, ends: 1 },
+    hosts: [
+      { name: "NVR", streams: 6, limit: 7, waiting: 0, cpu: 28 + (i % 5) },
+      { name: "Doorbell", streams: 0, limit: 2, waiting: 0, cpu: null },
+    ],
+    battery: [{ camera: "Doorbell", sleeping: true, watched: false }],
+  }));
+  const tiles = Object.fromEntries(CAMS.map((c) => [c.name, { plays: 9, drops: c.id === "cam-dogs" ? 1 : 0, failures: 0 }]));
+  return {
+    sample_s: 300,
+    keep_s: 129_600,
+    warmup_s: 300,
+    started_at: started - 300_000,
+    run: { started_at: started, opens: 4, open_ms: 6.5 * 3_600_000, visible_ms: 5.2 * 3_600_000, tiles, devices: { "Mac · Chrome": now - 60_000, "iPhone · Safari": now - 3 * 3_600_000 } },
+    samples,
+    now: null,
+  };
+}
+
 export function fakeHass(options: { admin: boolean; dark: boolean }): HomeAssistant {
   const catalog: Catalog = {
     version: settings.version,
@@ -389,8 +453,13 @@ export function fakeHass(options: { admin: boolean; dark: boolean }): HomeAssist
     "reolink_viewer/events/recent": (m) => recent(typeof m.date === "string" ? m.date : undefined),
     "reolink_viewer/events/days": () => ({ days: [21, 22, 23, 24, 25, 26, 27], failed: [] }),
     "reolink_viewer/events/seen": () => ({}),
-    "reolink_viewer/playback/check_reports": () => ({ reports: [] }),
-    "reolink_viewer/live/soak": () => ({ sample_s: 300, keep_s: 129_600, warmup_s: 300, started_at: NOW - 3_600_000, run: null, samples: [], now: null }),
+    "reolink_viewer/playback/check_reports": () => ({
+      reports: [
+        { id: "live-1", setup: "Live check · iPhone app, Wi-Fi (local)", text: LIVE_REPORT, done: true, updated: "2026-10-28T01:10:00Z" },
+        { id: "play-1", setup: "iPhone app, Wi-Fi (local)", text: PLAYBACK_REPORT, done: true, updated: "2026-10-28T01:30:00Z" },
+      ],
+    }),
+    "reolink_viewer/live/soak": soak,
   };
   const hass: HomeAssistant = {
     callWS: <T>(message: Record<string, unknown>): Promise<T> => {

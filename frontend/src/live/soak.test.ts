@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { SoakRun, SoakSample } from "../types";
-import { soakReport, type SoakInput } from "./soak";
+import { soakReport, soakSummary, type SoakInput } from "./soak";
 
 const OPENED = new Date(2026, 9, 22, 16, 30).getTime();
 const HOUR = 3_600_000;
@@ -157,10 +157,82 @@ describe("soakReport", () => {
     ]);
   });
 
+  it("says it in plain words: a headline, then what held and what to do", () => {
+    expect(soakSummary(input())).toEqual({
+      headline: "Passed: live view held up for the whole test.",
+      findings: [
+        { grade: "good", text: "Live video kept playing: no camera kept dropping and reconnecting." },
+        { grade: "good", text: "The video service (go2rtc) ran the whole time without restarting." },
+        { grade: "good", text: "The video service's memory use stayed steady (about 40.0 MB)." },
+        { grade: "good", text: "Connections to your cameras did not pile up." },
+        { grade: "good", text: "No camera or NVR was asked for more video streams than it can serve." },
+        { grade: "note", text: "Processor load at its highest: RLN36 23%." },
+        { grade: "good", text: "Home Assistant ran live view for 24.0 hours." },
+        { grade: "good", text: "The live board was on screen for 8.0 hours, opened 3 times." },
+      ],
+    });
+    // The text opens its verdicts with the same, for a report read elsewhere.
+    expect(soakReport(input())).toContain("In short: Passed: live view held up for the whole test.\n- Good: Live video kept playing");
+
+    const failing = soakSummary(
+      input({
+        now: OPENED + 2 * HOUR,
+        run: run({ visible_ms: HOUR, tiles: { Garage: { plays: 9, drops: 8, failures: 1 } } }),
+        samples: day((m) => ({
+          go2rtc: { state: "running", restarts: m >= 60 ? 1 : 0, memory_kb: 40_960 + m * 1000 },
+          battery: [{ camera: "Doorbell", sleeping: false, watched: false }],
+        })).slice(0, 25),
+      }),
+    );
+    expect(failing.headline).toBe("3 problems found so far.");
+    expect(failing.findings.filter((f) => f.grade !== "good")).toEqual([
+      {
+        grade: "problem",
+        text: "Live video kept dropping and reconnecting on Garage (9 times in 1.0 hours).",
+        advice: "Check those cameras' network (Wi-Fi signal or cable) and power.",
+      },
+      {
+        grade: "problem",
+        text: "The video service (go2rtc) restarted 1 time.",
+        advice: "Look for go2rtc errors in Home Assistant's log, and include the details below if you report it.",
+      },
+      {
+        grade: "note",
+        text: "The video service's memory use grew from 40.0 to 157.2 MB.",
+        advice: "If it keeps growing, restart Home Assistant and report it with the details below.",
+      },
+      { grade: "note", text: "Processor load at its highest: RLN36 23%." },
+      {
+        grade: "problem",
+        text: "Doorbell stayed awake when nobody was watching, which drains its battery.",
+        advice: "Make sure nothing else streams it (another app, or a dashboard card showing it live).",
+      },
+      {
+        grade: "pending",
+        text: "Home Assistant has run live view for 2.0 of 24 hours.",
+        advice: "Leave Home Assistant running; no page needs to be open.",
+      },
+      {
+        grade: "pending",
+        text: "The live board has been on screen for 1.0 of 8 hours.",
+        advice: "Open Reolink → Live whenever it suits you; the hours add up across sittings and devices.",
+      },
+    ]);
+
+    // Nothing measured yet.
+    const waiting = soakSummary(input({ run: null, samples: [] }));
+    expect(waiting.headline).toBe("The test has not started yet.");
+    expect(waiting.findings.map((f) => f.grade)).toEqual(["pending", "pending"]);
+    // Running, all well so far.
+    expect(soakSummary(input({ now: OPENED + 2 * HOUR, samples: day().slice(0, 25), run: run({ visible_ms: HOUR, tiles: {} }) })).headline).toBe(
+      "Running: nothing wrong so far.",
+    );
+  });
+
   it("reports Home Assistant's half before any grid has", () => {
     const text = soakReport(input({ run: null }));
     expect(text.split("\n")[1]).toBe(
-      "No grid has reported yet: open Reolink → Watch live and leave it showing; its hours add up.",
+      "No grid has reported yet: open Reolink → Live and leave it showing; its hours add up.",
     );
     expect(text).toContain("Tiles (plays · drops · failed starts):\n  no grid yet");
     expect(verdicts(text)).toEqual(

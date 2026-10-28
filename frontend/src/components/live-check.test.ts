@@ -19,6 +19,7 @@ vi.mock("../live/check", async (original) => {
   class FakeCheck {
     running = false;
     status = "";
+    plainStatus = "";
     text = "";
     constructor(
       _hass: unknown,
@@ -37,6 +38,12 @@ vi.mock("../live/check", async (original) => {
     }
     stop(): void {
       this.running = false;
+    }
+    inShort() {
+      return {
+        headline: "The camera started live video, typically in 0.8 s.",
+        findings: [{ grade: "good", text: "Laundry: live video starts in 0.8 s." }],
+      };
     }
   }
   return { ...actual, LiveCheck: FakeCheck };
@@ -102,15 +109,15 @@ describe("rv-live-check", () => {
   it("shows go2rtc's state, the options and the live reports", async () => {
     const { el } = await mount(true);
     const text = deepText(el);
-    expect(text).toContain("go2rtc: failed");
+    expect(text).toContain("Video service (go2rtc): failed");
     expect(text).toContain("go2rtc is not installed");
-    expect(text).toContain("go2rtc log");
+    expect(text).toContain("Its log");
     expect(text).toContain("Kept warm too");
     expect(text).toContain("NVR capacity test");
     expect(text).toContain("Garage");
     expect(text).toContain("Saved reports (1)");
     // Where each report was made, so a desktop report is not taken for an iPhone one.
-    expect(text).toContain("iPhone app, Tailscale · v0.5.4 · iOS 27.0, Companion app 2026.10.1 ·");
+    expect(text).toContain(" · iPhone app, Tailscale · v0.5.4 · iOS 27.0, Companion app 2026.10.1");
   });
 
   it("starts on this device's setup, remembers the choice and flags another device's", async () => {
@@ -122,13 +129,13 @@ describe("rv-live-check", () => {
     };
     let { el } = await mount(true);
     expect(await runSetup(el)).toBe("Desktop Chrome, LAN");
-    expect(deepText(el)).not.toContain("is for another device");
+    expect(deepText(el)).not.toContain("is for another kind of device");
     const select = el.renderRoot.querySelector("select");
     if (!select) throw new Error("no setup select");
     select.value = "iPhone app, Tailscale";
     select.dispatchEvent(new Event("change"));
     await el.updateComplete;
-    expect(deepText(el)).toContain("The setup “iPhone app, Tailscale” is for another device");
+    expect(deepText(el)).toContain("“iPhone app, Tailscale” is for another kind of device");
     document.body.innerHTML = "";
     ({ el } = await mount(true));
     expect(await runSetup(el)).toBe("iPhone app, Tailscale");
@@ -138,7 +145,7 @@ describe("rv-live-check", () => {
     setUserAgent(IPHONE_APP);
     ({ el } = await mount(true));
     expect(await runSetup(el)).toBe("iPhone app, Wi-Fi (local)");
-    expect(deepText(el)).not.toContain("is for another device");
+    expect(deepText(el)).not.toContain("is for another kind of device");
   });
 
   it("copies a saved report, and shows it to select where copying is blocked", async () => {
@@ -158,9 +165,14 @@ describe("rv-live-check", () => {
     copy.click();
     await flush();
     await el.updateComplete;
-    expect(toasts).toEqual(["Copying is blocked here: copy it from Saved reports on a computer, or select the text"]);
+    expect(toasts).toEqual(["Copying is blocked here: select the text instead, or copy it from Saved reports on a computer"]);
     expect(copy.textContent).toContain("Copy");
     expect(el.renderRoot.querySelector(".reports pre")?.textContent).toBe(SAVED_LIVE);
+    // Show and Hide: a report saved with its plain summary opens with it.
+    const show = [...el.renderRoot.querySelectorAll<HTMLButtonElement>(".reports button")].find((b) => b.textContent.trim() === "Hide");
+    show?.click();
+    await el.updateComplete;
+    expect(el.renderRoot.querySelector(".reports pre")).toBeNull();
   });
 
   it("hides what needs an admin", async () => {
@@ -189,6 +201,10 @@ describe("rv-live-check", () => {
     expect(runs[0]?.stage.classList.contains("stage")).toBe(true);
     await el.updateComplete;
     expect(deepText(el)).toContain("Reolink Viewer live check v0 · report");
+    // The result in plain words, then the details for support.
+    expect(el.renderRoot.querySelector("rv-findings")?.summary?.headline).toBe("The camera started live video, typically in 0.8 s.");
+    expect(el.renderRoot.querySelector("details.support pre")?.textContent).toBe("Reolink Viewer live check v0 · report");
+    expect(deepText(el)).toContain("Run it again");
     await el.runCheck({ setup: "Desktop Chrome, LAN", streams: ["sub"] });
     expect(runs[1]?.options).toMatchObject({ capacity: true, streams: ["sub"] });
   });

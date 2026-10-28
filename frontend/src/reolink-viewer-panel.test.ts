@@ -242,7 +242,9 @@ describe("reolink-viewer-panel", () => {
       },
     };
     const el = await mount(hass);
-    button(el, "Soak report")?.click();
+    [...(el.shadowRoot?.querySelectorAll<HTMLButtonElement>(".checks button") ?? [])]
+      .find((b) => b.textContent.includes("Soak report"))
+      ?.click();
     await flush();
     await el.updateComplete;
     expect(window.location.hash).toBe("#soak");
@@ -374,7 +376,7 @@ describe("reolink-viewer-panel", () => {
     hass.emit({ type: "error", message: "boom" });
     await flush();
     await el.updateComplete;
-    expect(text(el)).toContain("Probe failed: boom");
+    expect(text(el)).toContain("The probe stopped: boom");
 
     button(el, "Run probe")?.click();
     await flush();
@@ -383,7 +385,7 @@ describe("reolink-viewer-panel", () => {
     await el.updateComplete;
     expect(hass.unsubscribed).toBe(2);
     expect(button(el, "Run probe")).toBeDefined();
-    expect(text(el)).not.toContain("Probe failed");
+    expect(text(el)).not.toContain("The probe stopped");
   });
 
   it("cancels a running probe when removed", async () => {
