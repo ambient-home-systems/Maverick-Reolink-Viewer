@@ -82,6 +82,8 @@ tests/               # pytest-homeassistant-custom-component; test_mse_browser.p
                      # live_browser.cjs, live_grid_browser.cjs: the panel's grid);
                      # go2rtc_fixtures.py runs go2rtc and a fake camera
 scripts/             # setup_dev.sh, probe_to_matrix.py, make_mse_sample.py (writes mse-sample.ts),
+                     # build_release.py (the release package), bump_version.py,
+                     # ha_requirements.py (what a Home Assistant release pins for us),
                      # fetch_go2rtc.py (the pinned go2rtc for the tests);
                      # playback_check.js and inspect_recording.js (paste into the browser console);
                      # desktop-check/ runs the playback check in Chrome without clicking;
@@ -100,10 +102,10 @@ scripts/setup_dev.sh
 source .venv/bin/activate
 ```
 
-`requirements_test.txt` pins `pytest-homeassistant-custom-component` to the Home
-Assistant release we test against (currently 2026.10.1), plus the requirements of the
-HA components we load in tests (the Reolink integration's `reolink-aio`, `ha-ffmpeg`,
-the frontend, camera and stream packages).
+`requirements_test.txt` pins `pytest-homeassistant-custom-component` to the newest
+Home Assistant release we test against (currently 2026.10.4), plus the requirements of
+the HA components we load in tests (the Reolink integration's `reolink-aio`,
+`ha-ffmpeg`, the frontend, camera and stream packages), as that release pins them.
 
 ## Checks (all run in CI)
 
@@ -205,6 +207,47 @@ Tests set up HA's real Reolink integration on a mocked `reolink_aio.api.Host`.
 `tests/components/reolink/conftest.py` (re-sync it when bumping the HA pin);
 `tests/conftest.py` adds what the bridge and the probe read. Media tests run real
 ffmpeg against a generated clip when ffmpeg is installed and skip otherwise.
+
+## Home Assistant versions
+
+CI runs the whole test suite against:
+
+- **the pinned release** (`requirements_test.txt`), the newest tested;
+- **the oldest supported release** (`hacs.json`'s `homeassistant`, 2026.10.1): its
+  `pytest-homeassistant-custom-component` is in the `pytest` job's matrix, and
+  `scripts/ha_requirements.py` installs what that release pins for the Reolink,
+  ffmpeg, frontend, camera and stream components (reolink-aio above all);
+- **the newest release**, every week, non-blocking: it warns before users meet a
+  Home Assistant release that changed the Reolink integration.
+
+To move the pin to a newer release (each `pytest-homeassistant-custom-component`
+version names its Home Assistant release on PyPI):
+
+```bash
+pip install pytest-homeassistant-custom-component==<version>
+pip install $(python -m scripts.ha_requirements)
+pytest
+```
+
+then put those versions in `requirements_test.txt`, with the release in its first
+comment; `tests/test_packaging.py` fails if the two disagree. To raise the oldest
+supported release, change `hacs.json`, the README's "Requires Home Assistant" and
+the matrix's entry together (the same test checks they agree).
+
+## Releasing
+
+1. Set the version everywhere: `python -m scripts.bump_version 0.32.0` (the
+   manifest, `frontend/package.json` and its lockfile, the live check).
+2. Add its entry to `CHANGELOG.md`, in plain words: it becomes the release's notes.
+3. `cd frontend && npm run build`, commit, and merge to main once CI is green.
+4. On GitHub: **Actions → Release → Run workflow** (tick **Dry run** first to see
+   it through without publishing). It runs CI on main, packages the integration
+   (`scripts/build_release.py`: the versions agree, the changelog has the entry, the
+   built panel is whole), and makes the release `v0.32.0` with
+   `reolink_viewer.zip` attached and the changelog entry as its notes. HACS offers
+   it as an update from then on.
+
+CI packages the integration on every change too, so a release finds no surprise.
 
 ## Settings catalog
 

@@ -8,6 +8,8 @@ on:
     # Weekly: catch Home Assistant / reolink-aio changes that break the bridge.
     - cron: "17 5 * * 1"
   workflow_dispatch:
+  # The Release workflow runs it first, on the commit it releases.
+  workflow_call:
 
 permissions:
   contents: read
@@ -34,6 +36,8 @@ jobs:
       - run: pip install -r requirements_test.txt
       - run: ruff check .
       - run: ruff format --check .
+      - name: The release package is whole (versions, changelog, built panel)
+        run: python -m scripts.build_release
       - run: mypy
 
   pytest:
@@ -42,8 +46,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # The release requirements_test.txt pins (the newest tested).
         ha: [pinned]
         include:
+          # The oldest release this version supports (hacs.json), with its harness.
+          # (2026.10.0's reolink-aio 0.21.17 has no Baichuan.search_vod_days.)
+          - ha: "2026.10.1"
+            harness: "0.13.372"
           # The weekly run also tries the newest HA release, non-blocking.
           - ha: ${{ github.event_name == 'schedule' && 'latest' || 'pinned' }}
     continue-on-error: ${{ matrix.ha == 'latest' }}
@@ -57,9 +66,15 @@ jobs:
       - name: Install ffmpeg (real-ffmpeg media tests)
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
       - run: pip install -r requirements_test.txt
+      - name: Install Home Assistant ${{ matrix.ha }}
+        if: matrix.harness
+        run: pip install "pytest-homeassistant-custom-component==${{ matrix.harness }}"
       - name: Upgrade to the newest Home Assistant
         if: matrix.ha == 'latest'
         run: pip install --upgrade pytest-homeassistant-custom-component
+      - name: Install what that release pins for the Reolink, ffmpeg, frontend, camera and stream components
+        if: matrix.ha != 'pinned'
+        run: pip install $(python -m scripts.ha_requirements)
       - name: Fetch the pinned go2rtc (checksum verified) for the live tests
         run: echo "RV_GO2RTC=$(python -m scripts.fetch_go2rtc "$RUNNER_TEMP/go2rtc")" >> "$GITHUB_ENV"
       - run: python -m pytest --cov --cov-report=term-missing --cov-fail-under=90

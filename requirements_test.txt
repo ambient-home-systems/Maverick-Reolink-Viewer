@@ -1,5 +1,5 @@
-# Pinned to the Home Assistant release the tests run against (phacc 0.13.372 = HA 2026.10.1).
-pytest-homeassistant-custom-component==0.13.372
+# Pinned to the Home Assistant release the tests run against (phacc 0.13.375 = HA 2026.10.4).
+pytest-homeassistant-custom-component==0.13.375
 # Requirements of HA's Reolink integration in that release (not installed by phacc).
 reolink-aio==0.21.18
 ha-ffmpeg==3.2.2
@@ -7,6 +7,6 @@ ha-ffmpeg==3.2.2
 ruff==0.17.1
 mypy==2.4.0
 # Requirements of the HA components we (and Reolink) depend on, same release.
-home-assistant-frontend==20260930.3
+home-assistant-frontend==20260930.5
 PyTurboJPEG==1.8.3
 av==19.0.0

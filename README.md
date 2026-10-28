@@ -152,7 +152,10 @@ v0.30.0 works from the keyboard and with screen readers throughout: the timeline
 slider you move with the arrow keys, the calendar and the camera's tabs move with the
 arrows, every button says what it does, and motion stops when your device asks for less.
 
-Requires Home Assistant 2026.10 or newer with the Reolink integration set up.
+v0.31.0 is the first release: from now on each one comes packaged, with what it brings
+in [CHANGELOG.md](CHANGELOG.md), and HACS offers it as an update.
+
+Requires Home Assistant 2026.10.1 or newer with the Reolink integration set up.
 
 ### Install (HACS custom repository)
 
@@ -161,10 +164,25 @@ Requires Home Assistant 2026.10 or newer with the Reolink integration set up.
 2. Install **Reolink Viewer**, restart Home Assistant.
 3. Settings → Devices & services → **Add integration** → **Reolink Viewer**.
 
+HACS shows each new release as an update; install it and restart Home Assistant.
+Without HACS, download `reolink_viewer.zip` from the
+[latest release](https://github.com/ambient-home-systems/Maverick-Reolink-Viewer/releases/latest),
+unzip it into `config/custom_components/reolink_viewer`, and restart Home Assistant.
+
+### Home Assistant versions
+
+Each release is tested on every Home Assistant release from the oldest it supports to
+the newest of its day: v0.31.0 on 2026.10.1 to 2026.10.4 (2026.10.0's Reolink library
+is too old for its recordings). A weekly check tries each
+new Home Assistant release. If one changes the Reolink integration in a way Reolink
+Viewer cannot read, the panel says so on every page ("Reolink Viewer needs an
+update"), and your devices and their settings keep working until an update is out.
+
 | Document | What it covers |
 | --- | --- |
 | [docs/PLAN.md](docs/PLAN.md) | Evaluation: what the Reolink integration and `reolink-aio` already provide, the recommended architecture, live/playback design, and the Reolink-app (Baichuan) reverse-engineering assessment |
 | [DESIGN.md](DESIGN.md) | The panel's design: the Timetable world, its tokens (light and dark), type, components and rules |
 | [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) | Phased implementation plan with tasks, exit criteria, risks and the testing strategy |
 | [docs/hardware-matrix.md](docs/hardware-matrix.md) | Measured behavior per camera model, filled from the probe |
-| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Repository layout, dev environment, checks |
+| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Repository layout, dev environment, checks, Home Assistant versions, releasing |
+| [CHANGELOG.md](CHANGELOG.md) | What each release brings |

@@ -1,0 +1,67 @@
+name: Release
+
+# Releases the version on main, as manifest.json gives it: Actions → Release →
+# Run workflow. CI runs first on that commit; then the package is built and
+# checked (scripts/build_release.py), and the GitHub release v<version> is
+# made with the package attached and its notes from CHANGELOG.md. HACS offers
+# it as an update from then on. "Dry run" does all but publish.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run: check and package only, publish nothing"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  ci:
+    name: CI
+    uses: ./.github/workflows/ci.yml
+
+  release:
+    name: Package and publish
+    needs: ci
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+      - name: Releases come from main
+        if: ${{ !inputs.dry_run && github.ref != 'refs/heads/main' }}
+        run: |
+          echo "::error::Releases are made from main (this is ${GITHUB_REF}); run it there, or as a dry run."
+          exit 1
+      - name: Package (checks the versions, the changelog and the built panel)
+        run: |
+          echo "VERSION=$(python -m scripts.build_release --out dist)" >> "$GITHUB_ENV"
+          python -m scripts.build_release --notes > dist/notes.md
+      - name: Not released yet
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            echo "::error::v$VERSION is already released: raise the version (manifest.json, frontend/package.json, the live check) and add its CHANGELOG.md entry first."
+            exit 1
+          fi
+          echo "Ready to release v$VERSION:"
+          cat dist/notes.md
+      - name: Publish
+        if: ${{ !inputs.dry_run }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v$VERSION" dist/reolink_viewer.zip \
+            --target "$GITHUB_SHA" \
+            --title "Reolink Viewer $VERSION" \
+            --notes-file dist/notes.md

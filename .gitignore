@@ -14,3 +14,4 @@ scripts/desktop-check/reports/
 frontend/.preview/
 frontend/preview/public/media/
 .impeccable/review/
+dist/
