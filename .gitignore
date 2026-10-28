@@ -11,3 +11,6 @@ node_modules/
 frontend/coverage/
 scripts/desktop-check/reports/
 .cache/
+frontend/.preview/
+frontend/preview/public/media/
+.impeccable/review/
