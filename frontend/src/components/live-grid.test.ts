@@ -81,6 +81,7 @@ const CAMERAS: LiveCamera[] = [
         via: "nvr",
         entry_title: "RLN36",
         is_battery: false,
+        status_entity: "camera.garage_fluent",
         // Not warm yet on the server: its switch, just turned on, says it will be.
         streams: { sub: { encoding, entity_id: null, warm: false }, main: { encoding, entity_id: null, warm: false } },
       },
@@ -368,9 +369,38 @@ describe("rv-live-grid", () => {
     const player = players.find((p) => p.ref.connectionId === "nvr1");
     player?.setState({ kind: "waiting", error: "MSE: the server closed the stream", retryAt: Date.now() + 1000 });
     await garage.updateComplete;
-    expect(garage.shadowRoot?.textContent).toContain("Cannot play: MSE: the server closed the stream");
+    // In plain words, with what to do; the technical text is in its ⓘ view.
+    expect(garage.shadowRoot?.querySelector(".status .what")?.textContent).toBe("The camera's video stopped.");
+    expect(garage.shadowRoot?.textContent).toContain("It starts again by itself.");
+    expect(garage.shadowRoot?.textContent).not.toContain("MSE:");
     garage.shadowRoot?.querySelector<HTMLButtonElement>(".status button")?.click();
     expect(player?.retries).toBe(1);
+  });
+
+  it("shows a camera Home Assistant cannot reach as offline, and plays it again when it is back", async () => {
+    const { hass } = fakeHass();
+    const states = hass.states as Record<string, unknown>;
+    const since = new Date(Date.now() - 5 * 60_000);
+    states["camera.garage_fluent"] = { state: "unavailable", last_changed: since.toISOString() };
+    const { el, tiles } = await mountGrid(hass);
+    const garage = tiles().at(0);
+    if (!garage) throw new Error("no tile");
+    const player = () => players.find((p) => p.ref.connectionId === "nvr1");
+    expect(player()?.running ?? false).toBe(false);
+    expect(garage.shadowRoot?.querySelector(".state")?.textContent).toContain("Offline");
+    expect(garage.shadowRoot?.querySelector(".status .what")?.textContent).toBe(
+      `Offline since ${formatClock(since.getTime(), undefined)}`,
+    );
+    expect(garage.shadowRoot?.textContent).toContain("Home Assistant cannot reach this camera.");
+    expect(el.shadowRoot?.querySelector(".count")?.textContent).toContain("· 1 offline");
+    // Back: it plays.
+    const back = { ...hass, states: { ...hass.states, "camera.garage_fluent": { state: "streaming", last_changed: "" } } };
+    el.hass = back as unknown as HomeAssistant;
+    await el.updateComplete;
+    for (const tile of tiles()) await tile.updateComplete;
+    expect(player()?.running).toBe(true);
+    expect(garage.shadowRoot?.textContent).not.toContain("Offline since");
+    expect(el.shadowRoot?.querySelector(".count")?.textContent).not.toContain("offline");
   });
 
   it("shows what a tile plays, and how, behind its info button", async () => {
@@ -548,9 +578,11 @@ describe("full screen", () => {
     fullButton(garage).click();
     await settle(garage);
     const hd = players.find((p) => p.ref.stream === "main");
-    hd?.setState({ kind: "waiting", error: "WebRTC: the NVR is busy", retryAt: Date.now() + 1000 });
+    hd?.setState({ kind: "waiting", error: "WebRTC: every stream slot of this host is in use", retryAt: Date.now() + 1000 });
     await settle(garage);
-    expect(garage.shadowRoot?.textContent).toContain("HD cannot play: WebRTC: the NVR is busy");
+    expect(garage.shadowRoot?.textContent).toContain(
+      "HD cannot play: Too many cameras are streaming from this recorder at once.",
+    );
     expect(players.find((p) => p.ref.connectionId === "nvr1" && p.ref.stream === "sub")?.running).toBe(true);
     // Esc leaves full screen when it fills the window.
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
@@ -863,6 +895,8 @@ describe("the board", () => {
     expect(playingCount(cameras, new Set())).toBe("3 cameras");
     expect(playingCount(cameras, new Set(["door", "yard", "gone"]))).toBe("2 of 3 playing");
     expect(playingCount([camera("door")], new Set())).toBe("1 camera");
+    expect(playingCount(cameras, new Set(["door"]), 1)).toBe("1 of 3 playing · 1 offline");
+    expect(playingCount(cameras, new Set(), 3)).toBe("3 cameras · 3 offline");
   });
 
   it("crops a picture's top and bottom to fill its cell, never its sides", () => {

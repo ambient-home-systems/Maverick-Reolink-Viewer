@@ -2,7 +2,7 @@ import { LitElement, css, html, nothing, type TemplateResult } from "lit";
 
 import { toError } from "../api";
 import { icon } from "../icons";
-import { LiveData, cameraFor, isWarm, liveConnection } from "../live/data";
+import { LiveData, cameraFor, isWarm, liveConnection, offlineSince } from "../live/data";
 import { soakTally } from "../live/soak-tally";
 import { sharedStyles } from "../styles";
 import type { HomeAssistant, LiveCamera, LiveConnection } from "../types";
@@ -135,7 +135,15 @@ export class RvLiveGrid extends LitElement {
     const canFull = document.fullscreenEnabled && typeof this.requestFullscreen === "function";
     return html`<div class="head">
         <h1>Live</h1>
-        ${cameras?.length ? html`<p class="count">${playingCount(cameras, this._live)}</p>` : nothing}
+        ${cameras?.length
+          ? html`<p class="count">
+              ${playingCount(
+                cameras,
+                this._live,
+                cameras.filter((c) => offlineSince(this.hass, liveConnection(c)) !== undefined).length,
+              )}
+            </p>`
+          : nothing}
         ${canFull && cameras?.length
           ? html`<button class="text with-icon full" @click=${() => {
               this._toggleBoardFull();
@@ -277,11 +285,13 @@ export class RvLiveGrid extends LitElement {
 }
 
 /** The board's cameras, numbered as its tiles are. */
-/** The board's count: "6 of 8 playing", or the cameras while none plays yet. */
-export function playingCount(cameras: readonly LiveCamera[], live: ReadonlySet<string>): string {
+/** The board's count: "6 of 8 playing", or the cameras while none plays yet; and how many are offline. */
+export function playingCount(cameras: readonly LiveCamera[], live: ReadonlySet<string>, offline = 0): string {
   const playing = cameras.filter((c) => live.has(c.id)).length;
-  if (!playing) return `${String(cameras.length)} ${cameras.length === 1 ? "camera" : "cameras"}`;
-  return `${String(playing)} of ${String(cameras.length)} playing`;
+  const count = playing
+    ? `${String(playing)} of ${String(cameras.length)} playing`
+    : `${String(cameras.length)} ${cameras.length === 1 ? "camera" : "cameras"}`;
+  return offline ? `${count} · ${String(offline)} offline` : count;
 }
 
 export function boardCameras(cameras: LiveCamera[]): BoardCamera[] {

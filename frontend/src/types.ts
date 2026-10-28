@@ -429,6 +429,8 @@ export interface LiveConnection {
   via: "nvr" | "direct";
   entry_title: string;
   is_battery: boolean;
+  /** An entity of the camera: "unavailable" while Home Assistant cannot reach it. */
+  status_entity?: string | null;
   /**
    * Per stream the connection can serve (no ext without HTTP-FLV): its
    * configured encoding (none for ext), HA's camera entity showing it, and

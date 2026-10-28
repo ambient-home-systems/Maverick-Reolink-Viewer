@@ -604,8 +604,11 @@ def async_live_cameras(
 
     Each connection lists, per live stream it can serve, the configured
     encoding, the enabled camera entity showing it in Home Assistant's own
-    view (if any) and, given ``warm``, whether it is kept warm. Each camera
-    lists the entities a live view controls it with (``_live_controls``).
+    view (if any) and, given ``warm``, whether it is kept warm, and an
+    enabled entity of the camera whose state says whether Home Assistant
+    reaches it (the Reolink integration makes a camera's entities unavailable
+    while it is offline). Each camera lists the entities a live view controls
+    it with (``_live_controls``).
     """
     model = _async_build(hass, degraded=False)
     ent_reg = er.async_get(hass)
@@ -636,12 +639,22 @@ def async_live_cameras(
                 if conn.handle is not None
                 else frozenset(bridge.LiveProtocol)
             )
+            own = [
+                e
+                for e in _reolink_entities(ent_reg, [conn.device.id])
+                if e.disabled_by is None
+            ]
+            status_entity = next(
+                (e.entity_id for e in own if e.domain == "camera"),
+                own[0].entity_id if own else None,
+            )
             connections.append(
                 {
                     "connection_id": source.connection_id,
                     "via": source.via,
                     "entry_title": conn.entry_title,
                     "is_battery": source.is_battery,
+                    "status_entity": status_entity,
                     "streams": {
                         stream: {
                             "encoding": encodings.get(stream),

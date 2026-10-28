@@ -112,6 +112,18 @@ export function isWarm(hass: HomeAssistant | undefined, camera: LiveCamera): boo
   return liveConnection(camera)?.streams.sub?.warm === true;
 }
 
+/**
+ * Since when Home Assistant cannot reach a camera (epoch ms), or undefined
+ * while it can: the Reolink integration makes its entities unavailable then.
+ */
+export function offlineSince(hass: HomeAssistant | undefined, connection: LiveConnection | undefined): number | undefined {
+  const entity = connection?.status_entity;
+  const state = entity ? hass?.states[entity] : undefined;
+  if (state?.state !== "unavailable") return undefined;
+  const since = Date.parse(state.last_changed);
+  return Number.isNaN(since) ? Date.now() : since;
+}
+
 /** The connection live view watches a camera through: the NVR's where it has one. */
 export function liveConnection(camera: LiveCamera): LiveConnection | undefined {
   return (
