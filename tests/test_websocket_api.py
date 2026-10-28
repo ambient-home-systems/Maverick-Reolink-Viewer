@@ -13,6 +13,7 @@ from custom_components.reolink_viewer import bridge, probe
 from custom_components.reolink_viewer.media import ByteResult, FrameResult
 from homeassistant.components.ffmpeg import FFmpegManager
 from homeassistant.core import HomeAssistant
+from scripts import build_release
 
 from .conftest import SECRETS, TEST_PASSWORD
 from .ha_reolink_mock import TEST_UID
@@ -109,7 +110,7 @@ async def test_probe(
     assert events[0]["type"] == "progress"
     report = events[-1]["report"]
     assert report["ffmpeg_version"] == "7.1"
-    assert report["integration_version"] == "0.30.0"
+    assert report["integration_version"] == build_release.version()
     assert report["options"]["concurrency_test"] is False
     assert report["hosts"][0]["channels"][0]["live"]["rtsp"]["sub"]["ok"] is True
     text = str(report)

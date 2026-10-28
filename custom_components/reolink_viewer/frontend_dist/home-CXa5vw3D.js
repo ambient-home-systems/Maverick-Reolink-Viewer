@@ -4793,11 +4793,11 @@ function Ci(e) {
 //#endregion
 //#region src/views.ts
 var wi = {
-	events: () => import("./events-view-gwhkOFAH.js"),
-	list: () => import("./device-list-DsYTzAxx.js"),
-	device: () => import("./device-page-Dx4CFG6b.js"),
-	"live-check": () => import("./live-check-erUj-2KP.js"),
-	soak: () => import("./live-soak-BJacfADS.js")
+	events: () => import("./events-view-DfpbzLlN.js"),
+	list: () => import("./device-list-CwkUz-9J.js"),
+	device: () => import("./device-page-B6JwzSHI.js"),
+	"live-check": () => import("./live-check-BYAMYegS.js"),
+	soak: () => import("./live-soak-Dcr04OE6.js")
 }, Ti = /* @__PURE__ */ new Map();
 function $(e) {
 	let t = wi[e];
