@@ -996,7 +996,7 @@ function Bt(e) {
 }
 //#endregion
 //#region src/version.ts
-var Vt = "0.34.1", Ht = "https://github.com/ambient-home-systems/Maverick-Reolink-Viewer", Ut = {
+var Vt = "0.35.0", Ht = "https://github.com/ambient-home-systems/Maverick-Reolink-Viewer", Ut = {
 	guide: ["user-guide"],
 	troubleshooting: ["troubleshooting"],
 	cameras: ["cameras"],
@@ -4906,11 +4906,11 @@ function Fi(e) {
 //#endregion
 //#region src/views.ts
 var Ii = {
-	events: () => import("./events-view-CmU-xTml.js"),
-	list: () => import("./device-list-Dl0qdtAO.js"),
-	device: () => import("./device-page-C_r_yxy8.js"),
-	"live-check": () => import("./live-check-B_YBk9EP.js"),
-	soak: () => import("./live-soak-C5-sRkcn.js")
+	events: () => import("./events-view-BHF1AKSU.js"),
+	list: () => import("./device-list-6UkoBa4q.js"),
+	device: () => import("./device-page-BLyY5lhM.js"),
+	"live-check": () => import("./live-check-C0nW6WSD.js"),
+	soak: () => import("./live-soak-C_kB46Eh.js")
 }, Li = /* @__PURE__ */ new Map();
 function $(e) {
 	let t = Ii[e];
@@ -4949,6 +4949,11 @@ var Ri = {
 		_playbackConcurrency: { state: !0 },
 		_playbackStreams: { state: !0 },
 		_baichuan: { state: !0 },
+		_baichuanMain: { state: !0 },
+		_baichuanDownload: { state: !0 },
+		_baichuanSession: { state: !0 },
+		_baichuanCameras: { state: !0 },
+		_baichuanHold: { state: !0 },
 		_copied: { state: !0 },
 		_route: { state: !0 },
 		_toast: { state: !0 },
@@ -4963,7 +4968,7 @@ var Ri = {
 		this._route = jr(window.location.hash);
 	};
 	constructor() {
-		super(), this.narrow = !1, this._now = Date.now(), this._board = [], this._probe = { status: "idle" }, this._includeBattery = !1, this._concurrency = !1, this._maxStreams = 4, this._playback = !1, this._playbackOnly = !1, this._playbackConcurrency = !1, this._playbackStreams = 4, this._baichuan = !1, this._copied = !1, this._route = { view: "live" }, this.addEventListener(Dr, (e) => {
+		super(), this.narrow = !1, this._now = Date.now(), this._board = [], this._probe = { status: "idle" }, this._includeBattery = !1, this._concurrency = !1, this._maxStreams = 4, this._playback = !1, this._playbackOnly = !1, this._playbackConcurrency = !1, this._playbackStreams = 4, this._baichuan = !1, this._baichuanMain = !1, this._baichuanDownload = !0, this._baichuanSession = !1, this._baichuanCameras = "", this._baichuanHold = 5, this._copied = !1, this._route = { view: "live" }, this.addEventListener(Dr, (e) => {
 			this.navigate(e.detail);
 		}), this.addEventListener(Or, (e) => {
 			this.showToast(e.detail);
@@ -5351,9 +5356,82 @@ var Ri = {
 		}}
           />
           <span
-            >Test replay over the Reolink app's own protocol (Phase 5a): start a recording of a
-            recorder 45 minutes in over Baichuan and over HTTP, and compare. Read-only, a few
-            seconds of video.</span
+            >Test replay over the Reolink app's own protocol (Phase 5): start a long recording of
+            a recorder 75 % in over Baichuan and over HTTP, and compare; decode what arrives.
+            Read-only, a few seconds of video per camera.</span
+          >
+        </label>
+        <label class="option nested">
+          <input
+            type="checkbox"
+            .checked=${this._baichuanMain}
+            ?disabled=${e || !this._baichuan}
+            @change=${(e) => {
+			this._baichuanMain = e.target.checked;
+		}}
+          />
+          <span>Also the HD (main) recordings</span>
+        </label>
+        <label class="option nested">
+          <input
+            type="checkbox"
+            .checked=${this._baichuanDownload}
+            ?disabled=${e || !this._baichuan}
+            @change=${(e) => {
+			this._baichuanDownload = e.target.checked;
+		}}
+          />
+          <span>Also a download cut by time range (143) from the same point</span>
+        </label>
+        <label class="option nested">
+          <input
+            type="checkbox"
+            .checked=${this._baichuanSession}
+            ?disabled=${e || !this._baichuan}
+            @change=${(e) => {
+			this._baichuanSession = e.target.checked;
+		}}
+          />
+          <span
+            >Session test: hold a replay open beside a full-speed download, then two replays at
+            once, and count the recorder's logged-in users</span
+          >
+        </label>
+        <label class="option nested">
+          <span
+            >Cameras:
+            <input
+              type="text"
+              aria-label="Cameras to test, names separated by commas"
+              placeholder="every camera"
+              .value=${this._baichuanCameras}
+              ?disabled=${e || !this._baichuan}
+              @input=${(e) => {
+			this._baichuanCameras = e.target.value;
+		}}
+            />
+            (names, separated by commas; empty for every camera, up to 8)</span
+          >
+        </label>
+        <label class="option nested">
+          <span
+            >Hold each stream for
+            <select
+              aria-label="Seconds to hold each stream"
+              .value=${String(this._baichuanHold)}
+              ?disabled=${e || !this._baichuan}
+              @change=${(e) => {
+			this._baichuanHold = Number(e.target.value);
+		}}
+            >
+              ${[
+			5,
+			10,
+			30,
+			90
+		].map((e) => C`<option value=${e} ?selected=${e === this._baichuanHold}>${e}</option>`)}
+            </select>
+            seconds (90 leaves time to run the Live check's capacity test alongside)</span
           >
         </label>
       </div>
@@ -5424,7 +5502,13 @@ var Ri = {
 			playback_only: this._playback && this._playbackOnly,
 			playback_concurrency_test: this._playback && this._playbackConcurrency,
 			playback_max_streams: this._playbackStreams,
-			baichuan_test: this._baichuan
+			baichuan_test: this._baichuan,
+			baichuan_streams: this._baichuanMain ? ["sub", "main"] : ["sub"],
+			baichuan_download: this._baichuanDownload,
+			baichuan_session: this._baichuanSession,
+			baichuan_cameras: this._baichuanCameras.trim(),
+			baichuan_hold: this._baichuanHold,
+			baichuan_cut: 20
 		}, (e) => {
 			this._probe.status === "running" && (this._probe = {
 				...this._probe,

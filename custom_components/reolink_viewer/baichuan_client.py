@@ -1,20 +1,29 @@
-"""A minimal Baichuan client for the Phase 5a replay check (read-only).
+"""A minimal Baichuan client for the Phase 5 measurements (read-only).
 
-Opens its own TCP connection to a device and replays a recording the way the
-Reolink desktop client was seen to (docs/baichuan-playback.md §3.4): login, 123
-``ReplaySeek``, 5 ``FileInfoList`` with ``playSpeed``, the frames, 7 stop. It
-exists because reolink-aio drops the message class the NVR sends its replay
-frames in, so the frames cannot be received through Home Assistant's session.
+Opens its own TCP connection to a device and does what the Reolink desktop
+client was seen to (docs/baichuan-playback.md §3.4 and §3.5): login, then
+either a replay (123 ``ReplaySeek``, 5 ``FileInfoList`` with ``playSpeed``,
+the frames, 7 stop) or a download cut by time range (143 ``FileInfoList``
+with ``startTime``/``endTime``, the data, a 143 with status 300 at the end,
+144 to close). It exists because reolink-aio drops the message class the NVR
+sends its media in, so the frames cannot be received through Home Assistant's
+session.
+
+Several streams can run on one connection at once, each on its own command
+and handle byte (the channel + 1, as the client sends it): a replay and a
+download, or two replays of different channels. Each stream's chunks are
+reassembled into media blocks and analysed as they arrive
+(``baichuan_media``), without keeping any media.
 
 Ciphers and the login hashes come from reolink-aio (``reolink_aio.baichuan.util``).
-Nothing here changes a setting; the only commands sent are 1, 123, 5, 7 and 2.
+Nothing here changes a setting; the only commands sent are 1, 123, 5, 7, 143,
+144 and 2.
 """
 
 import asyncio
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
-import re
 import struct
 import time
 from xml.etree import ElementTree as ET
@@ -28,6 +37,7 @@ from reolink_aio.baichuan.util import (
     md5_str_modern,
 )
 
+from .baichuan_media import Block, BlockReader, StreamAnalysis
 from .bridge import BaichuanEndpoint
 
 MAGIC = bytes.fromhex(HEADER_MAGIC)
@@ -39,9 +49,14 @@ CMD_LOGOUT = 2
 CMD_REPLAY_START = 5
 CMD_REPLAY_STOP = 7
 CMD_REPLAY_SEEK = 123
+CMD_DOWNLOAD = 143
+CMD_DOWNLOAD_END = 144
 HOST_CHANNEL = 250
-MAX_BODY = 4 * 1024 * 1024
-_BLOCK = re.compile(rb"[0-9][01]dc|0[0-9]wb|100[0-9]")
+# A device ends a stream with one of these on the stream's own command.
+END_STATUSES = frozenset({300, 331})
+# What a decrypted XML part starts with (media decrypted by mistake does not).
+XML_TEXT_STARTS = ("<?xml", "<body", "<Extension")
+XML_STARTS = tuple(s.encode() for s in XML_TEXT_STARTS)
 
 LOGIN_XML = (
     '<?xml version="1.0" encoding="UTF-8" ?>\n<body>\n<LoginUser version="1.1">\n'
@@ -55,9 +70,7 @@ LOGOUT_XML = (
 )
 SEEK_XML = (
     '<?xml version="1.0" encoding="UTF-8" ?>\n<body>\n<ReplaySeek version="1.1">\n'
-    "<channelId>{channel}</channelId>\n<seq>{seq}</seq>\n<seekTime>\n"
-    "<year>{t.year}</year>\n<month>{t.month}</month>\n<day>{t.day}</day>\n"
-    "<hour>{t.hour}</hour>\n<minute>{t.minute}</minute>\n<second>{t.second}</second>\n"
+    "<channelId>{channel}</channelId>\n<seq>{seq}</seq>\n<seekTime>\n{time}"
     "</seekTime>\n</ReplaySeek>\n</body>\n"
 )
 START_XML = (
@@ -70,6 +83,19 @@ STOP_XML = (
     '<?xml version="1.0" encoding="UTF-8" ?>\n<body>\n<FileInfoList version="1.1">\n'
     "<FileInfo>\n<channelId>{channel}</channelId>\n<name>{name}</name>\n"
     "<streamType>{stream}</streamType>\n</FileInfo>\n</FileInfoList>\n</body>\n"
+)
+# The download cut, as reolink-downloader (MIT) describes it and the capture
+# showed it: a FileInfoList with the channel, the stream and the time range.
+DOWNLOAD_XML = (
+    '<?xml version="1.0" encoding="UTF-8" ?>\n<body>\n<FileInfoList version="1.1">\n'
+    "<FileInfo>\n<logicChnBitmap>{bitmap}</logicChnBitmap>\n"
+    "<channelId>{channel}</channelId>\n<supportSub>1</supportSub>\n"
+    "<streamType>{stream}</streamType>\n<startTime>\n{start}</startTime>\n"
+    "<endTime>\n{end}</endTime>\n</FileInfo>\n</FileInfoList>\n</body>\n"
+)
+TIME_XML = (
+    "<year>{t.year}</year>\n<month>{t.month}</month>\n<day>{t.day}</day>\n"
+    "<hour>{t.hour}</hour>\n<minute>{t.minute}</minute>\n<second>{t.second}</second>\n"
 )
 
 
@@ -86,13 +112,30 @@ class Reply:
     binary: bytes
     at: float  # time.monotonic()
 
+    def fields(self) -> dict[str, str]:
+        """Return the leaf elements (sizes, counts, names) of the XML parts by tag."""
+        found: dict[str, str] = {}
+        for part in self.xml.split("<?xml"):
+            root = _xml(
+                part
+                if not part.strip() or part.lstrip().startswith("<")
+                else "<?xml" + part
+            )
+            if root is None:
+                continue
+            for el in root.iter():
+                if not len(el) and el.text and el.text.strip():
+                    found[el.tag] = el.text.strip()
+        return found
+
 
 @dataclass(slots=True)
-class ReplayStats:
-    """What a replay delivered, as it arrives."""
+class StreamStats:
+    """What a stream delivered, as it arrives: counts, times and its analysis."""
 
     started: float
     first_chunk: float | None = None
+    last_chunk: float | None = None
     first_key_frame: float | None = None
     first_key_time: datetime | None = None
     chunks: int = 0
@@ -101,89 +144,92 @@ class ReplayStats:
     frames: int = 0
     audio: int = 0
     last_key_time: datetime | None = None
-    _buffer: bytearray = field(default_factory=bytearray)
+    # The device's end marker on the stream's command, if it sent one.
+    end_status: int | None = None
+    ended_at: float | None = None
+    chunks_after_end: int = 0
+    analysis: StreamAnalysis = field(default_factory=StreamAnalysis)
+    _reader: BlockReader = field(default_factory=BlockReader)
 
     def as_dict(self) -> dict[str, object]:
-        """Redaction-safe numbers."""
+        """Redaction-safe numbers, and the media analysis."""
+        wall = None
+        if self.first_chunk is not None and self.last_chunk is not None:
+            wall = self.last_chunk - self.first_chunk
         return {
             "first_chunk_ms": _since(self.started, self.first_chunk),
+            "last_chunk_ms": _since(self.started, self.last_chunk),
             "first_key_frame_ms": _since(self.started, self.first_key_frame),
             "first_key_frame_time": _iso(self.first_key_time),
             "last_key_frame_time": _iso(self.last_key_time),
             "chunks": self.chunks,
             "bytes": self.total_bytes,
+            "mbit_s": (round(self.total_bytes * 8 / wall / 1e6, 2) if wall else None),
             "key_frames": self.key_frames,
             "frames": self.frames,
             "audio_blocks": self.audio,
+            "end_status": self.end_status,
+            "ended_ms": _since(self.started, self.ended_at),
+            "chunks_after_end": self.chunks_after_end,
+            "resyncs": self._reader.resyncs,
+            "skipped_bytes": self._reader.skipped_bytes,
+            "media": self.analysis.as_dict(),
         }
 
+    def media_seconds(self) -> float | None:
+        """Return the media time received, by the key frames' POSIX times."""
+        if self.first_key_time is None or self.last_key_time is None:
+            return None
+        return (self.last_key_time - self.first_key_time).total_seconds()
+
     def feed(self, data: bytes, now: float) -> None:
-        """Account a chunk and scan it for blocks (across chunk boundaries)."""
+        """Account a chunk and the blocks it completes (across chunk boundaries)."""
         self.chunks += 1
         self.total_bytes += len(data)
+        self.last_chunk = now
         if self.first_chunk is None:
             self.first_chunk = now
-        self._buffer += data
-        while self._next_block(now):
-            pass
+        if self.ended_at is not None:
+            self.chunks_after_end += 1
+        for block in self._reader.feed(data):
+            self._block(block, now)
 
-    def _next_block(self, now: float) -> bool:
-        buf = self._buffer
-        if len(buf) < 8:
-            return False
-        magic = bytes(buf[:4])
-        if not _BLOCK.fullmatch(magic):
-            found = _BLOCK.search(buf, 1)
-            if found is None:
-                del buf[:-3]
-                return False
-            del buf[: found.start()]
-            return True
-        if magic.startswith(b"100"):
-            header = struct.unpack("<I", buf[4:8])[0]
-            header = header if 24 <= header <= 64 else 32
-            if len(buf) < header:
-                return False
-            del buf[:header]
-            return True
-        if magic.endswith(b"dc"):
-            key = magic[1:2] == b"0"
-            header = 24 + (struct.unpack("<I", buf[12:16])[0] if len(buf) >= 16 else 0)
-            if len(buf) < header:
-                return False
-            size = struct.unpack("<I", buf[8:12])[0]
-            if size > MAX_BODY:
-                del buf[:4]
-                return True
-            if len(buf) < header + size:
-                return False
-            if key:
-                self.key_frames += 1
-                when = struct.unpack("<I", buf[24:28])[0]
-                stamp = datetime.fromtimestamp(when) if 0 < when < 2**31 else None
-                self.last_key_time = stamp
-                if self.first_key_frame is None:
-                    self.first_key_frame = now
-                    self.first_key_time = stamp
-            else:
-                self.frames += 1
-            del buf[: header + size]
-            self._skip_padding()
-            return True
-        size = struct.unpack("<H", buf[4:6])[0]
-        if len(buf) < 8 + size:
-            return False
-        self.audio += 1
-        del buf[: 8 + size]
-        self._skip_padding()
-        return True
+    def _block(self, block: Block, now: float) -> None:
+        self.analysis.feed(block)
+        if block.kind == "key":
+            self.key_frames += 1
+            when = block.unix_time
+            stamp = (
+                datetime.fromtimestamp(when)  # the device's local clock
+                if when is not None and 0 < when < 2**31
+                else None
+            )
+            self.last_key_time = stamp
+            if self.first_key_frame is None:
+                self.first_key_frame = now
+                self.first_key_time = stamp
+        elif block.kind == "frame":
+            self.frames += 1
+        elif block.kind == "audio":
+            self.audio += 1
 
-    def _skip_padding(self) -> None:
-        buf = self._buffer
-        if len(buf) >= 4 and not _BLOCK.fullmatch(bytes(buf[:4])):
-            found = _BLOCK.search(buf, 0, min(len(buf), 68))
-            if found is not None:
-                del buf[: found.start()]
+    def end(self, status: int, now: float) -> None:
+        """Note the device's end marker."""
+        if self.ended_at is None:
+            self.end_status = status
+            self.ended_at = now
+            for block in self._reader.finish():
+                self._block(block, now)
+
+
+# The Phase 5a name.
+ReplayStats = StreamStats
+
+
+@dataclass(slots=True)
+class _Stream:
+    stats: StreamStats
+    on_chunk: Callable[[StreamStats], None] | None
 
 
 def _since(start: float, mark: float | None) -> float | None:
@@ -195,7 +241,7 @@ def _iso(value: datetime | None) -> str | None:
 
 
 class BaichuanReplayClient:
-    """One connection, one login, one replay at a time."""
+    """One connection, one login, any number of streams by handle."""
 
     def __init__(self, endpoint: BaichuanEndpoint, *, timeout: float = 10.0) -> None:
         """Initialize (nothing is opened yet)."""
@@ -207,9 +253,9 @@ class BaichuanReplayClient:
         self._pending: dict[tuple[int, int], asyncio.Future[Reply]] = {}
         self._key: bytes | None = None
         self._counter = 0
-        self._replay: tuple[int, int] | None = None  # (cmd, channel byte) of the stream
-        self._stats: ReplayStats | None = None
-        self._on_chunk: Callable[[ReplayStats], None] | None = None
+        # Streams by (cmd, channel byte): what the device sends them on.
+        self._streams: dict[tuple[int, int], _Stream] = {}
+        self._stats: StreamStats | None = None
         self.device_type: str | None = None
 
     # ---- connection ----
@@ -234,6 +280,7 @@ class BaichuanReplayClient:
             if not future.done():
                 future.set_exception(BaichuanClientError("connection closed"))
         self._pending.clear()
+        self._streams.clear()
 
     async def login(self) -> dict[str, float]:
         """Log in: the nonce, then the hashed user name and password."""
@@ -274,7 +321,9 @@ class BaichuanReplayClient:
 
     async def seek(self, channel: int, when: datetime) -> float:
         """123 ReplaySeek; returns the acknowledgement latency in ms."""
-        xml = SEEK_XML.format(channel=channel, seq=int(time.time()), t=when)
+        xml = SEEK_XML.format(
+            channel=channel, seq=int(time.time()), time=TIME_XML.format(t=when)
+        )
         began = time.monotonic()
         reply = await self._request(CMD_REPLAY_SEEK, xml.encode(), channel=channel)
         if reply.status != 200:
@@ -289,24 +338,26 @@ class BaichuanReplayClient:
         stream: str,
         *,
         speed: int = 1,
-        on_chunk: Callable[[ReplayStats], None] | None = None,
-    ) -> tuple[float, ReplayStats]:
+        on_chunk: Callable[[StreamStats], None] | None = None,
+    ) -> tuple[float, StreamStats]:
         """5 FileInfoList: start the replay; frames then arrive on the stream."""
         xml = START_XML.format(
             channel=channel, file_id=file_id, uid=uid, speed=speed, stream=stream
         )
-        self._stats = ReplayStats(started=time.monotonic())
-        self._on_chunk = on_chunk
-        self._replay = (CMD_REPLAY_START, channel + 1)
-        reply = await self._request(CMD_REPLAY_START, xml.encode(), channel=channel)
+        stats = self._open_stream(CMD_REPLAY_START, channel, on_chunk)
+        try:
+            reply = await self._request(CMD_REPLAY_START, xml.encode(), channel=channel)
+        except BaseException:
+            self._streams.pop((CMD_REPLAY_START, channel + 1), None)
+            raise
         if reply.status != 200:
-            self._replay = None
+            self._streams.pop((CMD_REPLAY_START, channel + 1), None)
             raise BaichuanClientError(
                 f"replay start refused with status {reply.status}"
             )
         # The reply's own binary (the stream header) was fed by the reader, in
         # order with the chunks that may already have followed it.
-        return _ms(self._stats.started, reply.at), self._stats
+        return _ms(stats.started, reply.at), stats
 
     async def stop(self, channel: int, name: str, stream: str) -> float:
         """7 stop; returns the acknowledgement latency in ms."""
@@ -315,15 +366,73 @@ class BaichuanReplayClient:
         try:
             reply = await self._request(CMD_REPLAY_STOP, xml.encode(), channel=channel)
         finally:
-            self._replay = None
+            self._streams.pop((CMD_REPLAY_START, channel + 1), None)
         if reply.status != 200:
             raise BaichuanClientError(f"replay stop refused with status {reply.status}")
         return _ms(began, reply.at)
 
+    # ---- download by time range ----
+
+    async def download(
+        self,
+        channel: int,
+        stream: str,
+        start: datetime,
+        end: datetime,
+        *,
+        bitmap: int | None = None,
+        on_chunk: Callable[[StreamStats], None] | None = None,
+    ) -> tuple[float, StreamStats, dict[str, str]]:
+        """143: a cut of the recording between two times, on the stream.
+
+        Returns the reply's latency, the stream's statistics and the reply's
+        fields (``sizeL``, ``sizeH``, ``FileCount`` on the NVR). ``bitmap``
+        is the ``logicChnBitmap``: the channel's bit by default.
+        """
+        xml = DOWNLOAD_XML.format(
+            bitmap=(1 << channel) if bitmap is None else bitmap,
+            channel=channel,
+            stream=stream,
+            start=TIME_XML.format(t=start),
+            end=TIME_XML.format(t=end),
+        )
+        stats = self._open_stream(CMD_DOWNLOAD, channel, on_chunk)
+        try:
+            reply = await self._request(CMD_DOWNLOAD, xml.encode(), channel=channel)
+        except BaseException:
+            self._streams.pop((CMD_DOWNLOAD, channel + 1), None)
+            raise
+        if reply.status != 200:
+            self._streams.pop((CMD_DOWNLOAD, channel + 1), None)
+            raise BaichuanClientError(f"download refused with status {reply.status}")
+        return _ms(stats.started, reply.at), stats, reply.fields()
+
+    async def download_end(self, channel: int) -> tuple[float, int]:
+        """144 (an empty body): end the download; returns (latency ms, status)."""
+        began = time.monotonic()
+        try:
+            reply = await self._request(CMD_DOWNLOAD_END, b"", channel=channel)
+        finally:
+            self._streams.pop((CMD_DOWNLOAD, channel + 1), None)
+        return _ms(began, reply.at), reply.status
+
     @property
-    def stats(self) -> ReplayStats | None:
-        """The running replay's statistics."""
+    def stats(self) -> StreamStats | None:
+        """The statistics of the stream opened last."""
         return self._stats
+
+    @property
+    def open_streams(self) -> int:
+        """Return how many streams are registered on the connection."""
+        return len(self._streams)
+
+    def _open_stream(
+        self, cmd: int, channel: int, on_chunk: Callable[[StreamStats], None] | None
+    ) -> StreamStats:
+        stats = StreamStats(started=time.monotonic())
+        self._streams[(cmd, channel + 1)] = _Stream(stats, on_chunk)
+        self._stats = stats
+        return stats
 
     # ---- framing ----
 
@@ -393,13 +502,13 @@ class BaichuanReplayClient:
             plain = AES.new(
                 key=self._key, mode=AES.MODE_CFB, iv=AES_IV, segment_size=128
             ).decrypt(data)
-            if plain.lstrip().startswith(b"<"):
+            if plain.lstrip().startswith(XML_STARTS):
                 return plain.decode("utf8", "replace")
         try:
             text = decrypt_baichuan(data, offset)
         except UnicodeDecodeError:
             return ""
-        return text if text.lstrip().startswith("<") else ""
+        return text if text.lstrip().startswith(XML_TEXT_STARTS) else ""
 
     async def _read_loop(self) -> None:
         reader = self._reader
@@ -437,20 +546,30 @@ class BaichuanReplayClient:
         cut = offset if 0 < offset <= len(body) else len(body)
         head, tail = body[:cut], body[cut:]
         xml = self._decrypt(head, ch_byte)
+        stream = self._streams.get((cmd, ch_byte))
         future = self._pending.get((cmd, ident))
         if future is not None and not future.done():
-            binary = tail if xml and "<binaryData>" in xml else b""
+            # After the extension: the body XML (a download's sizes), or the
+            # stream's first bytes.
+            body_xml = self._decrypt(tail, ch_byte) if xml and tail else ""
+            if body_xml:
+                xml += body_xml
+            binary = tail if xml and not body_xml and "<binaryData>" in xml else b""
             if binary:
                 binary = self._decrypt_media(xml, binary)
-                if (cmd, ch_byte) == self._replay and self._stats is not None:
-                    self._stats.feed(binary, now)
+                if stream is not None:
+                    stream.stats.feed(binary, now)
             future.set_result(Reply(status, xml, binary, now))
             return
-        if self._replay is not None and (cmd, ch_byte) == self._replay and self._stats:
+        if stream is None:
+            return
+        if status in END_STATUSES or (not body and cmd == CMD_DOWNLOAD):
+            stream.stats.end(status, now)
+        else:
             media = tail if xml else body
-            self._stats.feed(self._decrypt_media(xml, media), now)
-            if self._on_chunk is not None:
-                self._on_chunk(self._stats)
+            stream.stats.feed(self._decrypt_media(xml, media), now)
+        if stream.on_chunk is not None:
+            stream.on_chunk(stream.stats)
 
     def _decrypt_media(self, xml: str, media: bytes) -> bytes:
         """Apply the extension's encryptLen: that many leading bytes are AES."""

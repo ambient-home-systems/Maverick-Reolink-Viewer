@@ -232,6 +232,11 @@ def codec_string(entry: bytes) -> str | None:
     return box.type
 
 
+def hevc_codec_string(prefix: str, hvcc: bytes) -> str:
+    """Return the codec string of an ``hvcC`` record (its first 13 bytes)."""
+    return _hevc_codec(prefix, hvcc)
+
+
 def _hevc_codec(prefix: str, hvcc: bytes) -> str:
     """Build hvc1.<space><profile>.<compat>.<tier><level>.<constraints> (ISO 14496-15)."""
     space = hvcc[1] >> 6

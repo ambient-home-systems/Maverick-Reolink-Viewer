@@ -72,6 +72,11 @@ export class ReolinkViewerPanel extends LitElement {
     _playbackConcurrency: { state: true },
     _playbackStreams: { state: true },
     _baichuan: { state: true },
+    _baichuanMain: { state: true },
+    _baichuanDownload: { state: true },
+    _baichuanSession: { state: true },
+    _baichuanCameras: { state: true },
+    _baichuanHold: { state: true },
     _copied: { state: true },
     _route: { state: true },
     _toast: { state: true },
@@ -95,6 +100,11 @@ export class ReolinkViewerPanel extends LitElement {
   declare _playbackConcurrency: boolean;
   declare _playbackStreams: number;
   declare _baichuan: boolean;
+  declare _baichuanMain: boolean;
+  declare _baichuanDownload: boolean;
+  declare _baichuanSession: boolean;
+  declare _baichuanCameras: string;
+  declare _baichuanHold: number;
   declare _copied: boolean;
   declare _route: Route;
   /** The current view's file could not be loaded. */
@@ -124,6 +134,11 @@ export class ReolinkViewerPanel extends LitElement {
     this._playbackConcurrency = false;
     this._playbackStreams = 4;
     this._baichuan = false;
+    this._baichuanMain = false;
+    this._baichuanDownload = true;
+    this._baichuanSession = false;
+    this._baichuanCameras = "";
+    this._baichuanHold = 5;
     this._copied = false;
     this._route = { view: "live" };
     this.addEventListener(NAVIGATE_EVENT, (e) => {
@@ -600,9 +615,77 @@ export class ReolinkViewerPanel extends LitElement {
             }}
           />
           <span
-            >Test replay over the Reolink app's own protocol (Phase 5a): start a recording of a
-            recorder 45 minutes in over Baichuan and over HTTP, and compare. Read-only, a few
-            seconds of video.</span
+            >Test replay over the Reolink app's own protocol (Phase 5): start a long recording of
+            a recorder 75 % in over Baichuan and over HTTP, and compare; decode what arrives.
+            Read-only, a few seconds of video per camera.</span
+          >
+        </label>
+        <label class="option nested">
+          <input
+            type="checkbox"
+            .checked=${this._baichuanMain}
+            ?disabled=${running || !this._baichuan}
+            @change=${(e: Event) => {
+              this._baichuanMain = (e.target as HTMLInputElement).checked;
+            }}
+          />
+          <span>Also the HD (main) recordings</span>
+        </label>
+        <label class="option nested">
+          <input
+            type="checkbox"
+            .checked=${this._baichuanDownload}
+            ?disabled=${running || !this._baichuan}
+            @change=${(e: Event) => {
+              this._baichuanDownload = (e.target as HTMLInputElement).checked;
+            }}
+          />
+          <span>Also a download cut by time range (143) from the same point</span>
+        </label>
+        <label class="option nested">
+          <input
+            type="checkbox"
+            .checked=${this._baichuanSession}
+            ?disabled=${running || !this._baichuan}
+            @change=${(e: Event) => {
+              this._baichuanSession = (e.target as HTMLInputElement).checked;
+            }}
+          />
+          <span
+            >Session test: hold a replay open beside a full-speed download, then two replays at
+            once, and count the recorder's logged-in users</span
+          >
+        </label>
+        <label class="option nested">
+          <span
+            >Cameras:
+            <input
+              type="text"
+              aria-label="Cameras to test, names separated by commas"
+              placeholder="every camera"
+              .value=${this._baichuanCameras}
+              ?disabled=${running || !this._baichuan}
+              @input=${(e: Event) => {
+                this._baichuanCameras = (e.target as HTMLInputElement).value;
+              }}
+            />
+            (names, separated by commas; empty for every camera, up to 8)</span
+          >
+        </label>
+        <label class="option nested">
+          <span
+            >Hold each stream for
+            <select
+              aria-label="Seconds to hold each stream"
+              .value=${String(this._baichuanHold)}
+              ?disabled=${running || !this._baichuan}
+              @change=${(e: Event) => {
+                this._baichuanHold = Number((e.target as HTMLSelectElement).value);
+              }}
+            >
+              ${[5, 10, 30, 90].map((n) => html`<option value=${n} ?selected=${n === this._baichuanHold}>${n}</option>`)}
+            </select>
+            seconds (90 leaves time to run the Live check's capacity test alongside)</span
           >
         </label>
       </div>
@@ -681,6 +764,12 @@ export class ReolinkViewerPanel extends LitElement {
         playback_concurrency_test: this._playback && this._playbackConcurrency,
         playback_max_streams: this._playbackStreams,
         baichuan_test: this._baichuan,
+        baichuan_streams: this._baichuanMain ? ["sub", "main"] : ["sub"],
+        baichuan_download: this._baichuanDownload,
+        baichuan_session: this._baichuanSession,
+        baichuan_cameras: this._baichuanCameras.trim(),
+        baichuan_hold: this._baichuanHold,
+        baichuan_cut: 20,
       },
       (message) => {
         if (this._probe.status !== "running") return;

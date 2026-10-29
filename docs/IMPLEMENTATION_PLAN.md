@@ -21,7 +21,7 @@ put on it:
 | 2 | Event timeline, thumbnails, smooth playback | High (backend) / Very high (player) | 3–5 wk | Done (2026-10-21, v0.3.2). 2A (2026-10-20, v0.2.7): timeline 105–287 ms, first frame 0.6–1.1 s, auto-advance 6–7 ms on hardware. 2B: MSE player; uncached deep starts are the NVR's download up to the target (6.9–13.0 s in hour-long recordings, up to 84 s before), speeds 0.5–8×, HD/SD at the same moment, one-hour sessions within the caps, the iPhone app on Wi-Fi, Tailscale and Nabu Casa |
 | 3 | Live view via go2rtc, grid, fullscreen, PTZ | High | 3–4 wk | Done (2026-10-27, v0.15.1). Our own go2rtc and the live check (v0.4.0, runs 5–13); the key-frame cache, the image cache, the Live grid and Live tab, keep warm, full-screen HD, PTZ and the camera's controls, the picture first, battery cameras on wired power, a debug view per tile and the soak report (v0.5.0–v0.15.1). Exit runs: the soak passed (run 15), every tile's first image in a median 0.02 s on the iPhone and the Mac (runs 16–17), and the Phase 2 playback criteria held with live view running (runs 18–19) |
 | 4 | Design, performance, mobile, packaging, first release | Standard | 3–4 wk | Done (2026-10-28, v0.32.3). Step 1, the design (the Timetable), in v0.16.0–v0.22.0; step 2, the performance budget, in v0.23.0; step 3, mobile, in v0.24.0–v0.26.0; step 4, error states, in v0.27.0–v0.29.0; step 5, accessibility, in v0.30.0; step 6, packaging, in v0.31.0, the first release; step 7, docs, in v0.32.0, released the same day; v0.32.1 starts live video sooner where WebRTC cannot connect, from the work PC's check, v0.32.2 keeps the capacity test from blaming the NVR for a stream that plays no video, from the owner's live check, and v0.32.3 fixes full screen and the timeline's pinch on the iPhone, from the owner's iPhone. The rest of the exit checklist was not run: the owner closed the phase on v0.32.0 working in daily use. See "Phase 4 status" |
-| 5 | Optional R&D: Baichuan live/playback | Very high | 4–8 wk, time-boxed with gates | **5a done, go** (2026-10-29, v0.34.1): prior art surveyed, the capture tool and the owner's captures, `docs/baichuan-playback.md`, and the read-only check: a deep start over Baichuan costs the NVR 0.2 s against 4.7 s of HTTP download for the same point of a short recording. 5b–5d estimated at 3.5–5 wk, deep starts only; talk deferred. See "Phase 5 status" |
+| 5 | Optional R&D: Baichuan live/playback | Very high | 4–8 wk, time-boxed with gates | **5a done, go** (2026-10-29, v0.34.1): prior art surveyed, the capture tool and the owner's captures, `docs/baichuan-playback.md`, and the read-only check: a deep start over Baichuan costs the NVR 0.2 s against 4.7 s of HTTP download for the same point of a short recording. 5b–5d estimated at 3.5–5 wk, deep starts only; talk deferred. **5b step 1 built** (2026-10-29, v0.35.0): the probe measures the replay and the download cut (143) 75 % into sub and main recordings, decodes what arrives and counts the sessions; the source (replay, 143 or both) is chosen from the owner's report before step 2, the prototype. See "Phase 5 status" |
 
 Phases 1 and 2 can overlap once Phase 0 is done. Phase 5 can start any time after
 Phase 0 as a separate track.
@@ -4184,6 +4184,111 @@ Estimate for 5b–5d, 3.5–5 weeks, within the box:
    reolink-aio: receiving the replay's message class and a replay API, in step
    with its open PR #164, so HA itself benefits and the client's maintenance
    is shared.
+
+### 5b: the prototype (started 2026-10-29)
+
+Goal: a deep start in a recording that is not cached plays in about a second,
+by asking the NVR for the chosen moment over Baichuan instead of downloading
+everything before it over HTTP. Talk stays deferred.
+
+Two corrections to the estimate above, made before any code:
+
+1. **There is no muxer to feed.** `fmp4.py` only rewrites the NVR's own MP4
+   fragments; Baichuan delivers raw media blocks (H.264/H.265 access units
+   and the audio). 5b needs a muxer of its own, from those blocks to
+   MSE-valid fragmented MP4: an init segment with `avcC`/`hvcC` and the audio
+   configuration, `default-base-is-moof`, a `tfdt` in every fragment,
+   timestamps from the blocks, key-frame alignment, and composition offsets
+   if a stream has B-frames.
+2. **The replay is paced; the download cut is not.** The replay (123 → 5 → 7)
+   sends about six seconds in a burst, then real time (4× and 16× seen, 16×
+   key frames only). The capture also shows **143**, a download cut by time
+   range: 200 in about 100 ms, not paced (a 65 s clip in 0.37 s). A 143 from
+   the target onward could fill the cache at full speed and keep speeds,
+   scrubbing and HD as they are. Both are measured and one chosen; a
+   combination (the replay's first picture, a 143 filling behind it) is
+   allowed if it pays.
+
+So 5b runs in two steps with a gate between them.
+
+| 5b step | Status |
+| --- | --- |
+| 1. Measure, then stop (the gate) | **Built** (2026-10-29, v0.35.0, below). Waiting for the owner's report on the RLN36: a sub and a main recording, an H.264 and an H.265 camera (the Duo 3's main at 7680×2160, the CX810's main) |
+| 2. The prototype, behind an opt-in setting ("start deep in recordings over the Reolink protocol", off by default) | Not started: the source is chosen from step 1's report first (the rules below) |
+
+#### Step 1: the measurement (v0.35.0)
+
+The probe's opt-in Baichuan section (`probe_baichuan.py`, "Test replay over
+the Reolink app's own protocol") now runs on every camera asked for (the
+Cameras field; all, up to 8, when empty) and on the sub and, if ticked, the
+main recordings, 75 % into a long recording of the last four days
+([baichuan-playback.md §2.2](baichuan-playback.md#22-the-5b-measurement-step-1)):
+
+1. **Replay and 143 from 75 % in**: the acknowledgements, the time to the
+   first chunk and the first key frame, how close that key frame lands to the
+   asked time, throughput, media seconds per wall-clock second (paced or not),
+   the end markers (143's 300/331 or empty 143, the replay's none), and what
+   144 answers. The client (`baichuan_client.py`) gained the download cut
+   (143, the XML form reolink-downloader describes, the channel's own
+   `logicChnBitmap` bit with 255 as the fallback), its end (144), end-marker
+   detection, and several streams on one connection, each on its own command
+   and handle byte.
+2. **What arrives** (`baichuan_media.py`, new): the blocks reassembled across
+   chunks; the codec by the NAL units; SPS/PPS/VPS as hex with the profile,
+   level and size decoded (an `avc1.`/`hvc1.` codec string ready for the
+   muxer); I/P/B picture types from the slice headers (B-frames mean
+   composition offsets); the frame counter's steps, its ticks per second of
+   wall-clock time (microseconds or not) and the frame rate; the AAC object
+   type, sample rate and channels from the ADTS headers, or the ADPCM block
+   size. Tested on x264 and x265 streams with B-frames and on hand-built
+   parameter sets.
+3. **Session cost**: the logged-in users before, during and after each
+   stream; what `GetOnline` exposes about a maximum (`bridge.async_online_detail`:
+   field names and any field named like a limit, and the abilities about
+   users); the session test: one replay held open beside a full-speed HTTP
+   download, then two replays of two cameras on the same connection. Whether
+   a replay takes one of the NVR's stream slots: the Live check's capacity
+   test run during a 90 s hold.
+
+How to run it (the owner, Chrome on the LAN, the RLN36):
+
+1. Update to v0.35.0 and restart Home Assistant; reload the panel.
+2. Devices → the recorder → Hardware probe: tick **Test replay over the
+   Reolink app's own protocol** and, under it, **Also the HD (main)
+   recordings**; leave the download cut ticked; tick **Session test**; put
+   `Duo 3, CX810` in **Cameras** (an H.264 and an H.265 camera; a third name
+   is fine); hold 10 s. Run the probe; it takes a few minutes. Send the
+   report.
+3. A second run with the hold at 90 s and the Cameras field naming one
+   camera, with the Live check's capacity test started on the recorder while
+   the probe says "baichuan replay at …" (Devices → the recorder → Live check,
+   capacity ticked): whether the capacity test reaches its usual level with a
+   replay open. Send both reports.
+
+What the report decides (rules fixed before seeing it):
+
+- **The source.** 143 if its first key frame lands within one key-frame
+  interval of the asked time on sub and main (it starts mid-file), its media
+  seconds per wall-clock second stay well above 1 for the whole cut on main
+  too (it is not paced), and it ends with a marker: then step 2 fills the
+  cache from the target at full speed, and speeds, scrubbing, HD and the
+  second visit stay as they are. The replay if 143 cannot start mid-file or
+  is paced: then speed is the NVR's `playSpeed` (a stop and a start per
+  change), the cache holds only what was played, and HD is a second replay.
+  Both if 143 fills fast but its first key frame comes later than the
+  replay's by more than the budget allows: the replay's first picture, the
+  143 behind it.
+- **The muxer.** H.264 and H.265 from the parameter sets found (the codec
+  string from the SPS must match what the NVR's own MP4 says in the hardware
+  matrix); composition offsets if any stream shows B-frames; the counter's
+  units set the timescale; the ADTS header sets the audio sample entry.
+- **The sessions.** One connection per host if two replays on one connection
+  both deliver; the extra login is one user, and it must return to the
+  baseline after logout. If a replay holds an NVR stream slot (the capacity
+  test loses a level with one open), it is budgeted like a live stream.
+- **Go for step 2** if, on both codecs, the chosen source shows a first key
+  frame within 0.5 s of the request, the parameter sets decode, the audio
+  configuration is known, and the extra login never exceeds one.
 
 ---
 

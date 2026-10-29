@@ -936,6 +936,62 @@ class ReolinkHostHandle:
         detail = error.get("detail") if isinstance(error, dict) else None
         return None, str(detail or "no answer")
 
+    async def async_online_detail(self) -> dict[str, Any]:
+        """Describe what ``GetOnline`` exposes besides the count (Phase 5b, step 1).
+
+        Read-only, with ``action`` 1 so the device adds its ``range`` and
+        ``initial`` sections: the count, the field names of a logged-in
+        client's entry, the sections' keys, and every numeric field whose name
+        says it is a maximum or a limit (where a device states how many
+        clients may log in). Also the host's abilities about users or
+        logins. Names and numbers only: no user name, address or session id.
+        """
+        result: dict[str, Any] = {"count": None}
+        abilities = _safe(lambda: self._api.abilities)
+        if isinstance(abilities, dict):
+            result["abilities"] = {
+                key: value
+                for key, value in abilities.items()
+                if isinstance(key, str)
+                and any(w in key.lower() for w in ("user", "online", "login"))
+                and isinstance(value, dict | int | str)
+            }
+        send = getattr(self._api, "send", None)
+        if send is None:
+            result["error"] = "reolink-aio cannot send commands"
+            return result
+        try:
+            response = await send(
+                [{"cmd": "GetOnline", "action": 1, "param": {}}],
+                expected_response_type="json",
+            )
+        except Exception as err:  # noqa: BLE001 - reported, never raised
+            result["error"] = _search_error(err)
+            return result
+        item = response[0] if isinstance(response, list) and response else {}
+        item = item if isinstance(item, dict) else {}
+        sections: dict[str, list[str]] = {}
+        limits: dict[str, int | float] = {}
+        for name in ("value", "range", "initial"):
+            section = item.get(name)
+            if not isinstance(section, dict):
+                continue
+            sections[name] = sorted(str(k) for k in section)
+            _collect_limits(section, name, limits)
+        value = item.get("value")
+        users = value.get("User") if isinstance(value, dict) else None
+        if isinstance(users, list):
+            result["count"] = len(users)
+            first = users[0] if users and isinstance(users[0], dict) else {}
+            result["user_fields"] = sorted(str(k) for k in first)
+        else:
+            error = item.get("error")
+            detail = error.get("detail") if isinstance(error, dict) else None
+            result["error"] = str(detail or "no answer")
+        result["sections"] = sections
+        result["limits"] = limits
+        return result
+
     async def async_vod_url(
         self,
         channel: int,
@@ -1295,6 +1351,25 @@ def _events(by_trigger: Any) -> list[VodEvent]:
             end = max(end, known.end)
         merged[file_id, start] = VodEvent(start, end, types, file_id)
     return sorted(merged.values(), key=lambda e: (e.start, e.end))
+
+
+def _collect_limits(section: Any, path: str, out: dict[str, int | float]) -> None:
+    """Gather numeric fields named like a maximum or a limit, by dotted path."""
+    if isinstance(section, dict):
+        for key, value in section.items():
+            name = str(key)
+            here = f"{path}.{name}"
+            if isinstance(value, bool):
+                continue
+            if isinstance(value, int | float) and any(
+                w in name.lower() for w in ("max", "limit", "num")
+            ):
+                out[here] = value
+            elif isinstance(value, dict | list):
+                _collect_limits(value, here, out)
+    elif isinstance(section, list) and section:
+        # One entry stands for the list (its entries share a layout).
+        _collect_limits(section[0], f"{path}[]", out)
 
 
 def _search_error(err: BaseException) -> str:
