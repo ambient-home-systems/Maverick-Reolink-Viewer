@@ -172,8 +172,13 @@ class Session:
 # ---- framing ----
 
 
-def parse_header(data: bytes) -> Header | None:
-    """Parse a header at the start of ``data``; None if it is not one (or too short)."""
+def parse_header(data: bytes, *, header_len: int | None = None) -> Header | None:
+    """Parse a header at the start of ``data``; None if it is not one (or too short).
+
+    ``header_len`` forces the layout for a message class the table does not
+    know (``split_messages`` tries it when the length then lands on the next
+    header).
+    """
     if len(data) < 20 or data[:4] not in MAGICS:
         return None
     cmd_id, body_len = struct.unpack("<II", data[4:12])
@@ -182,7 +187,8 @@ def parse_header(data: bytes) -> Header | None:
     msg_num = struct.unpack("<H", data[14:16])[0]
     flag = struct.unpack("<H", data[16:18])[0]
     message_class = data[18:20].hex()
-    header_len = HEADER_LEN.get(message_class)
+    if header_len is None:
+        header_len = HEADER_LEN.get(message_class)
     if header_len is None:
         return None
     payload_offset = 0
@@ -218,6 +224,8 @@ def split_messages(data: bytes) -> tuple[list[RawMessage], list[Skip], int]:
     pos = 0
     while pos < len(data):
         header = parse_header(data[pos : pos + 24])
+        if header is None and data[pos : pos + 4] in MAGICS:
+            header = _guess_header(data, pos)
         if header is None:
             nxt = _next_magic(data, pos + 1)
             if nxt < 0:
@@ -237,6 +245,18 @@ def split_messages(data: bytes) -> tuple[list[RawMessage], list[Skip], int]:
         messages.append(RawMessage(pos, header, body[:cut], body[cut:]))
         pos = end
     return messages, skips, len(data) - pos
+
+
+def _guess_header(data: bytes, pos: int) -> Header | None:
+    """Accept an unknown message class when its length lands on the next header."""
+    for header_len in (24, 20):
+        header = parse_header(data[pos : pos + 24], header_len=header_len)
+        if header is None:
+            continue
+        end = pos + header_len + header.body_len
+        if end == len(data) or data[end : end + 4] in MAGICS:
+            return header
+    return None
 
 
 def _next_magic(data: bytes, start: int) -> int:

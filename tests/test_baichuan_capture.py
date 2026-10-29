@@ -749,3 +749,22 @@ async def test_udp_doorbell_capture(tmp_path: Path) -> None:
         assert secret not in text, secret
     assert "<cid>" in text
     assert "<uid>" in text
+
+
+def test_unknown_message_class_parsed_by_length() -> None:
+    body = b'<?xml version="1.0"?><body><x>1</x></body>'
+    known = _header(5, len(body), bytes(4), message_class="0000", flag=bytes(2)) + body
+    odd = _header(5, len(body), bytes(4), message_class="8364", flag=bytes(2)) + body
+    messages, skips, leftover = protocol.split_messages(known + odd + known)
+    assert [m.header.message_class for m in messages] == ["0000", "8364", "0000"]
+    assert messages[1].head == body
+    assert not skips
+    assert leftover == 0
+    # Alone at the end, the unknown class is accepted when its length ends the data.
+    messages, skips, leftover = protocol.split_messages(odd)
+    assert len(messages) == 1
+    # A wrong length is still a skip.
+    bad = _header(5, 7, bytes(4), message_class="8364", flag=bytes(2)) + body
+    messages, skips, leftover = protocol.split_messages(bad + known)
+    assert [m.header.message_class for m in messages] == ["0000"]
+    assert len(skips) == 1

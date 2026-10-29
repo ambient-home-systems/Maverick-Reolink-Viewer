@@ -14,6 +14,7 @@ channel names, times and the XML of each message.
 """
 
 import argparse
+from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -41,6 +42,7 @@ from .pcap import (
     reassemble_udp,
 )
 from .protocol import (
+    HEADER_LEN,
     Cipher,
     Credential,
     Header,
@@ -246,9 +248,19 @@ def _decode_flow(
                 else f"{hole.missing} bytes missing"
             )
             out.problems.append(f"{direction}: {what} at offset {hole.offset}")
-        for skip in skips:
+        if skips:
+            lengths = sorted(skip.length for skip in skips)
             out.problems.append(
-                f"{direction}: {skip.length} bytes skipped at offset {skip.offset} (no header)"
+                f"{direction}: {len(skips)} stretches without a header skipped, "
+                f"{sum(lengths)} bytes in all, {lengths[0]}-{lengths[-1]} bytes each, "
+                f"the first at offset {skips[0].offset}"
+            )
+        classes = Counter(m.header.message_class for m in messages)
+        unknown = {c: n for c, n in classes.items() if c not in HEADER_LEN}
+        if unknown:
+            out.problems.append(
+                f"{direction}: message classes not in the table, parsed by their length: "
+                + ", ".join(f"{c} x{n}" for c, n in sorted(unknown.items()))
             )
         if leftover:
             out.problems.append(
