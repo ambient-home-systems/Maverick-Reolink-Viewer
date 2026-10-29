@@ -594,11 +594,21 @@ def _brief_lines(entries: list[Entry]) -> list[str]:
 
 def _same_media_run(first: Entry, entry: Entry) -> bool:
     return (
-        not entry.documents
-        and entry.binary > 0
+        _media_only(entry)
         and entry.direction == first.direction
         and entry.cmd_id == first.cmd_id
         and entry.channel == first.channel
+    )
+
+
+def _media_only(entry: Entry) -> bool:
+    """Binary with no XML, or only the Extension/binaryData wrapper the NVR puts
+    on every download (143) and snapshot (298) chunk, which says nothing new."""
+    if entry.binary <= 0:
+        return False
+    return all(
+        tag.split("/", 1)[0] == "Extension" and "<binaryData>" in document
+        for tag, document in zip(entry.tags, entry.documents, strict=True)
     )
 
 
