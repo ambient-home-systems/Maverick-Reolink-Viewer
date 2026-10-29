@@ -614,8 +614,11 @@ def _same_media_run(first: Entry, entry: Entry) -> bool:
 
 
 def _media_only(entry: Entry) -> bool:
-    """Binary with no XML, or only the Extension/binaryData wrapper the NVR puts
-    on every download (143) and snapshot (298) chunk, which says nothing new."""
+    """Whether a message is binary with no XML, or only the binaryData wrapper.
+
+    The NVR puts an Extension with binaryData on every download (143) and
+    snapshot (298) chunk, which says nothing new.
+    """
     if entry.binary <= 0:
         return False
     return all(
