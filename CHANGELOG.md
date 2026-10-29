@@ -3,6 +3,23 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.34.0
+
+A measurement release for Phase 5a, nothing changes in daily use:
+
+- **Hardware probe → Test replay over the Reolink app's own protocol.** An opt-in
+  check that replays a long recording of a recorder 45 minutes in over Baichuan,
+  the protocol the Reolink app uses, and over HTTP, and compares how fast each
+  reaches the first picture. Read-only: it opens its own connection, plays a few
+  seconds, stops and logs out, and asks the recorder how many clients were
+  logged in before, during and after. Its numbers decide whether Phase 5
+  continues.
+- The developer tool behind it, `scripts/baichuan`, turns a Wireshark capture of
+  the Reolink client into a redacted message log, and `docs/baichuan-playback.md`
+  records what the captures showed.
+
+Tested on Home Assistant 2026.10.1 to 2026.10.4.
+
 ## 0.33.0
 
 Choose how full screen plays on each device:
