@@ -413,8 +413,16 @@ def _describe_opaque(data: bytes, redactor: Redactor) -> str:
 # ---- output ----
 
 
-def render_text(report: Report) -> str:
-    """Render the log as text."""
+def render_text(
+    report: Report, *, brief: bool = False, messages: tuple[int, int] | None = None
+) -> str:
+    """Render the log as text.
+
+    ``brief`` collapses each run of media-only messages (same direction, command
+    and channel, no XML) into one summary line and caps the block lines per
+    message, which keeps a long playback session readable. ``messages`` limits
+    the output to that index range (inclusive) of each connection.
+    """
     lines = [
         f"# Baichuan capture log: {report.capture}",
         f"packets {report.packets}, TCP segments {report.tcp_segments}, "
@@ -446,12 +454,71 @@ def render_text(report: Report) -> str:
             f"media stream {key}: {summary}" for key, summary in flow.streams.items()
         )
         lines.append("")
-        for entry in flow.entries:
-            lines.extend(_entry_lines(entry))
+        entries = flow.entries
+        if messages is not None:
+            entries = [e for e in entries if messages[0] <= e.index <= messages[1]]
+        if brief:
+            lines.extend(_brief_lines(entries))
+        else:
+            for entry in entries:
+                lines.extend(_entry_lines(entry))
     return "\n".join(lines) + "\n"
 
 
-def _entry_lines(entry: Entry) -> list[str]:
+MAX_BLOCK_LINES = 6
+
+
+def _brief_lines(entries: list[Entry]) -> list[str]:
+    lines: list[str] = []
+    i = 0
+    while i < len(entries):
+        run = [entries[i]]
+        j = i + 1
+        while j < len(entries) and _same_media_run(run[0], entries[j]):
+            run.append(entries[j])
+            j += 1
+        if len(run) < 3:
+            for entry in run:
+                lines.extend(_entry_lines(entry, max_blocks=MAX_BLOCK_LINES))
+        else:
+            lines.extend(_entry_lines(run[0], max_blocks=MAX_BLOCK_LINES))
+            lines.append(_run_summary(run[1:]))
+        i = j
+    return lines
+
+
+def _same_media_run(first: Entry, entry: Entry) -> bool:
+    return (
+        not entry.documents
+        and entry.binary > 0
+        and entry.direction == first.direction
+        and entry.cmd_id == first.cmd_id
+        and entry.channel == first.channel
+    )
+
+
+def _run_summary(run: list[Entry]) -> str:
+    first, last = run[0], run[-1]
+    kinds: dict[str, int] = {}
+    for entry in run:
+        for block in entry.blocks:
+            kind = block.split(" ", 1)[0]
+            kinds[kind] = kinds.get(kind, 0) + 1
+    notes = sorted({n for e in run for n in e.notes})
+    times = [b for e in run for b in e.blocks if " t=" in b]
+    span = ""
+    if times:
+        span = f"; key frames {times[0].split(' t=')[1].split()[0]} to {times[-1].split(' t=')[1].split()[0]}"
+    blocks = ", ".join(f"{k} {v}" for k, v in sorted(kinds.items()))
+    return (
+        f"#{first.index:05d}..#{last.index:05d} +{first.rel:.3f}s..+{last.rel:.3f}s "
+        f"{first.direction} cmd {first.cmd_id} ch {first.channel}: {len(run)} more messages, "
+        f"{sum(e.binary for e in run)} B, blocks: {blocks or 'none'}{span}"
+        + (f"; notes: {' | '.join(notes)}" if notes else "")
+    )
+
+
+def _entry_lines(entry: Entry, *, max_blocks: int | None = None) -> list[str]:
     when = datetime.fromtimestamp(entry.ts, tz=UTC).strftime("%H:%M:%S.%f")[:-3]
     status = (
         f"status {entry.status}"
@@ -471,9 +538,19 @@ def _entry_lines(entry: Entry) -> list[str]:
         lines.extend("    " + line for line in document.splitlines())
     if entry.binary:
         lines.append(f"    binary {entry.binary} B")
-    lines.extend(f"    block: {block}" for block in entry.blocks)
+    blocks = entry.blocks
+    if max_blocks is not None and len(blocks) > max_blocks:
+        lines.extend(f"    block: {block}" for block in blocks[:max_blocks])
+        lines.append(f"    ... and {len(blocks) - max_blocks} more blocks")
+    else:
+        lines.extend(f"    block: {block}" for block in blocks)
     lines.extend(f"    note: {note}" for note in entry.notes)
     return lines
+
+
+def _index_range(text: str) -> tuple[int, int]:
+    first, _, last = text.partition("-")
+    return int(first), int(last or first)
 
 
 def _credentials(args: argparse.Namespace) -> list[Credential]:
@@ -516,9 +593,21 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--json", type=Path, default=None, help="also write the log as JSON"
     )
+    parser.add_argument(
+        "--brief",
+        action="store_true",
+        help="collapse runs of media-only messages into one line each",
+    )
+    parser.add_argument(
+        "--messages",
+        type=_index_range,
+        default=None,
+        metavar="A-B",
+        help="only messages with these indexes (inclusive), e.g. 120-180",
+    )
     args = parser.parse_args(argv)
     report = analyze(args.capture, _credentials(args), args.port)
-    text = render_text(report)
+    text = render_text(report, brief=args.brief, messages=args.messages)
     if args.out is None:
         sys.stdout.write(text)
     else:

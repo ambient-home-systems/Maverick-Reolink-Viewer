@@ -109,6 +109,12 @@ BAICHUAN_PASSWORD='the password' python -m scripts.baichuan ~/Desktop/reolink-cl
     --user admin --out ~/Desktop/reolink-client.log.txt --json ~/Desktop/reolink-client.log.json
 ```
 
+A session with minutes of video produces a very large log, one line per frame.
+Add `--brief` to collapse each run of media-only messages into one summary line
+(the first message of a run, which carries the XML, stays in full); that log is
+the one to share. To look closer at a stretch, `--messages 120-180` writes only
+those message indexes of each connection, in full.
+
 Without `BAICHUAN_PASSWORD` the tool asks for the password. If the NVR and the
 Doorbell use different accounts, give each: `--user admin --user
 viewer:other-password` (a `name:password` form carries its own password). The

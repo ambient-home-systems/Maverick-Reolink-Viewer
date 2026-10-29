@@ -539,3 +539,46 @@ def test_media_resync_and_opaque() -> None:
     assert "resync" in blocks[0].note
     assert [b.kind for b in stream.finish()] == ["frame"]
     assert "codec H265" in stream.summary()
+
+
+async def test_brief_and_range(capture: dict[str, Any]) -> None:
+    report = analyze.analyze(capture["pcapng"], [protocol.Credential(USER, PASSWORD)])
+    flow = report.flows[0]
+    # Pad the replay with a long run of media-only messages.
+    base = flow.entries[8]
+    for i in range(10):
+        flow.entries.insert(
+            9 + i,
+            analyze.Entry(
+                100 + i,
+                base.ts + i,
+                base.rel + i,
+                base.direction,
+                base.cmd_id,
+                base.message_class,
+                base.channel,
+                base.stream_type,
+                base.msg_num,
+                base.status,
+                base.enc_flag,
+                500,
+                0,
+                "plain",
+                [],
+                [],
+                500,
+                [f"frame 01dc H264 300 B us={i}"],
+                [],
+            ),
+        )
+    full = analyze.render_text(report)
+    brief = analyze.render_text(report, brief=True)
+    assert len(brief) < len(full)
+    assert "11 more messages, 5592 B, blocks: frame 12" in brief
+    assert "#00008..#00109" in brief
+    assert "body/ReplaySeek" in brief
+    ranged = analyze.render_text(report, messages=(4, 6))
+    assert "#00004" in ranged
+    assert "#00007" not in ranged
+    assert analyze._index_range("120-180") == (120, 180)
+    assert analyze._index_range("7") == (7, 7)
