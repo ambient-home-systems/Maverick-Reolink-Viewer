@@ -223,7 +223,9 @@ def _decode_flow(
     redactor: Redactor,
 ) -> FlowReport:
     if isinstance(flow, UdpFlow):
-        out = FlowReport(label, 0, 0, flow.first_ts, transport="udp")
+        out = FlowReport(
+            label, flow.client_port, flow.server_port, flow.first_ts, transport="udp"
+        )
         if flow.unknown:
             out.problems.append(f"{flow.unknown} UDP datagrams with an unknown layout")
     else:
@@ -555,7 +557,10 @@ def render_text(
     for flow in report.flows:
         lines.append("")
         if flow.transport == "udp":
-            lines.append(f"## {flow.label} over UDP: {len(flow.entries)} messages")
+            lines.append(
+                f"## {flow.label} over UDP: client port {flow.client_port} -> "
+                f"device port {flow.server_port}, {len(flow.entries)} messages"
+            )
         else:
             lines.append(
                 f"## {flow.label}: client port {flow.client_port} -> device port {flow.server_port}, "
