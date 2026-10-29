@@ -224,6 +224,20 @@ def _redacted_error(err: Exception, hosts: list[bridge.ReolinkHostHandle]) -> st
             int, probatio.Range(min=1, max=PROBE_PLAYBACK_HARD_MAX_STREAMS)
         ),
         probatio.Optional("baichuan_test", default=False): bool,
+        probatio.Optional("baichuan_streams", default=["sub"]): [
+            probatio.In(["sub", "main"])
+        ],
+        probatio.Optional("baichuan_download", default=True): bool,
+        probatio.Optional("baichuan_session", default=False): bool,
+        probatio.Optional("baichuan_cameras", default=""): probatio.All(
+            str, probatio.Length(max=300)
+        ),
+        probatio.Optional("baichuan_hold", default=5): probatio.All(
+            int, probatio.Range(min=1, max=120)
+        ),
+        probatio.Optional("baichuan_cut", default=20): probatio.All(
+            int, probatio.Range(min=5, max=120)
+        ),
     }
 )
 @websocket_api.require_admin
@@ -280,7 +294,15 @@ async def ws_probe(
             concurrency_test=msg["playback_concurrency_test"],
             max_streams=msg["playback_max_streams"],
         ),
-        baichuan=BaichuanOptions(enabled=msg["baichuan_test"]),
+        baichuan=BaichuanOptions(
+            enabled=msg["baichuan_test"],
+            hold_seconds=msg["baichuan_hold"],
+            streams=tuple(msg["baichuan_streams"]),
+            download=msg["baichuan_download"],
+            session=msg["baichuan_session"],
+            cameras=msg["baichuan_cameras"],
+            cut_seconds=msg["baichuan_cut"],
+        ),
     )
 
     def progress(message: str) -> None:

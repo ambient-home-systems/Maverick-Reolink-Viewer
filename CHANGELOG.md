@@ -3,6 +3,13 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.35.1
+
+- **The Baichuan probe runs again.** In 0.35.0 the panel's new options for it
+  (HD recordings, the download cut, the session test, cameras, hold) were not
+  accepted on the server, so the probe stopped at once with "not a valid
+  option". Nothing else changes.
+
 ## 0.35.0
 
 A measurement release for Phase 5b, nothing changes in daily use:

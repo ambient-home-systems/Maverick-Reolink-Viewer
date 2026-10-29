@@ -152,6 +152,48 @@ async def test_probe_playback_options(
     assert msg["success"] is False
 
 
+async def test_probe_baichuan_options(
+    hass: HomeAssistant,
+    hass_ws_client: WebSocketGenerator,
+    loaded_viewer: MockConfigEntry,
+) -> None:
+    """The panel's Baichuan options reach the probe, exactly as the panel sends them."""
+    client = await hass_ws_client(hass)
+    with patch.object(
+        probe.Prober, "async_run", autospec=True, return_value={"ok": 1}
+    ) as run:
+        events = await _collect_probe(
+            client,
+            {
+                "baichuan_test": True,
+                "baichuan_streams": ["sub", "main"],
+                "baichuan_download": False,
+                "baichuan_session": True,
+                "baichuan_cameras": "Duo 3, CX810, Garage",
+                "baichuan_hold": 10,
+                "baichuan_cut": 20,
+            },
+        )
+    assert events[-1] == {"type": "result", "report": {"ok": 1}}
+    options = run.call_args.args[0]._options.baichuan
+    assert options.enabled is True
+    assert options.streams == ("sub", "main")
+    assert options.download is False
+    assert options.session is True
+    assert options.cameras == "Duo 3, CX810, Garage"
+    assert options.hold_seconds == 10
+    assert options.cut_seconds == 20
+    for bad in (
+        {"baichuan_streams": ["ext"]},
+        {"baichuan_hold": 0},
+        {"baichuan_cut": 999},
+        {"baichuan_cameras": "x" * 301},
+    ):
+        await client.send_json_auto_id({"type": "reolink_viewer/probe", **bad})
+        msg = await client.receive_json()
+        assert msg["success"] is False, bad
+
+
 async def test_probe_requires_admin(
     hass: HomeAssistant,
     hass_ws_client: WebSocketGenerator,
