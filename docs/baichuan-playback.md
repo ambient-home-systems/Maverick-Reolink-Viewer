@@ -138,7 +138,16 @@ lists two `audioStreamMode` values; the Doorbell acknowledges talk blocks in abo
   (`logicChnBitmap`, `channelId`, `supportSub`, `streamType`, `startTime`,
   `endTime`) returns a **time-range cut** of a recording; an empty 143 ends it.
   This is the only server-side "seek" described so far, as a download rather
-  than a stream.
+  than a stream. Read in full on 2026-10-29 (`src/reolink_downloader/baichuan.py`):
+  the XML is `<FileInfoList version="1.1"><FileInfo>` with `logicChnBitmap`
+  (255 on a camera), `channelId`, `supportSub` 0, `streamType`, then `startTime`
+  and `endTime` as year…second; no extension; the chunks carry `encryptLen`;
+  the end is a 143 with an empty body; no 144. neolink PR #396 instead sends 143
+  with a **binary** body (`iChannel` u32, `cUID` 32 bytes, `logicChnBitmap` 8
+  bytes, start and end as 6 × i32), takes status 300 or 331 as the end, and
+  closes with **144** and an empty body; it reports 143 as 400 on an E1 (NVR
+  models only). Our client (§2.2) sends the XML form with the channel's own
+  bit, falls back to 255, and closes with the empty 144.
 - **reostream** (AGPL-3.0, Go, `docs/protocol.md`, `docs/msgids.json` with 246
   ids): talk at wire level: all 8 tested cameras answer `<TalkAbility>` with
   ADPCM 16 kHz 16-bit mono, 1024 samples per block; `<TalkConfig>` is refused
@@ -222,6 +231,61 @@ first and then the previous three days, for a finished sub-stream recording of
 
 Both run under the host's stream budget at playback priority. The check never
 writes a setting; the report is redacted like the rest of the probe.
+
+### 2.2 The 5b measurement (step 1)
+
+Phase 5b's first step (IMPLEMENTATION_PLAN.md, "5b: the prototype") extends
+the same opt-in section so the source of a deep start can be chosen on
+numbers: the paced replay, the full-speed download cut (143), or the two
+together. v0.35.0 measures, per recorder, for each camera asked for (the
+**Cameras** field; every camera up to 8 when empty) and each stream (sub, and
+main with **Also the HD (main) recordings**), 75 % into the longest finished
+recording of 20 minutes or more of the last four days:
+
+1. **Replay** as in §2.1: login, 123, 5 with `playSpeed 1`, a hold (5 s by
+   default, up to 90), 7, logout. Now also the stream's pace (media seconds
+   by the key frames' POSIX times against wall-clock seconds), its end marker
+   if any, and the media analysis below.
+2. **Download cut** (`baichuan_download`, on by default): a fresh login, 143
+   from the same second for a 20 s cut (`startTime`/`endTime`), the data until
+   the NVR's end marker (status 300 or 331, or an empty 143) or the hold, then
+   144 and logout. Recorded: the reply's latency and fields (`sizeL`, `sizeH`,
+   `FileCount`), whether the channel's own `logicChnBitmap` bit was accepted
+   or 255 had to be sent, the time to the first chunk and the first key frame,
+   that key frame's time against the asked time (**can 143 start mid-file?**),
+   bytes and Mbit/s, media seconds per wall-clock second (**is it paced?**: a
+   20 s cut arriving in well under 20 s is not), whether the end marker came
+   within the hold and what 144 answered.
+3. **What arrives**, from the blocks of both streams, keeping no media
+   (`baichuan_media.py`): the codec by the NAL units (the header's label can
+   be wrong), the SPS/PPS/VPS as hex with the profile, level, size and (H.264)
+   reference-frame count and VUI frame rate decoded from them, the picture
+   types of the first slice of each access unit (I/P/**B**: B-frames mean the
+   muxer needs composition offsets), the NAL layout (Annex B or length
+   prefixes), the key frames' extra-header size and the unknown header field,
+   the per-frame counter's first, last, median step and steps backwards, its
+   ticks per second of wall-clock time (about 1,000,000 means microseconds)
+   and the frame rate that gives, and the audio: the block magic, the ADTS
+   header's object type, sample rate and channels for AAC, the DVI4 block
+   size for ADPCM.
+4. **Session cost**: the logged-in users (`GetOnline`) before and after the
+   section and during each stream; what `GetOnline` with its range exposes
+   (field names, any field named like a maximum, abilities about users); and,
+   with **Session test**, one replay held open while the same recording is
+   downloaded over HTTP at full speed (the download's Mbit/s and the replay's
+   chunks meanwhile), then a second replay of another camera on the **same
+   connection** (both streams' chunks, the users, the open streams), then both
+   stopped and the users after logout. Whether a replay takes one of the NVR's
+   stream slots is best seen with the Live check's capacity test run while the
+   hold is at 90 s: the probe holds the replay, the capacity test fills the
+   slots.
+
+The HTTP comparison (the sub recording's `DOWNLOAD` up to the 75 % offset) runs
+on the sub stream only: 75 % of a main recording is gigabytes.
+
+Every stream holds a slot of the host's stream budget at playback priority.
+The report stays redacted as before; the parameter sets and the stream
+headers it adds hold no identifier.
 
 ## 3. Message sequences (from the owner's capture, 2026-10-28)
 
@@ -328,7 +392,8 @@ the first time, 400 after 8 s the second. Live view ran throughout.
 | start time | `seekTime` (year…second, camera-local) in 123; `startTime`/`endTime` in 143 |
 | seek | a new 123 → 5; `seq` = the client's Unix time |
 | speed | `playSpeed` in 5 (1, 4, 16 seen) |
-| end of a stream | status 300 on the stream's own command (143, 298) |
+| end of a stream | status 300 on the stream's own command (143, 298); replay: none |
+| download cut | 143 with `logicChnBitmap`, `channelId`, `supportSub`, `streamType`, `startTime`, `endTime`; closed by 144 (empty) |
 
 A side finding for the timeline: the 14-digit stamp in a file `Id`, which Phase 2
 could not place, is the file's start time in UTC with a zero-based month.

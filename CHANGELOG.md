@@ -3,6 +3,24 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.35.0
+
+A measurement release for Phase 5b, nothing changes in daily use:
+
+- **Hardware probe → Test replay over the Reolink app's own protocol** now
+  measures what a deep start over that protocol would need: on every camera
+  of the recorder you choose (or all of them), on the sub recordings and, if
+  ticked, the HD ones, it replays 75 % into a long recording and, new, asks
+  for a download cut from the same point (the way the Reolink client saves a
+  clip), and times both to the first picture. It decodes what arrives (the
+  video codec and its parameter sets, picture types, timestamps, the audio
+  format) without keeping any video, and counts the recorder's logged-in
+  users around each stream. An optional session test holds a replay open
+  beside a full-speed download, then two replays at once. Read-only, a few
+  seconds of video per camera.
+
+Tested on Home Assistant 2026.10.1 to 2026.10.4.
+
 ## 0.34.1
 
 - **Hardware probe → Test replay over the Reolink app's own protocol** now looks

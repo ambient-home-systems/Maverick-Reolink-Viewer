@@ -373,6 +373,56 @@ async def test_online_users(
     assert await host.async_online_users() == (None, "reolink-aio cannot send commands")
 
 
+async def test_online_detail(
+    hass: HomeAssistant, loaded_reolink: MockConfigEntry, reolink_host: MagicMock
+) -> None:
+    """GetOnline with its range: field names, limits and abilities, no identities."""
+    (host,) = bridge.async_get_hosts(hass)
+    reolink_host.abilities = {
+        "onlineUserNum": {"ver": 1, "permit": 4},
+        "ptzType": {"ver": 2},
+        "loginLimit": 3,
+    }
+    reolink_host.send = AsyncMock(
+        return_value=[
+            {
+                "cmd": "GetOnline",
+                "code": 0,
+                "value": {
+                    "User": [
+                        {"userName": "admin", "ip": "10.0.0.5", "sessionId": 7},
+                        {"userName": "viewer", "ip": "10.0.0.6", "sessionId": 8},
+                    ]
+                },
+                "range": {"User": {"maxNum": 10, "userName": {"maxLen": 31}}},
+                "initial": {"User": [{"level": "admin", "canbeDisconn": True}]},
+            }
+        ]
+    )
+    detail = await host.async_online_detail()
+    (body,) = reolink_host.send.await_args.args
+    assert body == [{"cmd": "GetOnline", "action": 1, "param": {}}]
+    assert detail == {
+        "count": 2,
+        "abilities": {"onlineUserNum": {"ver": 1, "permit": 4}, "loginLimit": 3},
+        "user_fields": ["ip", "sessionId", "userName"],
+        "sections": {"value": ["User"], "range": ["User"], "initial": ["User"]},
+        "limits": {"range.User.maxNum": 10, "range.User.userName.maxLen": 31},
+    }
+    assert "admin" not in str(detail)
+    assert "10.0.0.5" not in str(detail)
+    reolink_host.send = AsyncMock(
+        return_value=[{"cmd": "GetOnline", "code": 1, "error": {"detail": "nope"}}]
+    )
+    detail = await host.async_online_detail()
+    assert detail["count"] is None
+    assert detail["error"] == "nope"
+    reolink_host.send = AsyncMock(side_effect=ReolinkError("busy"))
+    assert (await host.async_online_detail())["error"] == "ReolinkError"
+    del reolink_host.send
+    assert "cannot send" in (await host.async_online_detail())["error"]
+
+
 async def test_vod_url_methods(
     hass: HomeAssistant, reolink_host: MagicMock, loaded_reolink: MockConfigEntry
 ) -> None:

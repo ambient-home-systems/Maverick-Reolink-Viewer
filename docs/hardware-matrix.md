@@ -51,10 +51,17 @@ No Home Hubs. Until run 4 there were no battery cameras or doorbells; see host1.
 
 3. Paste the rows under the matching headers below.
 
-For the Phase 5a replay measurement, tick **Test replay over the Reolink app's own
-protocol**: the report gains a `baichuan_replay` section per recorder (a replay
-75 % into a long recording over Baichuan against the HTTP download up to the same
-point, and the device's logged-in users around it).
+For the Phase 5 measurements, tick **Test replay over the Reolink app's own
+protocol**: the report gains a `baichuan_replay` section per recorder. For each
+camera asked for (the **Cameras** field, or every camera up to 8) and each stream
+(sub; **Also the HD (main) recordings** adds main), it finds a long recording and,
+75 % in, runs a replay and, if ticked, a download cut by time range (143), with
+the HTTP download up to the same point for comparison on the sub stream, what
+the blocks hold (codec, parameter sets, picture types, timestamps, audio), and
+the recorder's logged-in users around each. **Session test** adds one replay
+held open beside a full-speed download, then two replays at once. Which cameras
+and streams to run, and how to read the report, are in
+[baichuan-playback.md §2.2](baichuan-playback.md#22-the-5b-measurement-step-1).
 
 For the Phase 2 recording playback measurements, tick **Test recording playback**
 (optionally **Only this test** to skip the Phase 0 checks, and **Test simultaneous

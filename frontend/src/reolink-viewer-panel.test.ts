@@ -455,6 +455,12 @@ describe("reolink-viewer-panel", () => {
       playback_concurrency_test: false,
       playback_max_streams: 4,
       baichuan_test: false,
+      baichuan_streams: ["sub"],
+      baichuan_download: true,
+      baichuan_session: false,
+      baichuan_cameras: "",
+      baichuan_hold: 5,
+      baichuan_cut: 20,
     });
     hass.emit({ type: "progress", message: "ch0 live rtsp main" });
     await el.updateComplete;
@@ -520,11 +526,30 @@ describe("reolink-viewer-panel", () => {
     button(el, "Cancel")?.click();
     await flush();
 
-    // The Baichuan replay check (Phase 5a) is its own opt-in.
+    // The Baichuan replay check (Phase 5) is its own opt-in, with its parts.
     await toggle(5);
+    await toggle(6); // the main recordings too
+    await toggle(7); // no download cut
+    await toggle(8); // the session test
+    const cameras = probeSection(el)?.querySelector<HTMLInputElement>("input[type=text]");
+    if (!cameras) throw new Error("no cameras field");
+    cameras.value = " Duo 3, CX810 ";
+    cameras.dispatchEvent(new Event("input"));
+    const hold = probeSection(el)?.querySelectorAll<HTMLSelectElement>("select")[2];
+    if (!hold) throw new Error("no hold select");
+    hold.value = "90";
+    hold.dispatchEvent(new Event("change"));
+    await el.updateComplete;
     button(el, "Run probe")?.click();
     await flush();
-    expect(hass.sent.at(-1)).toMatchObject({ baichuan_test: true });
+    expect(hass.sent.at(-1)).toMatchObject({
+      baichuan_test: true,
+      baichuan_streams: ["sub", "main"],
+      baichuan_download: false,
+      baichuan_session: true,
+      baichuan_cameras: "Duo 3, CX810",
+      baichuan_hold: 90,
+    });
   });
 
   it("shows probe errors and supports cancel", async () => {
