@@ -1,8 +1,7 @@
 # Baichuan playback and talk (Phase 5a)
 
 Status: **captured and decoded (2026-10-29).** §3–6 are from the owner's
-redacted logs; the NVR's replay frames await a re-run of the tool with its
-parser fix.
+redacted logs of the NVR (TCP) and the Doorbell (UDP).
 
 Why: the remaining gaps the HTTP/RTSP paths cannot close (see Phase 5 in
 [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md#phase-5--optional-rd-baichuan-media-difficulty-very-high-48-wk-gated)):
@@ -246,8 +245,21 @@ Deep start 47 minutes into an hour-long sub-stream recording:
 
 The client itself waited 0.54 s between the seek and the start. The owner saw
 the picture within about a second of the click; the NVR's share is under
-0.1 s. *The frames that follow are pending the re-run: the NVR sends them in a
-message class the tool first skipped.*
+0.15 s: **the first media message, holding the first key frame, came 64 ms
+after the start's reply, 136 ms after the request**, and the stream began at
+the key frame two seconds before the seek time (09:47:31Z for a seek at
+09:47:33Z). Across the nine starts of the session the first chunk followed the
+request by 50–105 ms.
+
+The replay stream arrives on the start's command and handle byte, in messages
+of a class of its own (`e26a`, a 24-byte header) whose status field carries
+the low bits of the seek's `seq`, each with an extension (`binaryData`,
+`encryptLen 1024`) and about 39 KB of media. The NVR first sends a burst of
+about six seconds, then one chunk a second: it paces the stream at the
+playback speed. At `playSpeed 4` it sent every frame with audio at 4.5× real
+time; at `playSpeed 16` it sent **key frames only, no audio**, at 18× real
+time. After a 7 stop nothing more comes on that handle and no end marker is
+sent; the stream's last chunk preceded the stop by the pacing interval.
 
 **Every seek, speed change, pause and resume is a stop and a new start**; the
 client never changes a running replay:
@@ -302,10 +314,13 @@ could not place, is the file's start time in UTC with a zero-based month.
 
 The stream header, key frames, frames and audio blocks are summarized per
 message by `scripts/baichuan/media.py` (block kind, codec, size, timestamps,
-padding) and agree with §1.5 on the NVR's live and download streams, with the
-first part of each chunk AES-encrypted as the extension's `encryptLen` says. The
-Doorbell's key frames carry a longer extra header than the NVR's. The NVR's
-replay frames are pending the re-run.
+padding) and agree with §1.5 on the NVR's live, replay and download streams:
+the same blocks in all three, H.264 sub stream with AAC audio, key frames about
+once a second, the first `encryptLen` bytes of each chunk AES-encrypted. A
+chunk boundary falls anywhere, so blocks are reassembled across chunks. The
+Doorbell's key frames carry a longer extra header than the NVR's, and its
+padding is not a multiple of 8, so a reader must find the next block by its
+magic rather than by rounding.
 
 ## 6. Session impact
 
@@ -313,7 +328,9 @@ replay frames are pending the re-run.
   thumbnails and downloads at once; a replay restarted while a 143 download ran,
   and 298 thumbnails were fetched during a replay. Each stream has its own
   handle byte, so several can share the connection.
-- Whether a replay takes one of the NVR's stream slots cannot be read from the
+- A replay was paced by the NVR at the playback speed (about 60 KB/s of sub
+  stream at 1×), so it holds the connection for as long as it plays, like a live
+  stream. Whether it takes one of the NVR's stream slots cannot be read from the
   capture; the read-only check (step 5) measures it against the stream budget.
 - The Doorbell: one UDP conversation; live view and talk ran together (full
   duplex); 898 heartbeats (234) and about 78,000 acknowledgements in 15 minutes.
