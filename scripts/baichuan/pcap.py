@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 import struct
 
-from reolink_aio.baichuan.util import calc_crc
+from reolink_aio.baichuan.util import calc_crc, decrypt_udp_baichuan
 
 PCAPNG_MAGIC = b"\x0a\x0d\x0d\x0a"
 PCAP_MAGICS = {
@@ -392,37 +392,58 @@ class UdpFlow:
     control: list[UdpControl] = field(default_factory=list)
     acks: int = 0
     unknown: int = 0
+    client_port: int = 0
+    server_port: int = 0  # the device port of the conversation's first datagram
 
 
 def reassemble_udp(segments: list[Segment], port: int) -> list[UdpFlow]:
     """Rebuild every Baichuan-over-UDP conversation (reolink-aio's ``udp_protocol``)."""
-    flows: dict[tuple[str, str], UdpFlow] = {}
-    chunks: dict[tuple[str, str, bool], dict[int, tuple[float, bytes]]] = {}
+    # A conversation is one client socket talking to one device: the client's
+    # address and port plus the device's address. The device may answer from
+    # more than one port (the connect port, then a data port), and the client
+    # opens a new socket for every connection, so two sockets to the same
+    # device are two conversations.
+    flows: dict[tuple[str, int, str], UdpFlow] = {}
+    chunks: dict[tuple[str, int, str, bool], dict[int, tuple[float, bytes]]] = {}
     for seg in segments:
         if seg.proto != PROTO_UDP or seg.payload[:4] not in UDP_MAGICS:
             continue
-        key = (seg.src, seg.dst) if (seg.src, seg.dst) in flows else (seg.dst, seg.src)
+        data = seg.payload
+        magic = data[:4]
+        key = (seg.src, seg.sport, seg.dst)
+        if key not in flows:
+            other = (seg.dst, seg.dport, seg.src)
+            if other in flows:
+                key = other
         flow = flows.get(key)
         if flow is None:
-            # The device is the side addressed on the connect or Baichuan port.
-            if seg.dport in (UDP_CONNECT_PORT, port):
-                client, server = seg.src, seg.dst
-            elif seg.sport in (UDP_CONNECT_PORT, port):
-                client, server = seg.dst, seg.src
+            sender_is_client = _udp_sender_is_client(seg, port, magic, data)
+            if sender_is_client:
+                client, client_port, server, server_port = (
+                    seg.src,
+                    seg.sport,
+                    seg.dst,
+                    seg.dport,
+                )
             else:
-                client, server = seg.src, seg.dst
-            key = (client, server)
+                client, client_port, server, server_port = (
+                    seg.dst,
+                    seg.dport,
+                    seg.src,
+                    seg.sport,
+                )
+            key = (client, client_port, server)
             flow = UdpFlow(
                 client,
                 server,
                 seg.ts,
-                Stream(client, 0, server, 0),
-                Stream(server, 0, client, 0),
+                Stream(client, client_port, server, server_port),
+                Stream(server, server_port, client, client_port),
+                client_port=client_port,
+                server_port=server_port,
             )
             flows[key] = flow
-        to_server = seg.src == flow.client
-        data = seg.payload
-        magic = data[:4]
+        to_server = seg.src == flow.client and seg.sport == flow.client_port
         if magic == UDP_MAGIC_CON and len(data) >= 20:
             length, trans_id = struct.unpack("<I4xI", data[4:16])
             payload = data[20 : 20 + length]
@@ -437,17 +458,43 @@ def reassemble_udp(segments: list[Segment], port: int) -> list[UdpFlow]:
             )
         elif magic == UDP_MAGIC_BC and len(data) >= 20:
             seq, length = struct.unpack("<II", data[12:20])
-            chunks.setdefault((flow.client, flow.server, to_server), {}).setdefault(
+            chunks.setdefault((*key, to_server), {}).setdefault(
                 seq, (seg.ts, data[20 : 20 + length])
             )
         elif magic == UDP_MAGIC_ACK:
             flow.acks += 1
         else:
             flow.unknown += 1
-    for (client, server, to_server), by_seq in chunks.items():
-        flow = flows[(client, server)]
+    for (client, client_port, server, to_server), by_seq in chunks.items():
+        flow = flows[(client, client_port, server)]
         _fill_udp(flow.to_server if to_server else flow.to_client, by_seq)
     return sorted(flows.values(), key=lambda f: f.first_ts)
+
+
+def _udp_sender_is_client(seg: Segment, port: int, magic: bytes, data: bytes) -> bool:
+    """Whether the first datagram of a conversation came from the client.
+
+    The device is the side on the connect or Baichuan port. A device that answers
+    from another port (the Doorbell uses a high one) is told apart by the
+    connection-control XML: the client sends ``C2D_*``, the device ``D2C_*``. A
+    capture that begins with the device's reply would otherwise swap the sides.
+    """
+    if seg.dport in (UDP_CONNECT_PORT, port):
+        return True
+    if seg.sport in (UDP_CONNECT_PORT, port):
+        return False
+    if magic == UDP_MAGIC_CON and len(data) >= 20:
+        length, trans_id = struct.unpack("<I4xI", data[4:16])
+        try:
+            plain = decrypt_udp_baichuan(data[20 : 20 + length], trans_id)
+        except Exception:  # noqa: BLE001 - a damaged datagram decides nothing
+            plain = ""
+        text = plain if isinstance(plain, str) else plain.decode("latin-1", "replace")
+        if "<D2C_" in text:
+            return False
+        if "<C2D_" in text:
+            return True
+    return True
 
 
 def _fill_udp(stream: Stream, by_seq: dict[int, tuple[float, bytes]]) -> None:
