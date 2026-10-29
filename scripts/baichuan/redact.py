@@ -62,9 +62,13 @@ SECRET_TAGS = frozenset(
         "pushserver",
         "p2pserver",
         "ntpserver",
+        "secretcode",
+        "bootsecret",
     }
 )
-SECRET_SUFFIXES = ("uid", "password", "token", "serial", "mac", "pwd", "ssid")
+SECRET_SUFFIXES = (
+    "uid", "password", "token", "serial", "mac", "pwd", "ssid", "secret", "secretcode",
+)
 _IPV4 = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
 _IPV6 = re.compile(r"\b(?:[0-9a-fA-F]{1,4}:){2,7}[0-9a-fA-F]{1,4}\b")
 _MAC = re.compile(r"\b(?:[0-9a-fA-F]{2}[:-]){5}[0-9a-fA-F]{2}\b")

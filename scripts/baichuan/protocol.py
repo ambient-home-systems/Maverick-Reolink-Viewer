@@ -240,8 +240,15 @@ def split_messages(data: bytes) -> tuple[list[RawMessage], list[Skip], int]:
 
 
 def _next_magic(data: bytes, start: int) -> int:
-    found = [i for i in (data.find(m, start) for m in MAGICS) if i >= 0]
-    return min(found) if found else -1
+    # Bound each search by the best hit so far: a magic that never recurs would
+    # otherwise be searched for across the whole remaining stream on every resync.
+    best = -1
+    for magic in MAGICS:
+        end = len(data) if best < 0 else best + len(magic)
+        found = data.find(magic, start, end)
+        if found >= 0 and (best < 0 or found < best):
+            best = found
+    return best
 
 
 # ---- decryption ----
