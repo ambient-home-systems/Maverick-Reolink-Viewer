@@ -1,8 +1,8 @@
-"""Read pcapng and pcap files and reassemble TCP streams.
+"""Read pcapng and pcap files and reassemble TCP streams and Baichuan UDP flows.
 
 Only what the Baichuan analysis needs: Ethernet (with 802.1Q), BSD loopback,
-raw IP and Linux cooked link types; IPv4 and IPv6; TCP. Each direction of a
-TCP connection becomes one byte stream with a map from byte offset to the time
+raw IP and Linux cooked link types; IPv4 and IPv6; TCP and UDP. Each direction
+of a connection becomes one byte stream with a map from byte offset to the time
 the packet carrying it was captured, so messages can be timed and the two
 directions interleaved. Out-of-order and retransmitted segments are handled;
 a hole (bytes never captured) is recorded and skipped over.
@@ -13,6 +13,8 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 import struct
+
+from reolink_aio.baichuan.util import calc_crc
 
 PCAPNG_MAGIC = b"\x0a\x0d\x0d\x0a"
 PCAP_MAGICS = {
@@ -68,10 +70,15 @@ class Segment:
 
 @dataclass(frozen=True, slots=True)
 class Hole:
-    """Bytes the capture missed, at ``offset`` of the reassembled stream."""
+    """Bytes the capture missed, at ``offset`` of the reassembled stream.
+
+    Over TCP ``missing`` is the byte count; over UDP only the number of missing
+    ``packets`` is known.
+    """
 
     offset: int
     missing: int
+    packets: int = 0
 
 
 @dataclass(slots=True)
@@ -349,3 +356,111 @@ def _fill(stream: Stream, direction: _Direction) -> None:
         nxt += len(fresh)
         produced += len(fresh)
     stream.data = b"".join(chunks)
+
+
+# ---- Baichuan over UDP ----
+
+UDP_MAGIC_CON = bytes.fromhex(
+    "3acf872a"
+)  # connection control, XOR with the transaction id
+UDP_MAGIC_BC = bytes.fromhex("10cf872a")  # a chunk of the Baichuan message stream
+UDP_MAGIC_ACK = bytes.fromhex("20cf872a")  # acknowledgement
+UDP_MAGICS = (UDP_MAGIC_CON, UDP_MAGIC_BC, UDP_MAGIC_ACK)
+UDP_CONNECT_PORT = 2015
+
+
+@dataclass(frozen=True, slots=True)
+class UdpControl:
+    """One connection-control datagram (``3acf872a``), still encrypted."""
+
+    ts: float
+    to_server: bool
+    trans_id: int
+    payload: bytes
+    crc_ok: bool
+
+
+@dataclass(slots=True)
+class UdpFlow:
+    """A Baichuan-over-UDP conversation between a client and a device."""
+
+    client: str
+    server: str
+    first_ts: float
+    to_server: Stream
+    to_client: Stream
+    control: list[UdpControl] = field(default_factory=list)
+    acks: int = 0
+    unknown: int = 0
+
+
+def reassemble_udp(segments: list[Segment], port: int) -> list[UdpFlow]:
+    """Rebuild every Baichuan-over-UDP conversation (reolink-aio's ``udp_protocol``)."""
+    flows: dict[tuple[str, str], UdpFlow] = {}
+    chunks: dict[tuple[str, str, bool], dict[int, tuple[float, bytes]]] = {}
+    for seg in segments:
+        if seg.proto != PROTO_UDP or seg.payload[:4] not in UDP_MAGICS:
+            continue
+        key = (seg.src, seg.dst) if (seg.src, seg.dst) in flows else (seg.dst, seg.src)
+        flow = flows.get(key)
+        if flow is None:
+            # The device is the side addressed on the connect or Baichuan port.
+            if seg.dport in (UDP_CONNECT_PORT, port):
+                client, server = seg.src, seg.dst
+            elif seg.sport in (UDP_CONNECT_PORT, port):
+                client, server = seg.dst, seg.src
+            else:
+                client, server = seg.src, seg.dst
+            key = (client, server)
+            flow = UdpFlow(
+                client,
+                server,
+                seg.ts,
+                Stream(client, 0, server, 0),
+                Stream(server, 0, client, 0),
+            )
+            flows[key] = flow
+        to_server = seg.src == flow.client
+        data = seg.payload
+        magic = data[:4]
+        if magic == UDP_MAGIC_CON and len(data) >= 20:
+            length, trans_id = struct.unpack("<I4xI", data[4:16])
+            payload = data[20 : 20 + length]
+            flow.control.append(
+                UdpControl(
+                    seg.ts,
+                    to_server,
+                    trans_id,
+                    payload,
+                    calc_crc(payload) == data[16:20],
+                )
+            )
+        elif magic == UDP_MAGIC_BC and len(data) >= 20:
+            seq, length = struct.unpack("<II", data[12:20])
+            chunks.setdefault((flow.client, flow.server, to_server), {}).setdefault(
+                seq, (seg.ts, data[20 : 20 + length])
+            )
+        elif magic == UDP_MAGIC_ACK:
+            flow.acks += 1
+        else:
+            flow.unknown += 1
+    for (client, server, to_server), by_seq in chunks.items():
+        flow = flows[(client, server)]
+        _fill_udp(flow.to_server if to_server else flow.to_client, by_seq)
+    return sorted(flows.values(), key=lambda f: f.first_ts)
+
+
+def _fill_udp(stream: Stream, by_seq: dict[int, tuple[float, bytes]]) -> None:
+    pieces: list[bytes] = []
+    produced = 0
+    expected: int | None = None
+    for seq in sorted(by_seq):
+        ts, payload = by_seq[seq]
+        if expected is not None and seq > expected:
+            stream.holes.append(Hole(produced, 0, packets=seq - expected))
+        stream._offsets.append(produced)  # noqa: SLF001 - building the stream
+        stream._times.append(ts)  # noqa: SLF001
+        pieces.append(payload)
+        produced += len(payload)
+        expected = seq + 1
+    stream.data = b"".join(pieces)

@@ -7,6 +7,7 @@ in the message is the reliable name, and the log shows both.
 """
 
 CMD_NAMES: dict[int, str] = {
+    -1: "UDP connection control (P2P XML)",
     1: "login (nonce, then LoginUser)",
     2: "logout",
     3: "live start (Preview)",

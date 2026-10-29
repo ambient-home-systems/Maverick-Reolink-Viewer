@@ -26,11 +26,20 @@ import sys
 from typing import Any
 from xml.etree import ElementTree as ET
 
-from reolink_aio.baichuan.util import get_value_from_xml
+from reolink_aio.baichuan.util import decrypt_udp_baichuan, get_value_from_xml
 
 from .media import MediaStream
 from .names import cmd_name
-from .pcap import Flow, Segment, parse_segment, read_packets, reassemble
+from .pcap import (
+    Flow,
+    Segment,
+    UdpControl,
+    UdpFlow,
+    parse_segment,
+    read_packets,
+    reassemble,
+    reassemble_udp,
+)
 from .protocol import (
     Cipher,
     Credential,
@@ -110,6 +119,7 @@ class FlowReport:
     client_port: int
     server_port: int
     first_ts: float
+    transport: str = "tcp"
     login: str = "no login seen"
     login_flag: str | None = None
     device_info: dict[str, str] = field(default_factory=dict)
@@ -121,6 +131,7 @@ class FlowReport:
         """JSON form."""
         return {
             "label": self.label,
+            "transport": self.transport,
             "client_port": self.client_port,
             "server_port": self.server_port,
             "login": self.login,
@@ -141,6 +152,7 @@ class Report:
     tcp_segments: int
     udp_on_port: int
     other_tcp_flows: int
+    udp_flows: int = 0
     flows: list[FlowReport] = field(default_factory=list)
 
     def as_dict(self) -> dict[str, Any]:
@@ -151,6 +163,7 @@ class Report:
             "tcp_segments": self.tcp_segments,
             "udp_on_port": self.udp_on_port,
             "other_tcp_flows": self.other_tcp_flows,
+            "udp_flows": self.udp_flows,
             "flows": [f.as_dict() for f in self.flows],
         }
 
@@ -166,16 +179,25 @@ def analyze(path: Path, credentials: Sequence[Credential], port: int = 9000) -> 
         seg = parse_segment(packet)
         if seg is None:
             continue
+        segments.append(seg)
         if seg.proto == 17:
             if port in (seg.sport, seg.dport):
                 udp_on_port += 1
-            continue
-        segments.append(seg)
-        if port not in (seg.sport, seg.dport):
+        elif port not in (seg.sport, seg.dport):
             ends = sorted([(seg.src, seg.sport), (seg.dst, seg.dport)])
             other_tcp.add((ends[0][0], ends[0][1], ends[1][0], ends[1][1]))
-    flows = reassemble(segments, port)
-    report = Report(path.name, packets, len(segments), udp_on_port, len(other_tcp))
+    tcp_flows = reassemble(segments, port)
+    udp_flows = reassemble_udp(segments, port)
+    report = Report(
+        path.name,
+        packets,
+        sum(1 for s in segments if s.proto == 6),
+        udp_on_port,
+        len(other_tcp),
+        udp_flows=len(udp_flows),
+    )
+    flows: list[Flow | UdpFlow] = [*tcp_flows, *udp_flows]
+    flows.sort(key=lambda f: f.first_ts)
     devices: dict[str, str] = {}
     start = min((f.first_ts for f in flows), default=0.0)
     redactor = (
@@ -192,25 +214,38 @@ def analyze(path: Path, credentials: Sequence[Credential], port: int = 9000) -> 
 
 
 def _decode_flow(
-    flow: Flow,
+    flow: Flow | UdpFlow,
     label: str,
     credentials: list[Credential],
     start: float,
     redactor: Redactor,
 ) -> FlowReport:
-    out = FlowReport(label, flow.client_port, flow.server_port, flow.first_ts)
+    if isinstance(flow, UdpFlow):
+        out = FlowReport(label, 0, 0, flow.first_ts, transport="udp")
+        if flow.unknown:
+            out.problems.append(f"{flow.unknown} UDP datagrams with an unknown layout")
+    else:
+        out = FlowReport(label, flow.client_port, flow.server_port, flow.first_ts)
     session = Session(credentials)
     redactor.add_secrets(session.secrets)
-    raw: list[tuple[float, int, str, RawMessage]] = []
+    items: list[tuple[float, int, str, RawMessage | UdpControl]] = []
+    if isinstance(flow, UdpFlow):
+        items.extend(
+            (c.ts, 0 if c.to_server else 1, "C>D" if c.to_server else "D>C", c)
+            for c in flow.control
+        )
     for order, (stream, direction) in enumerate(
         ((flow.to_server, "C>D"), (flow.to_client, "D>C"))
     ):
         messages, skips, leftover = split_messages(stream.data)
-        raw.extend((stream.time_at(m.offset), order, direction, m) for m in messages)
+        items.extend((stream.time_at(m.offset), order, direction, m) for m in messages)
         for hole in stream.holes:
-            out.problems.append(
-                f"{direction}: {hole.missing} bytes missing at offset {hole.offset}"
+            what = (
+                f"{hole.packets} UDP packets missing"
+                if hole.packets
+                else f"{hole.missing} bytes missing"
             )
+            out.problems.append(f"{direction}: {what} at offset {hole.offset}")
         for skip in skips:
             out.problems.append(
                 f"{direction}: {skip.length} bytes skipped at offset {skip.offset} (no header)"
@@ -219,20 +254,31 @@ def _decode_flow(
             out.problems.append(
                 f"{direction}: {leftover} bytes of an unfinished message at the end"
             )
-    raw.sort(key=lambda item: (item[0], item[1], item[3].offset))
+    items.sort(key=lambda item: (item[0], item[1], _offset_of(item[3])))
     streams: dict[str, MediaStream] = {}
-    for index, (ts, _order, direction, message) in enumerate(raw):
-        entry = _decode_message(
-            index=index,
-            ts=ts,
-            start=start,
-            direction=direction,
-            message=message,
-            session=session,
-            redactor=redactor,
-            streams=streams,
-            flow=out,
-        )
+    for index, (ts, _order, direction, item) in enumerate(items):
+        if isinstance(item, UdpControl):
+            entry = _control_entry(
+                index=index,
+                ts=ts,
+                start=start,
+                direction=direction,
+                control=item,
+                session=session,
+                redactor=redactor,
+            )
+        else:
+            entry = _decode_message(
+                index=index,
+                ts=ts,
+                start=start,
+                direction=direction,
+                message=item,
+                session=session,
+                redactor=redactor,
+                streams=streams,
+                flow=out,
+            )
         out.entries.append(entry)
     for key, media in streams.items():
         for block in media.finish():
@@ -240,7 +286,61 @@ def _decode_flow(
                 out.entries[block.msg_index].blocks.append(block.describe())
         out.streams[key] = redactor.text(media.summary())
     out.login = _login_summary(session)
+    if isinstance(flow, UdpFlow):
+        out.login += f"; {flow.acks} UDP acknowledgements"
     return out
+
+
+def _offset_of(item: RawMessage | UdpControl) -> int:
+    return item.offset if isinstance(item, RawMessage) else 0
+
+
+def _control_entry(
+    *,
+    index: int,
+    ts: float,
+    start: float,
+    direction: str,
+    control: UdpControl,
+    session: Session,
+    redactor: Redactor,
+) -> Entry:
+    """Decode a UDP connection-control message (``<P2P>`` XML, XOR with its transaction id)."""
+    entry = Entry(
+        index,
+        ts,
+        ts - start,
+        direction,
+        -1,
+        "udp",
+        0,
+        0,
+        control.trans_id,
+        None,
+        "udp",
+        len(control.payload),
+        0,
+        "udp-xor",
+    )
+    if not control.crc_ok:
+        entry.notes.append("CRC mismatch")
+    plain = decrypt_udp_baichuan(control.payload, control.trans_id)
+    try:
+        text = plain.decode("utf8")
+    except UnicodeDecodeError:
+        entry.cipher = Cipher.UNKNOWN
+        entry.notes.append("could not be decrypted")
+        return entry
+    documents = split_documents(text) or [text]
+    if direction == "D>C":
+        nonce = get_value_from_xml(text, "nc") if "<nc>" in text else None
+        if nonce and session.nonce is None:
+            session.set_nonce(nonce)
+            redactor.add_secrets(session.secrets)
+            entry.notes.append("login nonce (nc) taken from here")
+    entry.tags = [t for t in (root_tag(d) for d in documents) if t]
+    entry.documents = [redactor.xml(d) for d in documents]
+    return entry
 
 
 def _login_summary(session: Session) -> str:
@@ -429,19 +529,24 @@ def render_text(
         f"UDP packets on the Baichuan port {report.udp_on_port}, "
         f"other TCP connections {report.other_tcp_flows}",
     ]
-    if report.udp_on_port:
+    if report.udp_flows:
+        lines.append(f"Baichuan over UDP: {report.udp_flows} conversation(s) decoded")
+    elif report.udp_on_port:
         lines.append(
-            "WARNING: UDP traffic on the Baichuan port: the client may be using P2P/UDP, "
-            "which this tool does not decode. Add the devices by IP address."
+            "WARNING: UDP traffic on the Baichuan port that is not Baichuan's own UDP "
+            "framing (a relay?): not decoded."
         )
     if not report.flows:
-        lines.append("No TCP connections on the Baichuan port were found.")
+        lines.append("No Baichuan connections (TCP or UDP) were found.")
     for flow in report.flows:
         lines.append("")
-        lines.append(
-            f"## {flow.label}: client port {flow.client_port} -> device port {flow.server_port}, "
-            f"{len(flow.entries)} messages"
-        )
+        if flow.transport == "udp":
+            lines.append(f"## {flow.label} over UDP: {len(flow.entries)} messages")
+        else:
+            lines.append(
+                f"## {flow.label}: client port {flow.client_port} -> device port {flow.server_port}, "
+                f"{len(flow.entries)} messages"
+            )
         lines.append(f"login: {flow.login}")
         if flow.login_flag:
             lines.append(f"nonce response encryption flag: {flow.login_flag}")

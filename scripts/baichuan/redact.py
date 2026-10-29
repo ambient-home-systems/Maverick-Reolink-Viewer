@@ -67,7 +67,15 @@ SECRET_TAGS = frozenset(
     }
 )
 SECRET_SUFFIXES = (
-    "uid", "password", "token", "serial", "mac", "pwd", "ssid", "secret", "secretcode",
+    "uid",
+    "password",
+    "token",
+    "serial",
+    "mac",
+    "pwd",
+    "ssid",
+    "secret",
+    "secretcode",
 )
 _IPV4 = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
 _IPV6 = re.compile(r"\b(?:[0-9a-fA-F]{1,4}:){2,7}[0-9a-fA-F]{1,4}\b")

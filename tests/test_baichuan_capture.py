@@ -508,7 +508,7 @@ async def test_main_without_flows(
     assert (
         analyze.main([str(path), "--user", USER, "--out", str(tmp_path / "o.txt")]) == 1
     )
-    assert "No TCP connections" in (tmp_path / "o.txt").read_text()
+    assert "No Baichuan connections" in (tmp_path / "o.txt").read_text()
 
 
 def test_not_a_capture(tmp_path: Path) -> None:
@@ -582,3 +582,170 @@ async def test_brief_and_range(capture: dict[str, Any]) -> None:
     assert "#00007" not in ranged
     assert analyze._index_range("120-180") == (120, 180)
     assert analyze._index_range("7") == (7, 7)
+
+
+# ---- Baichuan over UDP (the battery Doorbell) ----
+
+DEVICE_UDP = ("192.168.7.21", 2015)
+CLIENT_UDP = ("192.168.7.50", 40000)
+DEVICE_DATA_PORT = 42123
+CLIENT_ID = 54321
+HOST_ID = 777
+D2C_C_R_XML = (
+    f"<P2P><D2C_C_R><cid>{CLIENT_ID}</cid><did>{HOST_ID}</did><nc>{NONCE}</nc>"
+    f"<rsp>0</rsp><cfm>1</cfm></D2C_C_R></P2P>"
+)
+D2C_S_R_XML = f"<P2P><D2C_S_R><uid>{UID}</uid><rsp>0</rsp></D2C_S_R></P2P>"
+MTU_PAYLOAD = 1330
+
+
+def _udp(src: tuple[str, int], dst: tuple[str, int], payload: bytes) -> bytes:
+    udp = struct.pack(">HHHH", src[1], dst[1], 8 + len(payload), 0) + payload
+    total = 20 + len(udp)
+    ip = struct.pack(
+        ">BBHHHBBH4s4s",
+        0x45,
+        0,
+        total,
+        1,
+        0x4000,
+        64,
+        17,
+        0,
+        _ip4(src[0]),
+        _ip4(dst[0]),
+    )
+    return bytes(12) + b"\x08\x00" + ip + udp
+
+
+def _udp_control(body: str) -> tuple[bytes, int]:
+    """A connection-control datagram, built by reolink-aio's own encoder."""
+    from reolink_aio.baichuan.udp_protocol import BaichuanUdpConnection
+
+    return BaichuanUdpConnection(DEVICE_UDP[0])._construct_udp_mess(body)
+
+
+def _udp_control_reply(body: str, trans_id: int) -> bytes:
+    """The device's reply: same transaction id, so the same XOR key."""
+    from reolink_aio.baichuan.util import calc_crc, encrypt_udp_baichuan
+
+    payload = encrypt_udp_baichuan(body, trans_id)
+    return (
+        bytes.fromhex("3acf872a")
+        + struct.pack("<I", len(payload))
+        + bytes.fromhex("01000000")
+        + struct.pack("<I", trans_id)
+        + calc_crc(payload)
+        + payload
+    )
+
+
+def _udp_bc_chunks(message: bytes, seq: int, peer_id: int) -> list[tuple[int, bytes]]:
+    """Split one Baichuan message into ``10cf872a`` chunks at the MTU, as reolink-aio does."""
+    chunks = []
+    for offset in range(0, len(message), MTU_PAYLOAD):
+        piece = message[offset : offset + MTU_PAYLOAD]
+        header = (
+            bytes.fromhex("10cf872a")
+            + struct.pack("<I", peer_id)
+            + bytes(4)
+            + struct.pack("<II", seq, len(piece))
+        )
+        chunks.append((seq, header + piece))
+        seq += 1
+    return chunks
+
+
+def _udp_ack(peer_id: int, seq: int) -> bytes:
+    return (
+        bytes.fromhex("20cf872a")
+        + struct.pack("<I", peer_id)
+        + bytes(8)
+        + struct.pack("<I", seq)
+        + bytes(4)
+        + struct.pack("<I", 0)
+    )
+
+
+def _udp_packets(events: list[tuple[str, bytes]]) -> list[tuple[float, bytes]]:
+    """The UDP connect exchange, then the Baichuan messages chunked, reordered and duplicated."""
+    packets: list[tuple[float, bytes]] = []
+    ts = 1_761_742_900.0
+    device_data = (DEVICE_UDP[0], DEVICE_DATA_PORT)
+    # Discovery and connect (XOR with the transaction id; replies reuse the id).
+    msg, trans = _udp_control("<P2P><C2D_S><to><port>40000</port></to></C2D_S></P2P>")
+    packets.append((ts, _udp(CLIENT_UDP, DEVICE_UDP, msg)))
+    packets.append(
+        (
+            ts + 0.05,
+            _udp(device_data, CLIENT_UDP, _udp_control_reply(D2C_S_R_XML, trans)),
+        )
+    )
+    msg, trans = _udp_control(
+        f"<P2P><C2D_C><uid>{UID}</uid><cli><port>40000</port></cli><cid>{CLIENT_ID}</cid>"
+        "<mtu>1350</mtu></C2D_C></P2P>"
+    )
+    packets.append((ts + 0.1, _udp(CLIENT_UDP, DEVICE_UDP, msg)))
+    packets.append(
+        (
+            ts + 0.15,
+            _udp(device_data, CLIENT_UDP, _udp_control_reply(D2C_C_R_XML, trans)),
+        )
+    )
+    seq = {"C": 0, "D": 0}
+    for side, data in events[
+        2:
+    ]:  # over UDP the nonce comes from D2C_C_R, not an empty cmd 1
+        ts += 0.5
+        if side == "C":
+            chunks = _udp_bc_chunks(data, seq["C"], HOST_ID)
+            seq["C"] += len(chunks)
+            for i, (_s, chunk) in enumerate(chunks):
+                packets.append((ts + 0.001 * i, _udp(CLIENT_UDP, device_data, chunk)))
+            packets.append(
+                (
+                    ts + 0.02,
+                    _udp(device_data, CLIENT_UDP, _udp_ack(CLIENT_ID, seq["C"] - 1)),
+                )
+            )
+        else:
+            chunks = _udp_bc_chunks(data, seq["D"], CLIENT_ID)
+            seq["D"] += len(chunks)
+            if len(chunks) > 1:  # the first replay chunk: reorder and repeat
+                chunks = [chunks[1], chunks[0], chunks[0], *chunks[2:]]
+            for i, (_s, chunk) in enumerate(chunks):
+                packets.append((ts + 0.001 * i, _udp(device_data, CLIENT_UDP, chunk)))
+    return packets
+
+
+async def test_udp_doorbell_capture(tmp_path: Path) -> None:
+    events = await _record_session()
+    path = tmp_path / "doorbell.pcapng"
+    path.write_bytes(_pcapng(_udp_packets(events)))
+    report = analyze.analyze(path, [protocol.Credential(USER, PASSWORD)])
+    assert report.udp_flows == 1
+    assert report.tcp_segments == 0
+    flow = report.flows[0]
+    assert flow.transport == "udp"
+    assert "verified" in flow.login
+    assert "acknowledgements" in flow.login
+    assert not flow.problems, flow.problems
+    cmds = [(e.direction, e.cmd_id) for e in flow.entries]
+    assert cmds[:4] == [("C>D", -1), ("D>C", -1), ("C>D", -1), ("D>C", -1)]
+    assert cmds[4:6] == [("C>D", 1), ("D>C", 1)]
+    assert [c for c in cmds if c[1] == 5] == [("C>D", 5), ("D>C", 5), ("D>C", 5)]
+    control = flow.entries[3]
+    assert control.tags == ["P2P/D2C_C_R"]
+    assert "login nonce (nc) taken from here" in control.notes
+    assert flow.entries[4].cipher == "bc"
+    seek = next(e for e in flow.entries if e.cmd_id == 123 and e.direction == "C>D")
+    assert seek.cipher == "aes"
+    replay_chunks = [e for e in flow.entries if e.cmd_id == 5 and e.direction == "D>C"]
+    kinds = [b.split()[0] for e in replay_chunks for b in e.blocks]
+    assert kinds == ["info", "key", "frame", "audio", "frame", "frame"]
+    text = analyze.render_text(report)
+    assert "over UDP" in text
+    for secret in _secret_strings():
+        assert secret not in text, secret
+    assert "<cid>" in text
+    assert "<uid>" in text

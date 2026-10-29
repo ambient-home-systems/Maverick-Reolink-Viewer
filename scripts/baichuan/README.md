@@ -123,8 +123,13 @@ tool tries every account on every connection and says which one matched.
 The summary at the top of the log says, per connection, whether the login was
 verified, the device type and model from the login response, any gaps in the
 capture, and the media streams seen. If it says "no login seen", the capture
-started after the client connected: capture again. If it warns about UDP on port
-9000, the client used P2P: add the devices by IP (step 6).
+started after the client connected: capture again.
+
+Battery cameras such as the Doorbell speak Baichuan over UDP even when added by
+IP address. The tool decodes that too (reolink-aio's UDP framing: the connect
+exchange on port 2015, whose reply carries the login nonce, then the message
+stream in numbered chunks); such a conversation is shown as "over UDP". Only
+traffic that uses neither framing, such as a cloud relay, is left undecoded.
 
 Share only the `.log.txt` (and, if you like, the `.log.json`). If your Mac is
 connected to the Claude session through Remote Control, the tool can be run there
