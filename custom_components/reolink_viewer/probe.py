@@ -60,7 +60,7 @@ from .media import (
     async_first_frame,
     async_hold_stream,
 )
-from .probe_baichuan import BaichuanCheck, BaichuanOptions
+from .probe_baichuan import NOT_RECORDER, BaichuanCheck, BaichuanOptions
 from .probe_playback import PlaybackCheck, PlaybackOptions
 from .scheduler import Priority, Scheduler
 
@@ -294,6 +294,8 @@ class Prober:
             step_timeout=self._options.step_timeout,
             progress=self._report_progress,
         )
+        if not info.is_nvr:
+            return {"ok": False, "skipped": NOT_RECORDER}
         try:
             now = await self._job(host, host.async_get_time, key=("time",))
             return await check.async_host(info, list(info.channels), now)
