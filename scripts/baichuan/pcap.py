@@ -488,8 +488,8 @@ def _udp_sender_is_client(seg: Segment, port: int, magic: bytes, data: bytes) ->
         try:
             plain = decrypt_udp_baichuan(data[20 : 20 + length], trans_id)
         except Exception:  # noqa: BLE001 - a damaged datagram decides nothing
-            plain = ""
-        text = plain if isinstance(plain, str) else plain.decode("latin-1", "replace")
+            plain = b""
+        text = plain.decode("latin-1", "replace")
         if "<D2C_" in text:
             return False
         if "<C2D_" in text:
