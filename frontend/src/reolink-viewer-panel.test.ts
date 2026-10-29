@@ -454,6 +454,7 @@ describe("reolink-viewer-panel", () => {
       playback_only: false,
       playback_concurrency_test: false,
       playback_max_streams: 4,
+      baichuan_test: false,
     });
     hass.emit({ type: "progress", message: "ch0 live rtsp main" });
     await el.updateComplete;
@@ -516,6 +517,14 @@ describe("reolink-viewer-panel", () => {
       playback_only: false,
       playback_concurrency_test: false,
     });
+    button(el, "Cancel")?.click();
+    await flush();
+
+    // The Baichuan replay check (Phase 5a) is its own opt-in.
+    await toggle(5);
+    button(el, "Run probe")?.click();
+    await flush();
+    expect(hass.sent.at(-1)).toMatchObject({ baichuan_test: true });
   });
 
   it("shows probe errors and supports cancel", async () => {

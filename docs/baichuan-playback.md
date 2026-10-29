@@ -200,6 +200,27 @@ reolink-aio's own encoder (`tests/test_baichuan_capture.py`). Steps:
 [scripts/baichuan/README.md](../scripts/baichuan/README.md). The capture and the
 full logs stay off the repository; only the redacted log is shared.
 
+### 2.1 The read-only check (step 5)
+
+The hardware probe has an opt-in **Baichuan replay** section
+(`probe_baichuan.py`, the panel's "Test replay over the Reolink app's own
+protocol" box). On a recorder it picks a recording of 20 minutes or more from
+a past day on the sub stream and, 75 % into it:
+
+- opens its own Baichuan connection (`baichuan_client.py`: reolink-aio cannot
+  receive the replay's message class), logs in, and does what the client does:
+  123 `ReplaySeek`, 5 `FileInfoList` with `playSpeed 1`, a few seconds of the
+  stream, 7 stop, logout. It records the acknowledgement latencies, the time to
+  the first chunk and to the first key frame, that key frame's time against the
+  seek, the blocks received, and whether anything follows the stop;
+- reads the same recording's HTTP `DOWNLOAD` up to the byte offset that 75 %
+  amounts to (what the serving cache fetches before such a start can play
+  today) and records the time to reach it;
+- asks the device's logged-in users before, during and after the replay.
+
+Both run under the host's stream budget at playback priority. The check never
+writes a setting; the report is redacted like the rest of the probe.
+
 ## 3. Message sequences (from the owner's capture, 2026-10-28)
 
 Capture: the Reolink desktop client on macOS talking to the RLN36 over TCP 9000

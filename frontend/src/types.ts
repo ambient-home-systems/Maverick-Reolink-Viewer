@@ -295,6 +295,8 @@ export interface ProbeOptions {
   playback_only?: boolean;
   playback_concurrency_test?: boolean;
   playback_max_streams?: number;
+  /** Baichuan replay check (Phase 5a). */
+  baichuan_test?: boolean;
 }
 
 export type ProbeReport = Record<string, unknown>;

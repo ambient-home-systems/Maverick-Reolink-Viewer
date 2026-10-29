@@ -240,6 +240,23 @@ class HostInfo:
 
 
 @dataclass(frozen=True, slots=True)
+class BaichuanEndpoint:
+    """How to open our own Baichuan connection to a host (Phase 5a check).
+
+    Carries the credentials: it never leaves the server and is never logged.
+    """
+
+    host: str
+    port: int
+    username: str
+    password: str
+
+    def __repr__(self) -> str:
+        """Hide the credentials."""
+        return f"BaichuanEndpoint(port={self.port})"
+
+
+@dataclass(frozen=True, slots=True)
 class VodFile:
     """A recording file returned by a VOD search.
 
@@ -826,6 +843,26 @@ class ReolinkHostHandle:
     def hide_password(self, text: str) -> str:
         """Redact credentials the library knows about."""
         return str(self._api.hide_password(text))
+
+    def baichuan_endpoint(self) -> BaichuanEndpoint:
+        """Return the host's Baichuan address and the entry's credentials.
+
+        For the Phase 5a replay check only, which opens its own connection
+        because reolink-aio cannot receive the NVR's replay messages.
+        """
+        data = self._entry.data
+        port = _safe(lambda: self._api.baichuan.port)
+        return BaichuanEndpoint(
+            host=str(data.get(CONF_HOST, "")),
+            port=int(port) if isinstance(port, int) and port > 0 else 9000,
+            username=str(data.get(CONF_USERNAME, "")),
+            password=str(data.get(CONF_PASSWORD, "")),
+        )
+
+    def channel_uid(self, channel: int) -> str | None:
+        """Return the camera UID of a channel (a secret), or None."""
+        uid = _safe(self._api.camera_uid, channel)
+        return uid if isinstance(uid, str) and uid and uid != _UNKNOWN else None
 
     # ---- Device I/O. Call these through the scheduler. ----
 

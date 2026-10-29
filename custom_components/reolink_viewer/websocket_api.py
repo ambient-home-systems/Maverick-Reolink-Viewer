@@ -22,6 +22,7 @@ from .checks import MAX_TEXT
 from .const import DOMAIN, PROBE_HARD_MAX_STREAMS, PROBE_PLAYBACK_HARD_MAX_STREAMS
 from .models import ReolinkViewerConfigEntry
 from .probe import ProbeOptions, Prober
+from .probe_baichuan import BaichuanOptions
 from .probe_playback import PlaybackOptions
 from .scheduler import Priority
 from .thumbnails import BUCKETS_S
@@ -222,6 +223,7 @@ def _redacted_error(err: Exception, hosts: list[bridge.ReolinkHostHandle]) -> st
         probatio.Optional("playback_max_streams", default=4): probatio.All(
             int, probatio.Range(min=1, max=PROBE_PLAYBACK_HARD_MAX_STREAMS)
         ),
+        probatio.Optional("baichuan_test", default=False): bool,
     }
 )
 @websocket_api.require_admin
@@ -278,6 +280,7 @@ async def ws_probe(
             concurrency_test=msg["playback_concurrency_test"],
             max_streams=msg["playback_max_streams"],
         ),
+        baichuan=BaichuanOptions(enabled=msg["baichuan_test"]),
     )
 
     def progress(message: str) -> None:

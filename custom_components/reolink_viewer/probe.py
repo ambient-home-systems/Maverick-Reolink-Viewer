@@ -60,6 +60,7 @@ from .media import (
     async_first_frame,
     async_hold_stream,
 )
+from .probe_baichuan import BaichuanCheck, BaichuanOptions
 from .probe_playback import PlaybackCheck, PlaybackOptions
 from .scheduler import Priority, Scheduler
 
@@ -95,6 +96,7 @@ class ProbeOptions:
     hold_seconds: float = 5.0
     step_timeout: float = PROBE_STEP_TIMEOUT
     playback: PlaybackOptions = field(default_factory=PlaybackOptions)
+    baichuan: BaichuanOptions = field(default_factory=BaichuanOptions)
 
     def __post_init__(self) -> None:
         """Clamp to safe values."""
@@ -265,8 +267,39 @@ class Prober:
             result["playback_concurrency"] = await playback.async_concurrency(
                 playback_files["sub"], playback_files["main"]
             )
+        if self._options.baichuan.enabled:
+            result["baichuan_replay"] = await self._baichuan_replay(host, info)
         result["duration_ms"] = _ms(start)
         return result
+
+    async def _baichuan_replay(
+        self, host: ReolinkHostHandle, info: HostInfo
+    ) -> dict[str, Any]:
+        """Run the Phase 5a replay check (opt-in, read-only)."""
+
+        def job[T](
+            factory: Callable[[], Awaitable[T]],
+            *,
+            timeout: float | None = None,
+            exclusive: bool = False,
+        ) -> Awaitable[T]:
+            return self._job(host, factory, timeout=timeout, exclusive=exclusive)
+
+        check = BaichuanCheck(
+            host,
+            job,
+            self._session,
+            self._scheduler.host(host.entry_id),
+            self._options.baichuan,
+            step_timeout=self._options.step_timeout,
+            progress=self._report_progress,
+        )
+        try:
+            now = await self._job(host, host.async_get_time, key=("time",))
+            return await check.async_host(info, list(info.channels), now)
+        except Exception as err:
+            _LOGGER.debug("Baichuan replay check failed", exc_info=True)
+            return {"ok": False, "error": _err(err)}
 
     def _playback_check(self, host: ReolinkHostHandle) -> PlaybackCheck | None:
         if not self._options.playback.enabled:
