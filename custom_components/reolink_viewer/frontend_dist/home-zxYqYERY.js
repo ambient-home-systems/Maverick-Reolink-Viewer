@@ -996,7 +996,7 @@ function Bt(e) {
 }
 //#endregion
 //#region src/version.ts
-var Vt = "0.34.0", Ht = "https://github.com/ambient-home-systems/Maverick-Reolink-Viewer", Ut = {
+var Vt = "0.34.1", Ht = "https://github.com/ambient-home-systems/Maverick-Reolink-Viewer", Ut = {
 	guide: ["user-guide"],
 	troubleshooting: ["troubleshooting"],
 	cameras: ["cameras"],
@@ -4906,11 +4906,11 @@ function Fi(e) {
 //#endregion
 //#region src/views.ts
 var Ii = {
-	events: () => import("./events-view-DXpvQC9J.js"),
-	list: () => import("./device-list-5GO0bZQM.js"),
-	device: () => import("./device-page-CzC71HYz.js"),
-	"live-check": () => import("./live-check-Coq7c0IT.js"),
-	soak: () => import("./live-soak-wfT00YZM.js")
+	events: () => import("./events-view-CmU-xTml.js"),
+	list: () => import("./device-list-Dl0qdtAO.js"),
+	device: () => import("./device-page-C_r_yxy8.js"),
+	"live-check": () => import("./live-check-B_YBk9EP.js"),
+	soak: () => import("./live-soak-C5-sRkcn.js")
 }, Li = /* @__PURE__ */ new Map();
 function $(e) {
 	let t = Ii[e];

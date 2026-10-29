@@ -43,7 +43,14 @@ from .scheduler import HostScheduler, Priority
 STREAM = "sub"
 STREAM_TYPE = "subStream"
 MIN_DURATION = timedelta(minutes=20)
+# A recording that ended this recently may still be growing.
+RECORDING_SETTLE = timedelta(minutes=2)
 TARGET_FRACTION = 0.75
+NOT_RECORDER = "not a recorder (the check replays NVR recordings)"
+NO_RECORDING = (
+    f"no finished recording of {MIN_DURATION.seconds // 60} minutes or more"
+    f" on any channel in the last {PROBE_SEARCH_DAYS + 1} days"
+)
 # The seek's channelId the Reolink client sent for an NVR channel.
 SEEK_CHANNEL_ID = 0
 HTTP_MAX_SECONDS = 60.0
@@ -76,12 +83,25 @@ def _err(err: BaseException) -> str:
     return f"{type(err).__name__}: {text}"[:300]
 
 
-def pick_recording(files: list[VodFile]) -> VodFile | None:
-    """Choose the longest recording of at least MIN_DURATION."""
-    long = [f for f in files if f.end - f.start >= MIN_DURATION and f.size]
+def pick_recording(files: list[VodFile], now: datetime) -> VodFile | None:
+    """Choose the longest finished recording of at least MIN_DURATION with a size."""
+    long = [
+        f
+        for f in files
+        if f.end - f.start >= MIN_DURATION
+        and f.size
+        and _naive_delta(now, f.end) >= RECORDING_SETTLE
+    ]
     if not long:
         return None
     return max(long, key=lambda f: f.end - f.start)
+
+
+def _naive_delta(a: datetime, b: datetime) -> timedelta:
+    """Subtract datetimes that may differ in tz-awareness (device local time)."""
+    if (a.tzinfo is None) != (b.tzinfo is None):
+        a, b = a.replace(tzinfo=None), b.replace(tzinfo=None)
+    return a - b
 
 
 def target_in(file: VodFile) -> tuple[datetime, int]:
@@ -121,25 +141,29 @@ class BaichuanCheck:
     async def async_host(
         self, info: HostInfo, channels: list[ChannelInfo], now: datetime
     ) -> dict[str, Any]:
-        """Run the check on the first channel of the host that records."""
+        """Run the check on the first channel of the host with a long recording."""
         if not info.is_nvr:
-            return _skipped("not a recorder (the check replays NVR recordings)")
-        channel = next(
-            (
-                c
-                for c in channels
-                if c.online and c.supports_replay and not c.is_battery
-            ),
-            None,
-        )
-        if channel is None:
+            return _skipped(NOT_RECORDER)
+        candidates = [
+            c for c in channels if c.online and c.supports_replay and not c.is_battery
+        ]
+        if not candidates:
             return _skipped("no online channel with replay support")
-        result: dict[str, Any] = {"channel": channel.channel, "stream": STREAM}
-        self._progress(f"ch{channel.channel} baichuan replay: searching a recording")
-        file, search = await self._recording(channel.channel, now)
+        result: dict[str, Any] = {"stream": STREAM, "channels_searched": []}
+        file: VodFile | None = None
+        channel = candidates[0]
+        for channel in candidates:
+            self._progress(
+                f"ch{channel.channel} baichuan replay: searching a long recording"
+            )
+            file, search = await self._recording(channel.channel, now)
+            result["channels_searched"].append({"channel": channel.channel, **search})
+            if file is not None:
+                break
+        result["channel"] = channel.channel
         result["search"] = search
         if file is None:
-            result["skipped"] = "no recording of 20 minutes or more in the last days"
+            result["skipped"] = NO_RECORDING
             return result
         when, target_bytes = target_in(file)
         result["recording"] = describe_file(file)
@@ -164,23 +188,24 @@ class BaichuanCheck:
     async def _recording(
         self, ch: int, now: datetime
     ) -> tuple[VodFile | None, dict[str, Any]]:
+        """Search one day at a time, today first, for a long finished recording."""
         midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        search: dict[str, Any] = {}
-        for days_back in range(1, PROBE_SEARCH_DAYS + 1):
+        search: dict[str, Any] = {"days": 0, "files": 0}
+        for days_back in range(PROBE_SEARCH_DAYS + 1):
             start = midnight - timedelta(days=days_back)
-            end = start + timedelta(days=1) - timedelta(seconds=1)
+            end = min(start + timedelta(days=1) - timedelta(seconds=1), now)
             began = time.monotonic()
             search_day = self._search_day(ch, start, end)
             try:
                 files = await self._job(search_day, timeout=self._timeout * 2)
             except Exception as err:  # noqa: BLE001 - recorded
-                return None, {"date": start.date().isoformat(), "error": _err(err)}
-            search = {
-                "date": start.date().isoformat(),
-                "latency_ms": _ms(began),
-                "files": len(files),
-            }
-            if (file := pick_recording(files)) is not None:
+                search["error"] = _err(err)
+                return None, search
+            search["days"] += 1
+            search["files"] += len(files)
+            search.setdefault("latency_ms", _ms(began))
+            if (file := pick_recording(files, now)) is not None:
+                search["date"] = start.date().isoformat()
                 return file, search
         return None, search
 

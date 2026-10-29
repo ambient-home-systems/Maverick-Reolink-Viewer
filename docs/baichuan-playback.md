@@ -204,8 +204,10 @@ full logs stay off the repository; only the redacted log is shared.
 
 The hardware probe has an opt-in **Baichuan replay** section
 (`probe_baichuan.py`, the panel's "Test replay over the Reolink app's own
-protocol" box). On a recorder it picks a recording of 20 minutes or more from
-a past day on the sub stream and, 75 % into it:
+protocol" box). On a recorder it looks through the channels in turn, today
+first and then the previous three days, for a finished sub-stream recording of
+20 minutes or more (continuous recording; motion clips are too short), and
+75 % into the first one found:
 
 - opens its own Baichuan connection (`baichuan_client.py`: reolink-aio cannot
   receive the replay's message class), logs in, and does what the client does:

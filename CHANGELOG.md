@@ -3,6 +3,14 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.34.1
+
+- **Hardware probe → Test replay over the Reolink app's own protocol** now looks
+  through every channel of the recorder, today's recordings included, for a
+  long recording instead of giving up when the first channel only has motion
+  clips. The report lists what was searched per channel. Cameras added directly
+  are skipped without a device call.
+
 ## 0.34.0
 
 A measurement release for Phase 5a, nothing changes in daily use:

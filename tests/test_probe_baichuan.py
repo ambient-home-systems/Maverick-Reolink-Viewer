@@ -2,10 +2,11 @@
 
 import asyncio
 from collections.abc import Callable
+from dataclasses import replace
 from datetime import datetime, timedelta
 import json
 from typing import Any, ClassVar, cast
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -47,8 +48,12 @@ def test_pick_and_target() -> None:
     short = vod(day, 5)
     long = vod(day + timedelta(hours=1), 60)
     longer = vod(day + timedelta(hours=2), 61, size=None)  # no size: not usable
-    assert pick_recording([short]) is None
-    assert pick_recording([short, long, longer]) is long
+    now = datetime(2026, 10, 16, 12, 0, 0)
+    assert pick_recording([short], now) is None
+    assert pick_recording([short, long, longer], now) is long
+    # A recording that ended a moment ago may still be growing.
+    assert pick_recording([long], datetime(2026, 10, 16, 7, 1, 0)) is None
+    assert pick_recording([long], datetime(2026, 10, 16, 7, 2, 1)) is long
     when, offset = target_in(long)
     assert when == datetime(2026, 10, 16, 6, 45, 1)
     assert offset == 75_000_000
@@ -271,7 +276,15 @@ async def test_check_skips(
         [make_vod_file(TEST_NOW, minutes=3)],
     )
     result = await check.async_host(info, list(info.channels), TEST_NOW)
-    assert result["skipped"].startswith("no recording of 20 minutes")
+    assert result["skipped"].startswith("no finished recording of 20 minutes")
+    assert result["search"] == {"days": 4, "files": 4, "latency_ms": ANY}
+    assert result["channels_searched"] == [{"channel": 0, **result["search"]}]
+    # Today's window ends now; the older ones span the whole day.
+    windows = [c.args[2] for c in reolink_host.request_vod_files.call_args_list]
+    assert windows[0] == TEST_NOW
+    assert windows[1] == TEST_NOW.replace(hour=23, minute=59, second=59) - timedelta(
+        days=1
+    )
     assert not FakeClient.instances
 
     reolink_host.is_nvr = False
@@ -342,8 +355,40 @@ async def test_check_without_uid_users_or_size(
     with patch.object(type(unsized), "size", 0):
         reolink_host.request_vod_files.return_value = ([], [unsized])
         result = await check.async_host(info, list(info.channels), TEST_NOW)
-    assert result["skipped"].startswith("no recording of 20 minutes")
+    assert result["skipped"].startswith("no finished recording of 20 minutes")
     await scheduler.async_shutdown()
+
+
+async def test_check_moves_on_to_a_channel_with_a_long_recording(
+    hass: HomeAssistant, loaded_reolink: MockConfigEntry, reolink_host: MagicMock
+) -> None:
+    scheduler = Scheduler(default_limit=2)
+    check, host = _check(hass, scheduler)
+    info = host.info()
+    first = info.channels[0]
+    channels = [first, replace(first, channel=1), replace(first, channel=2)]
+    day = TEST_NOW.replace(hour=5, minute=0, second=1)
+
+    async def search(ch: int, start: datetime, end: datetime, stream: str) -> Any:
+        if ch == 0:
+            return [], [make_vod_file(start, minutes=3)]  # motion clips only
+        if ch == 1 and start.day == TEST_NOW.day:
+            return [], [make_vod_file(day, minutes=60)]
+        raise AssertionError("searched past the first long recording")
+
+    reolink_host.request_vod_files = AsyncMock(side_effect=search)
+    with patch.object(asyncio, "sleep", AsyncMock()):
+        result = await check.async_host(info, channels, TEST_NOW)
+    await scheduler.async_shutdown()
+    assert result["ok"] is True
+    assert result["channel"] == 1
+    assert result["search"]["date"] == TEST_NOW.date().isoformat()
+    assert [c["channel"] for c in result["channels_searched"]] == [0, 1]
+    assert result["channels_searched"][0]["days"] == 4
+    assert result["channels_searched"][1]["days"] == 1
+    assert result["recording"]["start"] == day.isoformat()
+    (client,) = FakeClient.instances
+    assert client.calls[3][1][0] == 1  # the start went to the channel found
 
 
 async def test_check_http_url_failure(
