@@ -29,7 +29,7 @@ from xml.etree import ElementTree as ET
 
 from reolink_aio.baichuan.util import decrypt_udp_baichuan, get_value_from_xml
 
-from .media import MediaStream
+from .media import MAGIC_RE, MediaStream
 from .names import cmd_name
 from .pcap import (
     Flow,
@@ -427,7 +427,9 @@ def _decode_message(
         key = f"{direction} cmd {header.cmd_id} ch {header.channel}"
         stream = streams.setdefault(key, MediaStream())
         blocks = stream.feed(binary, index)
-        is_media = any(b.kind != "unknown" for b in stream.blocks)
+        is_media = any(b.kind != "unknown" for b in stream.blocks) or bool(
+            MAGIC_RE.fullmatch(binary[:4])
+        )
         if not is_media and len(binary) < 4096:
             if header.cmd_id in (1, 2):
                 entry.blocks.append(

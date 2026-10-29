@@ -1,8 +1,8 @@
 # Baichuan playback and talk (Phase 5a)
 
-Status: **prior art gathered and the capture tool built (2026-10-29); the capture
-of the Reolink desktop client is pending.** Sections 4–7 are filled from the
-owner's redacted log; until then they list what the log must answer.
+Status: **captured and decoded (2026-10-29).** §3–6 are from the owner's
+redacted logs; the NVR's replay frames await a re-run of the tool with its
+parser fix.
 
 Why: the remaining gaps the HTTP/RTSP paths cannot close (see Phase 5 in
 [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md#phase-5--optional-rd-baichuan-media-difficulty-very-high-48-wk-gated)):
@@ -201,27 +201,122 @@ reolink-aio's own encoder (`tests/test_baichuan_capture.py`). Steps:
 [scripts/baichuan/README.md](../scripts/baichuan/README.md). The capture and the
 full logs stay off the repository; only the redacted log is shared.
 
-## 3. Message sequences
+## 3. Message sequences (from the owner's capture, 2026-10-28)
 
-*To be filled from the log:* login; playback start deep inside a recording;
-seek forward and back; speed changes; pause and resume; stop; a clip download;
-talk on the Doorbell.
+Capture: the Reolink desktop client on macOS talking to the RLN36 over TCP 9000
+and to the battery Video Doorbell over Baichuan's UDP framing, decoded with
+`scripts/baichuan`; the owner's notes of each action tie the times to the
+clicks. The client could not add the Doorbell by IP address at all: it reached
+it by LAN scan and spoke UDP, as reolink-aio does.
+
+### 3.1 Login and the connection
+
+The NVR login is exactly reolink-aio's: the nonce request, the nonce, the
+hashed `<LoginUser>`, a 12 KB `<DeviceInfo>`, AES from then on. Within 1.5 s the
+client asked some 60 settings, then kept alive with 93 every 6–30 s. The client
+opened three TCP connections: one it logged out of after 46 s, one refused with
+401 (its saved password), and the one that carried everything else, live view,
+replay, thumbnails, downloads and pushes together, on **one connection**.
+
+### 3.2 Live view
+
+3 `<Preview>` (`channelId`, a client-chosen `handle`, `streamType`, `policy`
+`newestIFrame`) → 200 with the binary-data extension, then the stream on the
+same command and handle. The NVR's first media message came 80 ms after the
+request; the Doorbell answered in 45 ms with its newest key frame, 6.6–7 s old,
+the same trick as the integration's key-frame cache. Stop: 4 `<Preview>` with
+`channelId` and `handle`.
+
+### 3.3 Before playback
+
+142 `<DayRecords>` (the calendar); 14 → 15 → 16 `<FileInfoList>` (the day's
+files: `name`, `Id`, sizes, start and end; 0.7 s, 60 ms per page, 0.6 s to
+close); 272 → 273 → 274 `<findAlarmVideo>` (the events, 376 pages); 298
+`<CoverPreview>` thumbnails, one per hour, 0.45 s each, ended by status 300.
+
+### 3.4 Replay (the primary target)
+
+Deep start 47 minutes into an hour-long sub-stream recording:
+
+| time (UTC) | message | NVR's answer |
+| --- | --- | --- |
+| 01:50:19.025 | 56, encoding query | 54 ms |
+| 01:50:19.120 | 123 `<ReplaySeek>`: `channelId 0`, `seq` (the client's Unix time), `seekTime` 05:47:33 local | 17 ms, header only |
+| 01:50:19.661 | 5 `<FileInfoList>`: `channelId 18`, the file's `Id`, `uid`, `supportSub 1`, `playSpeed 1`, `streamType subStream` | 72 ms: 200 with the binary-data extension and the 32-byte stream header |
+
+The client itself waited 0.54 s between the seek and the start. The owner saw
+the picture within about a second of the click; the NVR's share is under
+0.1 s. *The frames that follow are pending the re-run: the NVR sends them in a
+message class the tool first skipped.*
+
+**Every seek, speed change, pause and resume is a stop and a new start**; the
+client never changes a running replay:
+
+| action | messages |
+| --- | --- |
+| seek forward, seek back | 7 stop → 56 → 123 at the new time → 5 |
+| 4×, 16×, back to 1× | the same, with `playSpeed` 4, 16, 1 |
+| pause | 7 stop |
+| resume | 56 → 123 at the paused second → 5 |
+| stop | 7 |
+
+7 `<FileInfoList>` names the file (`channelId`, `name`, `streamType`); the NVR
+acknowledges it in about 20 ms. The NVR's part of a restart is about 60 ms; the
+owner saw each seek land within 1–3 s and both speeds take effect.
+
+### 3.5 Clip and whole-file download
+
+Both went through **143**, a cut by time range (`channelId`, `streamType`,
+`startTime`, `endTime`): 200 with `sizeL`/`sizeH`/`FileCount` in 100 ms, the
+data on the same handle, a 143 with status 300 at the end, then the client's
+**144**. The 65 s clip (4.2 MB) arrived in 0.37 s; the whole hour (219 MB) in
+35 s.
+
+### 3.6 Talk (the Doorbell, over UDP)
+
+10 `<TalkAbility>` at session start (full duplex, ADPCM 16 kHz 16-bit mono,
+1024 samples per block, two stream modes on the Doorbell). "Start talking" is
+201 `<TalkConfig>` echoing that configuration with `followVideoStream`, answered
+200 in 0.5–0.6 s. Then 202 messages at 15–16 per second (one 64 ms block each,
+real time), all on handle 0, each acknowledged by a header-only 202 in batches
+0.2–0.5 s behind. Near the end of each session the Doorbell answered some
+frames with 400, 420 or 424. The close is 11 with `channelId`: 200 after 1.4 s
+the first time, 400 after 8 s the second. Live view ran throughout.
 
 ## 4. XML fields
 
-*To be filled from the log:* the elements that select the channel, the stream,
-the start time, a seek and the speed, with the values the client sent.
+| purpose | element |
+| --- | --- |
+| channel | `channelId` in 123 (0) and in 5/7/143 (the NVR channel) |
+| stream | `streamType` `subStream`/`mainStream` in 5, 7, 143, 3 |
+| file | `Id` in 5 (`C-CH-S-<stamp>-NNNNN`); `name` in 7 (channel + 1, then the local start time) |
+| start time | `seekTime` (year…second, camera-local) in 123; `startTime`/`endTime` in 143 |
+| seek | a new 123 → 5; `seq` = the client's Unix time |
+| speed | `playSpeed` in 5 (1, 4, 16 seen) |
+| end of a stream | status 300 on the stream's own command (143, 298) |
+
+A side finding for the timeline: the 14-digit stamp in a file `Id`, which Phase 2
+could not place, is the file's start time in UTC with a zero-based month.
 
 ## 5. Media framing as captured
 
-*To be filled from the log:* the stream header, the frame headers, padding and
-the audio blocks the RLN36 and the Doorbell actually send, against §1.5.
+The stream header, key frames, frames and audio blocks are summarized per
+message by `scripts/baichuan/media.py` (block kind, codec, size, timestamps,
+padding) and agree with §1.5 on the NVR's live and download streams, with the
+first part of each chunk AES-encrypted as the extension's `encryptLen` says. The
+Doorbell's key frames carry a longer extra header than the NVR's. The NVR's
+replay frames are pending the re-run.
 
 ## 6. Session impact
 
-*To be filled from the log and the read-only experiment:* connections per
-device, whether a replay takes one of the NVR's stream slots, and whether it
-runs beside live view and HTTP downloads.
+- The client used one TCP connection to the NVR for live view, replay,
+  thumbnails and downloads at once; a replay restarted while a 143 download ran,
+  and 298 thumbnails were fetched during a replay. Each stream has its own
+  handle byte, so several can share the connection.
+- Whether a replay takes one of the NVR's stream slots cannot be read from the
+  capture; the read-only check (step 5) measures it against the stream budget.
+- The Doorbell: one UDP conversation; live view and talk ran together (full
+  duplex); 898 heartbeats (234) and about 78,000 acknowledgements in 15 minutes.
 
 ## 7. Sources
 
