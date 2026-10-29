@@ -2,6 +2,7 @@
 
 import asyncio
 from collections.abc import AsyncGenerator
+import contextlib
 from datetime import datetime
 import struct
 
@@ -72,6 +73,7 @@ class FakeNvr:
         self.drop_on_seek = drop_on_seek
         self.requests: list[tuple[int, str]] = []
         self.writers: list[asyncio.StreamWriter] = []
+        self.tasks: list[asyncio.Task[None]] = []
         self.stopped = asyncio.Event()
         self.server: asyncio.AbstractServer | None = None
         self.port = 0
@@ -84,6 +86,11 @@ class FakeNvr:
     async def close(self) -> None:
         assert self.server is not None
         self.server.close()
+        for task in self.tasks:
+            task.cancel()
+        for task in self.tasks:
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
         for writer in self.writers:
             writer.close()
         try:
@@ -168,7 +175,9 @@ class FakeNvr:
                 )
                 info = b"1001" + struct.pack("<III", 32, 640, 360) + bytes(16)
                 writer.write(self._reply(5, ident, 200, ext + info, offset=len(ext)))
-                asyncio.get_running_loop().create_task(self._stream(writer, ident))
+                self.tasks.append(
+                    asyncio.get_running_loop().create_task(self._stream(writer, ident))
+                )
         elif cmd == 7:
             self.stopped.set()
             writer.write(self._reply(7, ident, 200))
