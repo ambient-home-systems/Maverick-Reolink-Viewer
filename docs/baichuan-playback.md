@@ -358,6 +358,42 @@ magic rather than by rounding.
 - The Doorbell: one UDP conversation; live view and talk ran together (full
   duplex); 898 heartbeats (234) and about 78,000 acknowledgements in 15 minutes.
 
+### 6.1 The read-only check's run (2026-10-29, v0.34.1)
+
+The owner ran the check from the hardware probe on the RLN36, from Home
+Assistant, with the usual live feeds up. It settled on the Garage Camera
+(RLC-520A, NVR channel 16): a sub-stream recording of 23 min 38 s from
+2026-10-26 (65 MB, 367 kbit/s), and went 75 % in (17 min 43 s, 48.8 MB).
+
+| step | measured |
+| --- | --- |
+| Login (nonce, then the login) | 3 ms + 46 ms |
+| 123 `ReplaySeek` acknowledged | 13 ms |
+| 5 `FileInfoList` acknowledged | 41 ms, the first chunk with it |
+| First key frame | **140 ms after the start request**, its time 3 s before the seek (the previous key frame; the GOP is 4 s) |
+| 5 s hold | 372 chunks, 556 KB, 3 key frames, 177 frames, 188 audio blocks (about 12 s of video: the 6 s burst, then paced) |
+| 7 stop acknowledged | 21 ms; nothing after it |
+| Logged-in users | 2 before, **3 during**, 2 after |
+| Wait for a stream-budget slot | 0 ms (both paths) |
+| HTTP `DOWNLOAD` to the same offset | first byte 189 ms, **4.67 s to 48.8 MB** at 87 Mbit/s |
+
+What it settles:
+
+- **A deep start over Baichuan costs the NVR about 0.2 s** (login, seek, start,
+  first key frame), against 4.7 s for the HTTP download up to the same point of
+  a short sub recording, and that download grows with the offset: 75 % into the
+  hour-long main recordings on this NVR (2.4–2.8 GB) is 1.8–2.1 GB, minutes at
+  this link's 87 Mbit/s. Phase 2B measured 6.9–13.0 s for sub-stream deep starts
+  at 41–57 min from the Mac. The Reolink app's start is not in the NVR but in
+  what it is asked for.
+- **The replay connection is one more logged-in user** for as long as it is
+  open, and it is released at logout. It started at once beside the live feeds,
+  so a replay is not refused when the live slots are busy; whether it holds one
+  of the NVR's stream slots is still unmeasured (the capacity test with a replay
+  open would show it) and the stream budget treats it as a stream anyway.
+- The stream is what the capture showed: a burst, then pacing at the playback
+  speed, key frames at 4 s on this camera, nothing after the stop.
+
 ## 7. Sources
 
 - reolink-aio: <https://github.com/starkillerOG/reolink_aio> (`reolink_aio/baichuan/`),

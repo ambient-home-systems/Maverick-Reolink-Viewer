@@ -933,6 +933,14 @@ Recorded video (NVR RLN36; the cameras record only to the NVR):
   in 160–490 ms**, fast enough for hover thumbnails.
 - The three cameras added directly have no local recordings: day search returns 0
   days, Search errors, and Baichuan event search returns 400/405.
+- **Replay over Baichuan (Phase 5a, 2026-10-29, v0.34.1)**: 75 % into a 24-minute
+  sub recording of the RLC-520A "Garage", the NVR acknowledged the seek in 13 ms
+  and the start in 41 ms and sent the first key frame 140 ms after the start
+  request, 3 s before the asked time (the previous key frame); the HTTP
+  `DOWNLOAD` took 4.67 s to reach the same offset (48.8 MB at 87 Mbit/s). The
+  replay counted as one more logged-in user (2 → 3 → 2) and started at once
+  beside the live feeds. Details in
+  [baichuan-playback.md §6.1](baichuan-playback.md#61-the-read-only-checks-run-2026-10-29-v0341).
 
 Recording playback (runs 3 and 4; the Phase 2 gate):
 
