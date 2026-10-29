@@ -21,7 +21,7 @@ put on it:
 | 2 | Event timeline, thumbnails, smooth playback | High (backend) / Very high (player) | 3–5 wk | Done (2026-10-21, v0.3.2). 2A (2026-10-20, v0.2.7): timeline 105–287 ms, first frame 0.6–1.1 s, auto-advance 6–7 ms on hardware. 2B: MSE player; uncached deep starts are the NVR's download up to the target (6.9–13.0 s in hour-long recordings, up to 84 s before), speeds 0.5–8×, HD/SD at the same moment, one-hour sessions within the caps, the iPhone app on Wi-Fi, Tailscale and Nabu Casa |
 | 3 | Live view via go2rtc, grid, fullscreen, PTZ | High | 3–4 wk | Done (2026-10-27, v0.15.1). Our own go2rtc and the live check (v0.4.0, runs 5–13); the key-frame cache, the image cache, the Live grid and Live tab, keep warm, full-screen HD, PTZ and the camera's controls, the picture first, battery cameras on wired power, a debug view per tile and the soak report (v0.5.0–v0.15.1). Exit runs: the soak passed (run 15), every tile's first image in a median 0.02 s on the iPhone and the Mac (runs 16–17), and the Phase 2 playback criteria held with live view running (runs 18–19) |
 | 4 | Design, performance, mobile, packaging, first release | Standard | 3–4 wk | Done (2026-10-28, v0.32.3). Step 1, the design (the Timetable), in v0.16.0–v0.22.0; step 2, the performance budget, in v0.23.0; step 3, mobile, in v0.24.0–v0.26.0; step 4, error states, in v0.27.0–v0.29.0; step 5, accessibility, in v0.30.0; step 6, packaging, in v0.31.0, the first release; step 7, docs, in v0.32.0, released the same day; v0.32.1 starts live video sooner where WebRTC cannot connect, from the work PC's check, v0.32.2 keeps the capacity test from blaming the NVR for a stream that plays no video, from the owner's live check, and v0.32.3 fixes full screen and the timeline's pinch on the iPhone, from the owner's iPhone. The rest of the exit checklist was not run: the owner closed the phase on v0.32.0 working in daily use. See "Phase 4 status" |
-| 5 | Optional R&D: Baichuan live/playback | Very high | 4–8 wk, time-boxed with gates | Not started |
+| 5 | Optional R&D: Baichuan live/playback | Very high | 4–8 wk, time-boxed with gates | **5a in progress** (2026-10-29): prior art surveyed, the capture tool built and tested, capture steps written; waiting for the owner's redacted log. See "Phase 5 status" |
 
 Phases 1 and 2 can overlap once Phase 0 is done. Phase 5 can start any time after
 Phase 0 as a separate track.
@@ -4127,6 +4127,30 @@ Guardrails:
 
 Exit criteria: for at least one target model, Baichuan playback starts faster or seeks
 more precisely than the Phase 2 path, measured with the debug panel.
+
+### Phase 5 status
+
+Started 2026-10-29 with step 5a only, the gate. The original targets are mostly
+gone: no owned camera has broken RTSP/FLV, the battery Doorbell runs on wired
+power and starts live over WebRTC in 0.4 s, and speeds and scrubbing work. Two
+gaps remain that only the Reolink app's own protocol may close, and 5a is scoped
+to them:
+
+- **Primary: deep starts in uncached recordings.** The NVR ignores HTTP `Range`
+  and `start=`, so starting 41–57 min into an hour-long recording waits for the
+  download up to there (6.9–13.0 s, Phase 2B), while the Reolink app starts at the
+  chosen time at once. Find out whether Baichuan playback on the RLN36 can start
+  at an arbitrary time, seek and change speed, and how fast.
+- **Secondary: two-way audio (talk)** on the Doorbell.
+
+| 5a step | Status |
+| --- | --- |
+| 1. Prior art at its latest versions: reolink-aio 0.22.0 (and its open PRs #164 replay, #186 download, #218 live, #219 talk), neolink master and PR #396, nodelink-js, cam-sim, reolink-downloader, reostream, leolink, the HTTP API guide | **Done**: [baichuan-playback.md §1](baichuan-playback.md#1-what-is-already-known). Nothing released plays or talks over Baichuan; the open PRs and nodelink-js agree on a replay pattern (123 `ReplaySeek` → 5 `FileInfoList` with `playSpeed` → 7 stop) and on talk (10 → 201 → 202 ADPCM → 11), but no one has seen an in-session seek, a speed change, pause/resume, or an NVR replay at all. §1.6 lists what the capture must settle |
+| 2. Capture-analysis tool `scripts/baichuan/` (pcapng/pcap → TCP reassembly → Baichuan framing → decryption with reolink-aio's cipher → redacted log) | **Done**: `python -m scripts.baichuan capture.pcapng --user admin --out log.txt [--json log.json]`. Tested on synthetic captures built with reolink-aio's own encoder (`tests/test_baichuan_capture.py`): out-of-order and retransmitted segments, a message split mid-header, a hole, a wrong password, two accounts, media blocks across messages, and that no credential, hash, nonce, UID, MAC or IP survives in the log |
+| 3. Capture steps | **Done**: [scripts/baichuan/README.md](../scripts/baichuan/README.md). Captured on 2026-10-28 by a local Claude session on the owner's Mac (Remote Control into this cloud session never connected): the NVR over TCP, the Doorbell over UDP (the client cannot add it by IP), the tool run there, only the redacted logs shared |
+| 4. `docs/baichuan-playback.md`: sequences, fields, framing, session impact | **Mostly done** ([§3–6](baichuan-playback.md#3-message-sequences-from-the-owners-capture-2026-10-28)): replay is 123 `ReplaySeek` → 5 `FileInfoList` (`playSpeed`) → 7, every seek/speed/pause/resume a stop and a new start, the NVR's part under 0.1 s; downloads by time range (143); talk 10 → 201 → 202 at real time → 11. The replay frames (re-run): the first key frame 136 ms after the start request, the stream paced at the playback speed, key frames only at 16× |
+| 5. Read-only confirmation, as an opt-in probe-style check in the panel | **Built** (see [baichuan-playback.md §2.1](baichuan-playback.md#21-the-read-only-check-step-5)): our own Baichuan connection, because reolink-aio drops the replay's message class; replay 75 % into a long recording against the HTTP download up to the same offset, the device's logged-in users before, during and after. **Waiting for the owner's run** (the probe's new box, then the report). Talk is not tried yet: the Doorbell speaks Baichuan over UDP, where sending audio needs reolink-aio 0.22's raw-payload send or our own UDP client; decided at the go/no-go |
+| 6. Go/no-go and the estimate for 5b–5d | Not started |
 
 ---
 

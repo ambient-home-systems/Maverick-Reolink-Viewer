@@ -15,3 +15,8 @@ frontend/.preview/
 frontend/preview/public/media/
 .impeccable/review/
 dist/
+# Phase 5 captures and their logs stay out of the repository.
+*.pcap
+*.pcapng
+*.log.txt
+*.log.json

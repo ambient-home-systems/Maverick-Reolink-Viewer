@@ -88,6 +88,8 @@ scripts/             # setup_dev.sh, probe_to_matrix.py, make_mse_sample.py (wri
                      # fetch_go2rtc.py (the pinned go2rtc for the tests);
                      # playback_check.js and inspect_recording.js (paste into the browser console);
                      # desktop-check/ runs the playback check in Chrome without clicking;
+                     # baichuan/ turns a Wireshark capture of the Reolink client into a
+                     # redacted Baichuan message log (Phase 5a, see its README);
                      # scrub_check.cjs drags the preview's timeline and counts long
                      # tasks, then pinches it with touch on a phone-sized page;
                      # a11y_check.cjs checks every view with axe-core and the keyboard

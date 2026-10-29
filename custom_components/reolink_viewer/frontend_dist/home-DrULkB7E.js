@@ -4906,11 +4906,11 @@ function Fi(e) {
 //#endregion
 //#region src/views.ts
 var Ii = {
-	events: () => import("./events-view-rGaP8de0.js"),
-	list: () => import("./device-list-CW3YROe5.js"),
-	device: () => import("./device-page-B4dX-b0c.js"),
-	"live-check": () => import("./live-check-lfhFILi7.js"),
-	soak: () => import("./live-soak-CGa_1pD3.js")
+	events: () => import("./events-view-BHD7uKb4.js"),
+	list: () => import("./device-list-V_yvFvPS.js"),
+	device: () => import("./device-page-DujhAEl0.js"),
+	"live-check": () => import("./live-check-Q-OHfSaj.js"),
+	soak: () => import("./live-soak-CPpucLAI.js")
 }, Li = /* @__PURE__ */ new Map();
 function $(e) {
 	let t = Ii[e];
@@ -4948,6 +4948,7 @@ var Ri = {
 		_playbackOnly: { state: !0 },
 		_playbackConcurrency: { state: !0 },
 		_playbackStreams: { state: !0 },
+		_baichuan: { state: !0 },
 		_copied: { state: !0 },
 		_route: { state: !0 },
 		_toast: { state: !0 },
@@ -4962,7 +4963,7 @@ var Ri = {
 		this._route = jr(window.location.hash);
 	};
 	constructor() {
-		super(), this.narrow = !1, this._now = Date.now(), this._board = [], this._probe = { status: "idle" }, this._includeBattery = !1, this._concurrency = !1, this._maxStreams = 4, this._playback = !1, this._playbackOnly = !1, this._playbackConcurrency = !1, this._playbackStreams = 4, this._copied = !1, this._route = { view: "live" }, this.addEventListener(Dr, (e) => {
+		super(), this.narrow = !1, this._now = Date.now(), this._board = [], this._probe = { status: "idle" }, this._includeBattery = !1, this._concurrency = !1, this._maxStreams = 4, this._playback = !1, this._playbackOnly = !1, this._playbackConcurrency = !1, this._playbackStreams = 4, this._baichuan = !1, this._copied = !1, this._route = { view: "live" }, this.addEventListener(Dr, (e) => {
 			this.navigate(e.detail);
 		}), this.addEventListener(Or, (e) => {
 			this.showToast(e.detail);
@@ -5340,6 +5341,21 @@ var Ri = {
             , one per camera, stopping at the first that fails</span
           >
         </label>
+        <label class="option">
+          <input
+            type="checkbox"
+            .checked=${this._baichuan}
+            ?disabled=${e}
+            @change=${(e) => {
+			this._baichuan = e.target.checked;
+		}}
+          />
+          <span
+            >Test replay over the Reolink app's own protocol (Phase 5a): start a recording of a
+            recorder 45 minutes in over Baichuan and over HTTP, and compare. Read-only, a few
+            seconds of video.</span
+          >
+        </label>
       </div>
       <div class="actions">
         ${e ? C`<button @click=${() => {
@@ -5407,7 +5423,8 @@ var Ri = {
 			playback_test: this._playback,
 			playback_only: this._playback && this._playbackOnly,
 			playback_concurrency_test: this._playback && this._playbackConcurrency,
-			playback_max_streams: this._playbackStreams
+			playback_max_streams: this._playbackStreams,
+			baichuan_test: this._baichuan
 		}, (e) => {
 			this._probe.status === "running" && (this._probe = {
 				...this._probe,

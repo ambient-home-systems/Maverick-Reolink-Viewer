@@ -71,6 +71,7 @@ export class ReolinkViewerPanel extends LitElement {
     _playbackOnly: { state: true },
     _playbackConcurrency: { state: true },
     _playbackStreams: { state: true },
+    _baichuan: { state: true },
     _copied: { state: true },
     _route: { state: true },
     _toast: { state: true },
@@ -93,6 +94,7 @@ export class ReolinkViewerPanel extends LitElement {
   declare _playbackOnly: boolean;
   declare _playbackConcurrency: boolean;
   declare _playbackStreams: number;
+  declare _baichuan: boolean;
   declare _copied: boolean;
   declare _route: Route;
   /** The current view's file could not be loaded. */
@@ -121,6 +123,7 @@ export class ReolinkViewerPanel extends LitElement {
     this._playbackOnly = false;
     this._playbackConcurrency = false;
     this._playbackStreams = 4;
+    this._baichuan = false;
     this._copied = false;
     this._route = { view: "live" };
     this.addEventListener(NAVIGATE_EVENT, (e) => {
@@ -587,6 +590,21 @@ export class ReolinkViewerPanel extends LitElement {
             , one per camera, stopping at the first that fails</span
           >
         </label>
+        <label class="option">
+          <input
+            type="checkbox"
+            .checked=${this._baichuan}
+            ?disabled=${running}
+            @change=${(e: Event) => {
+              this._baichuan = (e.target as HTMLInputElement).checked;
+            }}
+          />
+          <span
+            >Test replay over the Reolink app's own protocol (Phase 5a): start a recording of a
+            recorder 45 minutes in over Baichuan and over HTTP, and compare. Read-only, a few
+            seconds of video.</span
+          >
+        </label>
       </div>
       <div class="actions">
         ${running
@@ -662,6 +680,7 @@ export class ReolinkViewerPanel extends LitElement {
         playback_only: this._playback && this._playbackOnly,
         playback_concurrency_test: this._playback && this._playbackConcurrency,
         playback_max_streams: this._playbackStreams,
+        baichuan_test: this._baichuan,
       },
       (message) => {
         if (this._probe.status !== "running") return;

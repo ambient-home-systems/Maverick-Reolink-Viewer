@@ -51,6 +51,11 @@ No Home Hubs. Until run 4 there were no battery cameras or doorbells; see host1.
 
 3. Paste the rows under the matching headers below.
 
+For the Phase 5a replay measurement, tick **Test replay over the Reolink app's own
+protocol**: the report gains a `baichuan_replay` section per recorder (a replay
+75 % into a long recording over Baichuan against the HTTP download up to the same
+point, and the device's logged-in users around it).
+
 For the Phase 2 recording playback measurements, tick **Test recording playback**
 (optionally **Only this test** to skip the Phase 0 checks, and **Test simultaneous
 playback**). Reports with it have `schema_version` 2 and the script adds three
