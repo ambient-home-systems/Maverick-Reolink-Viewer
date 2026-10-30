@@ -459,11 +459,11 @@ async def test_prober_runs_the_check(
             session=MagicMock(),
             integration_version="0.0.1",
         ).async_run()
-    await scheduler.async_shutdown()
     (host,) = report["hosts"]
     assert host["baichuan_replay"]["ok"] is True
     assert report["options"]["baichuan"] == {
         "enabled": True,
+        "only": False,
         "hold_seconds": 1,
         "streams": ["sub"],
         "download": True,
@@ -474,6 +474,37 @@ async def test_prober_runs_the_check(
     text = json.dumps(report)
     for secret in SECRETS:
         assert secret not in text
+    assert "live" in host["channels"][0]
+
+    # "Only this test": the Phase 0 channel checks and the concurrency test
+    # are skipped, the Baichuan section still runs.
+    options = ProbeOptions(
+        baichuan=BaichuanOptions(enabled=True, only=True, hold_seconds=1)
+    )
+    live_calls = len(media.frame_calls)
+    with (
+        patch.object(probe, "async_first_frame", media.first_frame),
+        patch.object(probe_baichuan, "BaichuanReplayClient", FakeClient),
+        patch.object(probe_baichuan, "async_fetch", fake_fetch),
+        patch.object(asyncio, "sleep", AsyncMock()),
+    ):
+        report = await Prober(
+            scheduler,
+            bridge.async_get_hosts(hass),
+            options=options,
+            compat=bridge.async_check_compat(hass),
+            ffmpeg_binary="ffmpeg",
+            ffmpeg_version="7.1",
+            session=MagicMock(),
+            integration_version="0.0.1",
+        ).async_run()
+    (host,) = report["hosts"]
+    assert host.get("error") is None, host
+    assert host["baichuan_replay"]["ok"] is True
+    assert "live" not in host["channels"][0]
+    assert "skipped" in host["concurrency"]
+    assert len(media.frame_calls) == live_calls
+    await scheduler.async_shutdown()
 
 
 async def test_check_without_uid_users_or_size(

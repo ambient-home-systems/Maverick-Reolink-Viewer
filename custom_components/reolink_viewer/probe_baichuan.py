@@ -71,6 +71,8 @@ class BaichuanOptions:
     """Options of the Baichuan check."""
 
     enabled: bool = False
+    # Skip the Phase 0 channel checks: only this section runs on the host.
+    only: bool = False
     hold_seconds: float = 5.0
     streams: tuple[str, ...] = ("sub",)
     # The download by time range (143), after the replay.

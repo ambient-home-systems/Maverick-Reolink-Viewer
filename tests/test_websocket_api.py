@@ -166,6 +166,7 @@ async def test_probe_baichuan_options(
             client,
             {
                 "baichuan_test": True,
+                "baichuan_only": True,
                 "baichuan_streams": ["sub", "main"],
                 "baichuan_download": False,
                 "baichuan_session": True,
@@ -177,6 +178,7 @@ async def test_probe_baichuan_options(
     assert events[-1] == {"type": "result", "report": {"ok": 1}}
     options = run.call_args.args[0]._options.baichuan
     assert options.enabled is True
+    assert options.only is True
     assert options.streams == ("sub", "main")
     assert options.download is False
     assert options.session is True

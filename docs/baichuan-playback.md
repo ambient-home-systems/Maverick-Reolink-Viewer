@@ -238,9 +238,12 @@ Phase 5b's first step (IMPLEMENTATION_PLAN.md, "5b: the prototype") extends
 the same opt-in section so the source of a deep start can be chosen on
 numbers: the paced replay, the full-speed download cut (143), or the two
 together. v0.35.0 measures, per recorder, for each camera asked for (the
-**Cameras** field; every camera up to 8 when empty) and each stream (sub, and
-main with **Also the HD (main) recordings**), 75 % into the longest finished
-recording of 20 minutes or more of the last four days:
+**Cameras** field, any part of a channel's name or, from v0.35.2, its model;
+every camera up to 8 when empty) and each stream (sub, and main with **Also
+the HD (main) recordings**), 75 % into the longest finished recording of 20
+minutes or more of the last four days. **Only this test** (v0.35.2, on by
+default) skips the probe's Phase 0 checks on every channel, which take about
+six minutes on the RLN36:
 
 1. **Replay** as in §2.1: login, 123, 5 with `playSpeed 1`, a hold (5 s by
    default, up to 90), 7, logout. Now also the stream's pace (media seconds

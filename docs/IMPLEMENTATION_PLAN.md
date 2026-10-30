@@ -4253,12 +4253,14 @@ main recordings, 75 % into a long recording of the last four days
 How to run it (the owner, Chrome on the LAN, the RLN36):
 
 1. Update to v0.35.0 and restart Home Assistant; reload the panel.
-2. Devices → the recorder → Hardware probe: tick **Test replay over the
-   Reolink app's own protocol** and, under it, **Also the HD (main)
-   recordings**; leave the download cut ticked; tick **Session test**; put
-   `Duo 3, CX810` in **Cameras** (an H.264 and an H.265 camera; a third name
-   is fine); hold 10 s. Run the probe; it takes a few minutes. Send the
-   report.
+2. Devices → Hardware probe: tick **Test replay over the Reolink app's own
+   protocol** and, under it, leave **Only this test** ticked (v0.35.2: the
+   six minutes of Phase 0 checks are skipped), tick **Also the HD (main)
+   recordings**, leave the download cut ticked, tick **Session test**, and
+   put `Back Yard, Front Yard Left, Front Yard Right` in **Cameras** (the
+   Duo 3 and the CX810, H.265 mains, and the CX410, an H.264 main; from
+   v0.35.2 models match too: `Duo 3, CX810, CX410`); hold 10 s. Run the
+   probe; it takes a few minutes. Send the report.
 3. A second run with the hold at 90 s and the Cameras field naming one
    camera, with the Live check's capacity test started on the recorder while
    the probe says "baichuan replay at …" (Devices → the recorder → Live check,

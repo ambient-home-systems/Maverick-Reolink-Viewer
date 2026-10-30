@@ -996,7 +996,7 @@ function Bt(e) {
 }
 //#endregion
 //#region src/version.ts
-var Vt = "0.35.1", Ht = "https://github.com/ambient-home-systems/Maverick-Reolink-Viewer", Ut = {
+var Vt = "0.35.2", Ht = "https://github.com/ambient-home-systems/Maverick-Reolink-Viewer", Ut = {
 	guide: ["user-guide"],
 	troubleshooting: ["troubleshooting"],
 	cameras: ["cameras"],
@@ -4906,11 +4906,11 @@ function Fi(e) {
 //#endregion
 //#region src/views.ts
 var Ii = {
-	events: () => import("./events-view-4am8Coqe.js"),
-	list: () => import("./device-list-ChJ-Tmxy.js"),
-	device: () => import("./device-page-oWs7UbvT.js"),
-	"live-check": () => import("./live-check-BB8YqNt5.js"),
-	soak: () => import("./live-soak-DezhCnM_.js")
+	events: () => import("./events-view-CYF7fZ9n.js"),
+	list: () => import("./device-list-DaVaOeSr.js"),
+	device: () => import("./device-page-xnplYkeM.js"),
+	"live-check": () => import("./live-check-D3wDjPzR.js"),
+	soak: () => import("./live-soak-BaDMIVIl.js")
 }, Li = /* @__PURE__ */ new Map();
 function $(e) {
 	let t = Ii[e];
@@ -4949,6 +4949,7 @@ var Ri = {
 		_playbackConcurrency: { state: !0 },
 		_playbackStreams: { state: !0 },
 		_baichuan: { state: !0 },
+		_baichuanOnly: { state: !0 },
 		_baichuanMain: { state: !0 },
 		_baichuanDownload: { state: !0 },
 		_baichuanSession: { state: !0 },
@@ -4968,7 +4969,7 @@ var Ri = {
 		this._route = jr(window.location.hash);
 	};
 	constructor() {
-		super(), this.narrow = !1, this._now = Date.now(), this._board = [], this._probe = { status: "idle" }, this._includeBattery = !1, this._concurrency = !1, this._maxStreams = 4, this._playback = !1, this._playbackOnly = !1, this._playbackConcurrency = !1, this._playbackStreams = 4, this._baichuan = !1, this._baichuanMain = !1, this._baichuanDownload = !0, this._baichuanSession = !1, this._baichuanCameras = "", this._baichuanHold = 5, this._copied = !1, this._route = { view: "live" }, this.addEventListener(Dr, (e) => {
+		super(), this.narrow = !1, this._now = Date.now(), this._board = [], this._probe = { status: "idle" }, this._includeBattery = !1, this._concurrency = !1, this._maxStreams = 4, this._playback = !1, this._playbackOnly = !1, this._playbackConcurrency = !1, this._playbackStreams = 4, this._baichuan = !1, this._baichuanOnly = !0, this._baichuanMain = !1, this._baichuanDownload = !0, this._baichuanSession = !1, this._baichuanCameras = "", this._baichuanHold = 5, this._copied = !1, this._route = { view: "live" }, this.addEventListener(Dr, (e) => {
 			this.navigate(e.detail);
 		}), this.addEventListener(Or, (e) => {
 			this.showToast(e.detail);
@@ -5364,6 +5365,17 @@ var Ri = {
         <label class="option nested">
           <input
             type="checkbox"
+            .checked=${this._baichuanOnly}
+            ?disabled=${e || !this._baichuan}
+            @change=${(e) => {
+			this._baichuanOnly = e.target.checked;
+		}}
+          />
+          <span>Only this test (skip the live video and recording checks on every camera)</span>
+        </label>
+        <label class="option nested">
+          <input
+            type="checkbox"
             .checked=${this._baichuanMain}
             ?disabled=${e || !this._baichuan}
             @change=${(e) => {
@@ -5410,7 +5422,7 @@ var Ri = {
 			this._baichuanCameras = e.target.value;
 		}}
             />
-            (names, separated by commas; empty for every camera, up to 8)</span
+            (names or models, separated by commas; empty for every camera, up to 8)</span
           >
         </label>
         <label class="option nested">
@@ -5503,6 +5515,7 @@ var Ri = {
 			playback_concurrency_test: this._playback && this._playbackConcurrency,
 			playback_max_streams: this._playbackStreams,
 			baichuan_test: this._baichuan,
+			baichuan_only: this._baichuan && this._baichuanOnly,
 			baichuan_streams: this._baichuanMain ? ["sub", "main"] : ["sub"],
 			baichuan_download: this._baichuanDownload,
 			baichuan_session: this._baichuanSession,

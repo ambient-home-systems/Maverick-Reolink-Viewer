@@ -72,6 +72,7 @@ export class ReolinkViewerPanel extends LitElement {
     _playbackConcurrency: { state: true },
     _playbackStreams: { state: true },
     _baichuan: { state: true },
+    _baichuanOnly: { state: true },
     _baichuanMain: { state: true },
     _baichuanDownload: { state: true },
     _baichuanSession: { state: true },
@@ -100,6 +101,7 @@ export class ReolinkViewerPanel extends LitElement {
   declare _playbackConcurrency: boolean;
   declare _playbackStreams: number;
   declare _baichuan: boolean;
+  declare _baichuanOnly: boolean;
   declare _baichuanMain: boolean;
   declare _baichuanDownload: boolean;
   declare _baichuanSession: boolean;
@@ -134,6 +136,7 @@ export class ReolinkViewerPanel extends LitElement {
     this._playbackConcurrency = false;
     this._playbackStreams = 4;
     this._baichuan = false;
+    this._baichuanOnly = true;
     this._baichuanMain = false;
     this._baichuanDownload = true;
     this._baichuanSession = false;
@@ -623,6 +626,17 @@ export class ReolinkViewerPanel extends LitElement {
         <label class="option nested">
           <input
             type="checkbox"
+            .checked=${this._baichuanOnly}
+            ?disabled=${running || !this._baichuan}
+            @change=${(e: Event) => {
+              this._baichuanOnly = (e.target as HTMLInputElement).checked;
+            }}
+          />
+          <span>Only this test (skip the live video and recording checks on every camera)</span>
+        </label>
+        <label class="option nested">
+          <input
+            type="checkbox"
             .checked=${this._baichuanMain}
             ?disabled=${running || !this._baichuan}
             @change=${(e: Event) => {
@@ -669,7 +683,7 @@ export class ReolinkViewerPanel extends LitElement {
                 this._baichuanCameras = (e.target as HTMLInputElement).value;
               }}
             />
-            (names, separated by commas; empty for every camera, up to 8)</span
+            (names or models, separated by commas; empty for every camera, up to 8)</span
           >
         </label>
         <label class="option nested">
@@ -764,6 +778,7 @@ export class ReolinkViewerPanel extends LitElement {
         playback_concurrency_test: this._playback && this._playbackConcurrency,
         playback_max_streams: this._playbackStreams,
         baichuan_test: this._baichuan,
+        baichuan_only: this._baichuan && this._baichuanOnly,
         baichuan_streams: this._baichuanMain ? ["sub", "main"] : ["sub"],
         baichuan_download: this._baichuanDownload,
         baichuan_session: this._baichuanSession,

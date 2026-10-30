@@ -261,6 +261,8 @@ class Prober:
         result["channels"] = channels
         if self._options.playback.only:
             result["concurrency"] = _skipped("recording playback check only")
+        elif self._only_baichuan:
+            result["concurrency"] = _skipped("Baichuan check only")
         else:
             result["concurrency"] = await self._concurrency(host, info, channels)
         if playback is not None:
@@ -345,6 +347,11 @@ class Prober:
                 ports["error"] = _err(err)
         return ports
 
+    @property
+    def _only_baichuan(self) -> bool:
+        """Return True when only the Baichuan section was asked for."""
+        return self._options.baichuan.enabled and self._options.baichuan.only
+
     def _skip_reason(self, channel: ChannelInfo) -> str | None:
         if not channel.online:
             return "offline"
@@ -379,7 +386,7 @@ class Prober:
         if (reason := self._skip_reason(channel)) is not None:
             result["skipped"] = reason
             return result
-        if self._options.playback.only:
+        if self._options.playback.only or self._only_baichuan:
             return result
 
         # Fresh encodings (GetEnc) in case the cached data is incomplete.

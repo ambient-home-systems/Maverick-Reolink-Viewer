@@ -297,6 +297,7 @@ export interface ProbeOptions {
   playback_max_streams?: number;
   /** Baichuan replay and download check (Phase 5a, 5b step 1). */
   baichuan_test?: boolean;
+  baichuan_only?: boolean;
   baichuan_streams?: Stream[];
   baichuan_download?: boolean;
   baichuan_session?: boolean;

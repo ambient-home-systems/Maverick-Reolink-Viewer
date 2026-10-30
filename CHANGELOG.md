@@ -3,6 +3,14 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.35.2
+
+- **Hardware probe → Test replay over the Reolink app's own protocol** gains
+  **Only this test**, on by default: the probe skips the live video and
+  recording checks on every camera (six minutes on an NVR) and runs the
+  Baichuan measurement alone. Its **Cameras** field now matches camera
+  models ("Duo 3, CX810") as well as the names given to the channels.
+
 ## 0.35.1
 
 - **The Baichuan probe runs again.** In 0.35.0 the panel's new options for it
