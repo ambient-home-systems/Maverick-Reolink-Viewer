@@ -545,11 +545,13 @@ async def test_a_cut_without_a_fragment_in_time_is_stopped(
     with patch.object(vodcache, "CUT_FIRST_WAIT_S", 0.2):
         waiting = asyncio.ensure_future(_window(cache, entry, at_ms=AT_MS))
         await _until(lambda: "cut_error" in entry.timing)
+    # (Held here: once the download completes, the stopped cut is let go.)
+    cut = entry.cut
+    assert cut is not None
     media.gate.set()
     assert (await waiting).source == "file"
     assert entry.timing["cut_error"] == "no fragment within 0 s"
-    assert entry.cut is not None
-    assert entry.cut.error == "stopped"
+    assert cut.error == "stopped"
 
 
 async def test_a_seek_far_past_the_cut_starts_another_and_the_last_viewer_stops_it(
