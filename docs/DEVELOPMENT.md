@@ -171,7 +171,10 @@ Phase 4 step 2 set three limits; the first two run in CI.
   ```
 
   drags along the Playback timeline and hovers over it in Chromium, and counts the
-  long tasks. It fails on any on a desktop; with the processor slowed 4× (desktop
+  long tasks. It fails on any on a desktop (a pass that has some is scrubbed again on
+  a fresh page, and fails only if that one has some too: shared CI machines stall a
+  single task now and then, a slow timeline blocks every pass); with the processor
+  slowed 4× (desktop
   and phone sizes) it reports them only, as shared CI machines vary. Then it pinches
   the timeline with two fingers (Chromium's touch input, phone size) and fails if it
   did not zoom in.
