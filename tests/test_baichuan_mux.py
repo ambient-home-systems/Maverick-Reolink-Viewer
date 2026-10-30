@@ -402,7 +402,8 @@ def test_blocks_with_padding_and_the_extra_header_read_as_the_reader_gives_them(
 def test_spans_are_joined_by_the_counter() -> None:
     """After pause(), blocks already taken are skipped; a gap is bridged."""
     muxer = BaichuanMuxer(ORIGIN, ASKED)
-    assert muxer.resume_unix is None
+    before = muxer.resume_unix
+    assert before is None
     muxer.pause()  # nothing started: nothing to join
     assert muxer.stats.spans == 1
     pieces = muxer.feed(_h264_key(0, ASKED))

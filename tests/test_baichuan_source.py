@@ -326,7 +326,7 @@ async def test_an_hd_cut_comes_in_spans_joined_seamlessly(rig: Rig) -> None:
     cut = await rig.cut(stream="main", span_ms=3000, end_ms=START_MS + 605_000)
     await _until(lambda: cut.paused)
     assert cut.spans == 1
-    assert not cut.complete
+    assert cut.public()["complete"] is False
     # The last group (from the key frame at +2 s) waits for the next span.
     assert [f.start_ms for f in cut.index.fragments] == [
         AT_MS + s * 1000 for s in (-3, -2, -1, 0, 1)
@@ -669,4 +669,5 @@ async def test_an_hd_deep_start_extends_its_cut_and_hands_over_to_the_download(
         )
         assert handed.source == "file"
         assert handed.start_ms is not None
+        assert cut.end_ms is not None
         assert handed.start_ms <= cut.end_ms
