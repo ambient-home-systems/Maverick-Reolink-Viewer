@@ -949,6 +949,19 @@ Recorded video (NVR RLN36; the cameras record only to the NVR):
   replay counted as one more logged-in user (2 → 3 → 2) and started at once
   beside the live feeds. Details in
   [baichuan-playback.md §6.1](baichuan-playback.md#61-the-read-only-checks-run-2026-10-29-v0341).
+- **Replay and the download cut, Phase 5b run 1 (2026-10-30, v0.35.3)**: 75 %
+  into an hour-long sub recording of the CX410 (channel 18), the replay's first
+  key frame came 98 ms after the start request and the **download cut's (143)
+  232 ms**, both 3 s before the asked second; the cut sent 23 s of media in
+  0.17 s (135× real time) and ended with status 300, where the replay was paced
+  after a burst (15 s in 9.6 s); the HTTP `DOWNLOAD` to the same offset took
+  7.35 s. The recordings hold H.264 High 5.1 (`avc1.640033`) and, on the CX810's
+  main, H.265 Main 5 (`hvc1.1.6.L150`), no B-frames, a microsecond frame
+  counter, AAC-LC 16 kHz mono. Each stream is one more logged-in user; no
+  maximum is exposed. A main cut with `supportSub` 1 returned the sub stream,
+  and the reader lost sync on the main streams and the CX810 (fixed in
+  v0.35.4). Details in
+  [baichuan-playback.md §6.2](baichuan-playback.md#62-the-5b-measurements-first-run-2026-10-30-v0353).
 
 Recording playback (runs 3 and 4; the Phase 2 gate):
 

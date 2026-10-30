@@ -462,6 +462,85 @@ What it settles:
 - The stream is what the capture showed: a burst, then pacing at the playback
   speed, key frames at 4 s on this camera, nothing after the stop.
 
+### 6.2 The 5b measurement's first run (2026-10-30, v0.35.3)
+
+The owner ran the probe's Baichuan section alone on the RLN36 for the Duo 3,
+the CX410 ("Front Yard Right", channel 18) and the CX810 ("Front Yard Left",
+channel 22), sub and main, with the download cut and the session test, hold
+10 s. The Duo 3 records motion clips only (716 files in four days, none of 20
+minutes), so it measured nothing; v0.35.4 takes a camera's longest clip
+instead. Live view held 6 of the recorder's 7 stream slots throughout.
+
+**CX410 sub** (an hour-long recording, 225 MB, 500 kbit/s, 640×360 at 15 fps,
+75 % in at 06:45:00):
+
+| step | measured |
+| --- | --- |
+| Replay: login, 123, 5 | 49 ms, 20 ms, 21 ms; the first chunk with the start's reply |
+| Replay: first key frame | **98 ms after the start request**, 3 s before the asked second (key frames 1 s apart on this camera) |
+| Replay: 10 s hold | 15 s of media in 9.6 s: the burst, then pacing; stop acknowledged in 20 ms, nothing after |
+| 143 cut (20 s from the asked second) | 200 in 146 ms with `sizeL` 1,248,859; first chunk 223 ms, **first key frame 232 ms** after the request, 3 s before the asked second (the NVR starts the cut at the key frame before it) |
+| 143 pace | 1.55 MB, 23 s of media, in **0.17 s**: 72 Mbit/s, 135× real time; status 300 at 394 ms; 144 answered 200 in 1.3 ms; nothing after |
+| HTTP `DOWNLOAD` to the same offset | 169 MB in **7.35 s** at 188 Mbit/s |
+| Users | 2 before, 3 during each stream, 2 after |
+
+What the sub stream holds: H.264 High, level 5.1 (`avc1.640033`), 640×360,
+one reference frame, I and P pictures only (no B-frames), Annex B start
+codes, SPS `67640033ac1514a0a02ff950`, PPS `68ee3cb0`; the frame counter is
+in microseconds (999,790 ticks per second of the key frames' POSIX times),
+median step 66.7 ms (15 fps); the key frames' extra header is 8 bytes and
+holds the POSIX time; the audio is AAC-LC, 16 kHz, mono (`mp4a.40.2`), one
+519-byte ADTS frame per `05wb` block.
+
+**CX410 main** (2.4 GB, 5.4 Mbit/s, 2560×1440 at 30 fps): the replay's first
+chunk came in 28 ms and its first key frame in 843 ms, 2 s *after* the asked
+second (key frames 2–4 s apart); 9.4 MB in 9.3 s, paced at about 1×. The
+reader lost sync 155 times and skipped 2.5 MB (26 %): the key frames carry a
+248–256-byte extra header, and the frames announce one the reader did not
+take (v0.35.4 takes it, and keeps raw samples of anything still unread). From
+the SPS: `avc1.640033`, 2560×1440, no B-frames. **The 143 cut with
+`supportSub` 1 and `streamType mainStream` returned the sub stream** (640×360,
+1.53 MB in 0.15 s, 152× real time, status 300); v0.35.4 sends `supportSub` 0
+for a main cut, as reolink-downloader does.
+
+**CX810 sub** (an hour-long recording, 76 MB, 169 kbit/s): the replay's first
+chunk came in 86 ms but its first key frame **9.8 s** after the start, 12 s
+after the asked second, and the 143 cut (200 in 101 ms, `sizeL`/`sizeH`
+−1: size unknown; 590 KB in 0.1 s; status 300) held one key frame in 24 s of
+frames. The reader lost sync 147 times and skipped 44 % of the bytes on this
+camera, so key frames in the skipped stretches were missed: **the CX810's
+key-frame timing is not settled** until the next run. HTTP to 75 %: 57 MB in
+2.26 s at 213 Mbit/s.
+
+**CX810 main** (H.265, 2.3 GB, 5.1 Mbit/s, 3840×2160 at 25 fps): the replay's
+first key frame 8.5 s after the start, 11 s after the asked second, with the
+same reader loss (179 resyncs, 5.9 MB of 12.8 skipped); 20 s of media in
+18.6 s (paced). From the SPS: `hvc1.1.6.L150` (Main profile, level 5, main
+tier), 3840×2160, 64-pixel coding tree blocks, no B-frames seen; VPS
+`40010c01ffff01600000030000030000030000030096ac09`, SPS
+`42010101600000030000030000030000030096a001e020021c7f8aad3ba24bb2`, PPS
+`4401c072f0941ef648`; key frames 2–4 s apart; AAC as above. The 143 cut
+returned the sub stream again.
+
+**Session cost.** Every stream was one more logged-in user (2 → 3 → 2).
+`GetOnline` exposes no maximum: its only section is `value` (fields
+`canbeDisconn`, `ip`, `level`, `sessionId`, `userName`), and the abilities
+`online` and `user` carry permissions (`permit` 6), not a count. The session
+test's first replay took the recorder's seventh stream slot beside the six
+live view held, and the download beside it found no slot within 60 s: that
+is what the earlier runs waited on without end.
+
+**What it decides so far.** The download cut is the source for a deep start:
+it starts mid-file (at the key frame before the asked second on the CX410),
+it is not paced (135–152× real time, 72–81 Mbit/s on sub cuts), it ends with
+status 300, and 144 closes it. The replay's first key frame is as quick on
+the CX410 sub (98 ms) but the stream is paced after its burst, so it would
+hold the connection for as long as it plays. Left for the next run
+(v0.35.4): the frame layout on the main streams and the CX810 (raw samples),
+the main cut with `supportSub` 0, whether the CX810's first key frame really
+comes 12 s after the asked second (then a cut must be asked from a key-frame
+interval earlier), and the Duo 3 on its longest clip.
+
 ## 7. Sources
 
 - reolink-aio: <https://github.com/starkillerOG/reolink_aio> (`reolink_aio/baichuan/`),

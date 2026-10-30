@@ -623,3 +623,55 @@ def test_analysis_of_a_real_aac_stream(tmp_path: Path) -> None:
     assert isinstance(frames, int)
     assert frames >= 3
     assert parsed["partial_frame"] is False
+
+
+def test_frames_with_an_extra_header_and_raw_samples() -> None:
+    """Newer cameras' frames announce an extra header before the NAL units."""
+    extra = bytes(range(1, 41))  # 40 bytes, no start code in them
+    payload = annexb(H264_P)
+
+    def frame(with_extra: bool, size_includes_extra: bool = False) -> bytes:
+        body = (extra if with_extra else b"") + payload
+        declared = len(body) if size_includes_extra else len(payload)
+        header = b"01dc" + b"H264" + struct.pack("<IIII", declared, 40, 7, 0)
+        return header + body + bytes(-len(body) % 8)
+
+    # The extra header is taken when a start code follows it.
+    blocks = list(blocks_of(frame(True) * 3))
+    assert [b.kind for b in blocks] == ["frame"] * 3
+    assert all(b.payload == payload for b in blocks)
+    assert all(len(b.header) == 24 + 40 for b in blocks)
+    assert blocks[0].unix_time == 0x04030201  # bytes 24-27, as on key frames
+    analysis = _analyse(frame(True) * 3)
+    assert analysis.frame_extra_header_sizes == {40: 3}
+    assert analysis.layouts == {"annexb": 3}
+    # A frame that announces an extra header it does not carry is read plain
+    # (the reader waits for extra + size bytes before deciding, so the last
+    # such frame of a stream needs the next block behind it).
+    blocks = list(blocks_of(frame(False) * 2 + frame(True)))
+    assert [b.payload for b in blocks] == [payload, payload, payload]
+    assert [len(b.header) for b in blocks] == [24, 24, 64]
+    assert analysis.unknown_samples == []
+    # A payload without NAL units is sampled for the report, a few times.
+    junk = video("frame", b"\x55" * 32)
+    analysis = _analyse(junk * 5)
+    assert analysis.layouts == {"unknown": 5}
+    assert len(analysis.unknown_samples) == bm.MAX_RAW_SAMPLES
+    sample = analysis.unknown_samples[0]
+    assert sample["kind"] == "frame"
+    assert sample["size"] == 32
+    assert sample["payload_head"] == "55" * 32
+    assert str(sample["header"]).startswith(b"01dc".hex())
+    # A resync is sampled with the bytes before it and the skipped head.
+    reader = BlockReader()
+    good = video("frame", annexb(H264_P))
+    reader.feed(good + b"JUNKJUNKJUNK" + good)
+    (resync,) = reader.resync_samples
+    # The frame's two padding bytes and the junk after them.
+    assert resync["skipped"] == 14
+    assert resync["skipped_head"] == bytes(2).hex() + b"JUNKJUNKJUNK".hex()
+    assert len(str(resync["before"])) == 32  # the 16 bytes before, as hex
+    report = _analyse(frame(True) * 2).as_dict()["video"]
+    assert isinstance(report, dict)
+    assert report["frame_extra_header_sizes"] == {40: 2}
+    assert report["unknown_samples"] == []

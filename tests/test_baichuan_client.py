@@ -496,6 +496,7 @@ async def test_download_by_time_range(nvr: FakeNvr) -> None:
     assert nvr.ended == [19]
     request = next(xml for cmd, xml in nvr.requests if cmd == 143)
     assert "<logicChnBitmap>262144</logicChnBitmap>" in request
+    assert "<supportSub>1</supportSub>" in request
     assert "<channelId>18</channelId>" in request
     assert "<startTime>" in request
     assert "<second>53</second>" in request
@@ -514,8 +515,9 @@ async def test_download_bitmap_refused_then_accepted(socket_enabled: None) -> No
             await client.download(3, "mainStream", start, start)
         assert client.open_streams == 0
         _ms, stats, _fields = await client.download(
-            3, "mainStream", start, start, bitmap=255
+            3, "mainStream", start, start, bitmap=255, support_sub=0
         )
+        assert "<supportSub>0</supportSub>" in server.requests[-1][1]
         for _ in range(50):
             if stats.end_status is not None:
                 break

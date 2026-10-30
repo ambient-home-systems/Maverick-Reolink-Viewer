@@ -1,5 +1,5 @@
-import { Jt as e, Xt as t, Yt as n, a as r, bt as i, i as a, it as o, o as s, qt as c, r as l } from "./home-DaNMrOZP.js";
-import "./device-list-DP2c7HYo.js";
+import { Jt as e, Xt as t, Yt as n, a as r, bt as i, i as a, it as o, o as s, qt as c, r as l } from "./home-CE8p8jR0.js";
+import "./device-list-UEhZ-um5.js";
 //#region src/components/overview.ts
 var u = 3e4, d = {
 	people: "person",

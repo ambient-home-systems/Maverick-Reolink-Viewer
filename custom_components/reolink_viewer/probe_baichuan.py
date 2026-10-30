@@ -49,6 +49,9 @@ from .scheduler import HostScheduler, Priority
 
 STREAM_TYPES = {"sub": "subStream", "main": "mainStream"}
 MIN_DURATION = timedelta(minutes=20)
+# Without a long recording (a camera recording motion clips only), the
+# longest clip of at least this much is measured instead, and said so.
+MIN_SHORT_DURATION = timedelta(seconds=60)
 # A recording that ended this recently may still be growing.
 RECORDING_SETTLE = timedelta(minutes=2)
 TARGET_FRACTION = 0.75
@@ -129,12 +132,14 @@ def _err(err: BaseException) -> str:
     return f"{type(err).__name__}: {text}"[:300]
 
 
-def pick_recording(files: list[VodFile], now: datetime) -> VodFile | None:
-    """Choose the longest finished recording of at least MIN_DURATION with a size."""
+def pick_recording(
+    files: list[VodFile], now: datetime, minimum: timedelta = MIN_DURATION
+) -> VodFile | None:
+    """Choose the longest finished recording of at least ``minimum`` with a size."""
     long = [
         f
         for f in files
-        if f.end - f.start >= MIN_DURATION
+        if f.end - f.start >= minimum
         and f.size
         and _naive_delta(now, f.end) >= RECORDING_SETTLE
     ]
@@ -178,6 +183,13 @@ def _stream_report(stats: StreamStats, asked: datetime) -> dict[str, Any]:
             (stats.first_key_time - asked.replace(tzinfo=None)).total_seconds(), 1
         )
     media = stats.media_seconds()
+    report["key_span_s"] = media
+    # The frame counter's span covers the frames before the first key frame.
+    media_part = report.get("media")
+    video = media_part.get("video") if isinstance(media_part, dict) else None
+    span = video.get("span_s") if isinstance(video, dict) else None
+    if isinstance(span, int | float):
+        media = float(span)
     report["media_s"] = media
     if stats.first_chunk is not None and stats.last_chunk is not None:
         wall = stats.last_chunk - stats.first_chunk
@@ -271,6 +283,10 @@ class BaichuanCheck:
             return result
         when, target_bytes = target_in(file)
         result["recording"] = describe_file(file)
+        if search.get("short"):
+            result["recording"]["short"] = (
+                "no recording of 20 minutes or more: the longest clip instead"
+            )
         result["target"] = {
             "fraction": TARGET_FRACTION,
             "offset_s": round((when - file.start).total_seconds(), 1),
@@ -300,6 +316,7 @@ class BaichuanCheck:
         """Search one day at a time, today first, for a long finished recording."""
         midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
         search: dict[str, Any] = {"days": 0, "files": 0}
+        seen: list[VodFile] = []
         for days_back in range(PROBE_SEARCH_DAYS + 1):
             start = midnight - timedelta(days=days_back)
             end = min(start + timedelta(days=1) - timedelta(seconds=1), now)
@@ -316,6 +333,13 @@ class BaichuanCheck:
             if (file := pick_recording(files, now)) is not None:
                 search["date"] = start.date().isoformat()
                 return file, search
+            seen.extend(files)
+        # No long recording (motion clips only): the longest clip will do for
+        # what the stream holds, less so for the deep-start timing.
+        if (file := pick_recording(seen, now, MIN_SHORT_DURATION)) is not None:
+            search["short"] = True
+            search["date"] = file.start.date().isoformat()
+            return file, search
         return None, search
 
     def _search_day(
@@ -513,9 +537,13 @@ class BaichuanCheck:
     ) -> StreamStats:
         """Send the 143; if the channel's bit is refused, try the any-channel bitmap."""
         stream_type = STREAM_TYPES[stream]
+        # With supportSub 1 the RLN36 sent the sub stream for a mainStream cut
+        # (run 1); reolink-downloader sends 0 for the main stream.
+        support_sub = 1 if stream == "sub" else 0
+        result["support_sub"] = support_sub
         try:
             reply_ms, stats, fields = await client.download(
-                ch, stream_type, start, end, on_chunk=on_chunk
+                ch, stream_type, start, end, support_sub=support_sub, on_chunk=on_chunk
             )
             result["bitmap"] = "channel bit"
         except BaichuanClientError as err:
@@ -528,6 +556,7 @@ class BaichuanCheck:
                 start,
                 end,
                 bitmap=ANY_CHANNEL_BITMAP,
+                support_sub=support_sub,
                 on_chunk=on_chunk,
             )
             result["bitmap"] = str(ANY_CHANNEL_BITMAP)
@@ -607,25 +636,35 @@ class BaichuanCheck:
                 result["one_open"] = one
                 # A full-speed download beside the replay, as a cache fill.
                 before = _snapshot(stats_a)
-                result["fill_beside"] = await self._fill(first, hold)
+                try:
+                    result["fill_beside"] = await self._fill(first, hold)
+                except BaichuanClientError as err:
+                    result["fill_beside"] = {"ok": False, "skipped": _err(err)}
                 result["replay_during_fill"] = _delta(stats_a, before)
                 if second is not None:
                     self._progress(
                         f"ch{second.channel} baichuan: session test (two replays)"
                     )
                     two: dict[str, Any] = {}
-                    async with self._slot(
-                        f"ch{second.channel} baichuan session test (second replay)"
-                    ):
-                        before_a = _snapshot(stats_a)
-                        stats_b = await self._start_replay(client, second, two)
-                        before_b = _snapshot(stats_b)
-                        two["users"] = await self._users()
-                        await asyncio.sleep(hold)
-                        two["first_during"] = _delta(stats_a, before_a)
-                        two["second_during"] = _delta(stats_b, before_b)
-                        two["open_streams"] = client.open_streams
-                        two["stop_second_ms"] = await self._stop_replay(client, second)
+                    try:
+                        async with self._slot(
+                            f"ch{second.channel} baichuan session test (second replay)"
+                        ):
+                            before_a = _snapshot(stats_a)
+                            stats_b = await self._start_replay(client, second, two)
+                            before_b = _snapshot(stats_b)
+                            two["users"] = await self._users()
+                            await asyncio.sleep(hold)
+                            two["first_during"] = _delta(stats_a, before_a)
+                            two["second_during"] = _delta(stats_b, before_b)
+                            two["open_streams"] = client.open_streams
+                            two["stop_second_ms"] = await self._stop_replay(
+                                client, second
+                            )
+                    except BaichuanClientError as err:
+                        if "no stream slot" not in str(err):
+                            raise
+                        two["skipped"] = _err(err)
                     result["two_open"] = two
                 result["stop_first_ms"] = await self._stop_replay(client, first)
                 result["users_before_logout"] = await self._users()
