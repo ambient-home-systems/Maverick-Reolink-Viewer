@@ -457,8 +457,8 @@ class BaichuanSource:
             client = host.client
             if host.users or client is None:
                 return
-            host.client = None
-            host.logouts += 1
+            # Logged out once the device has been told (the lock keeps new
+            # cuts from taking the connection meanwhile).
             try:
                 await self._scheduler.host(entry_id).run(
                     client.logout, priority=Priority.SETTINGS, timeout=END_TIMEOUT_S
@@ -466,6 +466,9 @@ class BaichuanSource:
             except Exception as err:  # noqa: BLE001 - closed either way
                 _LOGGER.debug("Baichuan logout failed: %s", _describe(err))
                 await client.close()
+            finally:
+                host.client = None
+                host.logouts += 1
 
     # ---- Shutdown and stats ----
 
