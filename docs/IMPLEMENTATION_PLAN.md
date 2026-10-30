@@ -4213,7 +4213,7 @@ So 5b runs in two steps with a gate between them.
 
 | 5b step | Status |
 | --- | --- |
-| 1. Measure, then stop (the gate) | **Built** (2026-10-29, v0.35.0, below). Waiting for the owner's report on the RLN36: a sub and a main recording, an H.264 and an H.265 camera (the Duo 3's main at 7680×2160, the CX810's main) |
+| 1. Measure, then stop (the gate) | **Built** (2026-10-29, v0.35.0–v0.35.3, below). **Run 1** (2026-10-30, v0.35.3, [baichuan-playback.md §6.2](baichuan-playback.md#62-the-5b-measurements-first-run-2026-10-30-v0353)): on the CX410's sub the download cut (143) delivered its first key frame 232 ms after the request, 3 s before the asked second, 23 s of media in 0.17 s, status 300 at the end; the replay 98 ms but paced; HTTP to the same point 7.35 s. H.264 High 5.1 and H.265 Main 5, no B-frames, a microsecond counter, AAC-LC 16 kHz mono. The reader lost sync on the main streams and the CX810, a main cut returned the sub stream, and the Duo 3 had no long recording: v0.35.4 fixes the three; **run 2 pending** for the main-stream layout, the main cut and the CX810's key frames |
 | 2. The prototype, behind an opt-in setting ("start deep in recordings over the Reolink protocol", off by default) | Not started: the source is chosen from step 1's report first (the rules below) |
 
 #### Step 1: the measurement (v0.35.0)
@@ -4266,6 +4266,10 @@ How to run it (the owner, Chrome on the LAN, the RLN36):
    the probe says "baichuan replay at …" (Devices → the recorder → Live check,
    capacity ticked): whether the capacity test reaches its usual level with a
    replay open. Send both reports.
+4. **Run 2 (v0.35.4)**, after run 1: the same as run 1 with the keep-warm
+   switches off (or the live board closed) so the session test gets its
+   slots; it reads the main streams and the CX810, asks the main cuts for the
+   main stream, and measures the Duo 3 on its longest clip.
 
 What the report decides (rules fixed before seeing it):
 
@@ -4291,6 +4295,30 @@ What the report decides (rules fixed before seeing it):
 - **Go for step 2** if, on both codecs, the chosen source shows a first key
   frame within 0.5 s of the request, the parameter sets decode, the audio
   configuration is known, and the extra login never exceeds one.
+
+Run 1 against those rules (2026-10-30; the numbers in
+[baichuan-playback.md §6.2](baichuan-playback.md#62-the-5b-measurements-first-run-2026-10-30-v0353)):
+
+- **The source: the download cut (143), provisionally.** On the CX410's sub it
+  started at the key frame before the asked second, arrived at 135× real time
+  and ended with a marker; its first key frame came 232 ms after the request
+  (the replay's 98 ms, but paced after its burst). Step 2 fills the cache from
+  the target at full speed and keeps speeds, scrubbing, HD and the second
+  visit as they are. Provisional because the main cuts came back as the sub
+  stream (`supportSub` 1; v0.35.4 sends 0) and the CX810's key-frame timing
+  was lost in the reader's resyncs.
+- **The muxer:** `avc1.640033` (H.264 High 5.1) and `hvc1.1.6.L150` (H.265
+  Main 5), no B-frames seen, so no composition offsets; the counter is in
+  microseconds; AAC-LC 16 kHz mono from the ADTS headers. The frame layout of
+  the main streams and the CX810 is what run 2's raw samples must settle: the
+  reader took 24-byte frame headers and lost 26–44 % of those streams.
+- **The sessions:** one more logged-in user per stream, back to the baseline
+  at logout; no maximum exposed. Two replays on one connection were not
+  reached: live view held six of the seven stream slots. Run 2 with the
+  keep-warm switches off, or the live board closed, measures that part.
+- **Go for step 2** holds on the CX410 (both sources under 0.5 s, the
+  parameter sets decoded, the audio known, one extra login) and waits on run
+  2 for the H.265 camera.
 
 ---
 

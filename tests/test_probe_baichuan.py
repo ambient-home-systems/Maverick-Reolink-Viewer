@@ -147,9 +147,12 @@ class FakeClient:
         end: datetime,
         *,
         bitmap: int | None = None,
+        support_sub: int = 1,
         on_chunk: Callable[[StreamStats], None] | None = None,
     ) -> tuple[float, StreamStats, dict[str, str]]:
-        self.calls.append(("download", (channel, stream, start, end, bitmap)))
+        self.calls.append(
+            ("download", (channel, stream, start, end, bitmap, support_sub))
+        )
         if FakeClient.refuse_channel_bit and bitmap is None:
             raise BaichuanClientError("download refused with status 400")
         stats = self._stats(None)
@@ -281,6 +284,7 @@ async def test_check_measures_replay_download_and_http(
     download = sub["download"]
     assert download["ok"] is True
     assert download["bitmap"] == "channel bit"
+    assert download["support_sub"] == 1
     assert download["reply_ms"] == 100.0
     assert download["reply"] == {"sizeL": "4210000", "sizeH": "0", "FileCount": "1"}
     assert download["ended_within_hold"] is True
@@ -321,6 +325,7 @@ async def test_check_measures_replay_download_and_http(
         datetime(2026, 10, 16, 6, 45, 1),
         datetime(2026, 10, 16, 6, 45, 21),
         None,
+        1,
     )
     text = json.dumps(result)
     for secret in SECRETS:
@@ -349,6 +354,21 @@ async def test_check_main_stream_without_download(
     assert main_client.calls[3][1][3] == "mainStream"
     assert main_client.calls[4][1][2] == "mainStream"
     assert all("download" not in _calls(c) for c in FakeClient.instances)
+
+    # With the cut: the main stream's asks for the main stream (supportSub 0).
+    FakeClient.instances = []
+    scheduler = Scheduler(default_limit=2)
+    check, host = _check(
+        hass,
+        scheduler,
+        BaichuanOptions(enabled=True, hold_seconds=1, streams=("main",)),
+    )
+    with patch.object(asyncio, "sleep", AsyncMock()):
+        result = await check.async_host(info, list(info.channels), TEST_NOW)
+    main = result["channels"][0]["main"]
+    assert main["download"]["support_sub"] == 0
+    assert FakeClient.instances[1].calls[2][1][5] == 0
+    await scheduler.async_shutdown()
 
 
 async def test_check_records_failures(
@@ -400,7 +420,7 @@ async def test_check_skips(
     info = host.info()
     reolink_host.request_vod_files.return_value = (
         [],
-        [make_vod_file(TEST_NOW, minutes=3)],
+        [make_vod_file(TEST_NOW, minutes=0)],  # a clip under a minute
     )
     result = await check.async_host(info, list(info.channels), TEST_NOW)
     assert result["ok"] is False
@@ -578,13 +598,20 @@ async def test_check_runs_every_channel_that_has_a_long_recording(
     assert result["channels_left_out"] == [2]
     assert [c["channel"] for c in result["channels"]] == [0, 1]
     assert [c["name"] for c in result["channels"]] == ["Front", "Garage"]
-    assert "skipped" in result["channels"][0]["sub"]
-    assert result["channels"][0]["sub"]["search"]["days"] == 4
+    # Motion clips only: the longest clip is measured, and said so.
+    clips = result["channels"][0]["sub"]
+    assert clips["search"]["days"] == 4
+    assert clips["search"]["short"] is True
+    assert clips["recording"]["short"].startswith("no recording of 20 minutes")
+    assert clips["recording"]["duration_s"] == 180
+    assert clips["replay"]["ok"] is True
     assert result["channels"][1]["sub"]["search"]["days"] == 1
+    assert "short" not in result["channels"][1]["sub"]["search"]
     assert result["channels"][1]["sub"]["search"]["date"] == TEST_NOW.date().isoformat()
     assert result["channels"][1]["sub"]["recording"]["start"] == day.isoformat()
-    (client,) = FakeClient.instances
-    assert client.calls[3][1][0] == 1  # the start went to the channel found
+    first, second = FakeClient.instances
+    assert first.calls[3][1][0] == 0
+    assert second.calls[3][1][0] == 1  # the start went to the channel found
 
 
 async def test_session_test_holds_one_then_two_replays(
@@ -663,6 +690,29 @@ async def test_session_test_holds_one_then_two_replays(
         result = await check.async_host(info, _three_channels(info)[:1], TEST_NOW)
     assert result["session"]["fill_beside"]["error"] == "RuntimeError: no url"
     assert result["channels"][0]["sub"]["http"]["error"] == "RuntimeError: no url"
+
+    # Live view holding every slot but one: the first replay gets it, the
+    # download beside it and the second replay are skipped, the test goes on.
+    reolink_host.get_vod_source = AsyncMock(
+        return_value=("video/mp4", "http://nvr/cgi-bin/api.cgi?cmd=Download")
+    )
+    budget = scheduler.host(host.entry_id).streams
+    held = [budget.request(Priority.LIVE) for _ in range(budget.limit - 1)]
+    for ticket in held:
+        await ticket.wait()
+    check._options.session = True
+    with (
+        patch.object(probe_baichuan, "SLOT_TIMEOUT", 0.05),
+        patch.object(asyncio, "sleep", AsyncMock()),
+    ):
+        result = await check.async_host(info, _three_channels(info)[:2], TEST_NOW)
+    session = result["session"]
+    assert session["ok"] is True
+    assert "no stream slot" in session["fill_beside"]["skipped"]
+    assert "no stream slot" in session["two_open"]["skipped"]
+    assert session["stop_first_ms"] == 20.0
+    for ticket in held:
+        ticket.release()
     await scheduler.async_shutdown()
 
 

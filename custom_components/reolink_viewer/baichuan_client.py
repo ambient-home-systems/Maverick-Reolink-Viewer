@@ -89,7 +89,7 @@ STOP_XML = (
 DOWNLOAD_XML = (
     '<?xml version="1.0" encoding="UTF-8" ?>\n<body>\n<FileInfoList version="1.1">\n'
     "<FileInfo>\n<logicChnBitmap>{bitmap}</logicChnBitmap>\n"
-    "<channelId>{channel}</channelId>\n<supportSub>1</supportSub>\n"
+    "<channelId>{channel}</channelId>\n<supportSub>{support_sub}</supportSub>\n"
     "<streamType>{stream}</streamType>\n<startTime>\n{start}</startTime>\n"
     "<endTime>\n{end}</endTime>\n</FileInfo>\n</FileInfoList>\n</body>\n"
 )
@@ -381,6 +381,7 @@ class BaichuanReplayClient:
         end: datetime,
         *,
         bitmap: int | None = None,
+        support_sub: int = 1,
         on_chunk: Callable[[StreamStats], None] | None = None,
     ) -> tuple[float, StreamStats, dict[str, str]]:
         """143: a cut of the recording between two times, on the stream.
@@ -388,10 +389,14 @@ class BaichuanReplayClient:
         Returns the reply's latency, the stream's statistics and the reply's
         fields (``sizeL``, ``sizeH``, ``FileCount`` on the NVR). ``bitmap``
         is the ``logicChnBitmap``: the channel's bit by default.
+        ``support_sub`` is sent as is: with 1 the RLN36 sent the sub stream
+        whatever ``streamType`` said (5b run 1); reolink-downloader sends 0
+        for the main stream.
         """
         xml = DOWNLOAD_XML.format(
             bitmap=(1 << channel) if bitmap is None else bitmap,
             channel=channel,
+            support_sub=support_sub,
             stream=stream,
             start=TIME_XML.format(t=start),
             end=TIME_XML.format(t=end),

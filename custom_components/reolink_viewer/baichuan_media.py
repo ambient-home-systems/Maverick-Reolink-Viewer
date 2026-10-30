@@ -38,6 +38,12 @@ MAX_BLOCK = 16 * 1024 * 1024
 MAX_PARAMETER_SETS = 4
 MAX_DELTAS = 4000
 MAX_SAMPLES = 8
+# Raw samples kept for the report (hex): the first few blocks whose payload
+# holds no NAL unit, and the bytes around the first few resyncs, so a layout
+# the reader does not know can be decoded from the report.
+MAX_RAW_SAMPLES = 3
+RAW_SAMPLE_BYTES = 64
+_START_CODES = (b"\x00\x00\x00\x01", b"\x00\x00\x01")
 ADTS_SAMPLE_RATES = (
     96000,
     88200,
@@ -89,6 +95,8 @@ class BlockReader:
         self.resyncs = 0
         self.skipped_bytes = 0
         self.implausible = 0
+        self.resync_samples: list[dict[str, object]] = []
+        self._last_end: bytes = b""
 
     @property
     def pending(self) -> int:
@@ -122,6 +130,16 @@ class BlockReader:
             if found.start() > 8 or any(buf[: found.start()]):
                 self.resyncs += 1
                 self.skipped_bytes += found.start()
+                if len(self.resync_samples) < MAX_RAW_SAMPLES:
+                    self.resync_samples.append(
+                        {
+                            "skipped": found.start(),
+                            "before": self._last_end.hex(),
+                            "skipped_head": bytes(
+                                buf[: min(found.start(), RAW_SAMPLE_BYTES)]
+                            ).hex(),
+                        }
+                    )
             del buf[: found.start()]
             return _EMPTY
         if magic.startswith(b"100"):
@@ -137,15 +155,15 @@ class BlockReader:
                 return None
             codec, size, extra, micro, unknown = struct.unpack_from("<4sIIII", buf, 4)
             key = magic[1:2] == b"0"
-            header = FRAME_HEADER + (extra if key else 0)
-            if size > MAX_BLOCK or extra > 256:
+            if size > MAX_BLOCK or extra > 1024:
                 self.implausible += 1
                 del buf[:4]
                 return _EMPTY
-            if len(buf) < header + size:
+            if len(buf) < FRAME_HEADER + extra + size:
                 return None
+            header = FRAME_HEADER + self._extra_used(buf, key, extra)
             unix_time = None
-            if key and extra >= 4:
+            if header - FRAME_HEADER >= 4:
                 unix_time = struct.unpack_from("<I", buf, FRAME_HEADER)[0]
             block = Block(
                 "key" if key else "frame",
@@ -169,6 +187,23 @@ class BlockReader:
         )
         return self._take(block, AUDIO_HEADER + size)
 
+    @staticmethod
+    def _extra_used(buf: bytearray, key: bool, extra: int) -> int:
+        """Return the extra header's length as the payload shows it.
+
+        Key frames carry the extra header the field announces (8 bytes on the
+        NVR's sub streams, about 250 on newer cameras' main streams). Frames
+        announce one too on some streams: it is taken when a NAL start code
+        follows it and none sits where the payload would otherwise begin.
+        """
+        if key or not extra:
+            return extra
+        at_zero = bytes(buf[FRAME_HEADER : FRAME_HEADER + 4])
+        after = bytes(buf[FRAME_HEADER + extra : FRAME_HEADER + extra + 4])
+        if at_zero.startswith(_START_CODES):
+            return 0
+        return extra if after.startswith(_START_CODES) else 0
+
     def _take(self, block: Block, end: int) -> Block:
         """Consume a block and the padding after it (found by the next magic).
 
@@ -182,6 +217,7 @@ class BlockReader:
             found = MAGIC_RE.search(after)
             if found is not None and not any(after[: found.start()]):
                 pad = found.start()
+        self._last_end = bytes(buf[max(end - 16, 0) : end])
         del buf[: end + pad]
         return Block(
             block.kind,
@@ -616,6 +652,8 @@ class StreamAnalysis:
     sps: dict[str, object] | None = None
     sps_error: str | None = None
     extra_header_sizes: Counter[int] = field(default_factory=Counter)
+    frame_extra_header_sizes: Counter[int] = field(default_factory=Counter)
+    unknown_samples: list[dict[str, object]] = field(default_factory=list)
     unknown_field: list[int] = field(default_factory=list)
     pads: Counter[int] = field(default_factory=Counter)
     video_time: _Timestamps = field(default_factory=_Timestamps)
@@ -658,6 +696,8 @@ class StreamAnalysis:
             self.key_unix.add(block.unix_time)
         if key:
             self.extra_header_sizes[len(block.header) - FRAME_HEADER] += 1
+        else:
+            self.frame_extra_header_sizes[len(block.header) - FRAME_HEADER] += 1
         if (
             block.unknown is not None
             and len(self.unknown_field) < MAX_SAMPLES
@@ -667,6 +707,15 @@ class StreamAnalysis:
         layout, units = nal_units(block.payload)
         self.layouts[layout] += 1
         if not units:
+            if len(self.unknown_samples) < MAX_RAW_SAMPLES:
+                self.unknown_samples.append(
+                    {
+                        "kind": block.kind,
+                        "header": block.header.hex(),
+                        "size": len(block.payload),
+                        "payload_head": block.payload[:RAW_SAMPLE_BYTES].hex(),
+                    }
+                )
             return
         if self.detected is None:
             self.detected = _detect(units, block.codec)
@@ -790,6 +839,8 @@ class StreamAnalysis:
             "sps": self.sps,
             "sps_error": self.sps_error,
             "key_extra_header_sizes": dict(self.extra_header_sizes),
+            "frame_extra_header_sizes": dict(self.frame_extra_header_sizes),
+            "unknown_samples": self.unknown_samples,
             "header_unknown_field": [f"{v:08x}" for v in self.unknown_field],
             "padding": dict(self.pads),
             "timestamps": self.video_time.as_dict(),
@@ -799,6 +850,9 @@ class StreamAnalysis:
         ticks = self.ticks_per_second()
         if ticks is not None:
             video["ticks_per_second"] = ticks
+            first, last = self.video_time.first, self.video_time.last
+            if first is not None and last is not None and last >= first:
+                video["span_s"] = round((last - first) / ticks, 2)
         deltas = [d for d in self.video_time.deltas if d > 0]
         if deltas and ticks:
             video["fps_estimate"] = round(ticks / statistics.median(deltas), 2)

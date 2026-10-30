@@ -3,6 +3,22 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.35.4
+
+From the first Phase 5b report:
+
+- **The Baichuan probe reads newer cameras' recordings.** Their frames carry an
+  extra header the reader did not expect, so a quarter to a half of the bytes
+  were skipped and the key frames in them missed. The reader now takes the
+  header the stream shows, and the report keeps a few raw samples of anything
+  it still cannot read.
+- **A download cut of the HD recording asks for the HD stream** (the recorder
+  answered with the lighter one before).
+- **A camera without a long recording is measured on its longest clip**, and
+  the report says so.
+- **The session test skips a part it cannot get a stream slot for** instead of
+  stopping.
+
 ## 0.35.3
 
 - **The Baichuan probe no longer waits without end for a stream slot.** Each
