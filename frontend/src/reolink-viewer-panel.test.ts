@@ -455,6 +455,7 @@ describe("reolink-viewer-panel", () => {
       playback_concurrency_test: false,
       playback_max_streams: 4,
       baichuan_test: false,
+      baichuan_only: false,
       baichuan_streams: ["sub"],
       baichuan_download: true,
       baichuan_session: false,
@@ -528,9 +529,9 @@ describe("reolink-viewer-panel", () => {
 
     // The Baichuan replay check (Phase 5) is its own opt-in, with its parts.
     await toggle(5);
-    await toggle(6); // the main recordings too
-    await toggle(7); // no download cut
-    await toggle(8); // the session test
+    await toggle(7); // the main recordings too
+    await toggle(8); // no download cut
+    await toggle(9); // the session test
     const cameras = probeSection(el)?.querySelector<HTMLInputElement>("input[type=text]");
     if (!cameras) throw new Error("no cameras field");
     cameras.value = " Duo 3, CX810 ";
@@ -544,6 +545,7 @@ describe("reolink-viewer-panel", () => {
     await flush();
     expect(hass.sent.at(-1)).toMatchObject({
       baichuan_test: true,
+      baichuan_only: true, // on by default
       baichuan_streams: ["sub", "main"],
       baichuan_download: false,
       baichuan_session: true,

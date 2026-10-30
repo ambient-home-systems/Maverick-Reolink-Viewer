@@ -224,6 +224,7 @@ def _redacted_error(err: Exception, hosts: list[bridge.ReolinkHostHandle]) -> st
             int, probatio.Range(min=1, max=PROBE_PLAYBACK_HARD_MAX_STREAMS)
         ),
         probatio.Optional("baichuan_test", default=False): bool,
+        probatio.Optional("baichuan_only", default=False): bool,
         probatio.Optional("baichuan_streams", default=["sub"]): [
             probatio.In(["sub", "main"])
         ],
@@ -296,6 +297,7 @@ async def ws_probe(
         ),
         baichuan=BaichuanOptions(
             enabled=msg["baichuan_test"],
+            only=msg["baichuan_only"],
             hold_seconds=msg["baichuan_hold"],
             streams=tuple(msg["baichuan_streams"]),
             download=msg["baichuan_download"],
