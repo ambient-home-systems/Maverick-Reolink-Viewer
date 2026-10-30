@@ -26,7 +26,8 @@ seek, start, stop, the download cut, its end, and logout.
 """
 
 import asyncio
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 import time
@@ -64,6 +65,9 @@ ANY_CHANNEL_BITMAP = 255
 HTTP_MAX_SECONDS = 60.0
 # The full-speed download beside a replay (the session test).
 FILL_MAX_BYTES = 64 * 1024**2
+# A stream slot of the host's budget is waited for this long at most: live
+# tiles and cameras kept warm hold slots, and the probe must not hang on them.
+SLOT_TIMEOUT = 60.0
 
 
 @dataclass(slots=True)
@@ -232,6 +236,7 @@ class BaichuanCheck:
             "hold_s": self._options.hold_seconds,
             "cut_s": self._options.cut_seconds,
             "channels_left_out": [c.channel for c in candidates[MAX_CHANNELS:]],
+            "stream_budget": self._streams.stats(),
             "users_before": await self._users(),
             "online": await self._online_detail(),
             "channels": [],
@@ -337,6 +342,31 @@ class BaichuanCheck:
             self._host.baichuan_endpoint(), timeout=self._timeout
         )
 
+    @asynccontextmanager
+    async def _slot(self, what: str) -> AsyncIterator[None]:
+        """Hold a slot of the host's stream budget, or give up after SLOT_TIMEOUT."""
+        stats = self._streams.stats()
+        if stats["streams"] >= stats["stream_limit"]:
+            self._progress(
+                f"{what}: waiting for a stream slot ({stats['streams']} of"
+                f" {stats['stream_limit']} in use by live view or downloads)"
+            )
+        ticket = self._streams.request(Priority.PLAYBACK)
+        try:
+            async with asyncio.timeout(SLOT_TIMEOUT):
+                await ticket.wait()
+        except TimeoutError:
+            ticket.release()
+            raise BaichuanClientError(
+                f"no stream slot within {SLOT_TIMEOUT:.0f} s: {stats['streams']} of"
+                f" {stats['stream_limit']} in use (live view, cameras kept warm or"
+                " downloads); close live view and try again"
+            ) from None
+        try:
+            yield
+        finally:
+            ticket.release()
+
     async def _finish(self, client: BaichuanReplayClient) -> None:
         try:
             await client.logout()
@@ -390,7 +420,7 @@ class BaichuanCheck:
         began = time.monotonic()
         stats: StreamStats | None
         try:
-            async with self._streams.slot(Priority.PLAYBACK):
+            async with self._slot(f"ch{ch} baichuan {stream} replay"):
                 result["slot_wait_ms"] = _ms(began)
                 await client.connect()
                 result["login"] = await client.login()
@@ -429,7 +459,7 @@ class BaichuanCheck:
         client = self._client()
         began = time.monotonic()
         try:
-            async with self._streams.slot(Priority.PLAYBACK):
+            async with self._slot(f"ch{ch} baichuan {stream} download cut"):
                 result["slot_wait_ms"] = _ms(began)
                 await client.connect()
                 result["login"] = await client.login()
@@ -515,7 +545,12 @@ class BaichuanCheck:
         except Exception as err:  # noqa: BLE001
             return {"ok": False, "error": _err(err)}
         began = time.monotonic()
-        async with self._streams.slot(Priority.PLAYBACK):
+        try:
+            slot = self._slot(f"ch{ch} baichuan HTTP comparison")
+            await slot.__aenter__()
+        except BaichuanClientError as err:
+            return {"ok": False, "error": _err(err)}
+        try:
             slot_wait = _ms(began)
             fetched = await self._fetch(
                 self._session,
@@ -524,6 +559,8 @@ class BaichuanCheck:
                 max_seconds=HTTP_MAX_SECONDS,
                 timeout=self._timeout,
             )
+        finally:
+            await slot.__aexit__(None, None, None)
         reached = fetched.bytes_read >= target_bytes
         total: float | None = None
         if fetched.ttfb_ms is not None and fetched.read_ms is not None:
@@ -561,7 +598,7 @@ class BaichuanCheck:
         client = self._client()
         hold = self._options.hold_seconds
         try:
-            async with self._streams.slot(Priority.PLAYBACK):
+            async with self._slot(f"ch{first.channel} baichuan session test"):
                 await client.connect()
                 result["login"] = await client.login()
                 one: dict[str, Any] = {}
@@ -577,7 +614,9 @@ class BaichuanCheck:
                         f"ch{second.channel} baichuan: session test (two replays)"
                     )
                     two: dict[str, Any] = {}
-                    async with self._streams.slot(Priority.PLAYBACK):
+                    async with self._slot(
+                        f"ch{second.channel} baichuan session test (second replay)"
+                    ):
                         before_a = _snapshot(stats_a)
                         stats_b = await self._start_replay(client, second, two)
                         before_b = _snapshot(stats_b)
@@ -608,7 +647,7 @@ class BaichuanCheck:
             )
         except Exception as err:  # noqa: BLE001
             return {"ok": False, "error": _err(err)}
-        async with self._streams.slot(Priority.PLAYBACK):
+        async with self._slot(f"ch{replay.channel} baichuan session test (download)"):
             fetched = await self._fetch(
                 self._session,
                 url,

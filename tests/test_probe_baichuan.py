@@ -684,3 +684,35 @@ async def test_check_http_url_failure(
     assert sub["replay"]["error"] == "OSError: no route"
     assert sub["download"]["error"] == "OSError: no route"
     await scheduler.async_shutdown()
+
+
+async def test_check_gives_up_on_a_full_stream_budget(
+    hass: HomeAssistant, loaded_reolink: MockConfigEntry, long_recording: None
+) -> None:
+    """Live view holding every slot stops the check with a reason, not a hang."""
+    scheduler = Scheduler(default_limit=2)
+    check, host = _check(hass, scheduler)
+    info = host.info()
+    budget = scheduler.host(host.entry_id).streams
+    held = [budget.request(Priority.LIVE) for _ in range(budget.limit)]
+    for ticket in held:
+        await ticket.wait()
+    progress: list[str] = []
+    check._progress = progress.append
+    with (
+        patch.object(probe_baichuan, "SLOT_TIMEOUT", 0.05),
+        patch.object(asyncio, "sleep", AsyncMock()),
+    ):
+        result = await check.async_host(info, list(info.channels), TEST_NOW)
+    sub = result["channels"][0]["sub"]
+    assert "no stream slot within" in sub["replay"]["error"]
+    assert "no stream slot within" in sub["download"]["error"]
+    assert "no stream slot within" in sub["http"]["error"]
+    assert result["stream_budget"]["streams"] == budget.limit
+    assert any("waiting for a stream slot" in line for line in progress)
+    # Nothing was opened without a slot.
+    assert all(_calls(c) == ["logout"] for c in FakeClient.instances)
+    for ticket in held:
+        ticket.release()
+    assert budget.stats()["streams_waiting"] == 0
+    await scheduler.async_shutdown()

@@ -3,6 +3,14 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.35.3
+
+- **The Baichuan probe no longer waits without end for a stream slot.** Each
+  of its streams takes a slot of the recorder's stream budget, which live view
+  and cameras kept warm also hold; with none free the probe looked frozen.
+  It now says so in its progress line, gives up after a minute with the
+  reason, and the report records the budget's state.
+
 ## 0.35.2
 
 - **Hardware probe → Test replay over the Reolink app's own protocol** gains
