@@ -3,7 +3,9 @@
 // position, trimming what lies behind it. ManagedMediaSource where it exists
 // (the iOS Companion app has nothing else), else MediaSource. A start deep in
 // a recording costs one window, sent once the bytes up to it are on the
-// server's disk (Phase 2B step 2).
+// server's disk (Phase 2B step 2), or (Phase 5b, an option) cut from the
+// device for that moment: each answer names its source (X-RV-Source), and a
+// window from another source than the last brings that source's init segment.
 
 export type MseApi = "ManagedMediaSource" | "MediaSource";
 
@@ -41,6 +43,14 @@ export const JOIN_S = 0.5;
 export interface FeederStats {
   api: MseApi;
   mime: string;
+  /**
+   * What serves the windows: "file" (the recording's download) or "cut" (the
+   * device's cut of a moment deep in it, Phase 5b); and what served the first.
+   */
+  source: string;
+  firstSource: string | undefined;
+  /** Init segments appended on a change of source. */
+  switches: number;
   /** Windows fetched, their bytes, and how long the last one took. */
   windows: number;
   bytes: number;
@@ -91,6 +101,11 @@ export function aheadTarget(rate: number, bytesPerSecond: number): number {
   return bytesPerSecond > 0 ? Math.max(4, Math.min(byTime, AHEAD_MAX_BYTES / bytesPerSecond)) : byTime;
 }
 
+/** Whether a fetch was aborted (a function: not narrowed across awaits). */
+function aborted(signal: AbortSignal): boolean {
+  return signal.aborted;
+}
+
 function isQuota(err: unknown): boolean {
   return err instanceof DOMException && err.name === "QuotaExceededError";
 }
@@ -123,7 +138,18 @@ export class MseFeeder {
     /** Called once for a failure after start() resolved (never after destroy). */
     private readonly _onError: (err: Error) => void,
   ) {
-    this.stats = { api: "MediaSource", mime: "", windows: 0, bytes: 0, lastWaitMs: undefined, trims: 0, fetching: false };
+    this.stats = {
+      api: "MediaSource",
+      mime: "",
+      source: "file",
+      firstSource: undefined,
+      switches: 0,
+      windows: 0,
+      bytes: 0,
+      lastWaitMs: undefined,
+      trims: 0,
+      fetching: false,
+    };
   }
 
   /** Whether destroy() was called (or a failure ended feeding). */
@@ -161,9 +187,11 @@ export class MseFeeder {
     this._video.src = this._url;
     await opened;
     if (this._gone()) return;
-    const init = await this._get("init");
+    // The init of the source that will serve this start (Phase 5b: a cut).
+    const init = await this._get(`init?at=${Math.round(offsetMs)}`);
     const mime = init.headers.get("X-RV-Mime") ?? "";
     this.stats.mime = mime;
+    this.stats.source = init.headers.get("X-RV-Source") ?? "file";
     if (!mime || !Ctor.isTypeSupported(mime)) {
       throw new MseUnsupported(`MSE cannot play ${mime || "this recording"}`);
     }
@@ -284,7 +312,14 @@ export class MseFeeder {
       this.stats.bytes += data.length;
       this.stats.lastWaitMs = performance.now() - began;
       if (count > 0) {
+        const source = response.headers.get("X-RV-Source") ?? "file";
+        if (source !== this.stats.source) {
+          await this._switch(source, controller.signal);
+          // (Methods: not narrowed across the await.)
+          if (this._gone() || aborted(controller.signal)) return;
+        }
         await this._append(data);
+        this.stats.firstSource ??= source;
         if (query.first === undefined || this._runStartS === undefined) this._runStartS = start / 1000;
         this._next = { index: first + count, atS: end / 1000 };
         if (end > start) this._bytesPerSecond = (data.length * 1000) / (end - start);
@@ -313,6 +348,26 @@ export class MseFeeder {
       this._settle(controller);
     }
     this._pump();
+  }
+
+  /**
+   * The next window comes from another source (the recording's download or
+   * the device's cut): append that source's init segment first, changing the
+   * buffer's type if its codecs differ.
+   */
+  private async _switch(source: string, signal: AbortSignal): Promise<void> {
+    const init = await this._get(`init?source=${source}`, signal);
+    const mime = init.headers.get("X-RV-Mime") ?? "";
+    const data = new Uint8Array(await init.arrayBuffer());
+    if (this._gone() || aborted(signal)) return;
+    const buffer = this._buffer;
+    if (mime && mime !== this.stats.mime && buffer && typeof buffer.changeType === "function") {
+      buffer.changeType(mime);
+      this.stats.mime = mime;
+    }
+    await this._append(data);
+    this.stats.source = source;
+    this.stats.switches += 1;
   }
 
   private async _append(data: Uint8Array<ArrayBuffer>): Promise<void> {

@@ -5,14 +5,17 @@ import {
   browserLabel,
   bufferedSeconds,
   classifyHost,
+  cutReport,
   deepTarget,
   describeRate,
   deviceSetup,
+  loginReport,
   longRecordings,
   mb,
   setupMismatch,
   slope,
   smooth,
+  sourceLabel,
   span,
   touchingPairs,
   within,
@@ -191,5 +194,43 @@ describe("rates and sums", () => {
     expect(mb(2_500_000)).toBe("2.5 MB");
     expect(mb(8_589_934_592)).toBe("8.59 GB");
     expect(mb(undefined)).toBe("–");
+  });
+});
+
+describe("Phase 5b reports", () => {
+  it("names the source, describes a cut and the logins", () => {
+    expect(sourceLabel("cut")).toBe("the Reolink protocol cut");
+    expect(sourceLabel("file")).toBe("the recording's download");
+    expect(sourceLabel(undefined)).toBe("?");
+    expect(
+      cutReport({
+        first_fragment_ms: 412.6,
+        slot_ms: 0.4,
+        login: "new",
+        login_ms: 180,
+        reply_ms: 151,
+        fragments: 12,
+        bytes: 3_400_000,
+        complete: true,
+        mbit_s: 92.5,
+        mux: { anchor: "key frame time", counter_rate: 1_000_000, rate_learned: true },
+      }),
+    ).toBe(
+      "Reolink protocol cut: first fragment 413 ms, slot 0 ms, login (an extra user) 180 ms, reply 151 ms, 12 fragments, 3.4 MB, 92.5 Mbit/s, complete, placed by key frame time, counter 1000000/s (learned)",
+    );
+    expect(cutReport({ login: "shared", running: true })).toBe(
+      "Reolink protocol cut: login shared, 0 fragments, 0.0 MB, running",
+    );
+    expect(cutReport({ error: "no stream slot within 5 s (7 of 7 in use)", mux: {} })).toBe(
+      "Reolink protocol cut: 0 fragments, 0.0 MB, error no stream slot within 5 s (7 of 7 in use), placed by ?, counter ?/s",
+    );
+    expect(cutReport({})).toBe("Reolink protocol cut: 0 fragments, 0.0 MB, stopped");
+    expect(loginReport(undefined)).toBe("Reolink protocol: no statistics");
+    expect(loginReport({ enabled: false, logged_in: 0, logins: 0, logouts: 0, cuts_running: 0 })).toBe(
+      "Reolink protocol: off (the option is not set)",
+    );
+    expect(loginReport({ enabled: true, logged_in: 1, logins: 2, logouts: 1, cuts_running: 1 })).toBe(
+      "Reolink protocol: 1 host(s) logged in now, 2 logins, 1 logouts, 1 cuts running",
+    );
   });
 });

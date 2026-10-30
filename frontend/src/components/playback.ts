@@ -599,6 +599,13 @@ export class RvPlayback extends LitElement {
       }
     }
     if (seq === this._playSeq) this._note = undefined;
+    // Phase 5b: a start the device's cut served shows it in the debug panel.
+    try {
+      const status = await fetchCacheStatus(hass, token);
+      if (seq === this._playSeq && status.cache?.cut) this._metrics = { ...this._metrics, cache: status.cache };
+    } catch {
+      // The panel keeps what it showed.
+    }
   }
 
   /** Preload the next recording now, or near this one's end if that is far. */
@@ -1704,6 +1711,9 @@ export function describePlayer(player: RvPlayer | null): string {
     `${stats.windows} windows, ${(stats.bytes / 1_000_000).toFixed(1)} MB${stats.lastWaitMs === undefined ? "" : `, last in ${Math.round(stats.lastWaitMs)} ms`}`,
     `${Math.round(stats.ahead)} s ahead, ${Math.round(stats.behind)} s behind`,
     `${stats.trims} trims`,
+    // Phase 5b: the device's cut, or the recording's download.
+    `from ${stats.source === "cut" ? "Reolink protocol cut" : "download"}` +
+      (stats.switches ? ` (${stats.switches} source switches)` : ""),
   ];
   return parts.join(" · ");
 }
@@ -1719,7 +1729,14 @@ export function deliveryOf(progressive: boolean, browserProgressive: boolean, ca
 export function describeCache(cache: CacheStatus): string {
   const mb = `${(cache.bytes / 1_000_000).toFixed(1)} MB`;
   if (cache.error) return `failed: ${cache.error}`;
-  return cache.complete ? `cached (${mb})` : `filling (${mb} so far)`;
+  const state = cache.complete ? `cached (${mb})` : `filling (${mb} so far)`;
+  // Phase 5b: a deep start served by the device's cut.
+  const cut = cache.cut as { first_fragment_ms?: number; login?: string; error?: string | null } | undefined;
+  if (!cut) return state;
+  const first =
+    typeof cut.first_fragment_ms === "number" ? `first fragment ${Math.round(cut.first_fragment_ms)} ms` : "no fragment";
+  const login = cut.login === "new" ? ", new login" : cut.login ? ", shared login" : "";
+  return `${state} · Reolink protocol cut: ${cut.error ? `failed (${cut.error})` : `${first}${login}`}`;
 }
 
 function rememberedSetup(): string {

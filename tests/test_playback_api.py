@@ -302,11 +302,20 @@ async def test_mse_fragments(
     resp = await http.get(f"{base}/init")
     assert resp.status == 200
     assert resp.headers["X-RV-Mime"] == MIME
+    assert resp.headers["X-RV-Source"] == "file"
     assert await resp.read() == FTYP + av_moov()
+    # The init of what serves a start (the option is off: the recording).
+    resp = await http.get(f"{base}/init?at=40000")
+    assert resp.headers["X-RV-Source"] == "file"
+    assert await resp.read() == FTYP + av_moov()
+    resp = await http.get(f"{base}/init?source=cut")
+    assert resp.status == 502
     resp = await http.get(f"{base}/frags?at=10500&ms=4000")
     assert resp.status == 200
-    headers = {k: resp.headers[f"X-RV-{k}"] for k in ("First", "Count", "Last")}
-    assert headers == {"First": "5", "Count": "2", "Last": "0"}
+    headers = {
+        k: resp.headers[f"X-RV-{k}"] for k in ("First", "Count", "Last", "Source")
+    }
+    assert headers == {"First": "5", "Count": "2", "Last": "0", "Source": "file"}
     assert float(resp.headers["X-RV-Start"]) == 10_000
     assert float(resp.headers["X-RV-End"]) == 14_000
     data = await resp.read()
