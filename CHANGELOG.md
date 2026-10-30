@@ -3,6 +3,17 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.36.2
+
+- **HD plays on from one recording to the next**: after moving on to the next
+  recording in HD the viewer lost its place, so it did not get the one after
+  ready and stopped at its end; a jump within an HD recording also reloaded it
+  instead of seeking.
+- **The playback check** (v0.4.2) runs its SD rows in SD when the tab was left
+  on HD (its HD row switches to HD itself), and a jump that played while the
+  recording was still being copied is reported as not judged rather than "did
+  not play".
+
 ## 0.36.1
 
 What the hardware check of 0.36.0 asked for:

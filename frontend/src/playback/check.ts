@@ -36,7 +36,7 @@ import type { StreamDecision } from "./codec";
 import { SHAPES, mseApi, mseSupports, pickSample, probeShape, type MseApi } from "./mse-probe";
 import type { RvPlayer } from "./player";
 
-export const CHECK_VERSION = "0.4.1";
+export const CHECK_VERSION = "0.4.2";
 export const SETUPS = [
   "Desktop Chrome, LAN",
   "Desktop Chrome, Tailscale",
@@ -214,6 +214,7 @@ export class PlaybackCheck {
     markRunning(this.id, this.options.setup);
     try {
       await this._header();
+      this._sd();
       await this._timelines();
       await this._events();
       await this._deep();
@@ -566,6 +567,18 @@ export class PlaybackCheck {
     return cached;
   }
 
+  /**
+   * The rows up to H are the SD (sub) stream's: a tab left on HD goes to SD
+   * first (H switches to HD and back itself).
+   */
+  private _sd(): void {
+    const t = this._t;
+    if (t.stream === "sub") return;
+    t.player?.pause();
+    t.setStream("sub");
+    this._log("The tab was on HD: switched to SD for the check (H checks HD).");
+  }
+
   private async _deep(): Promise<void> {
     const t = this._t;
     const long = await this._findLong();
@@ -610,7 +623,8 @@ export class PlaybackCheck {
     const played = await this._play(target.time);
     const fetched = played.held?.complete === false;
     const cachedMs = played.ok && !fetched ? t.metrics.firstFrameMs : undefined;
-    this._log(`D2 ${fetched ? "Cached when chosen, but not on disk when played (not counted)" : "Cached"}, ${describe(target)}: ${played.line}`);
+    const notCounted = long.cached ? "Cached when chosen, but not on disk when played" : "Still being copied when played";
+    this._log(`D2 ${fetched ? `${notCounted} (not counted)` : "Cached"}, ${describe(target)}: ${played.line}`);
     await sleep(300);
     this._log(`     ${requestReport(played.began, played.source)}`);
     this._summary.push(
@@ -619,7 +633,12 @@ export class PlaybackCheck {
     );
     this._plain.push(
       cachedMs === undefined
-        ? { grade: "problem", text: "Jumping into the middle of a long recording did not play." }
+        ? played.ok
+          ? {
+              grade: "fine",
+              text: `Jumping into the middle of a long recording starts in ${secondsText(t.metrics.firstFrameMs ?? 0)} (not judged: its copy was still being made).`,
+            }
+          : { grade: "problem", text: "Jumping into the middle of a long recording did not play." }
         : {
             grade: speed(cachedMs, 2000, 4000),
             text:

@@ -118,7 +118,7 @@ describe("PlaybackCheck", () => {
       changes.push(1),
     );
     const report = await check.run();
-    expect(report).toContain("Reolink Viewer playback check v0.4.1 · Desktop Chrome, LAN · Garage");
+    expect(report).toContain("Reolink Viewer playback check v0.4.2 · Desktop Chrome, LAN · Garage");
     expect(report).toContain("A1 Time to timeline, today (as the tab opened): 120 ms (server: memory, total 4 ms)");
     expect(report).toContain("A2/A3 skipped: no earlier recording day this month");
     expect(report).toContain("B  skipped: no events today");
@@ -185,6 +185,56 @@ describe("PlaybackCheck", () => {
     expect(last).toMatchObject({ report_id: "run1", done: true });
     expect(String(last?.text)).toContain("INTERRUPTED:");
     expect(window.localStorage.getItem("reolink-viewer-check-running")).toBeNull();
+  });
+});
+
+describe("PlaybackCheck: deep starts", () => {
+  it("checks SD on a tab left on HD, and does not call a start whose copy is still being made a failure", async () => {
+    vi.spyOn(PlaybackCheck.prototype as unknown as { _pause: () => Promise<void> }, "_pause").mockResolvedValue();
+    const hass = reportingHass();
+    const base = hass.callWS.bind(hass);
+    hass.callWS = <T,>(message: Record<string, unknown>) => {
+      if (message.type === "reolink_viewer/playback/peek") {
+        hass.sent.push(message);
+        return Promise.resolve({ segment_id: "long", cache: null } as T);
+      }
+      return base<T>(message);
+    };
+    const day = { ...emptyDay(), segments: [{ id: "long", start: T0, end: T0 + 3_600_000, triggers: [], ambiguous: false }] };
+    let stream: "sub" | "main" = "main";
+    const streams: string[] = [];
+    const metrics: Record<string, unknown> = { timelineMs: 120 };
+    let playing: Record<string, unknown> | undefined;
+    const target: CheckTarget = {
+      ...stubTarget(hass),
+      day,
+      metrics,
+      get stream() {
+        return stream;
+      },
+      setStream: (next) => {
+        stream = next;
+        streams.push(next);
+      },
+      get playing() {
+        return playing as CheckTarget["playing"];
+      },
+      playAt: () => {
+        // Each start opens the recording, still being copied (2.3 GB in HD).
+        playing = { cache: { complete: false, bytes: 900_000_000, error: null } };
+        metrics.firstFrameMs = undefined;
+        setTimeout(() => Object.assign(metrics, { firstFrameMs: 490, stream }), 5);
+        return Promise.resolve();
+      },
+    };
+    const report = await new PlaybackCheck(target, { setup: "Desktop Chrome, LAN", soakMinutes: 0 }).run();
+    expect(streams).toEqual(["sub"]);
+    expect(report).toContain("The tab was on HD: switched to SD for the check (H checks HD).");
+    expect(report).toMatch(/D2 Still being copied when played \(not counted\), /);
+    expect(parseInShort(report)?.findings).toContainEqual({
+      grade: "fine",
+      text: "Jumping into the middle of a long recording starts in 0.5 s (not judged: its copy was still being made).",
+    });
   });
 });
 

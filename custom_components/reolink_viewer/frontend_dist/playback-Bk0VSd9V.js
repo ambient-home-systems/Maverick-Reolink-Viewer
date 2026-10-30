@@ -1,7 +1,7 @@
-import { $ as e, A as t, B as n, Bt as r, C as i, D as a, Ft as o, G as s, Gt as c, H as l, I as u, It as d, Jt as f, K as p, Kt as m, L as ee, Lt as h, M as te, N as ne, Nt as re, O as ie, P as g, Pt as _, Q as ae, R as oe, Rt as se, S as ce, St as v, T as le, U as y, V as ue, W as de, Xt as b, Yt as x, _ as fe, at as S, b as pe, bt as C, c as me, d as w, et as T, f as E, g as D, h as O, it as k, j as he, k as ge, l as A, m as _e, nt as ve, q as ye, qt as j, rt as be, s as xe, u as Se, ut as Ce, w as M, x as we, z as N, zt as P } from "./home-CGlX2y7Y.js";
-import { dayLabel as Te, shortDay as Ee } from "./events-view-DfMXF0tj.js";
-import { a as De, i as F, n as I, r as Oe, s as ke, t as Ae } from "./check-DpaujiJe.js";
-import { i as je } from "./findings-Dqmk7bWJ.js";
+import { $ as e, A as t, B as n, Bt as r, C as i, D as a, Ft as o, G as s, Gt as c, H as l, I as u, It as d, Jt as f, K as p, Kt as m, L as ee, Lt as h, M as te, N as ne, Nt as re, O as ie, P as g, Pt as _, Q as ae, R as oe, Rt as se, S as ce, St as v, T as le, U as y, V as ue, W as de, Xt as b, Yt as x, _ as fe, at as S, b as pe, bt as C, c as me, d as w, et as T, f as E, g as D, h as O, it as k, j as he, k as ge, l as A, m as _e, nt as ve, q as ye, qt as j, rt as be, s as xe, u as Se, ut as Ce, w as M, x as we, z as N, zt as P } from "./home-BCoAmaMB.js";
+import { dayLabel as Te, shortDay as Ee } from "./events-view-CEgHPjqX.js";
+import { a as De, i as F, n as I, r as Oe, s as ke, t as Ae } from "./check-4V41YkXC.js";
+import { i as je } from "./findings-ZL3k_4SW.js";
 var Me = class extends j {
 	static properties = {
 		events: { attribute: !1 },
@@ -1210,7 +1210,7 @@ var U = 6e4, Ge = 3e3, W = 1e4, Ke = 3, G = 86400, qe = 10 * w, Je = 10, K = 8e3
 				delivery: e ? `MSE (${T() ?? "?"})${u.cache.complete ? ", cached" : ""}` : tt(r, this._progressive, u.cache.complete)
 			};
 			let d = Math.max(0, s - u.start);
-			await this._player?.play(this._toItem(u), d, t), this._showDownload(u, a), this._schedulePreload(i.segment, a, s);
+			await this._player?.play(this._toItem(u, i.segment), d, t), this._showDownload(u, a), this._schedulePreload(i.segment, a, s);
 		} catch (e) {
 			a === this._playSeq && this._playError(c(e).message);
 		} finally {
@@ -1241,33 +1241,33 @@ var U = 6e4, Ge = 3e3, W = 1e4, Ke = 3, G = 86400, qe = 10 * w, Je = 10, K = 8e3
 		let t = this.hass, n = m(e.base ?? e.url ?? "");
 		t && n && r(t, [n]).catch(() => void 0);
 	}
-	_toItem(e) {
-		let t = {
-			recording: `${e.stream}:${e.segment_id}:${e.end}`,
-			segmentId: e.segment_id,
+	_toItem(e, t) {
+		let n = {
+			recording: `${e.stream}:${t.id}:${e.end}`,
+			segmentId: t.id,
 			start: e.start,
 			end: e.end,
 			release: () => {
 				this._release(e);
 			}
-		}, n = this.hass;
-		if (e.base && n?.fetchWithAuth) {
-			let r = n.fetchWithAuth.bind(n);
+		}, r = this.hass;
+		if (e.base && r?.fetchWithAuth) {
+			let t = r.fetchWithAuth.bind(r);
 			return {
-				...t,
+				...n,
 				key: e.base,
 				mse: {
 					base: e.base,
-					fetch: r,
+					fetch: t,
 					durationMs: e.end - e.start
 				}
 			};
 		}
-		let r = e.url ?? "";
+		let i = e.url ?? "";
 		return {
-			...t,
-			key: r,
-			url: r
+			...n,
+			key: i,
+			url: i
 		};
 	}
 	async _showDownload(e, t) {
@@ -1312,7 +1312,7 @@ var U = 6e4, Ge = 3e3, W = 1e4, Ke = 3, G = 86400, qe = 10 * w, Je = 10, K = 8e3
 				this._release(i);
 				return;
 			}
-			await this._player?.preload(this._toItem(i));
+			await this._player?.preload(this._toItem(i, r));
 		} catch {}
 	}
 	_onAdvanced(e) {

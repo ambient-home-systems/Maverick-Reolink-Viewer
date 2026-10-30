@@ -142,6 +142,39 @@ describe("rv-playback", () => {
     expect(el.renderRoot.textContent).toContain("Details and playback check");
   });
 
+  it("in HD, keeps the timeline's recordings though HD copies start apart from them", async () => {
+    const day = makeDay();
+    day.segments.push({ id: "s3", start: T0 + 64 * MIN, end: T0 + 66 * MIN, triggers: ["MOTION"], ambiguous: false });
+    const hass = playbackHass(day);
+    const base = hass.callWS.bind(hass);
+    hass.callWS = <T,>(message: Record<string, unknown>) => {
+      if (message.type === "reolink_viewer/playback/url" && message.stream === "main") {
+        hass.sent.push(message);
+        // The server names the HD copy by its own start, 1.5 s after the SD one.
+        const seg = day.segments.find((s) => s.id === message.segment_id);
+        const start = (seg?.start ?? 0) + 1500;
+        return Promise.resolve({ ...playbackUrl(String(start), start), stream: "main" } as T);
+      }
+      return base<T>(message);
+    };
+    const el = await mount(hass);
+    el._stream = "main";
+    await el.playAt(T0 + 60 * MIN + 10_000);
+    await flush();
+    const player = el.renderRoot.querySelector("rv-player");
+    expect(player?.current?.segmentId).toBe("s1");
+    expect(player?.preloaded?.segmentId).toBe("s2");
+    // It moves on to s2, then preloads s3: it still knows where it is.
+    const videos = player?.renderRoot.querySelectorAll("video");
+    videos?.[0]?.dispatchEvent(new Event("playing"));
+    videos?.[0]?.dispatchEvent(new Event("ended"));
+    videos?.[1]?.dispatchEvent(new Event("playing"));
+    for (let i = 0; i < 4; i += 1) await flush();
+    expect(el._cursor).toBe(T0 + 62 * MIN);
+    const urls = sentOf(hass, "reolink_viewer/playback/url").map((m) => m.segment_id);
+    expect(urls).toEqual(["s1", "s2", "s3"]);
+  });
+
   it("opens on the day of a time it is given, and plays from it (an event from the timetable)", async () => {
     const hass = playbackHass();
     const at = T0 + 63 * MIN;

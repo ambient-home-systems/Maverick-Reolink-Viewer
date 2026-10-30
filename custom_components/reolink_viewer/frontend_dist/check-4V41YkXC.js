@@ -1,5 +1,5 @@
-import { Gt as e, J as t, Kt as n, Lt as r, Nt as i, St as a } from "./home-CGlX2y7Y.js";
-import { a as o, n as s, o as c, r as l, s as u, t as d } from "./findings-Dqmk7bWJ.js";
+import { Gt as e, J as t, Kt as n, Lt as r, Nt as i, St as a } from "./home-BCoAmaMB.js";
+import { a as o, n as s, o as c, r as l, s as u, t as d } from "./findings-ZL3k_4SW.js";
 //#region src/playback/check-util.ts
 var f = (e) => /iPhone|iPad|iPod/.test(e);
 function p(e) {
@@ -225,7 +225,7 @@ function ce(e, t) {
 }
 //#endregion
 //#region src/playback/check.ts
-var le = "0.4.1", ue = [
+var le = "0.4.2", ue = [
 	"Desktop Chrome, LAN",
 	"Desktop Chrome, Tailscale",
 	"Desktop Chrome, Nabu Casa",
@@ -286,7 +286,7 @@ var H = (e) => new Date(e).toLocaleTimeString(), be = class {
 	async run() {
 		this.running = !0, $(this.id, this.options.setup);
 		try {
-			await this._header(), await this._timelines(), await this._events(), await this._deep(), await this._advance(), await this._rates(), await this._scrub(), await this._switchHd(), await this._link(), await this._capabilities(), this.options.soakMinutes > 0 && await this._soak();
+			await this._header(), this._sd(), await this._timelines(), await this._events(), await this._deep(), await this._advance(), await this._rates(), await this._scrub(), await this._switchHd(), await this._link(), await this._capabilities(), this.options.soakMinutes > 0 && await this._soak();
 			for (let e of s(this.inShort(!0))) this._log(e);
 			this._log(""), this._log("Summary:");
 			for (let e of this._summary) this._log(`- ${e}`);
@@ -486,6 +486,10 @@ var H = (e) => new Date(e).toLocaleTimeString(), be = class {
 		}
 		return o;
 	}
+	_sd() {
+		let e = this._t;
+		e.stream !== "sub" && (e.player?.pause(), e.setStream("sub"), this._log("The tab was on HD: switched to SD for the check (H checks HD)."));
+	}
 	async _deep() {
 		let e = this._t, t = await this._findLong();
 		if (this._long = t, !t) {
@@ -502,8 +506,11 @@ var H = (e) => new Date(e).toLocaleTimeString(), be = class {
 			this._log(`D1 ${l}, ${i(r)}: ${o.line}`), await B(300), this._log(`     ${X(o.began, o.source)}`), this._log(`     ${await this._fillReport()}`), this._log(`     ${re((await this._stats())?.vod.baichuan)}`);
 		}
 		await this._pause(1500);
-		let l = y(n, t.day.events, .1, .45, .4), u = await this._play(l.time), d = u.held?.complete === !1, f = u.ok && !d ? e.metrics.firstFrameMs : void 0;
-		this._log(`D2 ${d ? "Cached when chosen, but not on disk when played (not counted)" : "Cached"}, ${i(l)}: ${u.line}`), await B(300), this._log(`     ${X(u.began, u.source)}`), this._summary.push(`Deep start (sub, ${r} recording): not cached ${a === void 0 ? "not measured" : `${g(a)}${s ? ` from ${O(s)}` : ""}`}, cached ${D(f, 2e3)}`), this._plain.push(f === void 0 ? {
+		let l = y(n, t.day.events, .1, .45, .4), u = await this._play(l.time), d = u.held?.complete === !1, f = u.ok && !d ? e.metrics.firstFrameMs : void 0, p = t.cached ? "Cached when chosen, but not on disk when played" : "Still being copied when played";
+		this._log(`D2 ${d ? `${p} (not counted)` : "Cached"}, ${i(l)}: ${u.line}`), await B(300), this._log(`     ${X(u.began, u.source)}`), this._summary.push(`Deep start (sub, ${r} recording): not cached ${a === void 0 ? "not measured" : `${g(a)}${s ? ` from ${O(s)}` : ""}`}, cached ${D(f, 2e3)}`), this._plain.push(f === void 0 ? u.ok ? {
+			grade: "fine",
+			text: `Jumping into the middle of a long recording starts in ${o(e.metrics.firstFrameMs ?? 0)} (not judged: its copy was still being made).`
+		} : {
 			grade: "problem",
 			text: "Jumping into the middle of a long recording did not play."
 		} : {
