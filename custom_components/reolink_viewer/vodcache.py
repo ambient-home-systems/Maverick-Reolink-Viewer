@@ -33,8 +33,15 @@ served from the cache, with Range, by ``views.py``:
   reached is served from a cut the device sends of that moment
   (``baichuan_source.py``): its fragments in a file of their own beside the
   original, numbered from ``CUT_FIRST`` so a window's ``first`` says which
-  file it reads; the download goes on, and any failure of the cut falls back
-  to it;
+  file it reads; any failure of the cut falls back to the download;
+- such a recording is fetched once, in two pieces (Phase 5c): the download
+  stops where the cut's media begins (the original then holds the part
+  before it, and a window past that part reads the cut), and gives its stream
+  slot to the cut when the host has none free, resuming after it. The device
+  ignores Range, so a download that resumes reads the recording from its
+  start again and skips the bytes on disk. Whatever needs the whole original
+  (the file player, a clip, a part neither piece holds) resumes it to the
+  end;
 - the file player (the fallback) gets a plain MP4 (``remux.py``), rewritten
   from the complete original when first asked for, one at a time: browsers
   read a fragmented file whole before playing it. The original is kept (the
@@ -56,7 +63,7 @@ import struct
 import time
 from typing import Any, BinaryIO
 
-from aiohttp import ClientError, ClientSession, ClientTimeout
+from aiohttp import ClientError, ClientResponse, ClientSession, ClientTimeout
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
@@ -139,6 +146,8 @@ LAYOUT = 5
 COVER_MARGIN_MS = 60_000
 # Fragments are read and made MSE-ready in batches of about this many bytes.
 FRAGMENT_BATCH = 4 * 1024 * 1024
+# A cut that asked for the download's stream slot waits this long for it.
+LEND_TIMEOUT_S = 2.0
 
 
 class VodCacheError(Exception):
@@ -233,6 +242,15 @@ class Entry:
     cut: Cut | None = None
     cuts: int = 0
     cut_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    # Where the download stopped (ms of media): the cut has what follows, and
+    # the original holds only what precedes it (Phase 5c).
+    stopped_ms: float | None = None
+    # Something needs the whole original: the download no longer stops at a cut.
+    whole: bool = False
+    # The cut waits for a stream slot: the download gives its own up.
+    yielding: bool = False
+    # The download's response while it runs (closed to give the slot up).
+    response: ClientResponse | None = None
 
     @property
     def part_path(self) -> Path:
@@ -275,6 +293,8 @@ class Entry:
             "error": self.error,
             **self.timing,
         }
+        if self.stopped_ms is not None:
+            out["stopped_ms"] = round(self.stopped_ms)
         if self.cut is not None:
             out["cut"] = self.cut.public()
         return out
@@ -402,7 +422,7 @@ class VodCache:
         entry.last_access = time.monotonic()
         if entry.complete:
             return entry
-        if not entry.filling:
+        if not entry.filling and entry.stopped_ms is None:
             entry.priority = priority
             entry.task = self._hass.async_create_background_task(
                 self._fill(entry), f"reolink_viewer fill {cache_id[:8]}"
@@ -533,24 +553,38 @@ class VodCache:
     async def _fill(self, entry: Entry) -> None:
         rec = entry.recording
         began = time.monotonic()
-        entry.timing = {"cache": "fill", "priority": entry.priority.name.lower()}
+        state = {"cache": "fill", "priority": entry.priority.name.lower()}
+        if entry.written:
+            # Resumed after a stop at the cut: keep what the first part measured.
+            entry.timing.update(state)
+        else:
+            entry.timing = state
         host_sched = self._scheduler.host(rec.source.entry_id)
+        outcome = "complete"
         try:
-            ticket = host_sched.streams.request(entry.priority)
-            entry.ticket = ticket
-            try:
-                await ticket.wait()
-                entry.timing["wait_ms"] = _ms(began)
-                # Checked now rather than when it queued: other fills may
-                # have used the space meanwhile.
-                await self._make_room(
-                    entry.part_path, expected_size(rec), playback=_clicked(entry)
-                )
-                await self._download(entry)
-            finally:
-                ticket.release()
-                entry.ticket = None
-                self._reserved.pop(entry.part_path, None)
+            while True:
+                ticket = host_sched.streams.request(entry.priority)
+                entry.ticket = ticket
+                try:
+                    await ticket.wait()
+                    entry.timing.setdefault("wait_ms", _ms(began))
+                    # Checked now rather than when it queued: other fills may
+                    # have used the space meanwhile.
+                    await self._make_room(
+                        entry.part_path, expected_size(rec), playback=_clicked(entry)
+                    )
+                    outcome = await self._download(entry)
+                finally:
+                    ticket.release()
+                    entry.ticket = None
+                    entry.yielding = False
+                    self._reserved.pop(entry.part_path, None)
+                    async with entry.changed:
+                        entry.changed.notify_all()
+                if outcome != "yielded":
+                    break
+                # The cut took the slot: queue behind it, then go on.
+                entry.timing["yields"] = entry.timing.get("yields", 0) + 1
         except asyncio.CancelledError:
             entry.error = "cancelled"
             await self._discard_part(entry)
@@ -561,13 +595,50 @@ class VodCache:
             await self._discard_part(entry)
         else:
             entry.timing["fill_ms"] = _ms(began)
-            if entry.cut is not None and not entry.leases:
+            if outcome == "complete" and entry.cut is not None and not entry.leases:
                 # Whole now, and no viewer left: the cut is not needed.
                 await self._end_cut(entry)
             await self._evict()
         finally:
             async with entry.changed:
                 entry.changed.notify_all()
+
+    def _resume(self, entry: Entry) -> None:
+        """Fetch the rest of a recording whose download stopped at its cut."""
+        if entry.stopped_ms is None or entry.filling:
+            return
+        if self._entries.get(entry.recording.cache_id) is not entry:
+            # Evicted meanwhile: its part is gone, a new entry fetches it.
+            raise VodCacheError("recording evicted")
+        entry.whole = True
+        entry.stopped_ms = None
+        entry.priority = Priority.PLAYBACK
+        entry.task = self._hass.async_create_background_task(
+            self._fill(entry), f"reolink_viewer fill {entry.path.stem[:8]}"
+        )
+
+    async def _lend_slot(self, entry: Entry) -> None:
+        """Have the recording's download give its stream slot to its cut.
+
+        A download holding a slot stops and queues behind the cut; one still
+        waiting for a slot lets the cut go first.
+        """
+        ticket = entry.ticket
+        if ticket is None or ticket.released:
+            return
+        if not ticket.granted:
+            ticket.defer()
+            return
+        entry.yielding = True
+        if entry.response is not None:
+            # Also when it waits on the device: nothing arrives to stop it.
+            entry.response.close()
+        async with entry.changed:
+            try:
+                async with asyncio.timeout(LEND_TIMEOUT_S):
+                    await entry.changed.wait_for(lambda: entry.ticket is not ticket)
+            except TimeoutError:
+                return
 
     # ---- Plain MP4 (the file player) ----
 
@@ -703,8 +774,20 @@ class VodCache:
                 return first if first < len(index.fragments) else None
             return index.find(at_ms or 0.0)
 
-        index, complete = await self._await_index(entry, lambda i: start(i) is not None)
-        begin = start(index)
+        while True:
+            index, complete = await self._await_index(
+                entry, lambda i: start(i) is not None, stop=True
+            )
+            begin = start(index)
+            if begin is not None or complete or entry.stopped_ms is None:
+                break
+            # The download stopped at the cut before reaching this: read the
+            # cut on from there, or fetch the rest.
+            if first is not None and (cut := await self._cut_after(entry, first)):
+                return await self._cut_window(
+                    cut, at_ms=entry.stopped_ms, max_ms=max_ms, max_bytes=max_bytes
+                )
+            self._resume(entry)
         if begin is None:
             # The recording ends before that point.
             if first is None and index.fragments:
@@ -817,6 +900,7 @@ class VodCache:
                 reserve=self._reserve_cut,
                 size=size,
                 span_ms=span,
+                borrow=lambda: self._lend_slot(entry),
             )
         except CutError as err:
             entry.timing["cut_error"] = str(err)
@@ -936,6 +1020,33 @@ class VodCache:
             return None
         return reached
 
+    async def _cut_after(self, entry: Entry, first: int) -> Cut | None:
+        """Return the cut that follows a stopped original from its ``first`` on."""
+        if entry.stopped_ms is None or (cut := entry.cut) is None:
+            return None
+        indexed = await self._indexed_now(entry)
+        if indexed is None or first < len(indexed.fragments):
+            return None
+        if cut.error is not None or not _covers(cut, entry.stopped_ms):
+            return None
+        return cut
+
+    async def _reached_cut(self, entry: Entry) -> bool:
+        """Return whether the download has reached its cut (and may stop there)."""
+        cut = entry.cut
+        if (
+            entry.whole
+            or cut is None
+            or cut.error is not None
+            or (start := cut.start_ms) is None
+        ):
+            return False
+        indexed = await self._indexed_now(entry)
+        if indexed is None or indexed.duration_ms < start:
+            return False
+        entry.stopped_ms = indexed.duration_ms
+        return True
+
     async def _indexed_now(self, entry: Entry) -> FragmentIndex | None:
         """Index what the original holds now, without waiting for more."""
         if not entry.written:
@@ -972,12 +1083,18 @@ class VodCache:
             await self._hass.async_add_executor_job(_unlink, cut.path)
 
     async def _await_index(
-        self, entry: Entry, ready: Callable[[FragmentIndex], bool]
+        self,
+        entry: Entry,
+        ready: Callable[[FragmentIndex], bool],
+        *,
+        stop: bool = False,
     ) -> tuple[FragmentIndex, bool]:
         """Index the original as it fills until ``ready`` (or it is complete).
 
         Returns the index and whether the file was complete when the scan
-        began (then the index holds every fragment).
+        began (then the index holds every fragment). With ``stop``, it also
+        returns (not ready) when the download stopped at the recording's cut,
+        rather than resuming it.
         """
         if entry.fragments is None:
             entry.fragments = FragmentIndex()
@@ -1003,7 +1120,9 @@ class VodCache:
                 if index.init is None:
                     raise VodCacheError("not playable as fragments: no moov")
                 return index, complete
-            await self.async_wait(entry, offset=written)
+            if stop and _stopped(entry):
+                return index, complete
+            await self.async_wait(entry, offset=written, resume=not stop)
 
     def _candidates(self, entry: Entry) -> tuple[Path, Path]:
         """Where the original is: the part file while filling, then its name."""
@@ -1045,7 +1164,14 @@ class VodCache:
             playback=_clicked(entry),
         )
 
-    async def _download(self, entry: Entry) -> None:
+    async def _download(self, entry: Entry) -> str:
+        """Download the original; return how it ended.
+
+        "complete"; "stopped" where the recording's cut begins (the cut has
+        the rest); "yielded" when the cut asked for the stream slot. Resumed,
+        it reads the recording from its start again (the device ignores
+        Range) and skips the bytes already on disk.
+        """
         rec = entry.recording
         host = bridge.async_get_host(self._hass, rec.source.entry_id)
         vod_file = VodFile(
@@ -1071,7 +1197,24 @@ class VodCache:
             entry.timing["indexed"] = "no: offsets could not be shifted before"
         index_at = reserve = 0
         shifter: OffsetShifter | None = None
-        fd = await self._hass.async_add_executor_job(_open_write, entry.part_path)
+        skip = entry.written
+        fd, kept = await self._hass.async_add_executor_job(
+            _open_write_at, entry.part_path, skip
+        )
+        if kept < skip:
+            # The part on disk is shorter than counted: fetch it all again.
+            entry.written = skip = 0
+            entry.fragments = None
+        produced = 0
+
+        async def emit(data: bytes) -> None:
+            nonlocal produced
+            fresh = data[max(skip - produced, 0) :]
+            produced += len(data)
+            if fresh:
+                await self._write(entry, fd, fresh)
+
+        outcome = "complete"
         try:
             async with self._session().get(
                 url.value,
@@ -1081,13 +1224,25 @@ class VodCache:
             ) as resp:
                 if resp.status != 200:
                     raise VodCacheError(f"HTTP {resp.status}")
-                entry.timing["headers_ms"] = _ms(began)
+                entry.timing.setdefault("headers_ms", _ms(began))
+                entry.response = resp
                 buffer = bytearray()
                 first = True
-                async for received in resp.content.iter_chunked(CHUNK):
+                chunks = resp.content.iter_chunked(CHUNK)
+                while True:
+                    try:
+                        received = await anext(chunks)
+                    except StopAsyncIteration:
+                        break
+                    except ClientError, OSError:
+                        if not entry.yielding:
+                            raise
+                        break
+                    if entry.yielding:
+                        break
                     chunk = received
                     if first:
-                        entry.timing["ttfb_ms"] = _ms(began)
+                        entry.timing.setdefault("ttfb_ms", _ms(began))
                         first = False
                     if scanner.bytes_seen < 64 * 1024:
                         scanner.feed(chunk)
@@ -1114,17 +1269,26 @@ class VodCache:
                     buffer += chunk
                     # Write small at first so playback can start at once.
                     if len(buffer) >= (WRITE_BATCH if entry.written else 64 * 1024):
-                        await self._write(entry, fd, bytes(buffer))
+                        await emit(bytes(buffer))
                         buffer.clear()
+                        if produced > skip and await self._reached_cut(entry):
+                            outcome = "stopped"
+                            break
+                if entry.yielding:
+                    # The cut took the slot (closing the response ends a read).
+                    outcome = "yielded"
+                if outcome != "complete":
+                    return outcome
                 if not planned:
                     buffer += head
                 if shifter is not None:
                     buffer += shifter.finish()
                 if buffer:
-                    await self._write(entry, fd, bytes(buffer))
+                    await emit(bytes(buffer))
             if reserve:
                 await self._write_index(entry, fd, index_at, reserve)
         finally:
+            entry.response = None
             await self._hass.async_add_executor_job(os.close, fd)
         if entry.written == 0:
             raise VodCacheError("empty recording")
@@ -1134,6 +1298,7 @@ class VodCache:
         seconds = max(time.monotonic() - began, 1e-3)
         entry.timing["mbit_s"] = round(entry.written * 8 / seconds / 1e6, 1)
         await self._remember_media(rec, scanner, entry.timing.get("indexed"))
+        return outcome
 
     def _shift(self, rec: Recording, shifter: OffsetShifter, data: bytes) -> bytes:
         try:
@@ -1171,17 +1336,33 @@ class VodCache:
     # ---- Reading ----
 
     async def async_wait(
-        self, entry: Entry, *, offset: int = 0, complete: bool = False
+        self,
+        entry: Entry,
+        *,
+        offset: int = 0,
+        complete: bool = False,
+        resume: bool = True,
     ) -> None:
-        """Wait until ``offset`` bytes (or the whole file) are on disk."""
-        async with entry.changed:
-            await entry.changed.wait_for(
-                lambda: (
-                    entry.complete
-                    or entry.error is not None
-                    or (not complete and entry.written > offset)
-                )
+        """Wait until ``offset`` bytes (or the whole file) are on disk.
+
+        A download stopped at the recording's cut is resumed, as what is asked
+        for lies past the part it holds; without ``resume`` this returns then.
+        """
+
+        def ready() -> bool:
+            return (
+                entry.complete
+                or entry.error is not None
+                or (not complete and entry.written > offset)
             )
+
+        while True:
+            if resume and _stopped(entry) and not ready():
+                self._resume(entry)
+            async with entry.changed:
+                await entry.changed.wait_for(lambda: ready() or _stopped(entry))
+            if ready() or not resume:
+                break
         if entry.error is not None and not entry.complete:
             raise VodCacheError(entry.error)
 
@@ -1251,8 +1432,8 @@ class VodCache:
         units: dict[str, list[tuple[Path, int]]] = {}
         newest: dict[str, float] = {}
         for path, size, mtime in files:
-            if path.name.endswith(PART_SUFFIX):
-                continue
+            # A part being filled is protected below; a stopped one goes with
+            # its recording (and its cut).
             cache_id = _cache_id_of(path)
             units.setdefault(cache_id, []).append((path, size))
             newest[cache_id] = max(newest.get(cache_id, 0.0), mtime)
@@ -1423,6 +1604,11 @@ def _cache_id_of(path: Path) -> str:
     return name.removesuffix(FLAT_SUFFIX).removesuffix(SUFFIX)
 
 
+def _stopped(entry: Entry) -> bool:
+    """Return whether the download stopped at the cut (and is not resumed)."""
+    return entry.stopped_ms is not None and not entry.filling
+
+
 def _covers(cut: Cut, at_ms: float) -> bool:
     """Return whether a cut serves a start at ``at_ms`` (or soon will)."""
     start = cut.start_ms if cut.start_ms is not None else cut.asked_ms
@@ -1434,9 +1620,24 @@ def _covers(cut: Cut, at_ms: float) -> bool:
     return cut.running and at_ms <= reached + CUT_REACH_MS
 
 
-def _open_write(path: Path) -> int:
+def _open_write_at(path: Path, offset: int) -> tuple[int, int]:
+    """Open a part to write at ``offset``; return it and the bytes kept.
+
+    From 0 the file is emptied; else it is cut to ``offset`` (or kept whole
+    if shorter, and the shorter length returned).
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
-    return os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    if offset == 0:
+        return os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), 0
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT, 0o600)
+    kept = min(os.fstat(fd).st_size, offset)
+    if kept < offset:
+        os.ftruncate(fd, 0)
+        kept = 0
+    else:
+        os.ftruncate(fd, offset)
+    os.lseek(fd, kept, os.SEEK_SET)
+    return fd, kept
 
 
 def _open_read(path: Path) -> int:

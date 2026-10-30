@@ -1761,7 +1761,9 @@ export function deliveryOf(progressive: boolean, browserProgressive: boolean, ca
 export function describeCache(cache: CacheStatus): string {
   const mb = `${(cache.bytes / 1_000_000).toFixed(1)} MB`;
   if (cache.error) return `failed: ${cache.error}`;
-  const state = cache.complete ? `cached (${mb})` : `filling (${mb} so far)`;
+  // Phase 5c: the download stopped where the cut begins (the cut has the rest).
+  const stopped = typeof cache.stopped_ms === "number" ? `copied to ${(cache.stopped_ms / 60_000).toFixed(1)} min (${mb})` : undefined;
+  const state = cache.complete ? `cached (${mb})` : (stopped ?? `filling (${mb} so far)`);
   // Phase 5b: a deep start served by the device's cut, or why none did.
   if (typeof cache.cut_error === "string") return `${state} · Reolink protocol cut not used: ${cache.cut_error}`;
   const cut = cache.cut as { first_fragment_ms?: number; login?: string; error?: string | null } | undefined;

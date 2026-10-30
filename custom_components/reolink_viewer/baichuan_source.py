@@ -19,8 +19,9 @@ indexed like it (``fmp4.FragmentIndex``), so the MSE view serves both alike.
   nears the end of one (:meth:`Cut.extend`), and the muxer joins them. The
   login is held across spans; a stream slot only while a span downloads.
 - Each cut holds a slot of the host's stream budget, at playback priority, and
-  gives up if none is free within ``SLOT_TIMEOUT_S``; the login runs as a
-  scheduler job.
+  gives up if none is free within ``SLOT_TIMEOUT_S``. With none free at once
+  it first asks for its recording's download's (``borrow``, Phase 5c): a
+  deep start costs the device one stream. The login runs as a scheduler job.
 - The media times are the recording's (0 at its start); the cut's start and
   end are sent in the device's local time (``timeconv``'s zone, from the
   bridge), as the device keeps them.
@@ -70,6 +71,7 @@ ANY_CHANNEL_BITMAP = 255
 
 type ClientFactory = Callable[..., BaichuanReplayClient]
 type Reserve = Callable[[Path, int], Awaitable[None]]
+type Borrow = Callable[[], Awaitable[None]]
 
 
 class CutError(Exception):
@@ -104,6 +106,9 @@ class Cut:
     # Between spans: waiting for the cache to ask for the next one.
     paused: bool = False
     spans: int = 0
+    # Asks the recording's download for its stream slot (none was free).
+    borrow: Borrow | None = None
+    borrowed: int = 0
     _more: asyncio.Event = field(default_factory=asyncio.Event)
 
     def extend(self) -> None:
@@ -144,6 +149,7 @@ class Cut:
             "running": self.running,
             "paused": self.paused,
             "spans": self.spans,
+            "borrowed": self.borrowed,
             "error": self.error,
             **self.timing,
         }
@@ -229,6 +235,7 @@ class BaichuanSource:
         reserve: Reserve,
         size: int,
         span_ms: float | None = None,
+        borrow: Borrow | None = None,
     ) -> Cut:
         """Start a cut of a recording (UTC ``start_ms``-``end_ms``) at ``at_ms``.
 
@@ -237,13 +244,17 @@ class BaichuanSource:
         makes room for the file (``size`` expected) before bytes are written.
         With ``span_ms`` it cuts that much media, then waits for
         :meth:`Cut.extend` to cut the next span; else to the recording's end.
+        ``borrow()`` asks the recording's download for its stream slot when
+        none is free.
         """
         if self._closed:
             raise CutError("closed")
         previous = self._cuts.get((entry_id, channel))
         if previous is not None:
             await self.async_stop(previous)
-        cut = Cut(entry_id, channel, stream, path, at_ms, span_ms=span_ms)
+        cut = Cut(
+            entry_id, channel, stream, path, at_ms, span_ms=span_ms, borrow=borrow
+        )
         self._cuts[(entry_id, channel)] = cut
         cut.task = self._hass.async_create_background_task(
             self._run(cut, start_ms, end_ms, reserve, size),
@@ -340,6 +351,10 @@ class BaichuanSource:
         streams = self._scheduler.host(cut.entry_id).streams
         ticket = streams.request(Priority.PLAYBACK)
         try:
+            if not ticket.granted and cut.borrow is not None:
+                # Queued first, so the slot the download gives up is this one's.
+                cut.borrowed += 1
+                await cut.borrow()
             try:
                 async with asyncio.timeout(wait):
                     await ticket.wait()

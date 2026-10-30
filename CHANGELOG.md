@@ -3,6 +3,21 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.37.0
+
+Phase 5c, step 1: a start deep in a recording over the Reolink protocol (the
+option) fetches the recording once and costs the recorder one stream.
+
+- **Nothing is fetched twice.** The copy of the recording stops where the
+  recorder's answer begins; the answer has the rest. An HD start no longer
+  downloads the rest of the hour (about 2 GB) beside it. Downloading the clip,
+  or the file player, fetches the rest of the copy first.
+- **One stream per start.** With no stream free on the recorder, the start takes
+  its own copy's, and the copy goes on after it (0.36 waited for a second
+  stream, and on a busy recorder the start then waited for the copy).
+- **Details** says how far the copy went ("copied to 57.0 min"); the playback
+  check, where the copy stopped and when the start took its stream.
+
 ## 0.36.2
 
 - **HD plays on from one recording to the next**: after moving on to the next
