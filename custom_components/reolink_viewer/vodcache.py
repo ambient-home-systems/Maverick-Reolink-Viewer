@@ -1021,11 +1021,15 @@ class VodCache:
         return reached
 
     async def _cut_after(self, entry: Entry, first: int) -> Cut | None:
-        """Return the cut that follows a stopped original from its ``first`` on."""
+        """Return the cut that follows a stopped original at its ``first``.
+
+        Only the window right after the original's last fragment hands over
+        (the player reads on in order); one further on needs the rest of it.
+        """
         if entry.stopped_ms is None or (cut := entry.cut) is None:
             return None
         indexed = await self._indexed_now(entry)
-        if indexed is None or first < len(indexed.fragments):
+        if indexed is None or first != len(indexed.fragments):
             return None
         if cut.error is not None or not _covers(cut, entry.stopped_ms):
             return None
