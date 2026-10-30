@@ -22,5 +22,19 @@
         "name": "{camera} keep live view warm"
       }
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Reolink Viewer options",
+        "description": "A prototype from Phase 5b, off by default.",
+        "data": {
+          "baichuan_deep_start": "Start deep in recordings over the Reolink protocol"
+        },
+        "data_description": {
+          "baichuan_deep_start": "When a start or a seek lands well past what is cached of a recording, ask the device for that moment directly (its own protocol, port 9000) instead of downloading everything before it. The first picture shows in about a second; the recording still downloads as before. Adds one logged-in user on the device while in use. Falls back to the download on any failure."
+        }
+      }
+    }
   }
 }

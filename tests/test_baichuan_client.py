@@ -78,6 +78,15 @@ class FakeNvr:
         # How a download ends: a 143 with this status, or an empty 143 (None).
         self.end_status = end_status
         self.ended: list[int] = []
+        # A download's media (else a few synthetic blocks), in chunks of this
+        # size, this far apart; with ``gate``, held before the chunk at
+        # ``gate_at`` until it is set; ``silent`` sends no end marker.
+        self.media: bytes | None = None
+        self.chunk_size = 64 * 1024
+        self.delay = 0.05
+        self.gate: asyncio.Event | None = None
+        self.gate_at = 1
+        self.silent = False
         self.requests: list[tuple[int, str]] = []
         self.writers: list[asyncio.StreamWriter] = []
         self.tasks: list[asyncio.Task[None]] = []
@@ -237,8 +246,14 @@ class FakeNvr:
     ) -> None:
         """Replay chunks in the NVR's own class, the first 1024 media bytes AES."""
         data = media(frames=8) * self.chunks
-        cut = len(data) // self.chunks + 7  # chunk boundaries fall inside blocks
-        for i in range(self.chunks):
+        count = self.chunks
+        if self.media is not None and cmd == 143:
+            data = self.media
+            count = max(1, -(-len(data) // self.chunk_size))
+        cut = len(data) // count + 7  # chunk boundaries fall inside blocks
+        for i in range(count):
+            if self.gate is not None and i == self.gate_at:
+                await self.gate.wait()
             if self.stopped.is_set() and not end:
                 return
             piece = data[i * cut : (i + 1) * cut]
@@ -259,8 +274,8 @@ class FakeNvr:
                 + body
             )
             await writer.drain()
-            await asyncio.sleep(0.05)
-        if end:
+            await asyncio.sleep(self.delay)
+        if end and not self.silent:
             if self.end_status is None:
                 writer.write(self._reply(cmd, ident, 200))  # an empty 143
             else:

@@ -903,7 +903,8 @@ async def test_fragment_windows_follow_a_fill(
     """A start waits only for the fragments up to it, not the whole file."""
     vc, _sched, _host = cache
     entry = await vc.async_open(rec("slownvr"))
-    init, mime = await vc.async_init(entry)
+    init, mime, source = await vc.async_init(entry)
+    assert source == "file"
     assert init == FTYP + av_moov()
     assert mime == MIME
     # 10 s in is on disk before the pause: served while the download waits.

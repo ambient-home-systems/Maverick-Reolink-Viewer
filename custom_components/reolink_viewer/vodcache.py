@@ -29,6 +29,12 @@ served from the cache, with Range, by ``views.py``:
 - the MSE player reads the original as fragments made MSE-ready on the fly
   (``fmp4.py``), each as soon as it is on disk, so a start deep in a
   recording waits only for the bytes up to it;
+- with the Phase 5b option on, a start well past what the download has
+  reached is served from a cut the device sends of that moment
+  (``baichuan_source.py``): its fragments in a file of their own beside the
+  original, numbered from ``CUT_FIRST`` so a window's ``first`` says which
+  file it reads; the download goes on, and any failure of the cut falls back
+  to it;
 - the file player (the fallback) gets a plain MP4 (``remux.py``), rewritten
   from the complete original when first asked for, one at a time: browsers
   read a fragmented file whole before playing it. The original is kept (the
@@ -56,6 +62,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 
 from . import bridge
+from .baichuan_source import BaichuanSource, Cut, CutError
 from .bridge import VodFile, VodMethod
 from .devices import PlaybackSource
 from .fmp4 import Fragment, FragmentError, FragmentIndex
@@ -96,6 +103,17 @@ MEDIA_STORE_KEY = "reolink_viewer.media"
 SUFFIX = ".mp4"
 PART_SUFFIX = ".part"
 FLAT_SUFFIX = ".flat.mp4"
+# A cut of a recording (Phase 5b): <cache id>.<n>.cut.mp4, this run only.
+CUT_SUFFIX = ".cut.mp4"
+# Window indices of a cut's fragments start here (the original's below).
+CUT_FIRST = 1_000_000
+# A start is cut only this far past what the download has indexed (ms): a
+# start closer than that is reached by the download about as soon.
+DEEP_MARGIN_MS = 30_000
+# A start this far past what a running cut has received waits for it (ms).
+CUT_REACH_MS = 60_000
+# A cut's first fragment must come within this long, else the download serves.
+CUT_FIRST_WAIT_S = 6.0
 # A lease outlasts its URL by this much.
 LEASE_MARGIN_S = 60.0
 # A fill behind a click (playback priority) may evict a recording whose
@@ -128,6 +146,8 @@ class Window:
     fragments: tuple[Fragment, ...]
     # The recording ends with these (it is complete and nothing follows).
     last: bool
+    # Where the fragments are read from: the original ("file") or a cut.
+    source: str = "file"
 
     @property
     def start_ms(self) -> float | None:
@@ -202,6 +222,9 @@ class Entry:
     # The original's fragments found so far (the MSE player's reads).
     fragments: FragmentIndex | None = None
     index_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    # The device's cut of a moment deep in it (Phase 5b), if one was made.
+    cut: Cut | None = None
+    cuts: int = 0
 
     @property
     def part_path(self) -> Path:
@@ -238,12 +261,15 @@ class Entry:
 
     def public(self) -> dict[str, Any]:
         """Return debug information for the browser."""
-        return {
+        out = {
             "complete": self.complete,
             "bytes": self.written,
             "error": self.error,
             **self.timing,
         }
+        if self.cut is not None:
+            out["cut"] = self.cut.public()
+        return out
 
 
 class VodCache:
@@ -258,9 +284,11 @@ class VodCache:
         session: Callable[[], ClientSession],
         *,
         ffmpeg_binary: str | None = None,
+        baichuan: BaichuanSource | None = None,
     ) -> None:
         """Initialize the cache (call async_setup before use)."""
         self._hass = hass
+        self._baichuan = baichuan
         self._ffmpeg = ffmpeg_binary
         self._flatten_lock = asyncio.Lock()
         self._flat_tasks: set[asyncio.Task[None]] = set()
@@ -296,7 +324,8 @@ class VodCache:
         found: dict[str, int] = {}
         names = {p.name for p in self._dir.iterdir()}
         for path in self._dir.iterdir():
-            if path.name.endswith(PART_SUFFIX):
+            if path.name.endswith((PART_SUFFIX, CUT_SUFFIX)):
+                # Cuts serve the viewers of one run only.
                 path.unlink(missing_ok=True)
             elif path.name.endswith(FLAT_SUFFIX):
                 cache_id = path.name.removesuffix(FLAT_SUFFIX)
@@ -472,11 +501,18 @@ class VodCache:
             entry.leases.setdefault(token, lease)
 
     def release(self, token: str) -> None:
-        """End the lease of the URL ``token`` (it keeps working, unleased)."""
+        """End the lease of the URL ``token`` (it keeps working, unleased).
+
+        The last viewer leaving stops the recording's cut, if one runs.
+        """
         if (item := self._leases.pop(token, None)) is None:
             return
         if (entry := self._entries.get(item[0])) is not None:
             entry.leases.pop(token, None)
+            if not entry.leases and entry.cut is not None:
+                self._hass.async_create_background_task(
+                    self._end_cut(entry), "reolink_viewer end cut"
+                )
 
     def _prune_leases(self, now: float) -> None:
         """Forget the leases that have ended."""
@@ -596,11 +632,27 @@ class VodCache:
 
     # ---- MSE fragments ----
 
-    async def async_init(self, entry: Entry) -> tuple[bytes, str | None]:
-        """Return the init segment (ftyp + moov) and its MIME type with codecs."""
+    async def async_init(
+        self, entry: Entry, *, at_ms: float | None = None, source: str | None = None
+    ) -> tuple[bytes, str | None, str]:
+        """Return an init segment (ftyp + moov), its MIME type and its source.
+
+        ``source`` "cut": the cut's (a window from it follows); with ``at_ms``
+        the source that will serve a start there (a cut may begin); else the
+        original's.
+        """
+        if source == "cut":
+            cut = entry.cut
+            if cut is None or cut.index.init is None:
+                raise VodCacheError("no cut of this recording")
+            return cut.index.init, cut.index.mime, "cut"
+        if at_ms is not None and source is None:
+            cut = await self._cut_for(entry, at_ms)
+            if cut is not None:
+                return cut.index.init or b"", cut.index.mime, "cut"
         index, _complete = await self._await_index(entry, lambda i: i.init is not None)
         assert index.init is not None
-        return index.init, index.mime
+        return index.init, index.mime, "file"
 
     async def async_window(
         self,
@@ -617,6 +669,17 @@ class VodCache:
         (ms of media time). Then as many as are on disk, up to ``max_ms`` of
         media and ``max_bytes`` (at least one fragment).
         """
+
+        if first is not None and first >= CUT_FIRST:
+            if entry.cut is None:
+                raise VodCacheError("no cut of this recording")
+            return await self._cut_window(
+                entry.cut, first=first - CUT_FIRST, max_ms=max_ms, max_bytes=max_bytes
+            )
+        if first is None and (cut := await self._cut_for(entry, at_ms or 0.0)):
+            return await self._cut_window(
+                cut, at_ms=at_ms or 0.0, max_ms=max_ms, max_bytes=max_bytes
+            )
 
         def start(index: FragmentIndex) -> int | None:
             if first is not None:
@@ -650,21 +713,29 @@ class VodCache:
     ) -> AsyncIterator[bytes]:
         """Yield the window's fragments, made MSE-ready, in batches."""
         index = entry.fragments
+        candidates = self._candidates(entry)
+        first = window.first
+        cut = entry.cut
+        if window.source == "cut":
+            if cut is None:
+                raise VodCacheError("no cut of this recording")
+            index = cut.index
+            candidates = (cut.path, cut.path)
+            first -= CUT_FIRST
+            cut.readers += 1
+            cut.last_read = time.monotonic()
         assert index is not None
         entry.readers += 1
         entry.last_access = time.monotonic()
         try:
             batch: list[int] = []
             size = 0
-            for i, fragment in enumerate(window.fragments, window.first):
+            for i, fragment in enumerate(window.fragments, first):
                 batch.append(i)
                 size += fragment.size
-                if (
-                    size >= FRAGMENT_BATCH
-                    or i == window.first + len(window.fragments) - 1
-                ):
+                if size >= FRAGMENT_BATCH or i == first + len(window.fragments) - 1:
                     yield await self._hass.async_add_executor_job(
-                        _read_fragments, self._candidates(entry), index, batch
+                        _read_fragments, candidates, index, batch
                     )
                     batch, size = [], 0
         except FragmentError as err:
@@ -675,6 +746,165 @@ class VodCache:
         finally:
             entry.readers -= 1
             entry.last_access = time.monotonic()
+            if window.source == "cut" and cut is not None:
+                cut.readers -= 1
+
+    # ---- Cuts (Phase 5b) ----
+
+    async def _cut_for(self, entry: Entry, at_ms: float) -> Cut | None:
+        """Return the cut that serves a start at ``at_ms``, starting one if worth it.
+
+        None when the option is off, the original can serve it now or will
+        soon (within ``DEEP_MARGIN_MS`` of what is indexed), or the cut
+        failed: the original serves it then (the Phase 2 path).
+        """
+        source = self._baichuan
+        if source is None or not source.enabled or entry.complete:
+            return None
+        indexed = await self._indexed_now(entry)
+        if indexed is not None and indexed.find(at_ms) is not None:
+            return None
+        cut = entry.cut
+        if cut is not None and cut.error is None and _covers(cut, at_ms):
+            return await self._first_fragment(entry, cut, at_ms)
+        reached = indexed.duration_ms if indexed is not None else 0.0
+        if at_ms - reached < DEEP_MARGIN_MS:
+            return None
+        rec = entry.recording
+        remaining = max(rec.end_ms - rec.start_ms - at_ms, 0)
+        length = max(rec.end_ms - rec.start_ms, 1)
+        size = int(expected_size(rec) * min(remaining / length + 0.01, 1.0))
+        entry.cuts += 1
+        path = entry.path.with_name(f"{rec.cache_id}.{entry.cuts}{CUT_SUFFIX}")
+        try:
+            cut = await source.async_start(
+                entry_id=rec.source.entry_id,
+                channel=rec.source.channel,
+                stream=rec.stream,
+                start_ms=rec.start_ms,
+                end_ms=rec.end_ms,
+                at_ms=at_ms,
+                path=path,
+                reserve=self._reserve_cut,
+                size=size,
+            )
+        except CutError as err:
+            entry.timing["cut_error"] = str(err)
+            return None
+        old, entry.cut = entry.cut, cut
+        if cut.task is not None:
+            cut.task.add_done_callback(lambda _t: self._reserved.pop(path, None))
+        if old is not None and old.readers == 0:
+            await self._hass.async_add_executor_job(_unlink, old.path)
+        return await self._first_fragment(entry, cut, at_ms)
+
+    async def _first_fragment(self, entry: Entry, cut: Cut, at_ms: float) -> Cut | None:
+        """Wait for the cut to reach ``at_ms``; None (and stop it) if it fails."""
+        try:
+            await self._await_cut(
+                cut, lambda i: i.find(at_ms) is not None, CUT_FIRST_WAIT_S
+            )
+        except CutError as err:
+            entry.timing["cut_error"] = str(err)
+            if self._baichuan is not None:
+                await self._baichuan.async_stop(cut)
+            return None
+        # A cut that ended before that point leaves it to the original.
+        return cut if cut.index.find(at_ms) is not None else None
+
+    async def _await_cut(
+        self, cut: Cut, ready: Callable[[FragmentIndex], bool], wait: float | None
+    ) -> None:
+        """Wait until ``ready(cut.index)`` or the cut ends; CutError on failure."""
+        deadline = None if wait is None else time.monotonic() + wait
+        async with cut.changed:
+            while not ready(cut.index):
+                if cut.error is not None:
+                    raise CutError(cut.error)
+                if cut.complete or not cut.running:
+                    if cut.index.fragments:
+                        return
+                    raise CutError("the cut ended without a fragment")
+                timeout = None if deadline is None else deadline - time.monotonic()
+                if timeout is not None and timeout <= 0:
+                    raise CutError(f"no fragment within {wait:.0f} s")
+                try:
+                    async with asyncio.timeout(timeout):
+                        await cut.changed.wait()
+                except TimeoutError:
+                    continue
+
+    async def _cut_window(
+        self,
+        cut: Cut,
+        *,
+        at_ms: float | None = None,
+        first: int | None = None,
+        max_ms: float,
+        max_bytes: int,
+    ) -> Window:
+        """Return a window of the cut's fragments (like the original's)."""
+
+        def start(index: FragmentIndex) -> int | None:
+            if first is not None:
+                return first if first < len(index.fragments) else None
+            return index.find(at_ms or 0.0)
+
+        try:
+            await self._await_cut(cut, lambda i: start(i) is not None, None)
+        except CutError as err:
+            raise VodCacheError(f"cut failed: {err}") from err
+        index = cut.index
+        begin = start(index)
+        if begin is None:
+            # The cut ended before that point.
+            return Window(CUT_FIRST + len(index.fragments), (), True, "cut")
+        chosen: list[Fragment] = []
+        media = 0.0
+        size = 0
+        for fragment in index.fragments[begin:]:
+            if chosen and (media >= max_ms or size + fragment.size > max_bytes):
+                break
+            chosen.append(fragment)
+            media += fragment.duration_ms
+            size += fragment.size
+        last = cut.complete and begin + len(chosen) == len(index.fragments)
+        return Window(CUT_FIRST + begin, tuple(chosen), last, "cut")
+
+    async def _indexed_now(self, entry: Entry) -> FragmentIndex | None:
+        """Index what the original holds now, without waiting for more."""
+        if not entry.written:
+            return entry.fragments
+        if entry.fragments is None:
+            entry.fragments = FragmentIndex()
+        try:
+            async with entry.index_lock:
+                await self._hass.async_add_executor_job(
+                    _scan_fragments,
+                    self._candidates(entry),
+                    entry.fragments,
+                    entry.written,
+                )
+        except FileNotFoundError:
+            return None
+        return entry.fragments if entry.fragments.error is None else None
+
+    async def _reserve_cut(self, path: Path, size: int) -> None:
+        try:
+            await self._make_room(path, size, playback=True)
+        except VodCacheError as err:
+            raise CutError(str(err)) from err
+
+    async def _end_cut(self, entry: Entry) -> None:
+        """Stop the cut (the last viewer left); drop it once the original is whole."""
+        cut = entry.cut
+        if cut is None or entry.leases:
+            return
+        if self._baichuan is not None:
+            await self._baichuan.async_stop(cut)
+        if entry.complete and cut.readers == 0 and entry.cut is cut:
+            entry.cut = None
+            await self._hass.async_add_executor_job(_unlink, cut.path)
 
     async def _await_index(
         self, entry: Entry, ready: Callable[[FragmentIndex], bool]
@@ -1003,11 +1233,14 @@ class VodCache:
     async def async_stats(self) -> dict[str, Any]:
         """Return cache statistics with the disk use measured now."""
         await self._measure()
-        return {
+        out = {
             **self.stats(),
             "min_free_bytes": MIN_FREE_BYTES,
             "rewriting": sum(1 for e in self._entries.values() if e.flattening),
         }
+        if self._baichuan is not None:
+            out["baichuan"] = self._baichuan.stats()
+        return out
 
     def _disk_usage(self) -> list[tuple[Path, int, float]]:
         result = []
@@ -1120,7 +1353,20 @@ def _read_fragments(
 
 def _cache_id_of(path: Path) -> str:
     name = path.name.removesuffix(PART_SUFFIX)
+    if name.endswith(CUT_SUFFIX):
+        return name.removesuffix(CUT_SUFFIX).split(".", 1)[0]
     return name.removesuffix(FLAT_SUFFIX).removesuffix(SUFFIX)
+
+
+def _covers(cut: Cut, at_ms: float) -> bool:
+    """Return whether a cut serves a start at ``at_ms`` (or soon will)."""
+    start = cut.start_ms if cut.start_ms is not None else cut.asked_ms
+    if at_ms < start:
+        return False
+    reached = cut.end_ms if cut.end_ms is not None else cut.asked_ms
+    if cut.complete:
+        return at_ms < reached
+    return cut.running and at_ms <= reached + CUT_REACH_MS
 
 
 def _open_write(path: Path) -> int:
