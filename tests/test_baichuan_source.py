@@ -590,22 +590,51 @@ async def test_a_seek_far_past_the_cut_starts_another_and_the_last_viewer_stops_
     await _until(lambda: entry.cut is None and not cut.path.exists())
 
 
-async def test_a_cut_left_by_its_viewer_goes_when_the_download_completes(
+async def test_a_complete_cut_left_by_its_viewer_stays_with_the_part_copied(
     cached: tuple[VodCache, Rig],
     media: Server,  # noqa: F811
 ) -> None:
+    """The recording is kept in its two pieces: nothing is fetched twice."""
     cache, _rig = cached
+    with (
+        patch.object(vodcache, "WRITE_BATCH", 4096),
+        patch.object(vodcache, "CHUNK", 4096),
+    ):
+        entry = await cache.async_open(deep_rec())
+        cache.lease(entry, 600, "token1")
+        assert (await _window(cache, entry, at_ms=AT_MS)).source == "cut"
+        cut = entry.cut
+        assert cut is not None
+        await _done(cut)
+        cache.release("token1")
+        await asyncio.sleep(0.05)
+        media.gate.set()
+        await _until(lambda: entry.stopped_ms is not None and not entry.filling)
+    assert entry.cut is cut
+    assert cut.path.exists()
+    assert not entry.complete
+
+
+async def test_a_cut_stopped_by_its_viewer_leaving_goes_when_the_download_completes(
+    cached: tuple[VodCache, Rig],
+    media: Server,  # noqa: F811
+) -> None:
+    cache, rig = cached
+    rig.nvr.gate = asyncio.Event()
+    rig.nvr.gate_at = 8
+    rig.nvr.media = camera_blocks(ASKED - 3, seconds=30)
     entry = await cache.async_open(deep_rec())
     cache.lease(entry, 600, "token1")
     assert (await _window(cache, entry, at_ms=AT_MS)).source == "cut"
     cut = entry.cut
     assert cut is not None
-    await _done(cut)
-    cache.release("token1")  # still downloading: the cut stays for now
-    await asyncio.sleep(0.05)
-    assert cut.path.exists()
+    cache.release("token1")  # the cut stops part way
+    await _until(lambda: cut.error == "stopped")
+    assert cut.path.exists()  # still downloading: the cut stays for now
     media.gate.set()
     await _until(lambda: entry.cut is None and not cut.path.exists())
+    assert entry.complete
+    assert entry.stopped_ms is None
 
 
 async def test_cut_files_are_cleared_at_setup_and_counted_with_their_recording(
@@ -746,7 +775,10 @@ async def test_a_wait_past_the_stop_resumes_the_download(
 ) -> None:
     """A window waiting on the original when it stops; then a read past it."""
     cache, _rig = cached
-    with patch.object(vodcache, "WRITE_BATCH", 16 * 1024):
+    with (
+        patch.object(vodcache, "WRITE_BATCH", 4096),
+        patch.object(vodcache, "CHUNK", 4096),
+    ):
         entry = await cache.async_open(deep_rec())
         assert (await _window(cache, entry, at_ms=AT_MS)).source == "cut"
         cut = entry.cut
@@ -757,6 +789,8 @@ async def test_a_wait_past_the_stop_resumes_the_download(
         await asyncio.sleep(0.05)
         media.gate.set()
         window = await waiting
+        # (It stopped at the cut before reaching that, then resumed.)
+        assert entry.timing.get("fill_ms") is not None
     assert window.source == "file"
     assert window.first == 390
     assert entry.whole

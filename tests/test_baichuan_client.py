@@ -244,7 +244,17 @@ class FakeNvr:
         cmd: int = 5,
         end: bool = False,
     ) -> None:
-        """Replay chunks in the NVR's own class, the first 1024 media bytes AES."""
+        """Replay chunks in the NVR's own class, the first 1024 media bytes AES.
+
+        A client that hangs up mid-stream (a test ending, a cut stopped) ends
+        it quietly, as the device does.
+        """
+        with contextlib.suppress(ConnectionError):
+            await self._send(writer, ident, cmd=cmd, end=end)
+
+    async def _send(
+        self, writer: asyncio.StreamWriter, ident: int, *, cmd: int, end: bool
+    ) -> None:
         data = media(frames=8) * self.chunks
         count = self.chunks
         if self.media is not None and cmd == 143:
