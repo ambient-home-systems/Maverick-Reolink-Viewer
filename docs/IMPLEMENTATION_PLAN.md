@@ -3198,12 +3198,19 @@ timeline and back three times, then hovers along it (the thumbnails), while a
 
 | Run | Long tasks over 50 ms |
 | --- | --- |
-| Desktop (1440 px) | none (judged: CI fails on any) |
+| Desktop (1440 px) | none (judged: CI fails on any, in two passes in a row since v0.36.1) |
 | Desktop, processor slowed 4× | none (reported only) |
 | Phone (390 px), processor slowed 4× | one of 53 ms in one run, none in the other five (reported only) |
 
 The preview plays no video, so this covers the timeline, its thumbnails and the
-page, not the browser's own seeking. Seeking was measured on the hardware in
+page, not the browser's own seeking.
+
+From v0.36.1 a desktop pass with long tasks is scrubbed once more on a fresh page
+and judged on that. CI had failed it twice on unchanged timeline code (11 tasks of
+up to 77 ms, then 3 of up to 80 ms), the next run passing each time; locally
+v0.35.5 does the same (one of 54 ms mid-scrub in one of six passes), so it is the
+shared machine, not the timeline, which would block every pass. The check now also
+prints when each long task started. Seeking was measured on the hardware in
 Phase 2B ("Scrub": 5 of 5 points from the buffer, median 4 ms in Chrome and
 287–339 ms on the iPhone, where WebKit's `fastSeek` lands on the nearest key
 frame).
