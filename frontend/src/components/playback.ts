@@ -519,7 +519,7 @@ export class RvPlayback extends LitElement {
       };
       // Main and sub recordings start a few seconds apart: keep the wall time.
       const offset = Math.max(0, wanted - playback.start);
-      await this._player?.play(this._toItem(playback), offset, requestedAt);
+      await this._player?.play(this._toItem(playback, target.segment), offset, requestedAt);
       void this._showDownload(playback, seq);
       this._schedulePreload(target.segment, seq, wanted);
     } catch (err) {
@@ -577,10 +577,15 @@ export class RvPlayback extends LitElement {
     if (hass && token) releasePlayback(hass, [token]).catch(() => undefined);
   }
 
-  private _toItem(playback: PlaybackUrl): PlayItem {
+  /**
+   * The player's item for a recording on the timeline. It keeps the
+   * timeline's segment id: an HD copy starts a second or so from its SD twin,
+   * and its own id (its start) is in no list the tab has.
+   */
+  private _toItem(playback: PlaybackUrl, segment: Segment): PlayItem {
     const common = {
-      recording: `${playback.stream}:${playback.segment_id}:${playback.end}`,
-      segmentId: playback.segment_id,
+      recording: `${playback.stream}:${segment.id}:${playback.end}`,
+      segmentId: segment.id,
       start: playback.start,
       end: playback.end,
       release: () => {
@@ -672,7 +677,7 @@ export class RvPlayback extends LitElement {
         this._release(playback);
         return;
       }
-      await this._player?.preload(this._toItem(playback));
+      await this._player?.preload(this._toItem(playback, next));
     } catch {
       // Preloading is an optimisation: the next file is fetched when needed.
     }

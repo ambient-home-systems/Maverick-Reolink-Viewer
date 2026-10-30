@@ -4541,6 +4541,31 @@ iPhone Companion app on Wi-Fi):**
   within a recording the download served (it showed what served the first
   start). **v0.36.1:** each row names what served its own start or seek.
 
+**v0.36.1 on the hardware (the owner, 2026-10-30, LAN Chrome, Front Yard Right):**
+
+- **The first HD start of a day:** first frame 1101 ms, the URL 47 ms (the
+  day's HD list was searched ahead), the cut's first fragment 478 ms with a new
+  login (v0.36.0: 8668 ms, the URL 7879 ms).
+- **HD past the first span and jumps in HD:** played through the 3-minute span
+  and every jump with no pause, no "X MB of Y MB" and no fall back to SD.
+- **The HD cut's size:** a deep start 55.4 min into a 60-minute main recording
+  fetched 184.6 MB (139 fragments, complete at the recording's end, 4.6 min
+  after the start); an event 51.1 min into 52.5 min, 61.1 MB. Both ends were
+  within reach of the first span, so the span's bound itself was not seen
+  (v0.36.0: 1.9 GB beside the download).
+- **The check ran with the tab left on HD**, which its SD rows did not expect,
+  and found two "problems" that were the check's own: D2 played in 490 ms from
+  the download but "did not play" (the 2.3 GB main download was still running,
+  so the start was not counted); C said it did not move on, though it had
+  ("advanced", playing on the next recording 36 s in). The second also showed a
+  real fault in HD: the player's item carried the HD copy's own id (its start,
+  a second or so from its SD twin), which no list on the tab holds, so after
+  moving on in HD the tab lost its place: no preload of the recording after,
+  and none played once that one ended; a seek within the HD recording opened a
+  new URL instead of seeking. **v0.36.2:** the item keeps the timeline's id;
+  the check switches a tab left on HD to SD first (H checks HD) and says a
+  start whose copy is still being made played but was not judged.
+
 **What 5c should change** (revised with the hardware results):
 
 1. **Download once, one slot.** The check saw both costs: a deep start that
