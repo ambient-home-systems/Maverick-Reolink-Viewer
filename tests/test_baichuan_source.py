@@ -359,6 +359,7 @@ async def test_a_deep_start_is_served_from_the_cut_while_the_download_goes_on(
     assert init.startswith(b"\x00\x00\x00\x1cftyp")
     window = await _window(cache, entry, at_ms=AT_MS)
     assert window.source == "cut"
+    assert "cut_error" not in entry.timing
     assert window.first == CUT_FIRST + 3
     assert window.start_ms == AT_MS
     data = b"".join([c async for c in cache.async_read_window(entry, window)])
@@ -369,6 +370,7 @@ async def test_a_deep_start_is_served_from_the_cut_while_the_download_goes_on(
     assert entry.cut is not None
     await _done(entry.cut)
     end = await _window(cache, entry, first=CUT_FIRST + 6)
+    assert end.first == CUT_FIRST + 6
     assert (end.fragments, end.last) == ((), True)
     public = entry.public()
     assert public["cut"]["login"] == "new"
@@ -441,6 +443,7 @@ async def test_a_cut_ending_before_the_moment_falls_back(
     await asyncio.sleep(0.05)
     media.gate.set()
     assert (await waiting).source == "file"
+    assert entry.timing["cut_error"] == "the cut ended before that moment"
 
 
 async def test_a_cut_without_a_fragment_in_time_is_stopped(
@@ -478,7 +481,11 @@ async def test_a_seek_far_past_the_cut_starts_another_and_the_last_viewer_stops_
     rig.nvr.media = camera_blocks(ASKED + 197)
     window = await _window(cache, entry, at_ms=AT_MS + 200_000)
     assert window.source == "cut"
+    assert window.first // CUT_FIRST == 2
     assert entry.cut is not first
+    # A window asked of the first cut (its index) is refused.
+    with pytest.raises(VodCacheError, match="replaced"):
+        await _window(cache, entry, first=CUT_FIRST + 4)
     assert first.error == "stopped"
     assert not first.path.exists()
     assert entry.cuts == 2
@@ -489,6 +496,24 @@ async def test_a_seek_far_past_the_cut_starts_another_and_the_last_viewer_stops_
     media.gate.set()
     await cache.async_wait(entry, complete=True)
     cache.release("token1")
+    await _until(lambda: entry.cut is None and not cut.path.exists())
+
+
+async def test_a_cut_left_by_its_viewer_goes_when_the_download_completes(
+    cached: tuple[VodCache, Rig],
+    media: Server,  # noqa: F811
+) -> None:
+    cache, _rig = cached
+    entry = await cache.async_open(deep_rec())
+    cache.lease(entry, 600, "token1")
+    assert (await _window(cache, entry, at_ms=AT_MS)).source == "cut"
+    cut = entry.cut
+    assert cut is not None
+    await _done(cut)
+    cache.release("token1")  # still downloading: the cut stays for now
+    await asyncio.sleep(0.05)
+    assert cut.path.exists()
+    media.gate.set()
     await _until(lambda: entry.cut is None and not cut.path.exists())
 
 

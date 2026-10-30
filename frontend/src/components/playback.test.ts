@@ -518,6 +518,9 @@ describe("rv-playback", () => {
     expect(describeCache({ complete: false, bytes: 0, error: null, cut: { error: "timeout" } })).toBe(
       "filling (0.0 MB so far) · Reolink protocol cut: failed (timeout)",
     );
+    expect(
+      describeCache({ complete: false, bytes: 0, error: null, cut: {}, cut_error: "no stream slot within 5 s (7 of 7 in use)" }),
+    ).toBe("filling (0.0 MB so far) · Reolink protocol cut not used: no stream slot within 5 s (7 of 7 in use)");
   });
 
   it("offers the playback check and its saved reports under Details", async () => {

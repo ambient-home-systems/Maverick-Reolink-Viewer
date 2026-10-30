@@ -1730,7 +1730,8 @@ export function describeCache(cache: CacheStatus): string {
   const mb = `${(cache.bytes / 1_000_000).toFixed(1)} MB`;
   if (cache.error) return `failed: ${cache.error}`;
   const state = cache.complete ? `cached (${mb})` : `filling (${mb} so far)`;
-  // Phase 5b: a deep start served by the device's cut.
+  // Phase 5b: a deep start served by the device's cut, or why none did.
+  if (typeof cache.cut_error === "string") return `${state} · Reolink protocol cut not used: ${cache.cut_error}`;
   const cut = cache.cut as { first_fragment_ms?: number; login?: string; error?: string | null } | undefined;
   if (!cut) return state;
   const first =

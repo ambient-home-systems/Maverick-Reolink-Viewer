@@ -3,6 +3,22 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.36.0
+
+- **Start deep in recordings over the Reolink protocol** (an option, off by
+  default: Settings → Devices & services → Reolink Viewer → Configure). A start
+  or a jump more than 30 seconds past what is copied of a recording asks the
+  recorder for that moment over its own protocol, so the first picture shows
+  in about a second instead of after the copy reaches it (7 to 13 seconds 45
+  minutes into an hour on an NVR). The recording is still copied; speeds,
+  pausing and jumping work as before; any failure waits for the copy as
+  without the option. While in use the recorder counts one more signed-in
+  user, for about 30 seconds after the last such start. A prototype (Phase 5b):
+  the owner's hardware check decides what comes next.
+- **The playback check** (v0.4.0) and **Details** under the player say what
+  served a start: the Reolink protocol cut (with its first fragment and login)
+  or the recording's download.
+
 ## 0.35.5
 
 - **The Baichuan probe's session test** runs its second replay on the same

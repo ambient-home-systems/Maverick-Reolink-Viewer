@@ -91,6 +91,8 @@ class Cut:
     muxer: BaichuanMuxer | None = None
     readers: int = 0
     last_read: float = field(default_factory=time.monotonic)
+    # Which of its recording's cuts this is (the cache numbers its windows by it).
+    generation: int = 0
 
     @property
     def running(self) -> bool:

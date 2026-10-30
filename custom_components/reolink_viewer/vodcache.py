@@ -105,7 +105,8 @@ PART_SUFFIX = ".part"
 FLAT_SUFFIX = ".flat.mp4"
 # A cut of a recording (Phase 5b): <cache id>.<n>.cut.mp4, this run only.
 CUT_SUFFIX = ".cut.mp4"
-# Window indices of a cut's fragments start here (the original's below).
+# Window indices of a recording's n-th cut start at n times this (the
+# original's below it), so a window asked of a cut since replaced is refused.
 CUT_FIRST = 1_000_000
 # A start is cut only this far past what the download has indexed (ms): a
 # start closer than that is reached by the download about as soon.
@@ -225,6 +226,7 @@ class Entry:
     # The device's cut of a moment deep in it (Phase 5b), if one was made.
     cut: Cut | None = None
     cuts: int = 0
+    cut_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
     @property
     def part_path(self) -> Path:
@@ -553,6 +555,9 @@ class VodCache:
             await self._discard_part(entry)
         else:
             entry.timing["fill_ms"] = _ms(began)
+            if entry.cut is not None and not entry.leases:
+                # Whole now, and no viewer left: the cut is not needed.
+                await self._end_cut(entry)
             await self._evict()
         finally:
             async with entry.changed:
@@ -671,10 +676,11 @@ class VodCache:
         """
 
         if first is not None and first >= CUT_FIRST:
-            if entry.cut is None:
-                raise VodCacheError("no cut of this recording")
+            cut = entry.cut
+            if cut is None or first // CUT_FIRST != cut.generation:
+                raise VodCacheError("that cut of the recording was replaced")
             return await self._cut_window(
-                entry.cut, first=first - CUT_FIRST, max_ms=max_ms, max_bytes=max_bytes
+                cut, first=first % CUT_FIRST, max_ms=max_ms, max_bytes=max_bytes
             )
         if first is None and (cut := await self._cut_for(entry, at_ms or 0.0)):
             return await self._cut_window(
@@ -721,7 +727,7 @@ class VodCache:
                 raise VodCacheError("no cut of this recording")
             index = cut.index
             candidates = (cut.path, cut.path)
-            first -= CUT_FIRST
+            first %= CUT_FIRST
             cut.readers += 1
             cut.last_read = time.monotonic()
         assert index is not None
@@ -761,12 +767,21 @@ class VodCache:
         source = self._baichuan
         if source is None or not source.enabled or entry.complete:
             return None
+        # One decision at a time per recording: concurrent starts share a cut.
+        async with entry.cut_lock:
+            cut = await self._choose_cut(entry, source, at_ms)
+        return None if cut is None else await self._first_fragment(entry, cut, at_ms)
+
+    async def _choose_cut(
+        self, entry: Entry, source: BaichuanSource, at_ms: float
+    ) -> Cut | None:
+        """Return the cut covering ``at_ms``, a new one, or None (the original)."""
         indexed = await self._indexed_now(entry)
         if indexed is not None and indexed.find(at_ms) is not None:
             return None
         cut = entry.cut
         if cut is not None and cut.error is None and _covers(cut, at_ms):
-            return await self._first_fragment(entry, cut, at_ms)
+            return cut
         reached = indexed.duration_ms if indexed is not None else 0.0
         if at_ms - reached < DEEP_MARGIN_MS:
             return None
@@ -791,12 +806,13 @@ class VodCache:
         except CutError as err:
             entry.timing["cut_error"] = str(err)
             return None
+        cut.generation = entry.cuts
         old, entry.cut = entry.cut, cut
         if cut.task is not None:
             cut.task.add_done_callback(lambda _t: self._reserved.pop(path, None))
         if old is not None and old.readers == 0:
             await self._hass.async_add_executor_job(_unlink, old.path)
-        return await self._first_fragment(entry, cut, at_ms)
+        return cut
 
     async def _first_fragment(self, entry: Entry, cut: Cut, at_ms: float) -> Cut | None:
         """Wait for the cut to reach ``at_ms``; None (and stop it) if it fails."""
@@ -809,8 +825,12 @@ class VodCache:
             if self._baichuan is not None:
                 await self._baichuan.async_stop(cut)
             return None
-        # A cut that ended before that point leaves it to the original.
-        return cut if cut.index.find(at_ms) is not None else None
+        if cut.index.find(at_ms) is None:
+            # The cut ended before that point: the original serves it.
+            entry.timing["cut_error"] = "the cut ended before that moment"
+            return None
+        entry.timing.pop("cut_error", None)
+        return cut
 
     async def _await_cut(
         self, cut: Cut, ready: Callable[[FragmentIndex], bool], wait: float | None
@@ -856,9 +876,10 @@ class VodCache:
             raise VodCacheError(f"cut failed: {err}") from err
         index = cut.index
         begin = start(index)
+        base = CUT_FIRST * cut.generation
         if begin is None:
             # The cut ended before that point.
-            return Window(CUT_FIRST + len(index.fragments), (), True, "cut")
+            return Window(base + len(index.fragments), (), True, "cut")
         chosen: list[Fragment] = []
         media = 0.0
         size = 0
@@ -869,7 +890,7 @@ class VodCache:
             media += fragment.duration_ms
             size += fragment.size
         last = cut.complete and begin + len(chosen) == len(index.fragments)
-        return Window(CUT_FIRST + begin, tuple(chosen), last, "cut")
+        return Window(base + begin, tuple(chosen), last, "cut")
 
     async def _indexed_now(self, entry: Entry) -> FragmentIndex | None:
         """Index what the original holds now, without waiting for more."""

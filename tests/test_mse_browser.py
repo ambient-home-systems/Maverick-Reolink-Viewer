@@ -1,4 +1,4 @@
-"""Chromium plays what the MSE view serves (Phase 2B step 2).
+"""Chromium plays what the MSE view serves (Phase 2B step 2, Phase 5b step 2).
 
 A real recording (VP9 and Opus: Playwright's Chromium has no H.264 or AAC)
 is put in the NVR's fragment shape, served by the fake NVR, cached and
@@ -6,20 +6,29 @@ normalized by the integration, and fetched by Chromium through the real view
 with HA's auth. Chromium starts deep in it, plays across a window boundary to
 the end, and refuses the NVR's own fragment (the control).
 
-Needs ffmpeg (libvpx-vp9, libopus), node and Playwright with Chromium; skipped
-without them unless RV_BROWSER_TESTS=1 (CI), where it fails instead.
+Phase 5b: with the option on, a deep start in a recording whose download
+has not reached it is served from the device's cut (a fake NVR sending x264
+and AAC in Baichuan blocks), muxed by the integration; Chromium appends the
+cut's init and two windows and plays across them.
+
+Needs ffmpeg (libvpx-vp9, libopus; libx264 and AAC for the cut), node and
+Playwright with Chromium (1.57 or later for H.264: Chrome for Testing);
+skipped without them unless RV_BROWSER_TESTS=1 (CI), where it fails instead.
 """
 
 import asyncio
 import base64
-from collections.abc import Generator
+from collections.abc import AsyncGenerator, Generator
 import json
 import os
 from pathlib import Path
 import shutil
 import subprocess
-from typing import NoReturn
+from typing import Any, NoReturn
+from unittest.mock import AsyncMock, patch
 
+from aiohttp import web
+from aiohttp.test_utils import TestServer
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from pytest_homeassistant_custom_component.typing import (
@@ -27,9 +36,14 @@ from pytest_homeassistant_custom_component.typing import (
     WebSocketGenerator,
 )
 
+from custom_components.reolink_viewer import bridge
+from custom_components.reolink_viewer.bridge import BaichuanEndpoint
+from custom_components.reolink_viewer.const import CONF_BAICHUAN_DEEP_START
 from homeassistant.core import HomeAssistant
 
+from .baichuan_fixtures import camera_stream, encode
 from .mp4_fixtures import mse_ready, nvr_shape
+from .test_baichuan_client import PASSWORD, USER, FakeNvr
 from .test_playback_api import (  # noqa: F401 - fixtures
     BODY,
     DAY,
@@ -42,6 +56,7 @@ from .test_playback_api import (  # noqa: F401 - fixtures
 )
 
 SCRIPT = Path(__file__).with_name("mse_append.cjs")
+CUT_SCRIPT = Path(__file__).with_name("mse_cut.cjs")
 REQUIRED = os.environ.get("RV_BROWSER_TESTS") == "1"
 
 
@@ -157,3 +172,114 @@ async def test_chromium_plays_the_normalized_fragments(
     assert result["frames"]["total"] > 0
     # What the NVR stores, appended as it is, is refused.
     assert result["raw"] == "Error: append error"
+
+
+@pytest.fixture
+async def stalled(socket_enabled: None) -> AsyncGenerator[TestServer]:
+    """A recorder whose download never starts (the cut must serve)."""
+    release = asyncio.Event()
+
+    async def handler(_request: web.Request) -> web.StreamResponse:
+        await release.wait()
+        return web.Response(status=503)
+
+    app = web.Application()
+    app.router.add_get("/rec", handler)
+    server = TestServer(app, host="127.0.0.1")
+    await server.start_server()
+    yield server
+    release.set()
+    await server.close()
+
+
+@pytest.mark.timeout(180)
+async def test_chromium_plays_a_deep_start_from_the_devices_cut(
+    hass: HomeAssistant,
+    hass_ws_client: WebSocketGenerator,
+    hass_client: ClientSessionGenerator,
+    hass_access_token: str,
+    wired: MockConfigEntry,  # noqa: F811
+    reolink_host: Any,
+    stalled: TestServer,
+    tmp_path: Path,
+) -> None:
+    """Two minutes into a recording: the cut's init and windows play."""
+    node_path = await hass.async_add_executor_job(_node_path)
+    if node_path is None:
+        _missing("node with Playwright is not installed")
+    encoded = await hass.async_add_executor_job(encode, tmp_path, "h264", 8.0)
+    if encoded is None:
+        _missing("ffmpeg with libx264 and AAC is not installed")
+    reolink_host.get_vod_source = AsyncMock(
+        return_value=("video/mp4", str(stalled.make_url("/rec")))
+    )
+    hass.config_entries.async_update_entry(
+        wired, options={CONF_BAICHUAN_DEEP_START: True}
+    )
+    client = await hass_ws_client(hass)
+    camera = await _camera_id(client)
+    day = (
+        await _ws(
+            client,
+            {"type": "reolink_viewer/timeline/day", "device_id": camera, "date": DAY},
+        )
+    )["result"]
+    segment = day["segments"][0]
+    at_ms = 120_000
+    nvr = FakeNvr()
+    nvr.media = camera_stream(
+        encoded, start_unix=(segment["start"] + at_ms) // 1000 - 3, rate=1_004_000
+    )
+    nvr.chunk_size = 16 * 1024
+    nvr.delay = 0.001
+    await nvr.start()
+    endpoint = BaichuanEndpoint("127.0.0.1", nvr.port, USER, PASSWORD)
+    try:
+        with patch.object(
+            bridge.ReolinkHostHandle, "baichuan_endpoint", return_value=endpoint
+        ):
+            msg = await _ws(
+                client,
+                {
+                    "type": "reolink_viewer/playback/mse",
+                    "device_id": camera,
+                    "date": DAY,
+                    "segment_id": segment["id"],
+                },
+            )
+            base = msg["result"]["base"]
+            http = await hass_client()
+            origin = str(http.make_url("/")).rstrip("/")
+            process = await asyncio.create_subprocess_exec(
+                "node",
+                str(CUT_SCRIPT),
+                origin,
+                base,
+                hass_access_token,
+                str(at_ms),
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                env={**os.environ, "NODE_PATH": node_path},
+            )
+            stdout, stderr = await asyncio.wait_for(process.communicate(), 120)
+    finally:
+        await nvr.close()
+    assert process.returncode == 0, stderr.decode()
+    result = json.loads(stdout.decode().strip().splitlines()[-1])
+    if not result.get("supported", True):
+        _missing(f"this Chromium cannot play {result['mime']} (Playwright 1.57+)")
+    assert result.get("error") is None, result
+    assert result["initSource"] == "cut"
+    # x264's High profile (its level follows the picture), and AAC-LC.
+    assert result["mime"].startswith('video/mp4; codecs="avc1.64')
+    assert result["mime"].endswith(',mp4a.40.2"')
+    first, second = result["firstWindow"], result["secondWindow"]
+    assert first["source"] == second["source"] == "cut"
+    assert first["first"] >= 1_000_000
+    assert first["start"] <= at_ms < first["end"]
+    assert second["start"] == first["end"]
+    assert result["buffered"][0][0] <= at_ms / 1000
+    assert result["startedAt"] == pytest.approx(at_ms / 1000, abs=0.05)
+    assert result["crossed"], result
+    assert result["frames"]["total"] > 0
+    assert result["size"] == [320, 240]
