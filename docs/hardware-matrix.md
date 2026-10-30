@@ -973,6 +973,17 @@ Recorded video (NVR RLN36; the cameras record only to the NVR):
   counter near 1 MHz whose rate differs per camera by up to 2 %, AAC-LC 16 kHz
   mono. **The download cut is the deep-start source.** Details in
   [baichuan-playback.md §6.3](baichuan-playback.md#63-the-5b-measurements-second-run-2026-10-30-v0354-the-decision).
+- **Phase 5b step 2, the prototype's hardware check (2026-10-30, v0.36.0)**:
+  with the option on, an uncached deep start 52.4 min into an hour-long sub
+  recording (Front Yard Right, the CX410) showed its first frame in **0.51 s
+  on LAN Chrome and 0.60 s in the iPhone app**, served by the download cut
+  (first fragment 229–304 ms after the request); with the option off, 9.0 s
+  from the download. HD (H.264 2560×1440 main) from the cut: first fragment
+  516–600 ms, the iPhone's HD switch 1.06 s; the first HD start of a day on
+  Chrome waited 7.9 s for the day's HD search. The cut needs a stream slot of
+  its own: with one slot free, a small sub recording's download (56 MB at
+  200 Mbit/s) won. Details in
+  [IMPLEMENTATION_PLAN.md, 5b step 2](IMPLEMENTATION_PLAN.md#step-2-the-prototype-v0360).
 
 Recording playback (runs 3 and 4; the Phase 2 gate):
 

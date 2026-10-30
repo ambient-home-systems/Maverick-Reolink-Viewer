@@ -36,7 +36,7 @@ import type { StreamDecision } from "./codec";
 import { SHAPES, mseApi, mseSupports, pickSample, probeShape, type MseApi } from "./mse-probe";
 import type { RvPlayer } from "./player";
 
-export const CHECK_VERSION = "0.4.0";
+export const CHECK_VERSION = "0.4.1";
 export const SETUPS = [
   "Desktop Chrome, LAN",
   "Desktop Chrome, Tailscale",
@@ -415,7 +415,8 @@ export class PlaybackCheck {
           ? ""
           : ` · STARTED AT ${clock(shown ?? 0)}, ${span(Math.abs(off))} ${off < 0 ? "before" : "after"} the time asked`;
     const file = t.playing?.file ? ` · ${t.playing.file} file` : "";
-    const served = t.player?.mseStats?.firstSource;
+    // What served this start or seek (its first window asked for by time).
+    const served = t.player?.mseStats?.atSource;
     const from = served ? ` · from ${sourceLabel(served)}` : "";
     const line =
       `first frame ${ok && !t.playFailure ? ms(m.firstFrameMs) : "none"}` +

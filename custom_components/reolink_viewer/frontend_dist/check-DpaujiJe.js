@@ -1,5 +1,5 @@
-import { Gt as e, J as t, Kt as n, Lt as r, Nt as i, St as a } from "./home-BAXdaQM4.js";
-import { a as o, n as s, o as c, r as l, s as u, t as d } from "./findings-CVBkqk8f.js";
+import { Gt as e, J as t, Kt as n, Lt as r, Nt as i, St as a } from "./home-CGlX2y7Y.js";
+import { a as o, n as s, o as c, r as l, s as u, t as d } from "./findings-Dqmk7bWJ.js";
 //#region src/playback/check-util.ts
 var f = (e) => /iPhone|iPad|iPod/.test(e);
 function p(e) {
@@ -225,7 +225,7 @@ function ce(e, t) {
 }
 //#endregion
 //#region src/playback/check.ts
-var le = "0.4.0", ue = [
+var le = "0.4.1", ue = [
 	"Desktop Chrome, LAN",
 	"Desktop Chrome, Tailscale",
 	"Desktop Chrome, Nabu Casa",
@@ -383,7 +383,7 @@ var H = (e) => new Date(e).toLocaleTimeString(), be = class {
 		await t.playAt(e, n);
 		let a = t.playing === i ? void 0 : t.playing?.cache, o = await this._wait(() => t.metrics.firstFrameMs !== void 0 || !!t.playFailure, 12e4);
 		r.stop();
-		let s = t.metrics, c = t.player?.time, l = c === void 0 ? void 0 : c - e, u = l === void 0 || Math.abs(l) <= 2e3 ? "" : ` · STARTED AT ${H(c ?? 0)}, ${v(Math.abs(l))} ${l < 0 ? "before" : "after"} the time asked`, d = t.playing?.file ? ` · ${t.playing.file} file` : "", f = t.player?.mseStats?.firstSource, p = f ? ` · from ${O(f)}` : "", m = `first frame ${o && !t.playFailure ? g(s.firstFrameMs) : "none"} [URL ${g(s.urlMs)} · metadata ${g(r.seen.loadedmetadata)} · seeked ${g(r.seen.seeked)} · playing ${g(r.seen.playing)}] ${s.delivery ?? "?"}${d}${p} · ${s.stream ?? "?"} ${s.codec ?? ""}${u}${t.playFailure ? ` FAILED: ${t.playFailure}` : ""}`;
+		let s = t.metrics, c = t.player?.time, l = c === void 0 ? void 0 : c - e, u = l === void 0 || Math.abs(l) <= 2e3 ? "" : ` · STARTED AT ${H(c ?? 0)}, ${v(Math.abs(l))} ${l < 0 ? "before" : "after"} the time asked`, d = t.playing?.file ? ` · ${t.playing.file} file` : "", f = t.player?.mseStats?.atSource, p = f ? ` · from ${O(f)}` : "", m = `first frame ${o && !t.playFailure ? g(s.firstFrameMs) : "none"} [URL ${g(s.urlMs)} · metadata ${g(r.seen.loadedmetadata)} · seeked ${g(r.seen.seeked)} · playing ${g(r.seen.playing)}] ${s.delivery ?? "?"}${d}${p} · ${s.stream ?? "?"} ${s.codec ?? ""}${u}${t.playFailure ? ` FAILED: ${t.playFailure}` : ""}`;
 		return {
 			ok: o && !t.playFailure && !u,
 			line: m,

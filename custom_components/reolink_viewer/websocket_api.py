@@ -426,6 +426,8 @@ async def ws_timeline_days(
         probatio.Optional("max_age", default=0): probatio.All(
             int, probatio.Range(min=0, max=86400)
         ),
+        # A search ahead nobody waits for (the HD list, before HD is asked).
+        probatio.Optional("background", default=False): bool,
     }
 )
 @websocket_api.async_response
@@ -440,7 +442,11 @@ async def ws_timeline_day(
     entry, source = resolved
     try:
         day, timing = await entry.runtime_data.timeline.async_day(
-            source, msg["date"], msg["stream"], max_age=msg["max_age"]
+            source,
+            msg["date"],
+            msg["stream"],
+            priority=Priority.PREFETCH if msg["background"] else Priority.PLAYBACK,
+            max_age=msg["max_age"],
         )
     except TimelineError as err:
         connection.send_error(msg["id"], ERR_SEARCH_FAILED, str(err))

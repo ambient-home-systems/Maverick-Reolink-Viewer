@@ -228,6 +228,8 @@ export class RvPlayback extends LitElement {
   declare _mode: PlayerMode;
 
   private _daySeq = 0;
+  /** Days whose HD list was searched ahead (camera|date). */
+  private readonly _hdWarmed = new Set<string>();
   /** The `at` already played (it plays once). */
   private _openedAt: number | undefined;
   private _playSeq = 0;
@@ -383,6 +385,7 @@ export class RvPlayback extends LitElement {
         this._metrics = { ...this._metrics, timelineMs: performance.now() - began, timelineServer: day.timing };
       }
       this._warmLongRecording(day);
+      this._warmHdDay(day);
       stale = !options.quiet && day.timing.cache === "stale";
       this._retryEventsSoon(day);
     } catch (err) {
@@ -431,9 +434,26 @@ export class RvPlayback extends LitElement {
       const info = await fetchMediaInfo(hass, this.deviceId);
       this._hd = await canPlayMain(info.main);
       this._metrics = { ...this._metrics, hd: this._hd.reason };
+      if (this._day) this._warmHdDay(this._day);
     } catch {
       this._hd = { main: false, reason: "main stream information unavailable" };
     }
+  }
+
+  /**
+   * Search the day's HD recordings in the background, once per day, where
+   * HD plays: the first HD start of a day otherwise waits for that search
+   * (7.9 s on the owner's NVR, v0.36.0's hardware check).
+   */
+  private _warmHdDay(day: TimelineDay): void {
+    const hass = this.hass;
+    const key = `${this.deviceId}|${day.date}`;
+    if (!hass || !this._hd.main || !day.segments.length || this._hdWarmed.has(key)) return;
+    this._hdWarmed.add(key);
+    fetchTimelineDay(hass, this.deviceId, day.date, 0, { stream: "main", background: true }).catch(() => {
+      // Searched again when HD is asked for.
+      this._hdWarmed.delete(key);
+    });
   }
 
   /** On continuous cameras, start caching the recording at the cursor. */
@@ -593,7 +613,12 @@ export class RvPlayback extends LitElement {
         const status = await fetchCacheStatus(hass, token);
         if (!waiting() || !status.cache || status.cache.complete || status.cache.error) break;
         const hd = playback.stream === "main" ? "HD " : "";
-        this._note = `Fetching the ${hd}recording from the recorder: ${megabytes(status.cache.bytes)} of about ${megabytes(status.expected_bytes)}`;
+        const cut = status.cache.cut as { error?: string | null } | undefined;
+        // Phase 5b: the recorder is asked for this moment (the download goes on behind).
+        this._note =
+          cut && !cut.error && status.cache.cut_error === undefined
+            ? `Asking the recorder for this moment${hd ? " in HD" : ""}…`
+            : `Fetching the ${hd}recording from the recorder: ${megabytes(status.cache.bytes)} of about ${megabytes(status.expected_bytes)}`;
       } catch {
         break;
       }
@@ -1229,6 +1254,8 @@ export class RvPlayback extends LitElement {
         <dd>${m.cache ? describeCache(m.cache) : "–"}</dd>
         <dt>HD</dt>
         <dd>${this._hd.reason}</dd>
+        <dt>HD failures</dt>
+        <dd>${m.hdFailures ? `${m.hdFailures}× (last: ${m.lastHdFailure ?? "?"})` : "none"}</dd>
         <dt>Delivery</dt>
         <dd>
           ${m.delivery ?? (this._progressive ? "progressive" : "whole file first (WebKit)")}${this._playing?.file

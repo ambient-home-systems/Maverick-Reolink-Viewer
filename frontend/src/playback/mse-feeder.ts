@@ -49,6 +49,8 @@ export interface FeederStats {
    */
   source: string;
   firstSource: string | undefined;
+  /** What served the last window asked for by time (a start or a seek). */
+  atSource: string | undefined;
   /** Init segments appended on a change of source. */
   switches: number;
   /** Windows fetched, their bytes, and how long the last one took. */
@@ -143,6 +145,7 @@ export class MseFeeder {
       mime: "",
       source: "file",
       firstSource: undefined,
+      atSource: undefined,
       switches: 0,
       windows: 0,
       bytes: 0,
@@ -320,6 +323,7 @@ export class MseFeeder {
         }
         await this._append(data);
         this.stats.firstSource ??= source;
+        if (query.at !== undefined) this.stats.atSource = source;
         if (query.first === undefined || this._runStartS === undefined) this._runStartS = start / 1000;
         this._next = { index: first + count, atS: end / 1000 };
         if (end > start) this._bytesPerSecond = (data.length * 1000) / (end - start);

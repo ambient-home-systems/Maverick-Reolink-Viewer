@@ -397,3 +397,46 @@ def test_blocks_with_padding_and_the_extra_header_read_as_the_reader_gives_them(
     block = _key(payload, 0, ASKED)
     assert muxer.feed(block) == []
     assert muxer.finish()[0] == muxer.init
+
+
+def test_spans_are_joined_by_the_counter() -> None:
+    """After pause(), blocks already taken are skipped; a gap is bridged."""
+    muxer = BaichuanMuxer(ORIGIN, ASKED)
+    assert muxer.resume_unix is None
+    muxer.pause()  # nothing started: nothing to join
+    assert muxer.stats.spans == 1
+    pieces = muxer.feed(_h264_key(0, ASKED))
+    pieces += muxer.feed(_frame(annexb(P), 100_000))
+    pieces += muxer.feed(_h264_key(1_000_000, ASKED + 1))
+    pieces += muxer.feed(_frame(annexb(P), 1_100_000))
+    muxer.pause()
+    assert muxer.resume_unix == ASKED + 1
+    # The next span starts at the first key frame again: all but the last
+    # block skipped (and the audio while joining), then on.
+    pieces += muxer.feed(_h264_key(0, ASKED))
+    pieces += muxer.feed(_audio(adts_frame()))
+    pieces += muxer.feed(_frame(annexb(P), 1_100_000))
+    pieces += muxer.feed(_frame(annexb(P), 1_200_000))
+    pieces += muxer.feed(_h264_key(2_000_000, ASKED + 2))
+    pieces += muxer.finish()
+    assert muxer.stats.overlap_skipped == 2
+    assert muxer.stats.dropped_audio == 1
+    assert muxer.stats.spans == 2
+    index = _index(pieces)
+    assert [round(f.start_ms) for f in index.fragments] == [
+        2_700_000,
+        2_701_000,
+        2_702_000,
+    ]
+    assert [len(_trun_rows(p, 1)) for p in pieces[1:]] == [2, 3, 1]
+
+    # A key frame without a time: the next span starts from its media time.
+    other = BaichuanMuxer(ORIGIN, ASKED)
+    other.feed(_h264_key(0, ASKED))
+    other.feed(_h264_key(1_000_000, None))
+    assert other.resume_unix == ASKED + 1
+    other.pause()
+    # A gap: the next span begins past the last block; it is taken at once.
+    other.feed(_h264_key(3_000_000, ASKED + 3))
+    assert other.stats.overlap_skipped == 0
+    assert other.stats.key_frames == 3

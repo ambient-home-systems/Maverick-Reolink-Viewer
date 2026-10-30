@@ -44,11 +44,20 @@ ASKED = (START_MS + AT_MS) / 1000
 
 
 def camera_blocks(
-    first_unix: float, seconds: int = 6, *, fps: int = 5, rate: int = 1_000_000
+    first_unix: float,
+    seconds: int = 6,
+    *,
+    fps: int = 5,
+    rate: int = 1_000_000,
+    begin_s: int = 0,
 ) -> bytes:
-    """A cut's media: a key frame (with SPS/PPS) each second, frames between."""
+    """A cut's media: a key frame (with SPS/PPS) each second, frames between.
+
+    ``begin_s``: leave out the first seconds (a later span of the same stream:
+    the counter and the POSIX times go on from ``first_unix``).
+    """
     out = bytearray()
-    for i in range(seconds * fps):
+    for i in range(begin_s * fps, seconds * fps):
         t = i / fps
         micro = round(t * rate) & 0xFFFFFFFF
         if i % fps == 0:
@@ -102,17 +111,26 @@ class Rig:
     async def reserve(self, path: Path, size: int) -> None:
         self.reserved.append((path, size))
 
-    async def cut(self, channel: int = 3, stream: str = "sub", name: str = "a") -> Cut:
+    async def cut(
+        self,
+        channel: int = 3,
+        stream: str = "sub",
+        name: str = "a",
+        *,
+        end_ms: int = END_MS,
+        span_ms: float | None = None,
+    ) -> Cut:
         return await self.source.async_start(
             entry_id="entry1",
             channel=channel,
             stream=stream,
             start_ms=START_MS,
-            end_ms=END_MS,
+            end_ms=end_ms,
             at_ms=AT_MS,
             path=self.dir / f"{name}.cut.mp4",
             reserve=self.reserve,
             size=1000,
+            span_ms=span_ms,
         )
 
     def cmds(self) -> list[int]:
@@ -186,6 +204,7 @@ async def test_a_cut_is_muxed_to_fragments_and_the_login_ends_when_idle(
         "logins": 1,
         "logouts": 1,
         "cuts_running": 0,
+        "cuts_paused": 0,
     }
 
 
@@ -199,7 +218,7 @@ async def test_cuts_share_one_login_and_a_new_start_on_a_channel_replaces_its_cu
     assert rig.source.stats()["cuts_running"] == 2
     assert rig.source.stats()["logins"] == 1
     assert {first.timing["login"], other.timing["login"]} == {"new", "shared"}
-    main_xml = [x for c, x in rig.nvr.requests if c == 143][1]
+    main_xml = next(x for c, x in rig.nvr.requests if c == 143 and "<channelId>5<" in x)
     assert "<supportSub>0</supportSub>" in main_xml
     assert "<streamType>mainStream</streamType>" in main_xml
     replacement = await rig.cut(channel=3, name="c")
@@ -301,6 +320,75 @@ async def test_shutdown_stops_cuts_and_logs_out(rig: Rig) -> None:
         await rig.cut()
 
 
+async def test_an_hd_cut_comes_in_spans_joined_seamlessly(rig: Rig) -> None:
+    """Span by span: paused between them (the login kept), each one joined."""
+    rig.nvr.media = camera_blocks(ASKED - 3, seconds=6)
+    cut = await rig.cut(stream="main", span_ms=3000, end_ms=START_MS + 605_000)
+    await _until(lambda: cut.paused)
+    assert cut.spans == 1
+    assert not cut.complete
+    # The last group (from the key frame at +2 s) waits for the next span.
+    assert [f.start_ms for f in cut.index.fragments] == [
+        AT_MS + s * 1000 for s in (-3, -2, -1, 0, 1)
+    ]
+    assert rig.source.stats()["cuts_paused"] == 1
+    assert rig.source.stats()["logged_in"] == 1
+    # The next span, asked 4 s before the open group's key frame, overlaps.
+    rig.nvr.media = camera_blocks(ASKED - 3, seconds=13, begin_s=1)
+    cut.extend()
+    await _done(cut)
+    assert cut.error is None
+    assert cut.complete  # its span reached the recording's end (+5 s)
+    assert cut.spans == 2
+    starts = [f.start_ms for f in cut.index.fragments]
+    assert starts == [AT_MS + s * 1000 for s in range(-3, 10)]
+    assert all(f.duration_ms == 1000 for f in cut.index.fragments)
+    xmls = [x for c, x in rig.nvr.requests if c == 143]
+    assert len(xmls) == 2
+    # The second from 4 s before the key frame at +2 s (22:10:02 EDT).
+    assert "<minute>9</minute>\n<second>58</second>" in xmls[1]
+    assert "<streamType>mainStream</streamType>" in xmls[1]
+    mux = cut.public()["mux"]
+    assert mux["spans"] == 2
+    # Blocks from +1 s to the last one taken (+2.8 s) come again: skipped.
+    assert mux["overlap_skipped"] == 25
+    assert cut.public()["spans"] == 2
+    assert rig.nvr.ended == [4, 4]
+    assert rig.source.stats()["logins"] == 1
+    # extend() once the end is cut does nothing.
+    cut.extend()
+
+
+async def test_a_later_span_without_a_slot_fails_the_cut(rig: Rig) -> None:
+    rig.nvr.media = camera_blocks(ASKED - 3, seconds=6)
+    cut = await rig.cut(stream="main", span_ms=3000)
+    await _until(lambda: cut.paused)
+    held = [
+        rig.scheduler.host("entry1").streams.request(Priority.LIVE) for _ in range(2)
+    ]
+    with patch.object(baichuan_source, "SPAN_SLOT_TIMEOUT_S", 0.05):
+        cut.extend()
+        await _done(cut)
+    assert cut.error == "no stream slot within 0 s (2 of 2 in use)"
+    for ticket in held:
+        ticket.release()
+
+
+async def test_a_paused_cut_whose_connection_dropped_logs_in_again(rig: Rig) -> None:
+    rig.nvr.media = camera_blocks(ASKED - 3, seconds=6)
+    cut = await rig.cut(stream="main", span_ms=3000, end_ms=START_MS + 605_000)
+    await _until(lambda: cut.paused)
+    for writer in rig.nvr.writers:
+        writer.close()
+    await asyncio.sleep(0.1)
+    rig.nvr.media = camera_blocks(ASKED - 3, seconds=13, begin_s=1)
+    cut.extend()
+    await _done(cut)
+    assert cut.error is None
+    assert cut.complete
+    assert rig.source.stats()["logins"] == 2
+
+
 def test_device_local_time() -> None:
     assert _local(ASKED, None) == datetime(2026, 10, 30, 2, 10)
     assert _local(ASKED, NEW_YORK) == datetime(2026, 10, 29, 22, 10)
@@ -316,8 +404,8 @@ SOURCE = PlaybackSource("cam1", "Garage", "entry1", 3)
 LONG = fragmented_av(400)
 
 
-def deep_rec(name: str = "slow-deep") -> Recording:
-    return Recording(SOURCE, "sub", name, START_MS, END_MS, size=len(LONG))
+def deep_rec(name: str = "slow-deep", stream: str = "sub") -> Recording:
+    return Recording(SOURCE, stream, name, START_MS, END_MS, size=len(LONG))
 
 
 @pytest.fixture
@@ -532,3 +620,53 @@ async def test_cut_files_are_cleared_at_setup_and_counted_with_their_recording(
     stats = await cache.async_stats()
     assert "baichuan" not in stats
     await scheduler.async_shutdown()
+
+
+async def test_an_hd_deep_start_extends_its_cut_and_hands_over_to_the_download(
+    cached: tuple[VodCache, Rig],
+    media: Server,  # noqa: F811
+) -> None:
+    """The next span as the viewer nears the end; the download once it has it."""
+    cache, rig = cached
+    rig.nvr.media = camera_blocks(ASKED - 3, seconds=6)
+    with (
+        patch.dict(vodcache.CUT_SPAN_MS, {"main": 3000}),
+        patch.object(vodcache, "EXTEND_WITHIN_MS", 500),
+    ):
+        entry = await cache.async_open(deep_rec(stream="main"))
+        cache.lease(entry, 600, "token1")
+        _init, _mime, source = await cache.async_init(entry, at_ms=AT_MS)
+        assert source == "cut"
+        cut = entry.cut
+        assert cut is not None
+        await _until(lambda: cut.paused)
+        assert cut.spans == 1
+        window = await cache.async_window(
+            entry, at_ms=AT_MS, max_ms=1000, max_bytes=10**7
+        )
+        assert window.source == "cut"
+        assert window.start_ms == AT_MS
+        # Far from the end: no next span yet.
+        assert not cut._more.is_set()
+        # The window reaching the end of what the cut has asks for the next.
+        rig.nvr.media = camera_blocks(ASKED - 3, seconds=12, begin_s=1)
+        near = await cache.async_window(
+            entry, first=window.first + 1, max_ms=1000, max_bytes=10**7
+        )
+        assert near.start_ms == AT_MS + 1000
+        await _until(lambda: cut.spans == 2 and cut.paused)
+        after = await cache.async_window(
+            entry, first=near.first + 1, max_ms=1000, max_bytes=10**7
+        )
+        assert after.source == "cut"
+        assert after.start_ms == AT_MS + 2000
+        # The download has it all now: past the cut's fragments, it serves.
+        media.gate.set()
+        await cache.async_wait(entry, complete=True)
+        last = len(cut.index.fragments)
+        handed = await cache.async_window(
+            entry, first=window.first - 3 + last, max_ms=1000, max_bytes=10**7
+        )
+        assert handed.source == "file"
+        assert handed.start_ms is not None
+        assert handed.start_ms <= cut.end_ms

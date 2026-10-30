@@ -626,6 +626,10 @@ recordings over the Reolink protocol** (off by default):
   for sub, 0 for main; the channel's bit in `logicChnBitmap`, 255 if
   refused), from 4 s before the asked moment to the recording's end, in the
   device's local time. 144 when it ends, is replaced or the viewer leaves.
+  Since v0.36.1 an HD (main) cut asks 3 minutes at a time: the next 143
+  starts 4 s before the key frame of the group the last one left open, and
+  the muxer skips by the frame counter what it already has (the counter runs
+  on unchanged from one cut of a file to the next).
 - **The connection.** One per host, logged in by the first cut (a scheduler
   job), shared by every cut on that host (one per channel, by the handle
   byte), logged out 30 s after the last one ends: at most one extra

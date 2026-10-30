@@ -564,11 +564,13 @@ var Ue = (e, t, n, r) => e.callWS({
 	device_id: t,
 	year: n,
 	month: r
-}), We = (e, t, n, r = 0) => e.callWS({
+}), We = (e, t, n, r = 0, i = {}) => e.callWS({
 	type: "reolink_viewer/timeline/day",
 	device_id: t,
 	date: n,
-	...r > 0 ? { max_age: r } : {}
+	...r > 0 ? { max_age: r } : {},
+	...i.stream && i.stream !== "sub" ? { stream: i.stream } : {},
+	...i.background ? { background: !0 } : {}
 }), Ge = (e, t = {}) => e.callWS({
 	type: "reolink_viewer/events/recent",
 	...t.date ? { date: t.date } : {},
@@ -996,7 +998,7 @@ function Bt(e) {
 }
 //#endregion
 //#region src/version.ts
-var I = "0.36.0", Vt = "https://github.com/ambient-home-systems/Maverick-Reolink-Viewer", Ht = {
+var I = "0.36.1", Vt = "https://github.com/ambient-home-systems/Maverick-Reolink-Viewer", Ht = {
 	guide: ["user-guide"],
 	troubleshooting: ["troubleshooting"],
 	cameras: ["cameras"],
@@ -1587,6 +1589,7 @@ var Sn = class {
 			mime: "",
 			source: "file",
 			firstSource: void 0,
+			atSource: void 0,
 			switches: 0,
 			windows: 0,
 			bytes: 0,
@@ -1705,7 +1708,7 @@ var Sn = class {
 			if (this.stats.windows += 1, this.stats.bytes += i.length, this.stats.lastWaitMs = performance.now() - a, l > 0) {
 				let t = n.headers.get("X-RV-Source") ?? "file";
 				if (t !== this.stats.source && (await this._switch(t, r.signal), this._gone() || bn(r.signal))) return;
-				await this._append(i), this.stats.firstSource ??= t, (e.first === void 0 || this._runStartS === void 0) && (this._runStartS = u / 1e3), this._next = {
+				await this._append(i), this.stats.firstSource ??= t, e.at !== void 0 && (this.stats.atSource = t), (e.first === void 0 || this._runStartS === void 0) && (this._runStartS = u / 1e3), this._next = {
 					index: c + l,
 					atS: d / 1e3
 				}, d > u && (this._bytesPerSecond = i.length * 1e3 / (d - u));
@@ -4923,11 +4926,11 @@ function Fi(e) {
 //#endregion
 //#region src/views.ts
 var Ii = {
-	events: () => import("./events-view-XrDtR3BQ.js"),
-	list: () => import("./device-list-DR13B4HB.js"),
-	device: () => import("./device-page-BkUOd3XO.js"),
-	"live-check": () => import("./live-check-eagx0Zsa.js"),
-	soak: () => import("./live-soak-OlRowJNR.js")
+	events: () => import("./events-view-DfMXF0tj.js"),
+	list: () => import("./device-list-BXGJIeQH.js"),
+	device: () => import("./device-page-Be3X2dUu.js"),
+	"live-check": () => import("./live-check-BOF9likF.js"),
+	soak: () => import("./live-soak-BakiAGtJ.js")
 }, Li = /* @__PURE__ */ new Map();
 function Ri(e) {
 	let t = Ii[e];
