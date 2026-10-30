@@ -24,6 +24,11 @@ that clock (the drift is taken up by the last frame of each group). The
 streams of run 2 hold I and P pictures only: decode order is presentation
 order, so no composition offsets are written.
 
+A stream can come in spans (one download cut after another, Phase 5b's HD
+cut): after :meth:`BaichuanMuxer.pause` the open group of pictures is kept,
+and the next span, asked from a little before it, is joined by the counter:
+blocks the muxer already has are skipped, so the stream goes on seamlessly.
+
 Parameter sets equal to the init segment's are taken out of the samples;
 changed ones stay in band. Audio follows on its own clock (1024 samples per
 AAC frame), started at the first key frame and moved back into line with the
@@ -102,6 +107,8 @@ class MuxStats:
     anchor_offset_s: float | None = None
     parameter_set_changes: int = 0
     counter_steps_back: int = 0
+    spans: int = 1
+    overlap_skipped: int = 0
 
     def as_dict(self) -> dict[str, object]:
         """Return the numbers (no media)."""
@@ -120,6 +127,8 @@ class MuxStats:
             "anchor_offset_s": self.anchor_offset_s,
             "parameter_set_changes": self.parameter_set_changes,
             "counter_steps_back": self.counter_steps_back,
+            "spans": self.spans,
+            "overlap_skipped": self.overlap_skipped,
         }
 
 
@@ -207,6 +216,28 @@ class BaichuanMuxer:
         self._audio_config: _AudioConfig | None = None
         self._audio_next: int | None = None
         self._sequence = 0
+        # The open group's key frame's POSIX time; joining the next span.
+        self._gop_unix: int | None = None
+        self._joining = False
+
+    @property
+    def resume_unix(self) -> float | None:
+        """Return where the next span should start (POSIX s): the open group's key.
+
+        None before the first key frame.
+        """
+        if not self._started:
+            return None
+        if self._gop_unix is not None:
+            return float(self._gop_unix)
+        start = self._gop[0].time if self._gop else self._last_time
+        return self._origin + start
+
+    def pause(self) -> None:
+        """End a span without closing the open group; the next span joins it."""
+        if self._started:
+            self._joining = True
+            self.stats.spans += 1
 
     @property
     def first_time(self) -> float | None:
@@ -238,6 +269,15 @@ class BaichuanMuxer:
         if block.micro is None or (not key and not self._started):
             self.stats.dropped_frames += 1
             return []
+        if self._joining:
+            # The next span starts at or before what the muxer has: skip to
+            # the first block past the last one taken (by the counter).
+            last = self._clock.last_micro
+            step = (block.micro - last) & 0xFFFFFFFF if last is not None else 1
+            if step == 0 or step >= 1 << 31:
+                self.stats.overlap_skipped += 1
+                return []
+            self._joining = False
         _layout, units = nal_units(block.payload)
         if not units:
             self.stats.dropped_frames += 1
@@ -254,6 +294,8 @@ class BaichuanMuxer:
         out: list[bytes] = []
         if key:
             self.stats.key_frames += 1
+            unix = block.unix_time
+            self._gop_unix = unix if unix is not None and _plausible(unix) else None
             if not self._started:
                 self._start(counter, block.unix_time)
                 time = self._clock.first_time
@@ -350,7 +392,7 @@ class BaichuanMuxer:
 
     def _take_audio(self, block: Block) -> None:
         frames = _adts_frames(block.payload)
-        if not frames or not self._started:
+        if not frames or not self._started or self._joining:
             self.stats.dropped_audio += max(len(frames), 1)
             return
         for config, raw in frames:
@@ -671,3 +713,8 @@ def _adts_frames(payload: bytes) -> list[tuple[_AudioConfig, bytes]]:
         frames.append((config, payload[at + header : at + length]))
         at += length
     return frames
+
+
+def _plausible(unix: int) -> bool:
+    """Return whether a header field reads as a POSIX time of this decade."""
+    return 1_500_000_000 < unix < 2_100_000_000

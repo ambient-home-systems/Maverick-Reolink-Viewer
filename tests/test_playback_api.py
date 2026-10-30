@@ -17,6 +17,7 @@ from pytest_homeassistant_custom_component.typing import (
 
 from custom_components.reolink_viewer import bridge, timeline, views, vodcache
 from custom_components.reolink_viewer.devices import PlaybackSource
+from custom_components.reolink_viewer.scheduler import Priority
 from custom_components.reolink_viewer.thumbnails import ThumbKey
 from custom_components.reolink_viewer.views import VodGrant
 from custom_components.reolink_viewer.vodcache import Recording
@@ -114,6 +115,25 @@ async def test_timeline_commands(
     msg = await _ws(client, {"type": "reolink_viewer/timeline/warm"})
     assert msg["result"] == {"cameras": 1}
     await hass.async_block_till_done()
+    # The HD list searched ahead, in the background (the panel's warm-up).
+    with patch.object(
+        wired.runtime_data.timeline,
+        "async_day",
+        wraps=wired.runtime_data.timeline.async_day,
+    ) as day_search:
+        msg = await _ws(
+            client,
+            {
+                "type": "reolink_viewer/timeline/day",
+                "device_id": camera,
+                "date": DAY,
+                "stream": "main",
+                "background": True,
+            },
+        )
+    assert msg["success"] is True
+    background = [c for c in day_search.call_args_list if c.args[2] == "main"]
+    assert background[0].kwargs["priority"] is Priority.PREFETCH
 
     msg = await _ws(
         client,

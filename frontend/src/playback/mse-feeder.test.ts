@@ -242,6 +242,7 @@ describe("MseFeeder", () => {
     expect(server.requests[0]).toBe("init?at=80000");
     expect(f.stats.source).toBe("cut");
     expect(f.stats.firstSource).toBe("cut");
+    expect(f.stats.atSource).toBe("cut");
     expect(f.stats.mime).toBe('video/mp4; codecs="avc1.640033"');
     expect(f.stats.switches).toBe(0);
     // A seek back before the cut: the recording's download serves, with its init.
@@ -254,6 +255,8 @@ describe("MseFeeder", () => {
     expect(f.stats.source).toBe("file");
     expect(f.stats.switches).toBe(1);
     expect(f.stats.firstSource).toBe("cut");
+    // The seek's own source (the playback check's label).
+    expect(f.stats.atSource).toBe("file");
     const buffer = FakeMediaSource.last?.buffer;
     expect(buffer?.types).toEqual(['video/mp4; codecs="avc1.640033,mp4a.40.2"']);
     expect(f.stats.mime).toContain("mp4a");

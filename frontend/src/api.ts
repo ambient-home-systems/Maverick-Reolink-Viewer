@@ -156,18 +156,25 @@ export const fetchTimelineDays = (
     month,
   });
 
-/** `maxAge` (s): accept a copy of today that old at once (timing cache "stale"). */
+/**
+ * `maxAge` (s): accept a copy of today that old at once (timing cache "stale").
+ * `stream`: the HD (main) list instead of SD; `background`: a search nobody
+ * waits for (it yields to what someone asked for).
+ */
 export const fetchTimelineDay = (
   hass: HomeAssistant,
   deviceId: string,
   date: string,
   maxAge = 0,
+  options: { stream?: Stream; background?: boolean } = {},
 ): Promise<TimelineDay> =>
   hass.callWS<TimelineDay>({
     type: "reolink_viewer/timeline/day",
     device_id: deviceId,
     date,
     ...(maxAge > 0 ? { max_age: maxAge } : {}),
+    ...(options.stream && options.stream !== "sub" ? { stream: options.stream } : {}),
+    ...(options.background ? { background: true } : {}),
   });
 
 /**

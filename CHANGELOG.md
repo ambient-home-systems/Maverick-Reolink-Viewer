@@ -3,6 +3,22 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.36.1
+
+What the hardware check of 0.36.0 asked for:
+
+- **HD starts over the Reolink protocol fetch only what you will watch**: a few
+  minutes ahead at a time, more as you play, and the rest from the normal copy
+  once it has it (0.36.0 fetched the whole rest of the recording, about 2 GB an
+  hour, beside the copy).
+- **The first HD start of a day starts sooner**: the day's HD recordings are
+  looked up in the background when the day opens (that lookup took 8 seconds
+  when HD was first pressed).
+- While the recorder sends the moment asked for, the player says so ("Asking the
+  recorder for this moment…") instead of showing the copy's progress.
+- **Details** shows why HD last failed; the playback check names what served
+  each start and jump.
+
 ## 0.36.0
 
 - **Start deep in recordings over the Reolink protocol** (an option, off by

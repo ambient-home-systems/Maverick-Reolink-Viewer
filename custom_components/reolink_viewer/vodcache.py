@@ -115,6 +115,12 @@ DEEP_MARGIN_MS = 30_000
 CUT_REACH_MS = 60_000
 # A cut's first fragment must come within this long, else the download serves.
 CUT_FIRST_WAIT_S = 6.0
+# Media a cut fetches at a time, per stream (ms; absent: to the recording's
+# end). An HD cut to the end fetched 1.9 GB beside the download (v0.36.0's
+# hardware check); a few minutes ahead of the viewer is enough.
+CUT_SPAN_MS = {"main": 180_000}
+# The next span is asked for once a window comes this close to a cut's end.
+EXTEND_WITHIN_MS = 120_000
 # A lease outlasts its URL by this much.
 LEASE_MARGIN_S = 60.0
 # A fill behind a click (playback priority) may evict a recording whose
@@ -679,9 +685,14 @@ class VodCache:
             cut = entry.cut
             if cut is None or first // CUT_FIRST != cut.generation:
                 raise VodCacheError("that cut of the recording was replaced")
-            return await self._cut_window(
-                cut, first=first % CUT_FIRST, max_ms=max_ms, max_bytes=max_bytes
-            )
+            position = first % CUT_FIRST
+            handover = await self._handover_ms(entry, cut, position)
+            if handover is None:
+                return await self._cut_window(
+                    cut, first=position, max_ms=max_ms, max_bytes=max_bytes
+                )
+            # Past what the cut has, and the download has it: read the download.
+            first, at_ms = None, handover
         if first is None and (cut := await self._cut_for(entry, at_ms or 0.0)):
             return await self._cut_window(
                 cut, at_ms=at_ms or 0.0, max_ms=max_ms, max_bytes=max_bytes
@@ -786,7 +797,10 @@ class VodCache:
         if at_ms - reached < DEEP_MARGIN_MS:
             return None
         rec = entry.recording
+        span = CUT_SPAN_MS.get(rec.stream)
         remaining = max(rec.end_ms - rec.start_ms - at_ms, 0)
+        if span is not None:
+            remaining = min(remaining, span + 10_000)
         length = max(rec.end_ms - rec.start_ms, 1)
         size = int(expected_size(rec) * min(remaining / length + 0.01, 1.0))
         entry.cuts += 1
@@ -802,6 +816,7 @@ class VodCache:
                 path=path,
                 reserve=self._reserve_cut,
                 size=size,
+                span_ms=span,
             )
         except CutError as err:
             entry.timing["cut_error"] = str(err)
@@ -841,6 +856,9 @@ class VodCache:
             while not ready(cut.index):
                 if cut.error is not None:
                     raise CutError(cut.error)
+                if cut.paused:
+                    # Between spans, and what is wanted lies past it.
+                    cut.extend()
                 if cut.complete or not cut.running:
                     if cut.index.fragments:
                         return
@@ -890,7 +908,33 @@ class VodCache:
             media += fragment.duration_ms
             size += fragment.size
         last = cut.complete and begin + len(chosen) == len(index.fragments)
+        end = chosen[-1].start_ms + chosen[-1].duration_ms if chosen else None
+        reached = cut.end_ms
+        if (
+            not cut.complete
+            and end is not None
+            and reached is not None
+            and end >= reached - EXTEND_WITHIN_MS
+        ):
+            # The viewer nears the end of what the cut has: the next span.
+            cut.extend()
         return Window(base + begin, tuple(chosen), last, "cut")
+
+    async def _handover_ms(self, entry: Entry, cut: Cut, index: int) -> float | None:
+        """Return where to read the download instead of the cut, or None.
+
+        That is when a window past the cut's fragments is asked for while the
+        cut does not reach the recording's end, and the download has it.
+        """
+        if cut.complete or index < len(cut.index.fragments):
+            return None
+        reached = cut.end_ms
+        if reached is None:
+            return None
+        indexed = await self._indexed_now(entry)
+        if indexed is None or indexed.find(reached) is None:
+            return None
+        return reached
 
     async def _indexed_now(self, entry: Entry) -> FragmentIndex | None:
         """Index what the original holds now, without waiting for more."""

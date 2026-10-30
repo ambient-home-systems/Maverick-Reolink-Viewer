@@ -754,6 +754,30 @@ describe("rv-playback with MSE", () => {
     expect(el._note).toBe("Fetching the recording from the recorder: 40 MB of about 260 MB");
     expect(String(sentOf(hass, "reolink_viewer/playback/cache_status")[0]?.token)).toMatch(/^tok-s1-/);
   });
+
+  it("says it asks the recorder while its cut serves a start, and searches the HD list ahead", async () => {
+    const hass = mseHass();
+    const base = hass.callWS.bind(hass);
+    hass.callWS = <T,>(message: Record<string, unknown>) => {
+      if (message.type === "reolink_viewer/playback/cache_status") {
+        hass.sent.push(message);
+        const cache = { complete: false, bytes: 1_000_000, error: null, cut: { login: "new", error: null } };
+        return Promise.resolve({ cache, expected_bytes: 260_000_000 } as T);
+      }
+      return base<T>(message);
+    };
+    const el = await mount(hass);
+    // Where HD plays, the day's HD list is searched in the background, once.
+    el._hd = { main: true, reason: "avc1.640033 at 2560×1440 is supported" };
+    await el._loadDay("2026-10-17");
+    await el._loadDay("2026-10-17");
+    const ahead = sentOf(hass, "reolink_viewer/timeline/day").filter((m) => m.stream === "main");
+    expect(ahead).toEqual([expect.objectContaining({ date: "2026-10-17", background: true })]);
+    vi.spyOn(HTMLMediaElement.prototype, "play").mockImplementation(() => new Promise<void>(() => undefined));
+    await el.playAt(T0 + 60 * MIN + 30_000);
+    await new Promise((resolve) => setTimeout(resolve, 1_100));
+    expect(el._note).toBe("Asking the recorder for this moment…");
+  });
 });
 
 describe("videoCodec", () => {

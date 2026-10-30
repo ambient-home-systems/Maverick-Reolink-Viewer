@@ -14,6 +14,10 @@ indexed like it (``fmp4.FragmentIndex``), so the MSE view serves both alike.
   user per host, whatever the number of viewers.
 - One cut per channel at a time (the device tells streams apart by channel);
   a new start on a channel stops the cut running on it (144 closes it).
+- An HD cut comes in spans (``span_ms`` of media, a few minutes) rather than
+  to the recording's end: the cache asks for the next span as the viewer
+  nears the end of one (:meth:`Cut.extend`), and the muxer joins them. The
+  login is held across spans; a stream slot only while a span downloads.
 - Each cut holds a slot of the host's stream budget, at playback priority, and
   gives up if none is free within ``SLOT_TIMEOUT_S``; the login runs as a
   scheduler job.
@@ -27,7 +31,7 @@ for the host's address, credentials and time zone.
 """
 
 import asyncio
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 import contextlib
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, tzinfo
@@ -54,6 +58,8 @@ _LOGGER = logging.getLogger(__name__)
 LEAD_S = 4.0
 IDLE_LOGOUT_S = 30.0
 SLOT_TIMEOUT_S = 5.0
+# A later span waits longer for its slot: the viewer is still watching.
+SPAN_SLOT_TIMEOUT_S = 30.0
 LOGIN_TIMEOUT_S = 10.0
 CLIENT_TIMEOUT_S = 10.0
 # Nothing from the device for this long: the cut has failed.
@@ -93,6 +99,22 @@ class Cut:
     last_read: float = field(default_factory=time.monotonic)
     # Which of its recording's cuts this is (the cache numbers its windows by it).
     generation: int = 0
+    # Media cut at a time (ms); None: to the recording's end in one go.
+    span_ms: float | None = None
+    # Between spans: waiting for the cache to ask for the next one.
+    paused: bool = False
+    spans: int = 0
+    _more: asyncio.Event = field(default_factory=asyncio.Event)
+
+    def extend(self) -> None:
+        """Ask for the next span (no-op once the recording's end is cut)."""
+        if not self.complete:
+            self._more.set()
+
+    async def wait_for_more(self) -> None:
+        """Wait (between spans) until the next span is asked for."""
+        await self._more.wait()
+        self._more.clear()
 
     @property
     def running(self) -> bool:
@@ -120,6 +142,8 @@ class Cut:
             "fragments": len(self.index.fragments),
             "complete": self.complete,
             "running": self.running,
+            "paused": self.paused,
+            "spans": self.spans,
             "error": self.error,
             **self.timing,
         }
@@ -204,19 +228,22 @@ class BaichuanSource:
         path: Path,
         reserve: Reserve,
         size: int,
+        span_ms: float | None = None,
     ) -> Cut:
         """Start a cut of a recording (UTC ``start_ms``-``end_ms``) at ``at_ms``.
 
         It runs in the background; wait on ``cut.changed`` for its fragments.
         A cut running on the channel is stopped first. ``reserve(path, bytes)``
         makes room for the file (``size`` expected) before bytes are written.
+        With ``span_ms`` it cuts that much media, then waits for
+        :meth:`Cut.extend` to cut the next span; else to the recording's end.
         """
         if self._closed:
             raise CutError("closed")
         previous = self._cuts.get((entry_id, channel))
         if previous is not None:
             await self.async_stop(previous)
-        cut = Cut(entry_id, channel, stream, path, at_ms)
+        cut = Cut(entry_id, channel, stream, path, at_ms, span_ms=span_ms)
         self._cuts[(entry_id, channel)] = cut
         cut.task = self._hass.async_create_background_task(
             self._run(cut, start_ms, end_ms, reserve, size),
@@ -237,27 +264,58 @@ class BaichuanSource:
     async def _run(
         self, cut: Cut, start_ms: int, end_ms: int, reserve: Reserve, size: int
     ) -> None:
-        streams = self._scheduler.host(cut.entry_id).streams
-        ticket = streams.request(Priority.PLAYBACK)
+        tz = bridge.async_get_host(self._hass, cut.entry_id).timezone()
+        origin = start_ms / 1000
+        end = end_ms / 1000
+        asked = origin + cut.asked_ms / 1000
+        muxer = BaichuanMuxer(origin, asked)
+        cut.muxer = muxer
+        client: BaichuanReplayClient | None = None
+        fd: int | None = None
         try:
-            try:
-                async with asyncio.timeout(SLOT_TIMEOUT_S):
-                    await ticket.wait()
-            except TimeoutError:
-                stats = streams.stats()
-                raise CutError(
-                    f"no stream slot within {SLOT_TIMEOUT_S:.0f} s"
-                    f" ({stats['streams']} of {stats['stream_limit']} in use)"
-                ) from None
-            cut.timing["slot_ms"] = _ms(cut.began)
-            await reserve(cut.path, size)
-            client = await self._acquire(cut)
-            try:
-                await self._receive(
-                    cut, client, span=(start_ms, end_ms), reserve=reserve, size=size
-                )
-            finally:
-                self._release(cut.entry_id)
+            began = asked
+            while True:
+                span_end = end if cut.span_ms is None else began + cut.span_ms / 1000
+                final = span_end >= end
+                first = cut.spans == 0
+                async with self._slot(
+                    cut, SLOT_TIMEOUT_S if first else SPAN_SLOT_TIMEOUT_S
+                ):
+                    if first:
+                        cut.timing["slot_ms"] = _ms(cut.began)
+                        await reserve(cut.path, size)
+                        fd = await self._hass.async_add_executor_job(
+                            _open_write, cut.path
+                        )
+                    if client is None or not client.connected:
+                        if client is not None:
+                            self._release(cut.entry_id)
+                            client = None
+                        client = await self._acquire(cut)
+                    assert fd is not None
+                    cut.spans += 1
+                    await self._receive(
+                        cut,
+                        client,
+                        times=(
+                            _local(max(began - LEAD_S, origin), tz),
+                            _local(min(span_end, end), tz),
+                        ),
+                        final=final,
+                        fd=fd,
+                        reserve=reserve,
+                        size=size,
+                    )
+                if final:
+                    return
+                # Between spans: hold the login, not the slot.
+                cut.paused = True
+                async with cut.changed:
+                    cut.changed.notify_all()
+                await cut.wait_for_more()
+                cut.paused = False
+                resume = muxer.resume_unix
+                began = resume if resume is not None else span_end
         except asyncio.CancelledError:
             cut.error = cut.error or "stopped"
             raise
@@ -265,29 +323,50 @@ class BaichuanSource:
             cut.error = _describe(err)
             _LOGGER.debug("Baichuan cut on ch%d failed: %s", cut.channel, cut.error)
         finally:
-            ticket.release()
+            cut.paused = False
+            if fd is not None:
+                await self._hass.async_add_executor_job(os.close, fd)
+            if client is not None:
+                self._release(cut.entry_id)
             if self._cuts.get((cut.entry_id, cut.channel)) is cut:
                 del self._cuts[(cut.entry_id, cut.channel)]
             cut.timing["total_ms"] = _ms(cut.began)
             async with cut.changed:
                 cut.changed.notify_all()
 
+    @contextlib.asynccontextmanager
+    async def _slot(self, cut: Cut, wait: float) -> AsyncIterator[None]:
+        """Hold a slot of the host's stream budget, or fail within ``wait``."""
+        streams = self._scheduler.host(cut.entry_id).streams
+        ticket = streams.request(Priority.PLAYBACK)
+        try:
+            try:
+                async with asyncio.timeout(wait):
+                    await ticket.wait()
+            except TimeoutError:
+                stats = streams.stats()
+                raise CutError(
+                    f"no stream slot within {wait:.0f} s"
+                    f" ({stats['streams']} of {stats['stream_limit']} in use)"
+                ) from None
+            yield
+        finally:
+            ticket.release()
+
     async def _receive(
         self,
         cut: Cut,
         client: BaichuanReplayClient,
         *,
-        span: tuple[int, int],
+        times: tuple[datetime, datetime],
+        final: bool,
+        fd: int,
         reserve: Reserve,
         size: int,
     ) -> None:
-        start_ms, end_ms = span
-        host = bridge.async_get_host(self._hass, cut.entry_id)
-        tz = host.timezone()
-        origin = start_ms / 1000
-        asked = origin + cut.asked_ms / 1000
-        muxer = BaichuanMuxer(origin, asked)
-        cut.muxer = muxer
+        """Cut one span (device-local ``times``) into the open file."""
+        muxer = cut.muxer
+        assert muxer is not None
         feed = _Feed(muxer)
         options: dict[str, Any] = {
             # With 1 the RLN36 sent the sub stream for a mainStream cut (run 1).
@@ -296,8 +375,7 @@ class BaichuanSource:
             "on_chunk": feed.chunk,
             "analyse": False,
         }
-        start = _local(max(asked - LEAD_S, origin), tz)
-        end = _local(end_ms / 1000, tz)
+        start, end = times
         stream_type = STREAM_TYPES.get(cut.stream, STREAM_TYPES["main"])
         try:
             try:
@@ -315,16 +393,12 @@ class BaichuanSource:
                     bitmap=ANY_CHANNEL_BITMAP,
                     **options,
                 )
-            cut.timing["reply_ms"] = reply_ms
-            fd = await self._hass.async_add_executor_job(_open_write, cut.path)
-            try:
-                if stats.end_status is not None:
-                    feed.end_status = stats.end_status
-                await self._pump(
-                    cut, client, feed=feed, fd=fd, reserve=reserve, size=size
-                )
-            finally:
-                await self._hass.async_add_executor_job(os.close, fd)
+            cut.timing.setdefault("reply_ms", reply_ms)
+            if stats.end_status is not None:
+                feed.end_status = stats.end_status
+            await self._pump(
+                cut, client, feed=feed, final=final, fd=fd, reserve=reserve, size=size
+            )
         finally:
             if client.connected:
                 with contextlib.suppress(BaichuanClientError, TimeoutError, OSError):
@@ -337,14 +411,19 @@ class BaichuanSource:
         client: BaichuanReplayClient,
         *,
         feed: _Feed,
+        final: bool,
         fd: int,
         reserve: Reserve,
         size: int,
     ) -> None:
-        """Write what the muxer gives as it comes, until the device's end marker."""
+        """Write what the muxer gives as it comes, until the device's end marker.
+
+        At the end of the last span the muxer's open group is written; at the
+        end of another it is kept for the next span to join.
+        """
         pieces = feed.pieces
         lost = asyncio.ensure_future(client.lost.wait())
-        reserved = size
+        reserved = max(size, cut.written)
         try:
             while True:
                 waiter = asyncio.ensure_future(feed.arrived.wait())
@@ -365,7 +444,10 @@ class BaichuanSource:
                     raise CutError(feed.failures[0])
                 ended = feed.end_status is not None
                 if ended:
-                    pieces.extend(feed.muxer.finish())
+                    if final:
+                        pieces.extend(feed.muxer.finish())
+                    else:
+                        feed.muxer.pause()
                     cut.timing["end_status"] = feed.end_status
                 if pieces:
                     data = b"".join(pieces)
@@ -385,8 +467,9 @@ class BaichuanSource:
                     async with cut.changed:
                         cut.changed.notify_all()
                 if ended:
-                    cut.complete = True
-                    cut.timing["mbit_s"] = _rate(cut.written, cut.began)
+                    if final:
+                        cut.complete = True
+                        cut.timing["mbit_s"] = _rate(cut.written, cut.began)
                     return
                 if lost.done():
                     raise CutError("connection lost")
@@ -498,6 +581,7 @@ class BaichuanSource:
             "logins": sum(h.logins for h in self._hosts.values()),
             "logouts": sum(h.logouts for h in self._hosts.values()),
             "cuts_running": sum(1 for c in self._cuts.values() if c.running),
+            "cuts_paused": sum(1 for c in self._cuts.values() if c.paused),
         }
 
 
