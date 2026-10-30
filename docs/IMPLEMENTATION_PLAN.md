@@ -21,7 +21,7 @@ put on it:
 | 2 | Event timeline, thumbnails, smooth playback | High (backend) / Very high (player) | 3–5 wk | Done (2026-10-21, v0.3.2). 2A (2026-10-20, v0.2.7): timeline 105–287 ms, first frame 0.6–1.1 s, auto-advance 6–7 ms on hardware. 2B: MSE player; uncached deep starts are the NVR's download up to the target (6.9–13.0 s in hour-long recordings, up to 84 s before), speeds 0.5–8×, HD/SD at the same moment, one-hour sessions within the caps, the iPhone app on Wi-Fi, Tailscale and Nabu Casa |
 | 3 | Live view via go2rtc, grid, fullscreen, PTZ | High | 3–4 wk | Done (2026-10-27, v0.15.1). Our own go2rtc and the live check (v0.4.0, runs 5–13); the key-frame cache, the image cache, the Live grid and Live tab, keep warm, full-screen HD, PTZ and the camera's controls, the picture first, battery cameras on wired power, a debug view per tile and the soak report (v0.5.0–v0.15.1). Exit runs: the soak passed (run 15), every tile's first image in a median 0.02 s on the iPhone and the Mac (runs 16–17), and the Phase 2 playback criteria held with live view running (runs 18–19) |
 | 4 | Design, performance, mobile, packaging, first release | Standard | 3–4 wk | Done (2026-10-28, v0.32.3). Step 1, the design (the Timetable), in v0.16.0–v0.22.0; step 2, the performance budget, in v0.23.0; step 3, mobile, in v0.24.0–v0.26.0; step 4, error states, in v0.27.0–v0.29.0; step 5, accessibility, in v0.30.0; step 6, packaging, in v0.31.0, the first release; step 7, docs, in v0.32.0, released the same day; v0.32.1 starts live video sooner where WebRTC cannot connect, from the work PC's check, v0.32.2 keeps the capacity test from blaming the NVR for a stream that plays no video, from the owner's live check, and v0.32.3 fixes full screen and the timeline's pinch on the iPhone, from the owner's iPhone. The rest of the exit checklist was not run: the owner closed the phase on v0.32.0 working in daily use. See "Phase 4 status" |
-| 5 | Optional R&D: Baichuan live/playback | Very high | 4–8 wk, time-boxed with gates | **5a done, go** (2026-10-29, v0.34.1): prior art surveyed, the capture tool and the owner's captures, `docs/baichuan-playback.md`, and the read-only check: a deep start over Baichuan costs the NVR 0.2 s against 4.7 s of HTTP download for the same point of a short recording. 5b–5d estimated at 3.5–5 wk, deep starts only; talk deferred. **5b step 1 built** (2026-10-29, v0.35.0): the probe measures the replay and the download cut (143) 75 % into sub and main recordings, decodes what arrives and counts the sessions; the source (replay, 143 or both) is chosen from the owner's report before step 2, the prototype. **Step 1 done** (2026-10-30, v0.35.5): the download cut (143) is the source. **5b step 2 built** (2026-10-30, v0.36.0): the muxer, one Baichuan connection per host, deep starts served from the cut behind an option (off by default), the fallback to the download. **Hardware check passed** (2026-10-30): an uncached deep start 52 min into an hour shows its first frame in 0.51 s on Chrome and 0.60 s on the iPhone (9.0 s from the download with the option off); v0.36.1 cuts HD in 3-minute spans and searches the day's HD list ahead. **5b done** (2026-10-30, v0.36.2): every exit criterion met on the hardware, the NVR's own list of online users included (one more session while deep starts are in use, gone when idle); 5c is next. See "Phase 5 status" |
+| 5 | Optional R&D: Baichuan live/playback | Very high | 4–8 wk, time-boxed with gates | **5a done, go** (2026-10-29, v0.34.1): prior art surveyed, the capture tool and the owner's captures, `docs/baichuan-playback.md`, and the read-only check: a deep start over Baichuan costs the NVR 0.2 s against 4.7 s of HTTP download for the same point of a short recording. 5b–5d estimated at 3.5–5 wk, deep starts only; talk deferred. **5b step 1 built** (2026-10-29, v0.35.0): the probe measures the replay and the download cut (143) 75 % into sub and main recordings, decodes what arrives and counts the sessions; the source (replay, 143 or both) is chosen from the owner's report before step 2, the prototype. **Step 1 done** (2026-10-30, v0.35.5): the download cut (143) is the source. **5b step 2 built** (2026-10-30, v0.36.0): the muxer, one Baichuan connection per host, deep starts served from the cut behind an option (off by default), the fallback to the download. **Hardware check passed** (2026-10-30): an uncached deep start 52 min into an hour shows its first frame in 0.51 s on Chrome and 0.60 s on the iPhone (9.0 s from the download with the option off); v0.36.1 cuts HD in 3-minute spans and searches the day's HD list ahead. **5b done** (2026-10-30, v0.36.2): every exit criterion met on the hardware, the NVR's own list of online users included (one more session while deep starts are in use, gone when idle). **5c started** (2026-10-30): step 1 built (v0.37.0), a deep start fetches the recording once, in two pieces, and costs the device one stream. See "Phase 5 status" |
 
 Phases 1 and 2 can overlap once Phase 0 is done. Phase 5 can start any time after
 Phase 0 as a separate track.
@@ -4610,6 +4610,73 @@ iPhone Companion app on Wi-Fi):**
    channel rather than replacing the first viewer's.
 6. **5d, upstream:** propose 143/144 and the media message class to
    reolink-aio, so the client here can shrink to a caller of it.
+
+### 5c: integrate (started 2026-10-30)
+
+Goal: deep starts over the Reolink protocol become the normal path where the
+device supports them: one stream and the bytes once per start, on by default,
+the item list above in order. Steps, each released and checked on the
+hardware before the next:
+
+| 5c step | Status |
+| --- | --- |
+| 1. One stream, the bytes once | **Built** (v0.37.0, below) |
+| 2. The method per host, on by default | Next |
+| 3. The clock from the first second | |
+| 4. The HA host's load | |
+| 5. One cut per channel per viewer | |
+
+#### Step 1: one stream, the bytes once (v0.37.0)
+
+- **The download stops where the cut begins.** A recording a cut serves is
+  fetched in two pieces: the download from its start up to the cut's first
+  fragment, then stops (`Entry.stopped_ms`); the cut has the rest (SD to the
+  recording's end, HD in spans as it is watched). A window past the
+  download's last fragment reads the cut on from there (the MSE feeder
+  already switches sources). A sub start 57 min into an hour no longer
+  fetches the last 3 minutes twice; an HD start 5 min in no longer downloads
+  the other 55 minutes (about 2 GB) beside the spans.
+- **Whatever needs the whole original resumes it:** the file player, a clip,
+  the plain MP4, a window neither piece holds (the cut failed, was stopped,
+  or ends before it). The device ignores HTTP Range, so the download reads
+  the recording from its start again and skips the bytes on disk (the index
+  room and offset shifting give the same bytes again); it then runs to the
+  end (`Entry.whole`).
+- **The cut takes its download's stream slot when none is free.** With none
+  free at once, the cut (queued first) asks for its recording's download's
+  (`Cut.borrow`): a download holding a slot closes its response (also while
+  it waits on the device) and queues behind the cut, resuming the same way
+  once a slot is free; one still waiting lets the cut go first
+  (`StreamTicket.defer`). So a deep start costs the device one stream: the
+  run where the NVR had a single slot free (the cut waited 2.2 s for it and
+  the download served the start in 3.2 s) should start from the cut.
+- A stopped original's part counts with its recording for eviction (it goes
+  with the cut); both are one run's, cleared at setup.
+- **Shown:** Details' cache line "copied to 57.0 min (… MB) · Reolink protocol
+  cut: …"; the check's fill line "stopped at 57.0 min (the cut has the rest)",
+  "gave its slot to the cut 1×", and the cut's "slot … ms (the download's)".
+
+**Hardware checklist (the owner, LAN Chrome; the iPhone app for 4):**
+
+1. Update to v0.37.0 (the option stays on). Run the playback check with HD
+   ticked, as for v0.36.2. D1 should read as before (about 0.5 s from the
+   cut), and its fill line end "stopped at … (the cut has the rest)" with the
+   bytes about the share of the recording before the start (D1 starts 75–95 %
+   in, so most of the hour); D2 "Cached" from the download. H: the HD switch's
+   fill line "stopped at …", a few hundred MB at most, not a growing 1–2 GB.
+2. **One slot:** keep live view open on the board (or "keep live view warm"
+   on) so the NVR has few streams free, and do a deep start by hand in an hour
+   not played today. Details should show "Reolink protocol cut: first
+   fragment … ms" in about a second; if the check runs, the cut's line says
+   "slot … ms (the download's)" when it had to take it.
+3. **The whole when needed:** after a deep start, press **Download clip** for
+   that recording: it should download whole (the copy resumes and completes);
+   Details then reads "cached".
+4. On the iPhone app, a deep start and a jump back before it play as before.
+
+**Exit criteria:** a deep start fetches no recording twice (the fill line
+stops at the cut) and costs the device one stream (a start with one slot
+free plays from the cut in about a second); every v0.36.2 row unchanged.
 
 ---
 

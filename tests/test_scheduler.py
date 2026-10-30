@@ -385,6 +385,26 @@ async def test_stream_ticket_raise_priority_and_cancel() -> None:
     assert budget.stats() == {"stream_limit": 1, "streams": 0, "streams_waiting": 0}
 
 
+async def test_a_waiting_ticket_defers_to_those_queued_since() -> None:
+    """defer() moves a waiting ticket behind the later ones (not a granted one)."""
+    budget = StreamBudget("h", limit=1, prefetch_limit=1)
+    holder = budget.request(Priority.PLAYBACK)
+    await holder.wait()
+    download = budget.request(Priority.PLAYBACK)
+    cut = budget.request(Priority.PLAYBACK)
+    download.defer()
+    holder.defer()  # granted: no effect
+    assert holder.granted
+    holder.release()
+    await cut.wait()
+    assert not download.granted
+    cut.release()
+    await download.wait()
+    download.release()
+    download.defer()  # released: no effect
+    assert budget.stats()["streams"] == 0
+
+
 async def test_stream_slot_context_and_close() -> None:
     """slot() holds and frees; close() fails waiters; closed budgets refuse."""
     budget = StreamBudget("h", limit=1)

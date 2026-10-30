@@ -250,13 +250,16 @@ protocol, so the first picture shows in about a second:
 recordings over the Reolink protocol.** No restart is needed.
 
 - It is used only for a start or a jump well past what is already copied (more than
-  30 seconds). Everything else plays as before, and the recording is still copied.
+  30 seconds). Everything else plays as before.
+- The recording is then copied in two pieces: up to that moment as before, the
+  rest from the recorder's answer, so nothing is fetched twice. Downloading the
+  clip, or the file player, fetches the rest of the copy first.
 - Speeds, pausing and jumping work as usual. Jumping back before that moment plays
   from the copy.
 - While it is in use, the recorder counts one more signed-in user, for about 30
   seconds after the last such start.
-- It needs a free stream on the recorder. With live view on every camera, there may
-  be none: the start then waits for the copy, as without the option.
+- It needs a stream on the recorder: with none free, it takes the copy's (the copy
+  goes on after it), so a start costs the recorder one stream.
 - On any failure, the start waits for the copy, as without the option.
 
 The playback check's deep-start rows and **Details** under the player say what served

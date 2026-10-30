@@ -3,6 +3,7 @@
 import asyncio
 from collections.abc import AsyncGenerator, Callable
 from datetime import datetime, tzinfo
+import os
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch
@@ -673,3 +674,156 @@ async def test_an_hd_deep_start_extends_its_cut_and_hands_over_to_the_download(
         assert handed.start_ms is not None
         assert cut.end_ms is not None
         assert handed.start_ms <= cut.end_ms
+
+
+# ---- One stream, the bytes once (Phase 5c) ----
+
+
+async def _whole_copy(cache: VodCache) -> bytes:
+    """The original as an uninterrupted download leaves it."""
+    other = await cache.async_open(deep_rec("slow-other"), any_copy=False)
+    await cache.async_wait(other, complete=True)
+    return other.path.read_bytes()
+
+
+async def test_the_download_stops_where_the_cut_begins_and_the_cut_serves_on(
+    cached: tuple[VodCache, Rig],
+    media: Server,  # noqa: F811
+) -> None:
+    cache, _rig = cached
+    # Small reads, so the download stops within the cut's 6 s.
+    with (
+        patch.object(vodcache, "WRITE_BATCH", 4096),
+        patch.object(vodcache, "CHUNK", 4096),
+    ):
+        entry = await cache.async_open(deep_rec())
+        cache.lease(entry, 600, "token1")
+        assert (await _window(cache, entry, at_ms=AT_MS)).source == "cut"
+        cut = entry.cut
+        assert cut is not None
+        await _done(cut)
+        assert cut.start_ms is not None
+        media.gate.set()
+        await _until(lambda: entry.stopped_ms is not None and not entry.filling)
+    # The original holds what precedes the cut, and no more is fetched.
+    assert not entry.complete
+    assert entry.error is None
+    stopped = entry.stopped_ms
+    assert stopped is not None
+    assert stopped >= cut.start_ms
+    assert entry.public()["stopped_ms"] == round(stopped)
+    assert entry.part_path.exists()
+    assert entry.cut is cut
+    # Windows: the original's last fragment, then the cut on from there.
+    index = await cache._indexed_now(entry)
+    assert index is not None
+    count = len(index.fragments)
+    before = await _window(cache, entry, first=count - 1)
+    assert before.source == "file"
+    assert not before.last
+    after = await _window(cache, entry, first=count)
+    assert after.source == "cut"
+    assert after.start_ms is not None
+    assert after.start_ms <= stopped
+    assert after.end_ms is not None
+    assert after.end_ms > stopped
+    # A start in the part held reads it; a reopen does not fetch the rest.
+    assert (await _window(cache, entry, at_ms=10_000)).source == "file"
+    assert await cache.async_open(deep_rec()) is entry
+    assert not entry.filling
+    # The file player wants it whole: the rest is fetched, the same bytes.
+    whole = await _whole_copy(cache)
+    await cache.async_wait(entry, complete=True)
+    assert entry.public()["complete"]
+    assert entry.stopped_ms is None
+    assert entry.whole
+    assert entry.path.read_bytes() == whole
+
+
+async def test_a_wait_past_the_stop_resumes_the_download(
+    cached: tuple[VodCache, Rig],
+    media: Server,  # noqa: F811
+) -> None:
+    """A window waiting on the original when it stops; then a read past it."""
+    cache, _rig = cached
+    with patch.object(vodcache, "WRITE_BATCH", 16 * 1024):
+        entry = await cache.async_open(deep_rec())
+        assert (await _window(cache, entry, at_ms=AT_MS)).source == "cut"
+        cut = entry.cut
+        assert cut is not None
+        await _done(cut)
+        # Far past the cut's end (it is complete at 6 s): only the original.
+        waiting = asyncio.ensure_future(_window(cache, entry, first=390))
+        await asyncio.sleep(0.05)
+        media.gate.set()
+        window = await waiting
+    assert window.source == "file"
+    assert window.first == 390
+    assert entry.whole
+    await cache.async_wait(entry, complete=True)
+    # A stopped original evicted meanwhile is not resumed in place.
+    entry.stopped_ms = 1.0
+    entry.complete = False
+    cache._entries.pop(entry.recording.cache_id)
+    with pytest.raises(VodCacheError, match="evicted"):
+        await cache.async_wait(entry, complete=True)
+
+
+async def test_a_cut_without_a_free_slot_takes_its_downloads(
+    cached: tuple[VodCache, Rig],
+    media: Server,  # noqa: F811
+) -> None:
+    cache, rig = cached
+    rig.scheduler.host("entry1").streams.limit = 1
+    entry = await cache.async_open(deep_rec())
+    await _until(lambda: entry.ticket is not None and entry.ticket.granted)
+    await cache.async_wait(entry, offset=0)
+    # The download holds the host's one slot: the cut takes it at once.
+    assert (await _window(cache, entry, at_ms=AT_MS)).source == "cut"
+    cut = entry.cut
+    assert cut is not None
+    assert cut.borrowed == 1
+    assert cut.timing["slot_ms"] < 2000
+    await _done(cut)
+    assert entry.timing["yields"] == 1
+    # The download queued behind the cut, and goes on once it is done.
+    await _until(lambda: entry.ticket is not None and entry.ticket.granted)
+    whole = await _whole_copy_after(cache, media, entry)
+    assert entry.path.read_bytes() == whole
+    assert entry.timing["wait_ms"] >= 0
+
+
+async def _whole_copy_after(cache: VodCache, media: Server, entry: Any) -> bytes:  # noqa: F811
+    media.gate.set()
+    await cache.async_wait(entry, complete=True)
+    return await _whole_copy(cache)
+
+
+async def test_a_waiting_download_lets_its_cut_go_first(
+    cached: tuple[VodCache, Rig],
+) -> None:
+    cache, rig = cached
+    streams = rig.scheduler.host("entry1").streams
+    streams.limit = 1
+    holder = streams.request(Priority.LIVE)
+    await holder.wait()
+    entry = await cache.async_open(deep_rec())
+    await _until(lambda: entry.ticket is not None)
+    starting = asyncio.ensure_future(_window(cache, entry, at_ms=AT_MS))
+    await _until(lambda: entry.cut is not None and entry.cut.borrowed == 1)
+    holder.release()
+    assert (await starting).source == "cut"
+    assert entry.ticket is not None
+    assert not entry.ticket.granted
+    assert "yields" not in entry.timing
+
+
+def test_a_part_shorter_than_counted_is_fetched_again(tmp_path: Path) -> None:
+    path = tmp_path / "a.mp4.part"
+    path.write_bytes(b"x" * 10)
+    fd, kept = vodcache._open_write_at(path, 4)
+    os.close(fd)
+    assert (kept, path.read_bytes()) == (4, b"xxxx")
+    fd, kept = vodcache._open_write_at(path, 100)
+    os.close(fd)
+    assert (kept, path.read_bytes()) == (0, b"")

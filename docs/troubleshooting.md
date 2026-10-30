@@ -381,9 +381,10 @@ Playback), a start more than 30 seconds past what is copied should show its firs
 picture in about a second. When it does not, **Details** under the player says why, on
 the line about the recording, after **Reolink protocol cut not used:**
 
-- **"no stream slot within 5 s …"**: the recorder had no stream to spare. Live view
-  of every camera, or cameras kept warm, use them all. Close live view, or turn off
-  **keep live view warm** on some cameras, and try again.
+- **"no stream slot within 5 s …"**: the recorder had no stream to spare. The start
+  takes its own copy's stream when it has one, so this means live view of every
+  camera, or cameras kept warm, use them all. Close live view, or turn off **keep
+  live view warm** on some cameras, and try again.
 - **"login refused …"** or **"connection lost"**: Home Assistant could not sign in to
   the recorder over its own protocol (port 9000), or lost it. Check that the Reolink
   integration works, and that nothing blocks port 9000 between Home Assistant and the

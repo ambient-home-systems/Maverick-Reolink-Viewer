@@ -222,6 +222,8 @@ export const within = (value: number | undefined, budget: number): string =>
 export interface CutStatus {
   first_fragment_ms?: number;
   slot_ms?: number;
+  /** Times it took its recording's download's stream slot (none was free). */
+  borrowed?: number;
   reply_ms?: number;
   login?: string;
   login_ms?: number;
@@ -254,7 +256,9 @@ export function sourceLabel(source: string | undefined): string {
 export function cutReport(cut: CutStatus): string {
   const parts: string[] = [];
   if (typeof cut.first_fragment_ms === "number") parts.push(`first fragment ${Math.round(cut.first_fragment_ms)} ms`);
-  if (typeof cut.slot_ms === "number") parts.push(`slot ${Math.round(cut.slot_ms)} ms`);
+  if (typeof cut.slot_ms === "number") {
+    parts.push(`slot ${Math.round(cut.slot_ms)} ms${cut.borrowed ? " (the download's)" : ""}`);
+  }
   if (cut.login === "new") {
     parts.push(`login (an extra user)${typeof cut.login_ms === "number" ? ` ${Math.round(cut.login_ms)} ms` : ""}`);
   } else if (cut.login) {

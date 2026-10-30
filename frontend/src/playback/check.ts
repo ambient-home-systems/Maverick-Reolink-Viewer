@@ -510,6 +510,8 @@ export class PlaybackCheck {
         cache = null;
       }
       if (!cache || cache.error || (cache.complete && (!plain || cache.flat !== undefined))) break;
+      // Phase 5c: stopped where the cut begins; it goes no further.
+      if (typeof cache.stopped_ms === "number") break;
       await this._pause(1000);
     }
     if (!cache) return "server: not cached (or its URL expired)";
@@ -524,6 +526,8 @@ export class PlaybackCheck {
     }
     if (typeof cache.mbit_s === "number") parts.push(`${cache.mbit_s} Mbit/s`);
     parts.push(mb(cache.bytes));
+    if (typeof cache.stopped_ms === "number") parts.push(`stopped at ${span(cache.stopped_ms)} (the cut has the rest)`);
+    if (typeof cache.yields === "number") parts.push(`gave its slot to the cut ${String(cache.yields)}×`);
     if (cache.indexed !== undefined) parts.push(`index ${text(cache.indexed)}`);
     if (plain || cache.flat !== undefined) parts.push(`plain MP4 ${cache.flat === undefined ? "not yet" : text(cache.flat)}`);
     if (typeof cache.flat_ms === "number") parts.push(`rewrite ${ms(cache.flat_ms)}`);

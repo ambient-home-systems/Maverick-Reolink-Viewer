@@ -225,6 +225,10 @@ describe("Phase 5b reports", () => {
       "Reolink protocol cut: 0 fragments, 0.0 MB, error no stream slot within 5 s (7 of 7 in use), placed by ?, counter ?/s",
     );
     expect(cutReport({})).toBe("Reolink protocol cut: 0 fragments, 0.0 MB, stopped");
+    // Phase 5c: no slot was free, so it took its recording's download's.
+    expect(cutReport({ slot_ms: 35, borrowed: 1, complete: true })).toBe(
+      "Reolink protocol cut: slot 35 ms (the download's), 0 fragments, 0.0 MB, complete",
+    );
     expect(loginReport(undefined)).toBe("Reolink protocol: no statistics");
     expect(loginReport({ enabled: false, logged_in: 0, logins: 0, logouts: 0, cuts_running: 0 })).toBe(
       "Reolink protocol: off (the option is not set)",

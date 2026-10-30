@@ -541,6 +541,10 @@ describe("rv-playback", () => {
     expect(describeCache({ complete: true, bytes: 12_345_678, error: null })).toBe("cached (12.3 MB)");
     expect(describeCache({ complete: false, bytes: 500_000, error: null })).toBe("filling (0.5 MB so far)");
     expect(describeCache({ complete: false, bytes: 0, error: "HTTP 500" })).toBe("failed: HTTP 500");
+    // Phase 5c: the download stopped where the cut begins.
+    expect(describeCache({ complete: false, bytes: 240_000_000, error: null, stopped_ms: 3_420_000, cut: { login: "shared" } })).toBe(
+      "copied to 57.0 min (240.0 MB) · Reolink protocol cut: no fragment, shared login",
+    );
     // Phase 5b: a deep start the device's cut served.
     expect(
       describeCache({ complete: false, bytes: 500_000, error: null, cut: { first_fragment_ms: 380.4, login: "new" } }),

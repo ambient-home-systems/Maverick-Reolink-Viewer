@@ -95,6 +95,12 @@ class StreamTicket:
             self.priority = priority
             self._budget.dispatch()
 
+    def defer(self) -> None:
+        """Let the tickets queued since go first (a waiting ticket only)."""
+        if self.granted_priority is None and not self.released:
+            self.seq = self._budget.next_seq()
+            self._budget.dispatch()
+
     async def wait(self) -> None:
         """Wait until the slot is granted; cancelling gives the place up."""
         try:
@@ -125,11 +131,15 @@ class StreamBudget:
         self._seq = itertools.count()
         self._closed = False
 
+    def next_seq(self) -> int:
+        """Return the next place in the queue."""
+        return next(self._seq)
+
     def request(self, priority: Priority) -> StreamTicket:
         """Queue for a slot; the ticket's ``wait()`` resolves when granted."""
         if self._closed:
             raise SchedulerClosedError(self.name)
-        ticket = StreamTicket(self, priority, next(self._seq))
+        ticket = StreamTicket(self, priority, self.next_seq())
         self._waiting.append(ticket)
         self.dispatch()
         return ticket

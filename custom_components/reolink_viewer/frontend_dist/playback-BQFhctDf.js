@@ -1,7 +1,7 @@
-import { $ as e, A as t, B as n, Bt as r, C as i, D as a, Ft as o, G as s, Gt as c, H as l, I as u, It as d, Jt as f, K as p, Kt as m, L as ee, Lt as h, M as te, N as ne, Nt as re, O as ie, P as g, Pt as _, Q as ae, R as oe, Rt as se, S as ce, St as v, T as le, U as y, V as ue, W as de, Xt as b, Yt as x, _ as fe, at as S, b as pe, bt as C, c as me, d as w, et as T, f as E, g as D, h as O, it as k, j as he, k as ge, l as A, m as _e, nt as ve, q as ye, qt as j, rt as be, s as xe, u as Se, ut as Ce, w as M, x as we, z as N, zt as P } from "./home-BCoAmaMB.js";
-import { dayLabel as Te, shortDay as Ee } from "./events-view-CEgHPjqX.js";
-import { a as De, i as F, n as I, r as Oe, s as ke, t as Ae } from "./check-4V41YkXC.js";
-import { i as je } from "./findings-ZL3k_4SW.js";
+import { $ as e, A as t, B as n, Bt as r, C as i, D as a, Ft as o, G as s, Gt as c, H as l, I as u, It as d, Jt as f, K as p, Kt as m, L as ee, Lt as h, M as te, N as ne, Nt as re, O as ie, P as g, Pt as _, Q as ae, R as oe, Rt as se, S as ce, St as v, T as le, U as y, V as ue, W as de, Xt as b, Yt as x, _ as fe, at as S, b as pe, bt as C, c as me, d as w, et as T, f as E, g as D, h as O, it as k, j as he, k as ge, l as A, m as _e, nt as ve, q as ye, qt as j, rt as be, s as xe, u as Se, ut as Ce, w as M, x as we, z as N, zt as P } from "./home-BW0D-RQi.js";
+import { dayLabel as Te, shortDay as Ee } from "./events-view-qXMOCWhZ.js";
+import { a as De, i as F, n as I, r as Oe, s as ke, t as Ae } from "./check-CeK4vZJN.js";
+import { i as je } from "./findings-BKCA-j-A.js";
 var Me = class extends j {
 	static properties = {
 		events: { attribute: !1 },
@@ -2217,12 +2217,12 @@ function tt(e, t, n) {
 function nt(e) {
 	let t = `${(e.bytes / 1e6).toFixed(1)} MB`;
 	if (e.error) return `failed: ${e.error}`;
-	let n = e.complete ? `cached (${t})` : `filling (${t} so far)`;
-	if (typeof e.cut_error == "string") return `${n} · Reolink protocol cut not used: ${e.cut_error}`;
-	let r = e.cut;
-	if (!r) return n;
-	let i = typeof r.first_fragment_ms == "number" ? `first fragment ${Math.round(r.first_fragment_ms)} ms` : "no fragment", a = r.login === "new" ? ", new login" : r.login ? ", shared login" : "";
-	return `${n} · Reolink protocol cut: ${r.error ? `failed (${r.error})` : `${i}${a}`}`;
+	let n = typeof e.stopped_ms == "number" ? `copied to ${(e.stopped_ms / 6e4).toFixed(1)} min (${t})` : void 0, r = e.complete ? `cached (${t})` : n ?? `filling (${t} so far)`;
+	if (typeof e.cut_error == "string") return `${r} · Reolink protocol cut not used: ${e.cut_error}`;
+	let i = e.cut;
+	if (!i) return r;
+	let a = typeof i.first_fragment_ms == "number" ? `first fragment ${Math.round(i.first_fragment_ms)} ms` : "no fragment", o = i.login === "new" ? ", new login" : i.login ? ", shared login" : "";
+	return `${r} · Reolink protocol cut: ${i.error ? `failed (${i.error})` : `${a}${o}`}`;
 }
 function rt() {
 	try {
