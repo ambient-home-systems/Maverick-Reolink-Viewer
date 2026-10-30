@@ -692,7 +692,8 @@ class StreamAnalysis:
             self.video_time.add(block.micro)
             if key:
                 self.key_time.add(block.micro)
-        if block.unix_time is not None:
+        if key and block.unix_time is not None and _plausible_time(block.unix_time):
+            # Frames' extra headers hold something else at that offset.
             self.key_unix.add(block.unix_time)
         if key:
             self.extra_header_sizes[len(block.header) - FRAME_HEADER] += 1
@@ -894,6 +895,11 @@ def _date(raw: bytes) -> str:
     return (
         f"{year:04d}-{raw[1]:02d}-{raw[2]:02d} {raw[3]:02d}:{raw[4]:02d}:{raw[5]:02d}"
     )
+
+
+def _plausible_time(value: int) -> bool:
+    """Return whether a header field reads as a POSIX time of this decade."""
+    return 1_500_000_000 < value < 2_100_000_000
 
 
 def _detect(units: list[bytes], label: str) -> str | None:

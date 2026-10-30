@@ -645,6 +645,10 @@ def test_frames_with_an_extra_header_and_raw_samples() -> None:
     analysis = _analyse(frame(True) * 3)
     assert analysis.frame_extra_header_sizes == {40: 3}
     assert analysis.layouts == {"annexb": 3}
+    # A frame's extra header is not a key frame's clock (run 2: it polluted it).
+    assert analysis.key_unix.count == 0
+    analysis = _analyse(video("key", annexb(H264_SPS, H264_PPS, H264_IDR_I), unix=7))
+    assert analysis.key_unix.count == 0  # not a time of this decade
     # A frame that announces an extra header it does not carry is read plain
     # (the reader waits for extra + size bytes before deciding, so the last
     # such frame of a stream needs the next block behind it).

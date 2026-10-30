@@ -3,6 +3,14 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.35.5
+
+- **The Baichuan probe's session test** runs its second replay on the same
+  connection under that connection's stream slot, so live view holding the
+  other slots no longer skips it; and the frame counter's rate is read from the
+  key frames alone on newer cameras (their frames' extra headers were mistaken
+  for clocks).
+
 ## 0.35.4
 
 From the first Phase 5b report:

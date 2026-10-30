@@ -645,26 +645,19 @@ class BaichuanCheck:
                     self._progress(
                         f"ch{second.channel} baichuan: session test (two replays)"
                     )
+                    # On the same connection, under the connection's one slot:
+                    # whether the NVR counts it as a second session is what
+                    # the users and both streams' chunks show.
                     two: dict[str, Any] = {}
-                    try:
-                        async with self._slot(
-                            f"ch{second.channel} baichuan session test (second replay)"
-                        ):
-                            before_a = _snapshot(stats_a)
-                            stats_b = await self._start_replay(client, second, two)
-                            before_b = _snapshot(stats_b)
-                            two["users"] = await self._users()
-                            await asyncio.sleep(hold)
-                            two["first_during"] = _delta(stats_a, before_a)
-                            two["second_during"] = _delta(stats_b, before_b)
-                            two["open_streams"] = client.open_streams
-                            two["stop_second_ms"] = await self._stop_replay(
-                                client, second
-                            )
-                    except BaichuanClientError as err:
-                        if "no stream slot" not in str(err):
-                            raise
-                        two["skipped"] = _err(err)
+                    before_a = _snapshot(stats_a)
+                    stats_b = await self._start_replay(client, second, two)
+                    before_b = _snapshot(stats_b)
+                    two["users"] = await self._users()
+                    await asyncio.sleep(hold)
+                    two["first_during"] = _delta(stats_a, before_a)
+                    two["second_during"] = _delta(stats_b, before_b)
+                    two["open_streams"] = client.open_streams
+                    two["stop_second_ms"] = await self._stop_replay(client, second)
                     result["two_open"] = two
                 result["stop_first_ms"] = await self._stop_replay(client, first)
                 result["users_before_logout"] = await self._users()

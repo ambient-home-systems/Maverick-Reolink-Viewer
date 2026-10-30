@@ -176,7 +176,7 @@ lists two `audioStreamMode` values; the Doorbell acknowledges talk blocks in abo
 | --- | --- | --- | --- |
 | stream information | `1001` / `1002` | 32 B (a declared size at bytes 4–7) | width, height (bytes 8–15), frame rate (byte 17), start/end date (bytes 18–29 as year−1900, month, day, hour, minute, second) |
 | key frame | `N0dc` (N = 0–9) | 32 B | codec `H264`/`H265` (4–7), payload size (8–11), extra header size 8 (12–15), microseconds (16–19), unknown, POSIX time (24–27) |
-| frame | `N1dc` | 24 B | codec, payload size, extra header size 0, microseconds, unknown |
+| frame | `N1dc` | 24 B + extra | codec, payload size, extra header size (0 on the oldest layout, 96–312 on newer cameras, §6.3), microseconds, unknown |
 | AAC audio | `05wb` | 8 B | u16 size twice; ADTS payload |
 | ADPCM audio | `01wb` | 8 B | u16 size twice; then u16 `0100`, u16 half block size, 4-byte DVI4 state, samples |
 
@@ -411,7 +411,11 @@ once a second, the first `encryptLen` bytes of each chunk AES-encrypted. A
 chunk boundary falls anywhere, so blocks are reassembled across chunks. The
 Doorbell's key frames carry a longer extra header than the NVR's, and its
 padding is not a multiple of 8, so a reader must find the next block by its
-magic rather than by rounding.
+magic rather than by rounding. The 5b runs (§6.3) add that **frames carry an
+extra header too** on every camera but the CX410's sub, varying frame by
+frame (96–312 bytes), so §1.5's "extra header size 0" for `N1dc` holds only
+for the oldest layout; the field at bytes 12–15 announces it, and the NAL
+units start after it.
 
 ## 6. Session impact
 
@@ -540,6 +544,75 @@ hold the connection for as long as it plays. Left for the next run
 the main cut with `supportSub` 0, whether the CX810's first key frame really
 comes 12 s after the asked second (then a cut must be asked from a key-frame
 interval earlier), and the Duo 3 on its longest clip.
+
+### 6.3 The 5b measurement's second run (2026-10-30, v0.35.4): the decision
+
+The same cameras, the reader fixed, main cuts with `supportSub` 0, the Duo 3
+on its longest motion clip (19 min 46 s). **Not one resync on any stream**;
+every payload Annex B; every parameter set decoded. Live view still held 6 of
+the 7 stream slots, so the session test's download beside the replay and its
+second replay were skipped (v0.35.5 runs the second replay under the
+connection's own slot).
+
+| camera, stream (recording) | replay: start → first key frame | cut: request → first key frame | first key frame vs asked | cut pace | replay pace |
+| --- | --- | --- | --- | --- | --- |
+| Duo 3 sub, 1536×432 H.264, 20 fps (20 min clip, 34 MB) | 35 → **160 ms** | 103 (reply) → **186 ms** | −2 s | 20 s in 0.11 s, 44 Mbit/s, **179×** | 1.6× |
+| Duo 3 main, 7680×2160 H.265, 20 fps (20 min, 1.56 GB, 10.6 Mbit/s) | 69 → **187 ms** | 115 → **167 ms** | +1 s | 18 s (26 MB) in 1.09 s, **194 Mbit/s**, 16.6× | 1.1× |
+| CX410 sub, 640×360 H.264, 15 fps (1 h, 225 MB) | 41 → **119 ms** | 102 → **154 ms** | −3 s | 24 s in 0.14 s, 89 Mbit/s, **172×** | 1.7× |
+| CX410 main, 2560×1440 H.264, 30 fps (1 h, 2.4 GB) | 32 → **126 ms** | 93 → **126 ms** | 0 | 20 s (14.7 MB) in 0.62 s, **189 Mbit/s**, 32× | 1.3× |
+| CX810 sub, 640×360 H.264, 15 fps (1 h, 76 MB) | 40 → **183 ms** | 112 → **223 ms** | −1 s | 21 s in 0.11 s, 43 Mbit/s, **192×** | 1.4× |
+| CX810 main, 3840×2160 H.265, 25 fps (1 h, 2.3 GB) | 51 → **121 ms** | 123 → **176 ms** | 0 | 19 s (12.6 MB) in 0.59 s, **172 Mbit/s**, 32× | 1.3× |
+
+Every cut ended with status 300 and 144 answered 200 in about 20 ms; every
+replay stopped on 7 with nothing after. HTTP `DOWNLOAD` to the same offset:
+Duo 3 sub 1.0 s (25 MB), CX410 sub 7.4 s (169 MB), CX810 sub 2.6 s (57 MB),
+all at 185–250 Mbit/s. Users 2 → 3 during every stream → 2 after. The cut's
+`sizeL`/`sizeH` is right on some cuts (Duo 3 main 26.4 MB, CX810 main
+12.7 MB, CX410 sub 1.25 MB) and −1 or wrong on others: not to be relied on.
+
+What the streams hold, for the muxer:
+
+- **Video.** H.264 High, level 5.1 (`avc1.640033`) on every H.264 stream, sub
+  and main, with one reference frame, `pic_order_cnt_type` 0 and **I and P
+  pictures only** (no B-frames on any camera, so no composition offsets);
+  H.265 Main profile, level 5, main tier (`hvc1.1.6.L150`) on the Duo 3 and
+  CX810 mains, 64-pixel coding tree blocks. Annex B start codes everywhere;
+  each key frame carries VPS/SPS/PPS (H.265) or SPS/PPS (H.264) before the
+  IDR slice. The SPS is per stream (the CX410's sub and main share
+  `68ee3cb0` as PPS with different SPS).
+- **Block headers.** Key frames carry the extra header their field
+  announces: 8 bytes on the CX410's sub (the NVR's plain layout), 168 on the
+  Duo 3, 248–288 on the CX410's main and the CX810. **Frames carry one too on
+  every stream but the CX410's sub**: 144–200 bytes on the Duo 3, 96–312 on
+  the CX410's main, 128–288 on the CX810, varying frame by frame; the NAL
+  units start after it. The reader takes it by the start code (v0.35.4), and
+  the extra header's bytes 0–3 are a POSIX time on key frames only.
+- **Timestamps.** The 32-bit counter at bytes 16–19 steps by the frame
+  interval (49.9 ms Duo 3, 33.3 ms CX410 main, 66.7 ms CX410 sub) in units
+  close to microseconds: 999,790 ticks per second of the key frames' POSIX
+  times on the CX410, about 1,020,000 on the CX810 (its 2 s key-frame
+  interval reads 2,040,000). So the counter's rate differs per camera by up to
+  2 %, which is 72 s over an hour: the muxer must take its timescale from the
+  key frames' POSIX seconds (the counter between them), not assume 1 MHz.
+  The `1001` stream header's frame-rate byte says 30 on every stream, whatever
+  the camera's rate: not to be used.
+- **Key frames**: 1 s apart on the CX410's sub, 2 s on the mains and the
+  Duo 3's main, 4 s on the Duo 3's sub and the CX810's sub. The NVR starts
+  both the replay and the cut at the key frame nearest the asked second, 3 s
+  before to 1 s after.
+- **Audio.** AAC-LC, 16 kHz, mono (`mp4a.40.2`) on every stream, one ADTS
+  frame per `05wb` block (261–519 bytes), MPEG-2 or MPEG-4 ADTS headers;
+  blocks carry no timestamp of their own (their place in the stream does).
+
+**The decision (by the rules in IMPLEMENTATION_PLAN.md, 5b):** the
+**download cut (143)** is the source of a deep start. It starts mid-file at
+the nearest key frame, it is not paced (170–190× real time on sub, the link's
+170–194 Mbit/s on main, against the replay's 1.1–1.7×), it ends with a marker
+and 144 closes it, and its first key frame arrives 126–223 ms after the
+request on every camera and both codecs. The cache is filled from the target
+at the same speed HTTP fills it from the start, so speeds, scrubbing, HD and
+the second visit stay as they are. The replay is not needed for the first
+picture: the cut's is as quick. **Go for step 2.**
 
 ## 7. Sources
 
