@@ -709,7 +709,9 @@ async def test_session_test_holds_one_then_two_replays(
     session = result["session"]
     assert session["ok"] is True
     assert "no stream slot" in session["fill_beside"]["skipped"]
-    assert "no stream slot" in session["two_open"]["skipped"]
+    # The second replay shares the connection's slot: it runs.
+    assert session["two_open"]["open_streams"] == 2
+    assert session["two_open"]["stop_second_ms"] == 20.0
     assert session["stop_first_ms"] == 20.0
     for ticket in held:
         ticket.release()

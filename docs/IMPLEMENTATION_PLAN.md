@@ -4213,8 +4213,8 @@ So 5b runs in two steps with a gate between them.
 
 | 5b step | Status |
 | --- | --- |
-| 1. Measure, then stop (the gate) | **Built** (2026-10-29, v0.35.0–v0.35.3, below). **Run 1** (2026-10-30, v0.35.3, [baichuan-playback.md §6.2](baichuan-playback.md#62-the-5b-measurements-first-run-2026-10-30-v0353)): on the CX410's sub the download cut (143) delivered its first key frame 232 ms after the request, 3 s before the asked second, 23 s of media in 0.17 s, status 300 at the end; the replay 98 ms but paced; HTTP to the same point 7.35 s. H.264 High 5.1 and H.265 Main 5, no B-frames, a microsecond counter, AAC-LC 16 kHz mono. The reader lost sync on the main streams and the CX810, a main cut returned the sub stream, and the Duo 3 had no long recording: v0.35.4 fixes the three; **run 2 pending** for the main-stream layout, the main cut and the CX810's key frames |
-| 2. The prototype, behind an opt-in setting ("start deep in recordings over the Reolink protocol", off by default) | Not started: the source is chosen from step 1's report first (the rules below) |
+| 1. Measure, then stop (the gate) | **Built** (2026-10-29, v0.35.0–v0.35.3, below). **Run 1** (2026-10-30, v0.35.3, [baichuan-playback.md §6.2](baichuan-playback.md#62-the-5b-measurements-first-run-2026-10-30-v0353)): on the CX410's sub the download cut (143) delivered its first key frame 232 ms after the request, 3 s before the asked second, 23 s of media in 0.17 s, status 300 at the end; the replay 98 ms but paced; HTTP to the same point 7.35 s. H.264 High 5.1 and H.265 Main 5, no B-frames, a microsecond counter, AAC-LC 16 kHz mono. The reader lost sync on the main streams and the CX810, a main cut returned the sub stream, and the Duo 3 had no long recording: v0.35.4 fixes the three. **Run 2** (2026-10-30, v0.35.4, [§6.3](baichuan-playback.md#63-the-5b-measurements-second-run-2026-10-30-v0354-the-decision)): every stream read cleanly on all three cameras, sub and main; the cut's first key frame 126–223 ms after the request on both codecs, not paced, status 300 at the end; the replay's 119–187 ms but paced. **Done: the download cut is the source; go for step 2** |
+| 2. The prototype, behind an opt-in setting ("start deep in recordings over the Reolink protocol", off by default) | **Started** (2026-10-30) on the download cut, with what run 2 fixed for the muxer (below) |
 
 #### Step 1: the measurement (v0.35.0)
 
@@ -4319,6 +4319,33 @@ Run 1 against those rules (2026-10-30; the numbers in
 - **Go for step 2** holds on the CX410 (both sources under 0.5 s, the
   parameter sets decoded, the audio known, one extra login) and waits on run
   2 for the H.265 camera.
+
+Run 2 (2026-10-30, v0.35.4) closes the gate
+([§6.3](baichuan-playback.md#63-the-5b-measurements-second-run-2026-10-30-v0354-the-decision)):
+
+- **The source is the download cut (143), final.** On the Duo 3 (H.265
+  7680×2160), the CX410 and the CX810 (H.265 3840×2160), sub and main, the
+  cut's first key frame came 126–223 ms after the request, at the key frame
+  nearest the asked second (3 s before to 1 s after); sub cuts at 170–190×
+  real time, main cuts at the link's 172–194 Mbit/s; status 300 at the end,
+  144 closes it. The replay's first key frame is as quick (119–187 ms) but
+  the stream is paced at 1.1–1.7×, so it buys nothing the cut does not. Step
+  2 fills the cache from the target over 143 and serves it through the
+  fragment path; everything after the first picture stays as it is.
+- **What the muxer takes from run 2:** `avc1.640033` and `hvc1.1.6.L150`,
+  I and P pictures only (no composition offsets); VPS/SPS/PPS in every key
+  frame; Annex B to length-prefixed samples; frames' extra headers of
+  96–312 bytes skipped by the start code; the 32-bit counter as the clock
+  with its rate taken from the key frames' POSIX seconds (999,790 ticks per
+  second on the CX410, about 1,020,000 on the CX810: a fixed 1 MHz would drift
+  72 s an hour); the stream header's frame-rate byte ignored (30 on every
+  stream); AAC-LC 16 kHz mono from the ADTS headers, one frame per block.
+- **The sessions:** one more logged-in user per connection, back to the
+  baseline at logout; two replays on one connection still unmeasured (live
+  view held the slots again; v0.35.5 runs the second replay under the
+  connection's own slot). Step 2 holds one connection per host under one
+  stream slot and measures it in the playback check's deep-start rows.
+- **Go.**
 
 ---
 

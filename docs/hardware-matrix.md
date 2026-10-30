@@ -962,6 +962,17 @@ Recorded video (NVR RLN36; the cameras record only to the NVR):
   and the reader lost sync on the main streams and the CX810 (fixed in
   v0.35.4). Details in
   [baichuan-playback.md §6.2](baichuan-playback.md#62-the-5b-measurements-first-run-2026-10-30-v0353).
+- **Phase 5b run 2 (2026-10-30, v0.35.4), the decision**: on the Duo 3 (a
+  20-minute clip), the CX410 and the CX810 (hour-long recordings), sub and
+  main, the download cut's first key frame came 126–223 ms after the request
+  and the replay's 119–187 ms after the start, within 3 s before to 1 s after
+  the asked second; sub cuts arrived at 170–190× real time, main cuts at
+  172–194 Mbit/s (the Duo 3's 7680×2160 H.265 included), every cut ended with
+  status 300. Every stream read cleanly: H.264 High 5.1 or H.265 Main 5, no
+  B-frames, frame extra headers of 96–312 bytes on the newer cameras, a frame
+  counter near 1 MHz whose rate differs per camera by up to 2 %, AAC-LC 16 kHz
+  mono. **The download cut is the deep-start source.** Details in
+  [baichuan-playback.md §6.3](baichuan-playback.md#63-the-5b-measurements-second-run-2026-10-30-v0354-the-decision).
 
 Recording playback (runs 3 and 4; the Phase 2 gate):
 

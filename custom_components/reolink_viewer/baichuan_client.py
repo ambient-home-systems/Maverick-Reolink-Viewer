@@ -201,7 +201,7 @@ class StreamStats:
             when = block.unix_time
             stamp = (
                 datetime.fromtimestamp(when)  # the device's local clock
-                if when is not None and 0 < when < 2**31
+                if when is not None and 1_500_000_000 < when < 2_100_000_000
                 else None
             )
             self.last_key_time = stamp
