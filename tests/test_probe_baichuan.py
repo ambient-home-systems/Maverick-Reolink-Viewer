@@ -63,8 +63,10 @@ def test_pick_target_and_options() -> None:
     assert options.streams == ("sub",)
     channel = MagicMock(name="Front Yard Right")
     channel.name = "Front Yard Right"
+    channel.model = "Reolink Duo 3 PoE"
     assert BaichuanOptions().wanted(channel)
     assert BaichuanOptions(cameras=" front, garage ").wanted(channel)
+    assert BaichuanOptions(cameras="Duo 3, CX810").wanted(channel)  # the model
     assert not BaichuanOptions(cameras="garage").wanted(channel)
 
 

@@ -77,7 +77,8 @@ class BaichuanOptions:
     download: bool = True
     # The session test: a replay beside a download, then two replays at once.
     session: bool = False
-    # Camera names to test, comma-separated (any part of a name); all if empty.
+    # Cameras to test, comma-separated: any part of a channel's name or of its
+    # model ("Duo 3", "CX810"); all if empty.
     cameras: str = ""
     # The download cut's length from the target.
     cut_seconds: float = 20.0
@@ -90,9 +91,10 @@ class BaichuanOptions:
         self.streams = streams or ("sub",)
 
     def wanted(self, channel: ChannelInfo) -> bool:
-        """Return whether the camera-name filter admits a channel."""
+        """Return whether the camera filter admits a channel (its name or model)."""
         terms = [t.strip().lower() for t in self.cameras.split(",") if t.strip()]
-        return not terms or any(t in channel.name.lower() for t in terms)
+        names = (channel.name.lower(), channel.model.lower())
+        return not terms or any(t in name for t in terms for name in names)
 
 
 @dataclass(slots=True)
