@@ -217,3 +217,66 @@ export function bufferedSeconds(ranges: { length: number; start(i: number): numb
 /** A pass/fail mark against a budget. */
 export const within = (value: number | undefined, budget: number): string =>
   value === undefined ? "not measured" : `${ms(value)} ${value < budget ? "✓" : "✗"}`;
+
+/** What the server says of a Reolink protocol cut (Phase 5b; cache.cut). */
+export interface CutStatus {
+  first_fragment_ms?: number;
+  slot_ms?: number;
+  reply_ms?: number;
+  login?: string;
+  login_ms?: number;
+  fragments?: number;
+  bytes?: number;
+  complete?: boolean;
+  running?: boolean;
+  error?: string | null;
+  mbit_s?: number | null;
+  mux?: { anchor?: string | null; counter_rate?: number; rate_learned?: boolean };
+}
+
+/** The Reolink protocol's connections (playback/stats → vod.baichuan). */
+export interface BaichuanStats {
+  enabled: boolean;
+  logged_in: number;
+  logins: number;
+  logouts: number;
+  cuts_running: number;
+}
+
+/** Where a window came from, in words. */
+export function sourceLabel(source: string | undefined): string {
+  if (source === "cut") return "the Reolink protocol cut";
+  if (source === "file") return "the recording's download";
+  return "?";
+}
+
+/** One line on a cut: how soon its first fragment came, the login, what it got. */
+export function cutReport(cut: CutStatus): string {
+  const parts: string[] = [];
+  if (typeof cut.first_fragment_ms === "number") parts.push(`first fragment ${Math.round(cut.first_fragment_ms)} ms`);
+  if (typeof cut.slot_ms === "number") parts.push(`slot ${Math.round(cut.slot_ms)} ms`);
+  if (cut.login === "new") {
+    parts.push(`login (an extra user)${typeof cut.login_ms === "number" ? ` ${Math.round(cut.login_ms)} ms` : ""}`);
+  } else if (cut.login) {
+    parts.push("login shared");
+  }
+  if (typeof cut.reply_ms === "number") parts.push(`reply ${Math.round(cut.reply_ms)} ms`);
+  parts.push(`${cut.fragments ?? 0} fragments, ${((cut.bytes ?? 0) / 1_000_000).toFixed(1)} MB`);
+  if (typeof cut.mbit_s === "number") parts.push(`${cut.mbit_s} Mbit/s`);
+  parts.push(cut.error ? `error ${cut.error}` : cut.complete ? "complete" : cut.running ? "running" : "stopped");
+  const mux = cut.mux;
+  if (mux) {
+    parts.push(`placed by ${mux.anchor ?? "?"}, counter ${mux.counter_rate ?? "?"}/s${mux.rate_learned ? " (learned)" : ""}`);
+  }
+  return `Reolink protocol cut: ${parts.join(", ")}`;
+}
+
+/** The Reolink protocol's logins, for the report (the extra user's coming and going). */
+export function loginReport(stats: BaichuanStats | undefined): string {
+  if (!stats) return "Reolink protocol: no statistics";
+  if (!stats.enabled) return "Reolink protocol: off (the option is not set)";
+  return (
+    `Reolink protocol: ${stats.logged_in} host(s) logged in now, ${stats.logins} logins, ${stats.logouts} logouts` +
+    `, ${stats.cuts_running} cuts running`
+  );
+}

@@ -149,6 +149,10 @@ class StreamStats:
     ended_at: float | None = None
     chunks_after_end: int = 0
     analysis: StreamAnalysis = field(default_factory=StreamAnalysis)
+    # Each block as it completes (the deep-start source muxes them); the
+    # analysis can be left out where only the media matters.
+    on_block: Callable[[Block], None] | None = None
+    analyse: bool = True
     _reader: BlockReader = field(default_factory=BlockReader)
 
     def as_dict(self) -> dict[str, object]:
@@ -195,7 +199,10 @@ class StreamStats:
             self._block(block, now)
 
     def _block(self, block: Block, now: float) -> None:
-        self.analysis.feed(block)
+        if self.analyse:
+            self.analysis.feed(block)
+        if self.on_block is not None:
+            self.on_block(block)
         if block.kind == "key":
             self.key_frames += 1
             when = block.unix_time
@@ -257,6 +264,8 @@ class BaichuanReplayClient:
         self._streams: dict[tuple[int, int], _Stream] = {}
         self._stats: StreamStats | None = None
         self.device_type: str | None = None
+        # Set once the connection is closed or lost.
+        self.lost = asyncio.Event()
 
     # ---- connection ----
 
@@ -268,8 +277,14 @@ class BaichuanReplayClient:
             )
         self._task = asyncio.get_running_loop().create_task(self._read_loop())
 
+    @property
+    def connected(self) -> bool:
+        """Return True while the connection is open and read."""
+        return self._writer is not None and not self.lost.is_set()
+
     async def close(self) -> None:
         """Close the connection (without a logout)."""
+        self.lost.set()
         if self._task is not None:
             self._task.cancel()
             self._task = None
@@ -383,6 +398,8 @@ class BaichuanReplayClient:
         bitmap: int | None = None,
         support_sub: int = 1,
         on_chunk: Callable[[StreamStats], None] | None = None,
+        on_block: Callable[[Block], None] | None = None,
+        analyse: bool = True,
     ) -> tuple[float, StreamStats, dict[str, str]]:
         """143: a cut of the recording between two times, on the stream.
 
@@ -402,6 +419,8 @@ class BaichuanReplayClient:
             end=TIME_XML.format(t=end),
         )
         stats = self._open_stream(CMD_DOWNLOAD, channel, on_chunk)
+        stats.on_block = on_block
+        stats.analyse = analyse
         try:
             reply = await self._request(CMD_DOWNLOAD, xml.encode(), channel=channel)
         except BaseException:
@@ -538,6 +557,7 @@ class BaichuanReplayClient:
             ConnectionError,
             BaichuanClientError,
         ) as err:
+            self.lost.set()
             for future in self._pending.values():
                 if not future.done():
                     future.set_exception(BaichuanClientError(f"connection lost: {err}"))

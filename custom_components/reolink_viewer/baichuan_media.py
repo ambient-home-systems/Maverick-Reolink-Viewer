@@ -516,6 +516,18 @@ def _h265_profile_tier_level(
     return profile, tier, level, hvcc
 
 
+def h265_config_header(unit: bytes) -> bytes:
+    """Return the hvcC record's first 13 bytes from an H.265 SPS NAL unit.
+
+    That is the version, then the profile, tier and level.
+    """
+    r = BitReader(rbsp(unit[2:]))
+    r.u(4)  # sps_video_parameter_set_id
+    max_sub_layers_minus1 = r.u(3)
+    r.u(1)
+    return _h265_profile_tier_level(r, max_sub_layers_minus1)[3]
+
+
 def parse_h265_pps(unit: bytes) -> dict[str, int]:
     """Return what a slice header needs from an H.265 PPS."""
     r = BitReader(rbsp(unit[2:]))
@@ -900,6 +912,11 @@ def _date(raw: bytes) -> str:
 def _plausible_time(value: int) -> bool:
     """Return whether a header field reads as a POSIX time of this decade."""
     return 1_500_000_000 < value < 2_100_000_000
+
+
+def detect_codec(units: list[bytes], label: str) -> str | None:
+    """Return h264 or h265 for an access unit's NAL units (and its label)."""
+    return _detect(units, label)
 
 
 def _detect(units: list[bytes], label: str) -> str | None:

@@ -95,11 +95,13 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
-      - name: Install ffmpeg (VP9 and Opus test media)
+      - name: Install ffmpeg (VP9, Opus, x264 and AAC test media)
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
       - run: pip install -r requirements_test.txt
+      # 1.57+ ships Chrome for Testing, which plays H.264 and AAC through MSE
+      # (the device's cut, Phase 5b); older builds have neither.
       - name: Install Playwright's Chromium
-        run: npm install -g playwright@1.56.1 && playwright install --with-deps chromium
+        run: npm install -g playwright@1.63.0 && playwright install --with-deps chromium
       - name: Fetch the pinned go2rtc (checksum verified)
         run: echo "RV_GO2RTC=$(python -m scripts.fetch_go2rtc "$RUNNER_TEMP/go2rtc")" >> "$GITHUB_ENV"
       - name: Chromium plays the MSE view's fragments, and watches live through HA

@@ -7,6 +7,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from pytest_homeassistant_custom_component.typing import ClientSessionGenerator
 
 from custom_components.reolink_viewer.const import (
+    CONF_BAICHUAN_DEEP_START,
     DOMAIN,
     ISSUE_INCOMPATIBLE,
     PANEL_COMPONENT_NAME,
@@ -35,6 +36,14 @@ async def test_setup_registers_panel(
     )
     assert panel.sidebar_title == "Reolink"
     assert not ir.async_get(hass).async_get_issue(DOMAIN, ISSUE_INCOMPATIBLE)
+    # Phase 5b's deep starts follow the option, read at each start.
+    baichuan = loaded_viewer.runtime_data.baichuan
+    assert baichuan is not None
+    assert not baichuan.enabled
+    hass.config_entries.async_update_entry(
+        loaded_viewer, options={CONF_BAICHUAN_DEEP_START: True}
+    )
+    assert baichuan.enabled
 
 
 async def test_unload_and_reload(

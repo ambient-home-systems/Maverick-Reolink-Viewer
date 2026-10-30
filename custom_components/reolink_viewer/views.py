@@ -282,7 +282,12 @@ class MseView(HomeAssistantView):
     async def get(
         self, request: web.Request, token: str, part: str
     ) -> web.StreamResponse:
-        """Return the init segment (``init``) or a window (``frags``)."""
+        """Return the init segment (``init``) or a window (``frags``).
+
+        ``init?at=`` gives the init of the source that will serve a start
+        there, ``init?source=`` that source's; ``X-RV-Source`` names it on
+        both answers ("file", or "cut" for the device's cut, Phase 5b).
+        """
         hass: HomeAssistant = request.app["hass"]
         if (data := loaded_data(hass)) is None or part not in ("init", "frags"):
             return _not_found()
@@ -300,7 +305,12 @@ class MseView(HomeAssistantView):
             cache.touch(token)
             async with asyncio.timeout(COMPLETE_TIMEOUT):
                 if part == "init":
-                    init, mime = await cache.async_init(entry)
+                    init, mime, source = await cache.async_init(
+                        entry,
+                        at_ms=query.get("at_ms") if "at" in request.query else None,
+                        source=request.query.get("source"),
+                    )
+                    headers["X-RV-Source"] = source
                     if mime:
                         headers["X-RV-Mime"] = mime
                     return web.Response(
@@ -352,6 +362,7 @@ async def _send_window(
             "X-RV-First": str(window.first),
             "X-RV-Count": str(len(window.fragments)),
             "X-RV-Last": "1" if window.last else "0",
+            "X-RV-Source": window.source,
             **{k: f"{v:.3f}" for k, v in times.items() if v is not None},
         }
     )

@@ -18,7 +18,12 @@ class FakeBuffer extends EventTarget {
   updating = false;
   ranges: [number, number][] = [];
   removed: [number, number][] = [];
+  types: string[] = [];
   failNext: "quota" | "error" | undefined;
+
+  changeType(type: string): void {
+    this.types.push(type);
+  }
 
   get buffered(): TimeRanges {
     const r = [...this.ranges].sort((a, b) => a[0] - b[0]);
@@ -37,7 +42,7 @@ class FakeBuffer extends EventTarget {
         this.dispatchEvent(new Event("error"));
         return false;
       }
-      if (text !== "INIT") {
+      if (!text.startsWith("INIT")) {
         const [start = 0, end = 0] = text.split(",").map(Number);
         this.ranges = merge([...this.ranges, [start, end]]);
       }
@@ -113,15 +118,24 @@ class FakeMediaSource extends EventTarget {
  */
 function fakeServer(count = 30, shortBy = 0, fragment = 2, lateLast = false) {
   const requests: string[] = [];
-  const state = { status: 200, text: "" };
+  // Windows at or past `cutFrom` (s) come from the device's cut (Phase 5b).
+  const state = { status: 200, text: "", cutFrom: Number.POSITIVE_INFINITY };
+  const mimes: Record<string, string> = {
+    file: 'video/mp4; codecs="avc1.640033,mp4a.40.2"',
+    cut: 'video/mp4; codecs="avc1.640033"',
+  };
   const fetch = (path: string, init?: RequestInit): Promise<Response> => {
     const part = path.split("/").at(-1) ?? "";
     requests.push(part);
     if (state.status !== 200) return Promise.resolve(new Response(state.text, { status: state.status }));
-    if (part === "init") {
-      return Promise.resolve(new Response("INIT", { headers: { "X-RV-Mime": 'video/mp4; codecs="avc1.640033"' } }));
-    }
     const query = new URLSearchParams(part.split("?")[1]);
+    if (part.startsWith("init")) {
+      const at = query.has("at") ? Number(query.get("at")) / 1000 : 0;
+      const src = query.get("source") ?? (at >= state.cutFrom ? "cut" : "file");
+      return Promise.resolve(
+        new Response(`INIT ${src}`, { headers: { "X-RV-Mime": mimes[src] ?? "", "X-RV-Source": src } }),
+      );
+    }
     const first = query.has("first")
       ? Number(query.get("first"))
       : Math.min(Math.floor(Number(query.get("at")) / 1000 / fragment), count - 1);
@@ -130,6 +144,7 @@ function fakeServer(count = 30, shortBy = 0, fragment = 2, lateLast = false) {
     // The buffered range can end a little before the window (audio vs video).
     const body = n ? `${first * fragment},${(first + n) * fragment - shortBy}` : "";
     const headers: Record<string, string> = {
+      "X-RV-Source": first * fragment >= state.cutFrom ? "cut" : "file",
       "X-RV-First": String(first),
       "X-RV-Count": String(n),
       "X-RV-Last": first + n >= count && (n === 0 || !lateLast) ? "1" : "0",
@@ -201,7 +216,7 @@ describe("MseFeeder", () => {
     expect(video.currentTime).toBe(10.5);
     await settle();
     expect(server.requests.slice(0, 3)).toEqual([
-      "init",
+      "init?at=10500",
       `frags?at=10500&ms=${FIRST_WINDOW_MS}&bytes=16777216`,
       "frags?first=7&ms=20000&bytes=16777216",
     ]);
@@ -215,6 +230,33 @@ describe("MseFeeder", () => {
     video.dispatchEvent(new Event("timeupdate"));
     await settle();
     expect(server.requests.length).toBe(before);
+    f.destroy();
+  });
+
+  it("starts from the device's cut and switches init segments when the source changes", async () => {
+    const server = fakeServer(60);
+    server.state.cutFrom = 60;
+    const { f, video } = feeder(server, fakeVideo(), 120_000);
+    await f.start(80_000);
+    await settle();
+    expect(server.requests[0]).toBe("init?at=80000");
+    expect(f.stats.source).toBe("cut");
+    expect(f.stats.firstSource).toBe("cut");
+    expect(f.stats.mime).toBe('video/mp4; codecs="avc1.640033"');
+    expect(f.stats.switches).toBe(0);
+    // A seek back before the cut: the recording's download serves, with its init.
+    video.currentTime = 10;
+    video.dispatchEvent(new Event("seeking"));
+    await settle();
+    const at = server.requests.indexOf(`frags?at=10000&ms=${FIRST_WINDOW_MS}&bytes=16777216`);
+    expect(at).toBeGreaterThan(0);
+    expect(server.requests[at + 1]).toBe("init?source=file");
+    expect(f.stats.source).toBe("file");
+    expect(f.stats.switches).toBe(1);
+    expect(f.stats.firstSource).toBe("cut");
+    const buffer = FakeMediaSource.last?.buffer;
+    expect(buffer?.types).toEqual(['video/mp4; codecs="avc1.640033,mp4a.40.2"']);
+    expect(f.stats.mime).toContain("mp4a");
     f.destroy();
   });
 

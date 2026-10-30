@@ -14,24 +14,29 @@ import {
   browserLabel,
   bufferedSeconds,
   classifyHost,
+  cutReport,
   deepTarget,
   describeRate,
+  loginReport,
   longRecordings,
   mb,
   ms,
   slope,
   smooth,
   SMOOTH_RULE,
+  sourceLabel,
   span,
   touchingPairs,
   within,
+  type BaichuanStats,
+  type CutStatus,
   type RateSample,
 } from "./check-util";
 import type { StreamDecision } from "./codec";
 import { SHAPES, mseApi, mseSupports, pickSample, probeShape, type MseApi } from "./mse-probe";
 import type { RvPlayer } from "./player";
 
-export const CHECK_VERSION = "0.3.2";
+export const CHECK_VERSION = "0.4.0";
 export const SETUPS = [
   "Desktop Chrome, LAN",
   "Desktop Chrome, Tailscale",
@@ -131,9 +136,21 @@ interface Long {
   cached: boolean;
 }
 
+interface PlaybackStats {
+  vod: {
+    disk_bytes?: number;
+    reserved_bytes?: number;
+    leased?: number;
+    max_bytes?: number;
+    baichuan?: BaichuanStats;
+  };
+}
+
 interface Played {
   ok: boolean;
   line: string;
+  /** What served the first window (MSE): "file" or "cut" (Phase 5b). */
+  served: string | undefined;
   began: number;
   source: string | undefined;
   /** What the server had of the recording when the start opened it (none opened: undefined). */
@@ -398,13 +415,16 @@ export class PlaybackCheck {
           ? ""
           : ` · STARTED AT ${clock(shown ?? 0)}, ${span(Math.abs(off))} ${off < 0 ? "before" : "after"} the time asked`;
     const file = t.playing?.file ? ` · ${t.playing.file} file` : "";
+    const served = t.player?.mseStats?.firstSource;
+    const from = served ? ` · from ${sourceLabel(served)}` : "";
     const line =
       `first frame ${ok && !t.playFailure ? ms(m.firstFrameMs) : "none"}` +
       ` [URL ${ms(m.urlMs)} · metadata ${ms(watch.seen.loadedmetadata)} · seeked ${ms(watch.seen.seeked)} · playing ${ms(watch.seen.playing)}]` +
-      ` ${m.delivery ?? "?"}${file} · ${m.stream ?? "?"} ${m.codec ?? ""}${where}${t.playFailure ? ` FAILED: ${t.playFailure}` : ""}`;
+      ` ${m.delivery ?? "?"}${file}${from} · ${m.stream ?? "?"} ${m.codec ?? ""}${where}${t.playFailure ? ` FAILED: ${t.playFailure}` : ""}`;
     return {
       ok: ok && !t.playFailure && !where,
       line,
+      served,
       began,
       source: t.playing?.base ?? t.playing?.url,
       held,
@@ -507,7 +527,9 @@ export class PlaybackCheck {
     if (typeof cache.flat_ms === "number") parts.push(`rewrite ${ms(cache.flat_ms)}`);
     if (typeof cache.flat_moov_bytes === "number") parts.push(`moov ${mb(cache.flat_moov_bytes)}`);
     if (cache.error) parts.push(`error ${cache.error}`);
-    return `server: ${parts.join(", ")}`;
+    if (typeof cache.cut_error === "string") parts.push(`cut not used: ${cache.cut_error}`);
+    const cut = cache.cut as CutStatus | undefined;
+    return `server: ${parts.join(", ")}${cut ? ` | ${cutReport(cut)}` : ""}`;
   }
 
   /** A long recording not on disk yet (or, failing that, one that is). */
@@ -558,13 +580,17 @@ export class PlaybackCheck {
       `${span(target.time - seg.start)} into a ${length} recording of ${long.date}` +
       (target.event ? ` (event ${target.event.types.join("+")} at ${clock(target.event.start)})` : " (no event there: a point)");
     let uncachedMs: number | undefined;
+    let uncachedFrom: string | undefined;
     if (!long.cached) {
       const target = deepTarget(seg, long.day.events, 0.5, 0.95, 0.75);
       const played = await this._play(target.time);
       // The server may have fetched it meanwhile (a prefetch): then this
       // start did not wait for the recorder.
       const held = played.held;
-      if (played.ok && held?.complete === false) uncachedMs = t.metrics.firstFrameMs;
+      if (played.ok && held?.complete === false) {
+        uncachedMs = t.metrics.firstFrameMs;
+        uncachedFrom = played.served;
+      }
       const label = held?.complete
         ? "Not cached when chosen, but on disk when played (not counted)"
         : held?.bytes
@@ -574,6 +600,7 @@ export class PlaybackCheck {
       await sleep(300);
       this._log(`     ${requestReport(played.began, played.source)}`);
       this._log(`     ${await this._fillReport()}`);
+      this._log(`     ${loginReport((await this._stats())?.vod.baichuan)}`);
     } else {
       this._log("D1 skipped: every long recording looked at is cached already (try again after other recordings were viewed)");
     }
@@ -586,7 +613,7 @@ export class PlaybackCheck {
     await sleep(300);
     this._log(`     ${requestReport(played.began, played.source)}`);
     this._summary.push(
-      `Deep start (sub, ${length} recording): not cached ${uncachedMs === undefined ? "not measured" : ms(uncachedMs)}` +
+      `Deep start (sub, ${length} recording): not cached ${uncachedMs === undefined ? "not measured" : `${ms(uncachedMs)}${uncachedFrom ? ` from ${sourceLabel(uncachedFrom)}` : ""}`}` +
         `, cached ${within(cachedMs, 2000)}`,
     );
     this._plain.push(
@@ -1139,7 +1166,7 @@ export class PlaybackCheck {
     });
   }
 
-  private async _stats(): Promise<{ vod: Record<string, number | undefined> } | undefined> {
+  private async _stats(): Promise<PlaybackStats | undefined> {
     try {
       return await this._t.hass.callWS({ type: "reolink_viewer/playback/stats" });
     } catch {

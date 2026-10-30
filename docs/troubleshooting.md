@@ -374,6 +374,28 @@ include the text under **Details** when you ask for help.
 When HD fails during playback, the player says "HD could not play", gives the reason,
 and goes back to SD.
 
+### A start deep in a recording is still slow, with the option on
+
+With **Start deep in recordings over the Reolink protocol** on (see the user guide,
+Playback), a start more than 30 seconds past what is copied should show its first
+picture in about a second. When it does not, **Details** under the player says why, on
+the line about the recording, after **Reolink protocol cut not used:**
+
+- **"no stream slot within 5 s …"**: the recorder had no stream to spare. Live view
+  of every camera, or cameras kept warm, use them all. Close live view, or turn off
+  **keep live view warm** on some cameras, and try again.
+- **"login refused …"** or **"connection lost"**: Home Assistant could not sign in to
+  the recorder over its own protocol (port 9000), or lost it. Check that the Reolink
+  integration works, and that nothing blocks port 9000 between Home Assistant and the
+  recorder.
+- **"no fragment within 6 s"**: the recorder answered too slowly; the start waited
+  for the copy instead.
+- **"the cut ended before that moment"**: the recorder had less of the recording
+  than the search said.
+
+In each case the recording plays as it does without the option. Turning the option
+off stops it being tried.
+
 ### Events are missing
 
 - Events come from the cameras' own detections (person, vehicle, animal, face,

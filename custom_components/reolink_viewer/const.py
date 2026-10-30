@@ -42,6 +42,9 @@ PROBE_SCHEMA_VERSION: Final = 2
 PROBE_PLAYBACK_DEFAULT_STREAMS: Final = 4
 PROBE_PLAYBACK_HARD_MAX_STREAMS: Final = 6
 
+# Options. Phase 5b: start deep in recordings over the Reolink protocol.
+CONF_BAICHUAN_DEEP_START: Final = "baichuan_deep_start"
+
 # Playback caches (under HA's cache directory) and their size caps.
 VOD_CACHE_DIR: Final = "vod"
 # Our go2rtc's config file (no secret in it) and a downloaded binary, if any.

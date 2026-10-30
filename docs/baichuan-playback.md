@@ -614,7 +614,43 @@ at the same speed HTTP fills it from the start, so speeds, scrubbing, HD and
 the second visit stay as they are. The replay is not needed for the first
 picture: the cut's is as quick. **Go for step 2.**
 
-## 7. Sources
+## 7. The deep-start prototype (5b step 2, v0.36.0)
+
+How the integration uses the download cut, behind the option **Start deep in
+recordings over the Reolink protocol** (off by default):
+
+- **When.** A start (or a seek) more than 30 s past what the recording's
+  download has indexed, in a recording not yet whole on disk. Nearer starts,
+  cached recordings and the option off keep to the Phase 2 path.
+- **The request.** 143 for the recording's channel and stream (`supportSub` 1
+  for sub, 0 for main; the channel's bit in `logicChnBitmap`, 255 if
+  refused), from 4 s before the asked moment to the recording's end, in the
+  device's local time. 144 when it ends, is replaced or the viewer leaves.
+- **The connection.** One per host, logged in by the first cut (a scheduler
+  job), shared by every cut on that host (one per channel, by the handle
+  byte), logged out 30 s after the last one ends: at most one extra
+  logged-in user per host. Each cut holds a slot of the host's stream budget
+  (a free one within 5 s, else no cut).
+- **The muxer** (`baichuan_mux.py`): one fragment per group of pictures, on
+  the recording's timeline: the first key frame at its POSIX second minus the
+  recording's start (the asked time if the two are more than 30 s apart), the
+  frames by the counter, the counter's rate learned from the key frames'
+  POSIX seconds once they span a minute (until then 1 MHz; corrections take
+  at most a tenth of a frame's duration); `avcC`/`hvcC` from the stream's own
+  parameter sets, AAC from the first ADTS header, audio on its own clock
+  started at the first key frame. No composition offsets (I and P only).
+- **Serving.** The fragments go to a file of their own beside the
+  recording's, indexed like it; the MSE view serves windows from it numbered
+  from 1,000,000 × the cut's number, says `X-RV-Source: cut`, and gives its
+  init segment (`init?source=cut`); the panel's feeder appends a source's
+  init when the windows' source changes. Any failure (no slot, login, no
+  fragment within 6 s, the cut ending before the moment) falls back to the
+  download.
+
+The owner's hardware check of this prototype is in
+[IMPLEMENTATION_PLAN.md, 5b step 2](IMPLEMENTATION_PLAN.md#step-2-the-prototype-v0360).
+
+## 8. Sources
 
 - reolink-aio: <https://github.com/starkillerOG/reolink_aio> (`reolink_aio/baichuan/`),
   PRs [#164](https://github.com/starkillerOG/reolink_aio/pull/164),

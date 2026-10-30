@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 
 from homeassistant.config_entries import ConfigEntry
 
+from .baichuan_source import BaichuanSource
 from .checks import CheckReports
 from .events import SeenStore
 from .live.service import LiveService
@@ -30,6 +31,8 @@ class ReolinkViewerData:
     probe_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     # False in degraded mode: no live features that need the bridge.
     compat_ok: bool = True
+    # Phase 5b's deep starts over the Reolink protocol (the option decides).
+    baichuan: BaichuanSource | None = None
 
 
 type ReolinkViewerConfigEntry = ConfigEntry[ReolinkViewerData]

@@ -21,7 +21,7 @@ put on it:
 | 2 | Event timeline, thumbnails, smooth playback | High (backend) / Very high (player) | 3–5 wk | Done (2026-10-21, v0.3.2). 2A (2026-10-20, v0.2.7): timeline 105–287 ms, first frame 0.6–1.1 s, auto-advance 6–7 ms on hardware. 2B: MSE player; uncached deep starts are the NVR's download up to the target (6.9–13.0 s in hour-long recordings, up to 84 s before), speeds 0.5–8×, HD/SD at the same moment, one-hour sessions within the caps, the iPhone app on Wi-Fi, Tailscale and Nabu Casa |
 | 3 | Live view via go2rtc, grid, fullscreen, PTZ | High | 3–4 wk | Done (2026-10-27, v0.15.1). Our own go2rtc and the live check (v0.4.0, runs 5–13); the key-frame cache, the image cache, the Live grid and Live tab, keep warm, full-screen HD, PTZ and the camera's controls, the picture first, battery cameras on wired power, a debug view per tile and the soak report (v0.5.0–v0.15.1). Exit runs: the soak passed (run 15), every tile's first image in a median 0.02 s on the iPhone and the Mac (runs 16–17), and the Phase 2 playback criteria held with live view running (runs 18–19) |
 | 4 | Design, performance, mobile, packaging, first release | Standard | 3–4 wk | Done (2026-10-28, v0.32.3). Step 1, the design (the Timetable), in v0.16.0–v0.22.0; step 2, the performance budget, in v0.23.0; step 3, mobile, in v0.24.0–v0.26.0; step 4, error states, in v0.27.0–v0.29.0; step 5, accessibility, in v0.30.0; step 6, packaging, in v0.31.0, the first release; step 7, docs, in v0.32.0, released the same day; v0.32.1 starts live video sooner where WebRTC cannot connect, from the work PC's check, v0.32.2 keeps the capacity test from blaming the NVR for a stream that plays no video, from the owner's live check, and v0.32.3 fixes full screen and the timeline's pinch on the iPhone, from the owner's iPhone. The rest of the exit checklist was not run: the owner closed the phase on v0.32.0 working in daily use. See "Phase 4 status" |
-| 5 | Optional R&D: Baichuan live/playback | Very high | 4–8 wk, time-boxed with gates | **5a done, go** (2026-10-29, v0.34.1): prior art surveyed, the capture tool and the owner's captures, `docs/baichuan-playback.md`, and the read-only check: a deep start over Baichuan costs the NVR 0.2 s against 4.7 s of HTTP download for the same point of a short recording. 5b–5d estimated at 3.5–5 wk, deep starts only; talk deferred. **5b step 1 built** (2026-10-29, v0.35.0): the probe measures the replay and the download cut (143) 75 % into sub and main recordings, decodes what arrives and counts the sessions; the source (replay, 143 or both) is chosen from the owner's report before step 2, the prototype. See "Phase 5 status" |
+| 5 | Optional R&D: Baichuan live/playback | Very high | 4–8 wk, time-boxed with gates | **5a done, go** (2026-10-29, v0.34.1): prior art surveyed, the capture tool and the owner's captures, `docs/baichuan-playback.md`, and the read-only check: a deep start over Baichuan costs the NVR 0.2 s against 4.7 s of HTTP download for the same point of a short recording. 5b–5d estimated at 3.5–5 wk, deep starts only; talk deferred. **5b step 1 built** (2026-10-29, v0.35.0): the probe measures the replay and the download cut (143) 75 % into sub and main recordings, decodes what arrives and counts the sessions; the source (replay, 143 or both) is chosen from the owner's report before step 2, the prototype. **Step 1 done** (2026-10-30, v0.35.5): the download cut (143) is the source. **5b step 2 built** (2026-10-30, v0.36.0): the muxer, one Baichuan connection per host, deep starts served from the cut behind an option (off by default), the fallback to the download; the owner's hardware check is next. See "Phase 5 status" |
 
 Phases 1 and 2 can overlap once Phase 0 is done. Phase 5 can start any time after
 Phase 0 as a separate track.
@@ -4214,7 +4214,7 @@ So 5b runs in two steps with a gate between them.
 | 5b step | Status |
 | --- | --- |
 | 1. Measure, then stop (the gate) | **Built** (2026-10-29, v0.35.0–v0.35.3, below). **Run 1** (2026-10-30, v0.35.3, [baichuan-playback.md §6.2](baichuan-playback.md#62-the-5b-measurements-first-run-2026-10-30-v0353)): on the CX410's sub the download cut (143) delivered its first key frame 232 ms after the request, 3 s before the asked second, 23 s of media in 0.17 s, status 300 at the end; the replay 98 ms but paced; HTTP to the same point 7.35 s. H.264 High 5.1 and H.265 Main 5, no B-frames, a microsecond counter, AAC-LC 16 kHz mono. The reader lost sync on the main streams and the CX810, a main cut returned the sub stream, and the Duo 3 had no long recording: v0.35.4 fixes the three. **Run 2** (2026-10-30, v0.35.4, [§6.3](baichuan-playback.md#63-the-5b-measurements-second-run-2026-10-30-v0354-the-decision)): every stream read cleanly on all three cameras, sub and main; the cut's first key frame 126–223 ms after the request on both codecs, not paced, status 300 at the end; the replay's 119–187 ms but paced. **Done: the download cut is the source; go for step 2** |
-| 2. The prototype, behind an opt-in setting ("start deep in recordings over the Reolink protocol", off by default) | **Started** (2026-10-30) on the download cut, with what run 2 fixed for the muxer (below) |
+| 2. The prototype, behind an opt-in setting ("start deep in recordings over the Reolink protocol", off by default) | **Built** (2026-10-30, v0.36.0, [below](#step-2-the-prototype-v0360)): the muxer, one connection per host, the cut served through the fragment path with the download as the fallback, the source in the check's D rows and the debug panel; tests on real x264, x265 and AAC streams, Chromium appending the cut through the real view. **The owner's hardware check is next** (the exit criteria below) |
 
 #### Step 1: the measurement (v0.35.0)
 
@@ -4346,6 +4346,172 @@ Run 2 (2026-10-30, v0.35.4) closes the gate
   connection's own slot). Step 2 holds one connection per host under one
   stream slot and measures it in the playback check's deep-start rows.
 - **Go.**
+
+#### Step 2: the prototype (v0.36.0)
+
+Built on the download cut, behind the integration's option **Start deep in
+recordings over the Reolink protocol** (Settings → Devices & services →
+Reolink Viewer → Configure; off by default, read at each start, no reload).
+
+**What runs:**
+
+1. **The muxer** (`baichuan_mux.py`, pure): blocks in; an init segment, then
+   one fragment per group of pictures, out. `avcC` (with the High profile's
+   chroma and bit depth fields) or `hvcC` from the stream's own VPS/SPS/PPS,
+   the picture size from the SPS; AAC from the first ADTS header (ADPCM is
+   not muxed); `default-base-is-moof`, `tfdt` v1, `trun` data offsets from the
+   `moof`; samples as 4-byte length-prefixed NAL units without the access
+   unit delimiter and the parameter sets the init holds (changed ones stay in
+   band). Times on the recording's timeline (0 at its start, UTC): the first
+   key frame at its POSIX second (the asked time when they are more than 30 s
+   apart: a device clock off), then the 32-bit counter, wraps unwrapped, steps
+   back absorbed; the counter's rate learned from the key frames' POSIX
+   seconds once they span a minute (clamped to 0.95–1.05 MHz) and each frame
+   moved toward that clock by at most a tenth of its duration. Audio on its own
+   clock (1024 samples a frame) from the first key frame, moved into line when
+   more than 2 s behind the video, dropped while more than 2 s ahead.
+2. **The source** (`baichuan_source.py`): one `BaichuanReplayClient` per host,
+   logged in by the first cut as a scheduler job (playback priority), shared by
+   every cut on the host, logged out 30 s after the last one ends. One cut per
+   channel: a new start on the channel stops the running one (144). Each cut
+   holds a slot of the host's stream budget (5 s to get one, else no cut), asks
+   143 from 4 s before the moment to the recording's end in the device's local
+   time (`supportSub` 1 for sub, 0 for main; the channel's bit, 255 if
+   refused), muxes the blocks as they arrive (the client hands them over
+   without its analysis), writes them to `<cache id>.<n>.cut.mp4` in the
+   executor, indexes it (`FragmentIndex`) and wakes the waiting windows. It
+   fails on 15 s without data, a lost connection or a muxer error.
+3. **The cache** (`vodcache.py`): a start (`init?at=`, or `frags?at=`) more
+   than 30 s past what the download has indexed, in a recording not yet whole,
+   asks for a cut (one decision at a time per recording), or reuses the running
+   cut if it covers the moment or will within 60 s; it waits up to 6 s for the
+   fragment holding the moment. Windows from the cut are numbered from
+   1,000,000 × the cut's number (a window asked of a replaced cut is refused)
+   and say `X-RV-Source: cut`; `init?source=cut` gives its init. The download
+   goes on as before. The cut's file is reserved before it is written (the
+   rest of the recording's expected size), counted, evicted with its
+   recording, deleted when the last viewer leaves a recording now whole, and at
+   start-up. Any failure (no slot, the login, no fragment in 6 s, the cut
+   ending before the moment) leaves the start to the download, with the reason
+   in the recording's status (`cut_error`).
+4. **The panel**: the MSE feeder asks for the init of the source serving its
+   start (`init?at=`) and, when a window comes from the other source, appends
+   that source's init first (`changeType` if the codecs differ). The playback
+   check (v0.4.0) says in each start's line what served the first window; its
+   D1 row adds the cut (first fragment, slot, login new or shared, reply,
+   fragments, rate, placement) and the Reolink protocol's logins (logged in now,
+   logins, logouts); its summary says what served the uncached deep start. The
+   debug panel's player line names the source; its cache line the cut's first
+   fragment and login, or why no cut was used.
+
+**How seeking and speeds work after a Baichuan start** (the exit criterion's
+"record how"): the cut is not paced, so it lands on disk at the link's speed
+(170–190× real time on sub), and every speed from 0.5× to 8× and a pause are
+the player's own, on what is on disk. A seek inside the cut (or up to 60 s
+past what it has received) reads the cut; a seek before it reads the download
+(the panel appends the download's init, then its windows); a seek further on,
+more than 30 s past the download, starts a new cut and stops the old one. The
+replay (paced, a new start per seek or speed) is not used.
+
+**Tests** (CI): the muxer on hand-made and real x264, x265 and AAC streams in
+camera blocks (ffprobe and ffmpeg read and decode every frame; the counter's
+rate learned on two minutes at 1.02 MHz; wraps, steps back, missing and
+changed parameter sets); the source and the cache against the fake NVR (one
+login shared by two cuts and the idle logout, a channel's cut replaced, the
+any-channel retry, no slot, a refused login, no room, a silent device, a lost
+connection, the deep start served from the cut while the download goes on,
+near starts and the option off on the download, every fallback, a seek far on,
+the last viewer leaving, the files at start-up); the panel's feeder switching
+sources; and **Chromium appending the cut's init and two windows through the
+real view with HA's auth, playing from 2 minutes in across the windows**
+(H.264 and AAC need Playwright 1.57+, Chrome for Testing: the browser job now
+pins 1.63.0).
+
+**Known limits of the prototype:**
+
+- The first key frame is placed to the second (its POSIX time is whole
+  seconds): within 1 s of the download's timeline.
+- Until a minute of key frames has arrived, the counter is taken at 1 MHz: up
+  to 2 % off (the CX810), corrected gently afterwards. A minute of sub arrives
+  in under a second, of main in a few.
+- The cut needs a stream slot of its own beside the download's: on the RLN36
+  (7 slots) with six cameras live or kept warm, a deep start falls back.
+- The recording is still downloaded whole, from the start: the NVR sends the
+  part from the moment twice.
+- The muxing runs in Home Assistant's event loop at the link's speed: an HD
+  main cut is about 20 MB/s of parsing on the HA host.
+- Two viewers starting far apart in recordings of one channel replace each
+  other's cut (the device tells cuts apart by channel).
+- In the hour repeated when clocks fall back, the cut's local times can mean
+  either hour; the device picks.
+
+**Hardware checklist (the owner, LAN Chrome and the iPhone Companion app):**
+
+1. Update to v0.36.0 and restart Home Assistant. Leave the option off first.
+2. **Option off, Phase 2 unchanged:** on a camera with a long recording, run
+   the playback check (sub; HD ticked on Chrome) on LAN Chrome. Every row
+   should read as before: D1's line says "from the recording's download", the
+   D1 report says "Reolink protocol: off (the option is not set)", no
+   "Reolink protocol cut" anywhere.
+3. Turn the option on (Configure → tick → Submit). Close live view on the
+   board (or turn off "keep live view warm"), so the NVR has stream slots.
+4. **Uncached deep start, sub (Chrome):** run the playback check on a camera
+   whose long recordings were not played lately (D1 needs one not cached).
+   D1 should read "from the Reolink protocol cut" with a first frame of about
+   1 s; its report line "Reolink protocol cut: first fragment … ms, … login
+   (an extra user)" and "Reolink protocol: 1 host(s) logged in now". The
+   summary: "not cached … ms from the Reolink protocol cut".
+5. **Seeks and speeds after it:** right after a deep start by hand (click on
+   the timeline 45+ min into an uncached hour), change speed 0.5×, 2×, 4×, 8×,
+   pause and resume, click a little further on, then click back before the
+   start point. Each should play; Details' player line should say "from
+   Reolink protocol cut", then "from download (1 source switches)" after the
+   click back.
+6. **HD main (Chrome):** switch to HD and do a deep start by hand in an
+   uncached main recording; it should play within a few seconds (Details:
+   "Reolink protocol cut: first fragment …").
+7. **iPhone Companion app on Wi-Fi:** repeat 4 (Setup "iPhone app, Wi-Fi
+   (local)") and a deep start by hand. (H.265 HD does not play there in MSE,
+   as before.)
+8. **Logged-in users:** watch the NVR's own list of online users (in its web
+   interface's user settings) before a deep start, during it and a minute
+   after the last one: one more session from Home Assistant's address while
+   deep starts are in use, never two, and gone within a minute. The D1 report
+   line "Reolink protocol: … logged in now, … logins, … logouts" is the
+   integration's own count of the same.
+9. Copy the check reports (Saved reports → Copy) for Chrome sub, Chrome HD and
+   the iPhone, and send them.
+
+**Exit criteria (the owner's check, pending):**
+
+| Criterion | Result |
+| --- | --- |
+| Uncached deep start 45+ min into an hour-long sub recording: first frame in about 1 s (Phase 2: 6.9–13.0 s) | pending |
+| Uncached deep start in HD main plays in a few seconds where the browser decodes it | pending |
+| Seeking and 0.5–8× after a Baichuan start (how: above) | pending |
+| NVR logged-in users never above baseline + 1, back to baseline when idle | pending |
+| Option off: every Phase 2 criterion unchanged | pending |
+
+**What 5c should change** (to be revised with the hardware results):
+
+1. **Download once.** Start the HTTP download at the recording's start but
+   stop it at the cut's start (or cut the part before the moment too), and
+   let the cut take the download's stream slot rather than a second one, so a
+   deep start costs the NVR one stream and the bytes once. The cut's file then
+   becomes part of the recording's cache (a recording in two or more pieces),
+   which the fragment index and eviction learn.
+2. **Per-host method** in the hardware matrix and the options: the cut for the
+   NVR (and cameras that answer 143), the download elsewhere; on by default if
+   the owner's check passes.
+3. **The clock from the first second:** keep each camera's counter rate (it is
+   stable) in the media store, and place the first key frame finer than a
+   second from the counter's phase across several key frames.
+4. **The HA host's load:** measure an HD main cut's CPU on the owner's host;
+   move the block parsing and muxing to the executor if it shows.
+5. **One cut per channel per viewer:** queue or refuse a second far cut on a
+   channel rather than replacing the first viewer's.
+6. **5d, upstream:** propose 143/144 and the media message class to
+   reolink-aio, so the client here can shrink to a caller of it.
 
 ---
 

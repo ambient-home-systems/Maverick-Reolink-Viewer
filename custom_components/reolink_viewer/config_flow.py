@@ -1,12 +1,25 @@
-"""Config flow for Reolink Viewer: a single instance with no options."""
+"""Config flow for Reolink Viewer: a single instance, with its options."""
 
-from typing import Any
+from typing import Any, override
 
 import probatio
 
-from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
+from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult
+from homeassistant.core import callback
+from homeassistant.helpers.schema_config_entry_flow import (
+    SchemaFlowFormStep,
+    SchemaOptionsFlowHandler,
+)
 
-from .const import DOMAIN, NAME
+from .const import CONF_BAICHUAN_DEEP_START, DOMAIN, NAME
+
+# Phase 5b: a start deep in an uncached recording asks the device for that
+# moment over the Reolink protocol (off by default; the files stay the source
+# otherwise). Read at each start, so no reload is needed.
+OPTIONS_SCHEMA = probatio.Schema(
+    {probatio.Required(CONF_BAICHUAN_DEEP_START, default=False): bool}
+)
+OPTIONS_FLOW = {"init": SchemaFlowFormStep(OPTIONS_SCHEMA)}
 
 
 class ReolinkViewerConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -23,3 +36,10 @@ class ReolinkViewerConfigFlow(ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             return self.async_create_entry(title=NAME, data={})
         return self.async_show_form(step_id="user", data_schema=probatio.Schema({}))
+
+    @staticmethod
+    @callback
+    @override
+    def async_get_options_flow(config_entry: ConfigEntry) -> SchemaOptionsFlowHandler:
+        """Return the options flow (one setting)."""
+        return SchemaOptionsFlowHandler(config_entry, OPTIONS_FLOW)

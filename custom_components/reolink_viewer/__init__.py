@@ -17,9 +17,11 @@ from homeassistant.util.hass_dict import HassKey
 from homeassistant.util.ssl import SSLCipherList
 
 from . import bridge
+from .baichuan_source import BaichuanSource
 from .checks import CheckReports
 from .const import (
     CAMERA_HOST_CONCURRENCY,
+    CONF_BAICHUAN_DEEP_START,
     DEFAULT_HOST_CONCURRENCY,
     DEFAULT_STREAM_BUDGET,
     DOMAIN,
@@ -133,6 +135,14 @@ async def async_setup_entry(
         resolver=lambda entry_id: host_limits(hass, entry_id),
     )
     cache_dir = Path(hass.config.cache_path(DOMAIN))
+    # Phase 5b: deep starts over the Reolink protocol, when the option is on.
+    baichuan = BaichuanSource(
+        hass,
+        scheduler,
+        enabled=lambda: (
+            compat.ok and bool(entry.options.get(CONF_BAICHUAN_DEEP_START, False))
+        ),
+    )
     vod_cache = VodCache(
         hass,
         scheduler,
@@ -143,6 +153,7 @@ async def async_setup_entry(
             hass, verify_ssl=False, ssl_cipher=SSLCipherList.INSECURE
         ),
         ffmpeg_binary=get_ffmpeg_manager(hass).binary,
+        baichuan=baichuan,
     )
     thumbnails = ThumbnailService(
         hass,
@@ -172,6 +183,7 @@ async def async_setup_entry(
         scheduler=scheduler,
         timeline=TimelineService(hass, scheduler),
         vod_cache=vod_cache,
+        baichuan=baichuan,
         thumbnails=thumbnails,
         check_reports=check_reports,
         seen=seen,
@@ -227,6 +239,8 @@ async def async_unload_entry(
     frontend.async_remove_panel(hass, PANEL_URL_PATH, warn_if_unknown=False)
     if entry.runtime_data.live is not None:
         await entry.runtime_data.live.async_shutdown()
+    if entry.runtime_data.baichuan is not None:
+        await entry.runtime_data.baichuan.async_shutdown()
     await entry.runtime_data.vod_cache.async_shutdown()
     await entry.runtime_data.scheduler.async_shutdown()
     return True
