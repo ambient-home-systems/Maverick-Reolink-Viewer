@@ -118,7 +118,7 @@ describe("PlaybackCheck", () => {
       changes.push(1),
     );
     const report = await check.run();
-    expect(report).toContain("Reolink Viewer playback check v0.4.2 · Desktop Chrome, LAN · Garage");
+    expect(report).toContain("Reolink Viewer playback check v0.4.3 · Desktop Chrome, LAN · Garage");
     expect(report).toContain("A1 Time to timeline, today (as the tab opened): 120 ms (server: memory, total 4 ms)");
     expect(report).toContain("A2/A3 skipped: no earlier recording day this month");
     expect(report).toContain("B  skipped: no events today");
@@ -235,6 +235,23 @@ describe("PlaybackCheck: deep starts", () => {
       grade: "fine",
       text: "Jumping into the middle of a long recording starts in 0.5 s (not judged: its copy was still being made).",
     });
+  });
+});
+
+describe("PlaybackCheck: the link", () => {
+  it("reads the MSE player's fragments from what is on disk, not the clip", async () => {
+    vi.spyOn(PlaybackCheck.prototype as unknown as { _pause: () => Promise<void> }, "_pause").mockResolvedValue();
+    const hass = reportingHass();
+    const asked: string[] = [];
+    hass.fetchWithAuth = (path: string) => {
+      asked.push(path);
+      return Promise.resolve(new Response(new Uint8Array(2_000_000), { status: 200 }));
+    };
+    const playing = { base: "/api/reolink_viewer/mse/tok1", clip_url: "/clip/x", cache: { complete: false, bytes: 1, error: null } };
+    const target: CheckTarget = { ...stubTarget(hass), playing: playing as unknown as CheckTarget["playing"] };
+    const report = await new PlaybackCheck(target, { setup: "Desktop Chrome, LAN", soakMinutes: 0 }).run();
+    expect(asked).toEqual(["/api/reolink_viewer/mse/tok1/frags?first=0&ms=300000&bytes=33554432"]);
+    expect(report).toMatch(/L {2}Link to Home Assistant: 2\.0 MB of fragments in \d+ ms after the answer = [\d.]+ Mbit\/s \(answer \d+ ms, HTTP 200\)/);
   });
 });
 

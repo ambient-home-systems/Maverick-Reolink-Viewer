@@ -3,6 +3,13 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.37.1
+
+- **The playback check** (v0.4.3): its link test reads the fragments the player
+  reads, from what is copied, instead of the clip. Since 0.37.0 a clip of a
+  recording copied in two pieces waits for the rest of the copy, so the test
+  timed out ("signal is aborted").
+
 ## 0.37.0
 
 Phase 5c, step 1: a start deep in a recording over the Reolink protocol (the
