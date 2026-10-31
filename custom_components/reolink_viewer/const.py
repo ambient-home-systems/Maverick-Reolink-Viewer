@@ -44,6 +44,8 @@ PROBE_PLAYBACK_HARD_MAX_STREAMS: Final = 6
 
 # Options. Phase 5b: start deep in recordings over the Reolink protocol.
 CONF_BAICHUAN_DEEP_START: Final = "baichuan_deep_start"
+# On unless turned off (Phase 5c): devices that refuse it are found out.
+DEFAULT_BAICHUAN_DEEP_START: Final = True
 
 # Playback caches (under HA's cache directory) and their size caps.
 VOD_CACHE_DIR: Final = "vod"

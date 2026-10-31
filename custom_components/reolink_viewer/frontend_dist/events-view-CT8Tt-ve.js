@@ -1,4 +1,4 @@
-import { E as e, Et as t, F as n, Jt as r, M as i, T as a, U as o, W as s, Xt as c, Yt as l, bt as u, it as d, l as f, p, qt as m, v as h, y as g } from "./home-ViA0Ttxx.js";
+import { E as e, Et as t, F as n, Jt as r, M as i, T as a, U as o, W as s, Xt as c, Yt as l, bt as u, it as d, l as f, p, qt as m, v as h, y as g } from "./home-BCavfCvE.js";
 //#region src/playback/calendar.ts
 var _ = [
 	0,
@@ -257,7 +257,7 @@ var b = class extends m {
 		return n.delete(t) || n.add(t), n;
 	}
 	render() {
-		let e = this._day, t = e === this._today, n = x(e);
+		let e = this._day, t = e === this._today, n = C(e);
 		return l`<div class="head">
         <h1>Events</h1>
         <div class="day-nav" role="group" aria-label="Day">
@@ -272,7 +272,7 @@ var b = class extends m {
 			this._calendar = !this._calendar;
 		}}
           >
-            ${t ? "Today" : S(e)}${u("chevronDown")}
+            ${t ? "Today" : w(e)}${u("chevronDown")}
           </button>
           <button class="step" aria-label="The day after" ?disabled=${t} @click=${() => {
 			this._shift(1);
@@ -483,23 +483,23 @@ var b = class extends m {
         }
       }
     `];
-};
-function x(e) {
-	return (/* @__PURE__ */ new Date(`${e}T00:00:00Z`)).toLocaleDateString(void 0, {
-		weekday: "long",
-		day: "numeric",
-		month: "long",
-		timeZone: "UTC"
-	});
+}, x = new Intl.DateTimeFormat(void 0, {
+	weekday: "long",
+	day: "numeric",
+	month: "long",
+	timeZone: "UTC"
+}), S = new Intl.DateTimeFormat(void 0, {
+	weekday: "short",
+	day: "numeric",
+	month: "short",
+	timeZone: "UTC"
+});
+function C(e) {
+	return x.format(/* @__PURE__ */ new Date(`${e}T00:00:00Z`));
 }
-function S(e) {
-	return (/* @__PURE__ */ new Date(`${e}T00:00:00Z`)).toLocaleDateString(void 0, {
-		weekday: "short",
-		day: "numeric",
-		month: "short",
-		timeZone: "UTC"
-	});
+function w(e) {
+	return S.format(/* @__PURE__ */ new Date(`${e}T00:00:00Z`));
 }
 customElements.get("rv-events") || customElements.define("rv-events", b);
 //#endregion
-export { b as RvEvents, x as dayLabel, S as shortDay };
+export { b as RvEvents, C as dayLabel, w as shortDay };

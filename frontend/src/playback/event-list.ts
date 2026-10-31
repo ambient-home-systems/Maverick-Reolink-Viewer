@@ -1,4 +1,4 @@
-import { LitElement, css, html, nothing, type TemplateResult } from "lit";
+import { LitElement, css, html, nothing, type PropertyValues, type TemplateResult } from "lit";
 
 import { eventLabel, formatLength, pictogram } from "../components/timetable";
 import { icon } from "../icons";
@@ -45,6 +45,22 @@ export class RvEventList extends LitElement {
   /** The events on show, newest first. */
   get visible(): TimelineEvent[] {
     return [...this.events].reverse().slice(0, this._shown);
+  }
+
+  /** The start of the event at `current`, if one is (the row marked). */
+  private _activeAt(at: number | undefined): number | undefined {
+    if (at === undefined) return undefined;
+    return this.events.find((e) => at >= e.start && at < e.end)?.start;
+  }
+
+  /**
+   * Dragging the timeline moves `current` many times a second: the rows change
+   * only when the marked event does.
+   */
+  protected override shouldUpdate(changed: PropertyValues<this>): boolean {
+    if (changed.size !== 1 || !changed.has("current")) return true;
+    const before = changed.get("current");
+    return this._activeAt(before) !== this._activeAt(this.current);
   }
 
   protected override updated(): void {

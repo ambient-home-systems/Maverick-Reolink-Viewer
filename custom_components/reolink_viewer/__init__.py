@@ -22,6 +22,7 @@ from .checks import CheckReports
 from .const import (
     CAMERA_HOST_CONCURRENCY,
     CONF_BAICHUAN_DEEP_START,
+    DEFAULT_BAICHUAN_DEEP_START,
     DEFAULT_HOST_CONCURRENCY,
     DEFAULT_STREAM_BUDGET,
     DOMAIN,
@@ -135,12 +136,15 @@ async def async_setup_entry(
         resolver=lambda entry_id: host_limits(hass, entry_id),
     )
     cache_dir = Path(hass.config.cache_path(DOMAIN))
-    # Phase 5b: deep starts over the Reolink protocol, when the option is on.
+    # Phase 5b/5c: deep starts over the Reolink protocol, unless turned off.
     baichuan = BaichuanSource(
         hass,
         scheduler,
         enabled=lambda: (
-            compat.ok and bool(entry.options.get(CONF_BAICHUAN_DEEP_START, False))
+            compat.ok
+            and bool(
+                entry.options.get(CONF_BAICHUAN_DEEP_START, DEFAULT_BAICHUAN_DEEP_START)
+            )
         ),
     )
     vod_cache = VodCache(

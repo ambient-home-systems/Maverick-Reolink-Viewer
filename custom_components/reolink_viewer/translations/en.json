@@ -27,12 +27,12 @@
     "step": {
       "init": {
         "title": "Reolink Viewer options",
-        "description": "A prototype from Phase 5b, off by default.",
+        "description": "On by default since 0.38.0. A recorder that does not take the Reolink protocol is found out at its first deep start and left alone.",
         "data": {
           "baichuan_deep_start": "Start deep in recordings over the Reolink protocol"
         },
         "data_description": {
-          "baichuan_deep_start": "When a start or a seek lands well past what is cached of a recording, ask the device for that moment directly (its own protocol, port 9000) instead of downloading everything before it. The first picture shows in about a second; the recording still downloads as before. Adds one logged-in user on the device while in use. Falls back to the download on any failure."
+          "baichuan_deep_start": "When a start or a seek lands well past what is cached of a recording, ask the device for that moment directly (its own protocol, port 9000) instead of downloading everything before it. The first picture shows in about a second, and the recording is copied in two pieces, nothing twice. Adds one logged-in user on the device while in use. Falls back to the download on any failure; a device that refuses the protocol is not asked again for 6 hours."
         }
       }
     }

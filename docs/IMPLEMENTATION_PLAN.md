@@ -3210,7 +3210,18 @@ and judged on that. CI had failed it twice on unchanged timeline code (11 tasks 
 up to 77 ms, then 3 of up to 80 ms), the next run passing each time; locally
 v0.35.5 does the same (one of 54 ms mid-scrub in one of six passes), so it is the
 shared machine, not the timeline, which would block every pass. The check now also
-prints when each long task started. Seeking was measured on the hardware in
+prints when each long task started.
+
+v0.38.0 then cut the work each drag step does, after the check failed both
+desktop passes on a docs-only change: a Chromium profile (CPU 2×) showed every
+pointermove re-rendering the event list's 60 rows (its marked row rarely
+changes), `getBoundingClientRect()` forcing a layout in each timeline draw, and
+a new `Intl` formatter for the day's name in each page render. The event list
+now updates on a cursor move only when the marked event changes, the timeline
+takes its width from its ResizeObserver, and the day's formatters are made
+once. Per step, from the pointermove to the next frame (3 runs of the check's
+drag): CPU 1× median 3.6 → 2.9 ms (p99 7.7 → 5.7); CPU 4× median 18.8 → 12.5 ms
+(p99 37.8 → 29.4). Seeking was measured on the hardware in
 Phase 2B ("Scrub": 5 of 5 points from the buffer, median 4 ms in Chrome and
 287–339 ms on the iPhone, where WebKit's `fastSeek` lands on the nearest key
 frame).
@@ -4621,7 +4632,7 @@ hardware before the next:
 | 5c step | Status |
 | --- | --- |
 | 1. One stream, the bytes once | **Done** (v0.37.0–v0.37.1, below): the owner's check passed (2026-10-31) |
-| 2. The method per host, on by default | Next |
+| 2. The method per host, on by default | **Built** (v0.38.0, below) |
 | 3. The clock from the first second | |
 | 4. The HA host's load | |
 | 5. One cut per channel per viewer | |
@@ -4692,6 +4703,40 @@ app): met.**
 One row failed: the check's link test timed out ("signal is aborted"), as it
 read the clip of a recording copied in two pieces, which waits for the rest of
 the copy. v0.37.1 reads the player's fragments instead (check v0.4.3).
+
+#### Step 2: the method per host, on by default (v0.38.0)
+
+- **On by default** (`DEFAULT_BAICHUAN_DEEP_START`): new installs, and installs
+  whose options never set it, use deep starts over the Reolink protocol; the
+  option turns them off. The owner's checks of 5b and step 1 are the case for it.
+- **The method per host, found out rather than listed:** a device that refuses
+  the protocol (its port closed: "connection refused"; the login or the
+  download cut refused; no nonce) before any cut of it came through is left
+  alone for `UNSUPPORTED_RETRY_S` (6 h): its starts get "not supported by this
+  device (…)" at once, without a login, and wait for the download as with the
+  option off. A device that has served a cut is never left alone for a later
+  refusal (that refusal is the cut's: a channel, a time range), and timeouts, a
+  lost connection or no free slot never count. The hardware matrix needs no
+  per-model list: run 2 showed the NVR, the Duo 3, the CX410 and the CX810
+  all take 143 (the NVR answering for its channels), and a camera that does
+  not is found at its first deep start.
+- **Shown:** Details' cache line "Reolink protocol cut not used: not supported
+  by this device (…)"; the check's D1 report "…; not supported by N device(s):
+  …"; Home Assistant's log says once when a device is left alone, and why.
+
+**Hardware checklist (the owner):**
+
+1. Update to v0.38.0. In the options, the setting shows ticked (it was already
+   on here). A deep start plays from the cut as in step 1.
+2. Untick it, Submit: a deep start waits for the download (Details: no cut).
+   Tick it again.
+3. Optional, to see a device left alone: none of the owner's devices refuses
+   the protocol, so this is covered by the tests (a closed port, a refused
+   login); nothing to do on the hardware.
+
+**Exit criteria:** on by default without a step by the owner; a device that
+refuses the protocol costs one try per 6 h, then its starts are the download's
+at once.
 
 **Learned:** the 4 to 8 s before a clip of such a recording downloads is the
 price of a device that ignores Range; a clip is rare and the wait is said in

@@ -243,6 +243,8 @@ export interface BaichuanStats {
   logins: number;
   logouts: number;
   cuts_running: number;
+  /** Why devices that refused the protocol are left alone for now (Phase 5c). */
+  unsupported?: string[];
 }
 
 /** Where a window came from, in words. */
@@ -278,9 +280,10 @@ export function cutReport(cut: CutStatus): string {
 /** The Reolink protocol's logins, for the report (the extra user's coming and going). */
 export function loginReport(stats: BaichuanStats | undefined): string {
   if (!stats) return "Reolink protocol: no statistics";
-  if (!stats.enabled) return "Reolink protocol: off (the option is not set)";
+  if (!stats.enabled) return "Reolink protocol: off (turned off in the options)";
   return (
     `Reolink protocol: ${stats.logged_in} host(s) logged in now, ${stats.logins} logins, ${stats.logouts} logouts` +
-    `, ${stats.cuts_running} cuts running`
+    `, ${stats.cuts_running} cuts running` +
+    (stats.unsupported?.length ? `; not supported by ${String(stats.unsupported.length)} device(s): ${stats.unsupported.join("; ")}` : "")
   );
 }

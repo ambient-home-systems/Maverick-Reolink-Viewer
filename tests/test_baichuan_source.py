@@ -5,6 +5,7 @@ from collections.abc import AsyncGenerator, Callable
 from datetime import datetime, tzinfo
 import os
 from pathlib import Path
+import socket
 from typing import Any
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
@@ -206,6 +207,7 @@ async def test_a_cut_is_muxed_to_fragments_and_the_login_ends_when_idle(
         "logouts": 1,
         "cuts_running": 0,
         "cuts_paused": 0,
+        "unsupported": [],
     }
 
 
@@ -257,13 +259,21 @@ async def test_failures_end_the_cut_with_a_reason(rig: Rig) -> None:
     for ticket in held:
         ticket.release()
 
-    # The login is refused.
+    # The login is refused: before any cut came through, the device is left
+    # alone for a while (its starts go straight to the download).
     rig.nvr.refuse_login = True
     cut = await rig.cut()
     await _done(cut)
     assert cut.error is not None
     assert "refused" in cut.error
+    assert rig.source.stats()["unsupported"] == [cut.error]
+    asked = len(rig.nvr.requests)
+    with pytest.raises(CutError, match=r"not supported by this device \(login refused"):
+        await rig.cut()
+    assert len(rig.nvr.requests) == asked
     rig.nvr.refuse_login = False
+    # Asked again once the while is over.
+    rig.source._hosts["entry1"].unsupported_until = 0.0
 
     # No room on disk.
     async def no_room(_path: Path, _size: int) -> None:
@@ -861,3 +871,42 @@ def test_a_part_shorter_than_counted_is_fetched_again(tmp_path: Path) -> None:
     fd, kept = vodcache._open_write_at(path, 100)
     os.close(fd)
     assert (kept, path.read_bytes()) == (0, b"")
+
+
+async def test_a_device_that_worked_is_not_left_alone_and_a_closed_port_is(
+    rig: Rig,
+) -> None:
+    """A refusal after a cut came through is that cut's; a closed port is not."""
+    await _done(await rig.cut())
+    rig.nvr.refuse_login = True
+    await _until(lambda: rig.source.stats()["logged_in"] == 0)
+    cut = await rig.cut()
+    await _done(cut)
+    assert cut.error is not None
+    assert "refused" in cut.error
+    assert rig.source.stats()["unsupported"] == []
+    rig.nvr.refuse_login = False
+    # Another device whose port for the protocol is closed.
+    closed = socket.socket()
+    closed.bind(("127.0.0.1", 0))
+    port = closed.getsockname()[1]
+    closed.close()
+    other = Host(None, rig.nvr, NEW_YORK)
+    other.baichuan_endpoint = lambda: BaichuanEndpoint(  # type: ignore[method-assign]
+        "127.0.0.1", port, USER, PASSWORD
+    )
+    with patch.object(bridge, "async_get_host", return_value=other):
+        cut = await rig.source.async_start(
+            entry_id="entry2",
+            channel=0,
+            stream="sub",
+            start_ms=START_MS,
+            end_ms=END_MS,
+            at_ms=AT_MS,
+            path=rig.dir / "b.cut.mp4",
+            reserve=rig.reserve,
+            size=1000,
+        )
+        await _done(cut)
+    assert cut.error == "connection refused (its port for the protocol is closed)"
+    assert rig.source.stats()["unsupported"] == [cut.error]

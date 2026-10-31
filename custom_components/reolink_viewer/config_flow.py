@@ -11,13 +11,17 @@ from homeassistant.helpers.schema_config_entry_flow import (
     SchemaOptionsFlowHandler,
 )
 
-from .const import CONF_BAICHUAN_DEEP_START, DOMAIN, NAME
+from .const import CONF_BAICHUAN_DEEP_START, DEFAULT_BAICHUAN_DEEP_START, DOMAIN, NAME
 
-# Phase 5b: a start deep in an uncached recording asks the device for that
-# moment over the Reolink protocol (off by default; the files stay the source
-# otherwise). Read at each start, so no reload is needed.
+# Phase 5b/5c: a start deep in an uncached recording asks the device for that
+# moment over the Reolink protocol (on by default; devices that refuse it are
+# found out). Read at each start, so no reload is needed.
 OPTIONS_SCHEMA = probatio.Schema(
-    {probatio.Required(CONF_BAICHUAN_DEEP_START, default=False): bool}
+    {
+        probatio.Required(
+            CONF_BAICHUAN_DEEP_START, default=DEFAULT_BAICHUAN_DEEP_START
+        ): bool
+    }
 )
 OPTIONS_FLOW = {"init": SchemaFlowFormStep(OPTIONS_SCHEMA)}
 
