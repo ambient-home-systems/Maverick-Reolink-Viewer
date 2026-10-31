@@ -36,7 +36,7 @@ import type { StreamDecision } from "./codec";
 import { SHAPES, mseApi, mseSupports, pickSample, probeShape, type MseApi } from "./mse-probe";
 import type { RvPlayer } from "./player";
 
-export const CHECK_VERSION = "0.4.2";
+export const CHECK_VERSION = "0.4.3";
 export const SETUPS = [
   "Desktop Chrome, LAN",
   "Desktop Chrome, Tailscale",
@@ -63,6 +63,8 @@ const SAMPLE_MS = 60_000;
 /** The link test reads up to this much, for at most LINK_MS. */
 const LINK_BYTES = 32 * 1024 * 1024;
 const LINK_MS = 3_000;
+/** The MSE link test asks for this much media (the server's most). */
+const LINK_WINDOW_MS = 300_000;
 const SAVE_EVERY_MS = 10_000;
 /** The scrub part previews these points around the play position (s). */
 const SCRUB_POINTS_S = [-10, -5, 3, 8, 15] as const;
@@ -976,9 +978,23 @@ export class PlaybackCheck {
   }
 
   private async _link(): Promise<void> {
-    // The file player's URL, or the clip URL of the same recording (MSE).
-    const url = this._t.playing?.url ?? this._t.playing?.clip_url;
-    if (!url) {
+    // MSE: the fragments the player reads, from the start of what is on disk
+    // (a clip waits for the whole recording, which after a deep start may be
+    // in two pieces). Else the file player's URL, read with Range.
+    const t = this._t;
+    const playing = t.playing;
+    const fetchWithAuth = t.hass.fetchWithAuth?.bind(t.hass);
+    const base = playing?.base;
+    const url = playing?.url ?? playing?.clip_url;
+    let read: ((signal: AbortSignal) => Promise<Response>) | undefined;
+    let what = "of the cached recording";
+    if (base && fetchWithAuth) {
+      what = "of fragments";
+      read = (signal) => fetchWithAuth(`${base}/frags?first=0&ms=${String(LINK_WINDOW_MS)}&bytes=${String(LINK_BYTES)}`, { cache: "no-store", signal });
+    } else if (url) {
+      read = (signal) => fetch(url, { headers: { Range: `bytes=0-${String(LINK_BYTES - 1)}` }, cache: "no-store", signal });
+    }
+    if (!read) {
       this._log("L  skipped: nothing played");
       return;
     }
@@ -988,11 +1004,7 @@ export class PlaybackCheck {
       controller.abort();
     }, LINK_MS);
     try {
-      const response = await fetch(url, {
-        headers: { Range: `bytes=0-${LINK_BYTES - 1}` },
-        cache: "no-store",
-        signal: controller.signal,
-      });
+      const response = await read(controller.signal);
       const firstByte = performance.now() - began;
       // Read for at most LINK_MS: long enough to measure a fast link.
       let bytes = 0;
@@ -1009,7 +1021,7 @@ export class PlaybackCheck {
       const total = performance.now() - began;
       const mbit = (bytes * 8) / ((total - firstByte) * 1000);
       this._log(
-        `L  Link to Home Assistant: ${mb(bytes)} of the cached recording in ${ms(total - firstByte)} after the answer` +
+        `L  Link to Home Assistant: ${mb(bytes)} ${what} in ${ms(total - firstByte)} after the answer` +
           ` = ${mbit.toFixed(1)} Mbit/s (answer ${ms(firstByte)}, HTTP ${response.status})`,
       );
       this._summary.push(`Link: ${mbit.toFixed(1)} Mbit/s`);
