@@ -4620,7 +4620,7 @@ hardware before the next:
 
 | 5c step | Status |
 | --- | --- |
-| 1. One stream, the bytes once | **Built** (v0.37.0, below) |
+| 1. One stream, the bytes once | **Done** (v0.37.0–v0.37.1, below): the owner's check passed (2026-10-31) |
 | 2. The method per host, on by default | Next |
 | 3. The clock from the first second | |
 | 4. The HA host's load | |
@@ -4677,6 +4677,27 @@ hardware before the next:
 **Exit criteria:** a deep start fetches no recording twice (the fill line
 stops at the cut) and costs the device one stream (a start with one slot
 free plays from the cut in about a second); every v0.36.2 row unchanged.
+
+**The owner's check (2026-10-31, v0.37.0, LAN Chrome with HD and the iPhone
+app): met.**
+
+| | Result |
+| --- | --- |
+| The bytes once | Every fill line stopped at its cut: an event 39.3 min into a 39.6 min recording copied to 39.2 min (166 MB) with a 2.0 MB cut; D1, 56.9 min into an hour, copied to 57.0 min (224 MB) with a 13.7 MB cut; the HD switch 5.1 min in copied to 5.1 min (202 MB) with the cut's spans (240 MB): about 440 MB where v0.36.2 fetched the spans and the whole hour (about 2.5 GB) |
+| Starts | D1 433 ms from the cut (its first fragment 249 ms); D2 83 ms from the part copied; events 36–584 ms; moved on with a 9 ms gap; 0.5–8× smooth; HD in 0.76 s and back in 0.17 s, both keeping the moment |
+| One stream | With the live board open (few streams free), a deep start by hand was "responsive" |
+| The whole when needed | Download clip after a deep start: the download began after 4 to 8 s (the copy read again from its start, then completed) |
+| iPhone | A start at the end of an hour, then back before it: "very fast" |
+
+One row failed: the check's link test timed out ("signal is aborted"), as it
+read the clip of a recording copied in two pieces, which waits for the rest of
+the copy. v0.37.1 reads the player's fragments instead (check v0.4.3).
+
+**Learned:** the 4 to 8 s before a clip of such a recording downloads is the
+price of a device that ignores Range; a clip is rare and the wait is said in
+the user guide. If it matters, 5c could fetch the rest in the background once
+the viewer leaves (one stream, at prefetch priority), so a later clip finds
+the copy whole.
 
 ---
 
