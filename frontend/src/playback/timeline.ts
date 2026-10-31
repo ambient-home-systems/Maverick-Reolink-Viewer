@@ -84,6 +84,8 @@ export class RvTimeline extends LitElement {
   declare timeZone: string | undefined;
 
   private _width = 0;
+  /** The width the ResizeObserver last reported (0: none yet). */
+  private _observed = 0;
   private _resize: ResizeObserver | undefined;
   /** One pointer pressed: where, whether it moved, and the time it scrubbed to. */
   private _drag: { pointerId: number; x: number; moved: boolean; time?: number } | undefined;
@@ -107,7 +109,10 @@ export class RvTimeline extends LitElement {
   override connectedCallback(): void {
     super.connectedCallback();
     if (typeof ResizeObserver !== "undefined") {
-      this._resize = new ResizeObserver(() => {
+      this._resize = new ResizeObserver((entries) => {
+        // The width each draw uses: read here, not with a layout per draw.
+        const width = entries.at(-1)?.contentRect.width;
+        this._observed = width ? Math.max(1, Math.round(width)) : 0;
         this._draw();
       });
       this._resize.observe(this);
@@ -376,7 +381,9 @@ export class RvTimeline extends LitElement {
   private _draw(): void {
     const canvas = this._canvas;
     if (!canvas) return;
-    const width = Math.max(1, Math.round(this.getBoundingClientRect().width || canvas.clientWidth || 300));
+    // From the ResizeObserver; measured (a forced layout) only until it reports.
+    const width =
+      this._observed || Math.max(1, Math.round(this.getBoundingClientRect().width || canvas.clientWidth || 300));
     this._width = width;
     const ratio = window.devicePixelRatio || 1;
     if (canvas.width !== width * ratio) {

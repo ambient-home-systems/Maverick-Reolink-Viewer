@@ -22,6 +22,11 @@ indexed like it (``fmp4.FragmentIndex``), so the MSE view serves both alike.
   gives up if none is free within ``SLOT_TIMEOUT_S``. With none free at once
   it first asks for its recording's download's (``borrow``, Phase 5c): a
   deep start costs the device one stream. The login runs as a scheduler job.
+- The method per host (Phase 5c): a device that refuses the protocol (its
+  port closed, the login or the download cut refused, no nonce) before any
+  cut of it came through is not asked again for ``UNSUPPORTED_RETRY_S``; its
+  starts go straight to the download, and ``stats()`` says why. Timeouts, a lost connection or no free stream
+  slot are passing failures and change nothing.
 - The media times are the recording's (0 at its start); the cut's start and
   end are sent in the device's local time (``timeconv``'s zone, from the
   bridge), as the device keeps them.
@@ -67,6 +72,8 @@ CLIENT_TIMEOUT_S = 10.0
 QUIET_TIMEOUT_S = 15.0
 END_TIMEOUT_S = 3.0
 STREAM_TYPES = {"sub": "subStream", "main": "mainStream"}
+# A device that refused the protocol is asked again after this long.
+UNSUPPORTED_RETRY_S = 6 * 3600.0
 ANY_CHANNEL_BITMAP = 255
 
 type ClientFactory = Callable[..., BaichuanReplayClient]
@@ -191,6 +198,11 @@ class _Host:
     logouts: int = 0
     idle: asyncio.TimerHandle | None = None
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    # Why the device does not take the protocol, and until when (monotonic).
+    unsupported: str | None = None
+    unsupported_until: float = 0.0
+    # A cut has come through: a later refusal is that cut's, not the device's.
+    worked: bool = False
 
 
 class BaichuanSource:
@@ -249,6 +261,11 @@ class BaichuanSource:
         """
         if self._closed:
             raise CutError("closed")
+        host = self._hosts.get(entry_id)
+        if host is not None and host.unsupported is not None:
+            if time.monotonic() < host.unsupported_until:
+                raise CutError(f"not supported by this device ({host.unsupported})")
+            host.unsupported = None
         previous = self._cuts.get((entry_id, channel))
         if previous is not None:
             await self.async_stop(previous)
@@ -317,6 +334,7 @@ class BaichuanSource:
                         reserve=reserve,
                         size=size,
                     )
+                    self._hosts[cut.entry_id].worked = True
                 if final:
                     return
                 # Between spans: hold the login, not the slot.
@@ -333,6 +351,16 @@ class BaichuanSource:
         except Exception as err:  # noqa: BLE001 - the cache falls back
             cut.error = _describe(err)
             _LOGGER.debug("Baichuan cut on ch%d failed: %s", cut.channel, cut.error)
+            host = self._hosts.setdefault(cut.entry_id, _Host())
+            if _refused(err) and not host.worked:
+                host.unsupported = cut.error
+                host.unsupported_until = time.monotonic() + UNSUPPORTED_RETRY_S
+                _LOGGER.info(
+                    "Deep starts over the Reolink protocol are off for a device"
+                    " for %d h: %s",
+                    UNSUPPORTED_RETRY_S // 3600,
+                    cut.error,
+                )
         finally:
             cut.paused = False
             if fd is not None:
@@ -597,6 +625,9 @@ class BaichuanSource:
             "logouts": sum(h.logouts for h in self._hosts.values()),
             "cuts_running": sum(1 for c in self._cuts.values() if c.running),
             "cuts_paused": sum(1 for c in self._cuts.values() if c.paused),
+            "unsupported": [
+                h.unsupported for h in self._hosts.values() if h.unsupported is not None
+            ],
         }
 
 
@@ -628,9 +659,21 @@ def _scan(path: Path, index: FragmentIndex, available: int) -> None:
 def _describe(err: BaseException) -> str:
     if isinstance(err, TimeoutError):
         return "timeout"
+    if isinstance(err, ConnectionRefusedError):
+        return "connection refused (its port for the protocol is closed)"
     if isinstance(err, (CutError, BaichuanClientError, bridge.BridgeError)):
         return str(err)
     return type(err).__name__
+
+
+def _refused(err: BaseException) -> bool:
+    """Return whether the device refused the protocol (not a passing failure)."""
+    if isinstance(err, ConnectionRefusedError):
+        return True
+    if not isinstance(err, BaichuanClientError):
+        return False
+    text = str(err)
+    return "refused" in text or "no nonce" in text
 
 
 def _ms(start: float) -> float:

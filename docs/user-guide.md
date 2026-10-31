@@ -238,16 +238,21 @@ The camera's recordings, from its NVR or its own SD card.
 
 A camera with no recordings to play says why, and what to do.
 
-#### Starting deep in a recording (an option)
+#### Starting deep in a recording
 
 A recording that has not been played lately is copied from the recorder as it plays,
-from its start. Jumping 45 minutes into an hour-long recording therefore waits until
-the copy reaches that point: 7 to 13 seconds on an NVR. An option, off by default,
-asks the recorder for that moment directly instead, over the Reolink app's own
-protocol, so the first picture shows in about a second:
+from its start. Jumping 45 minutes into an hour-long recording would therefore wait
+until the copy reaches that point: 7 to 13 seconds on an NVR. Instead, the recorder
+is asked for that moment directly, over the Reolink app's own protocol, so the first
+picture shows in about a second. It is on by default since 0.38.0, and can be turned
+off (no restart is needed):
 
 **Settings → Devices & services → Reolink Viewer → Configure → Start deep in
-recordings over the Reolink protocol.** No restart is needed.
+recordings over the Reolink protocol.**
+
+- A recorder or camera that does not take the protocol is found out at its first
+  deep start, and left alone for six hours: its starts wait for the copy, as with the
+  option off. **Details** says "not supported by this device" and why.
 
 - It is used only for a start or a jump well past what is already copied (more than
   30 seconds). Everything else plays as before.

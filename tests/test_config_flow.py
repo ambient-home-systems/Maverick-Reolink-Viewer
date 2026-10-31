@@ -32,7 +32,7 @@ async def test_single_instance(hass: HomeAssistant) -> None:
 
 
 async def test_options_flow(hass: HomeAssistant) -> None:
-    """The one option: deep starts over the Reolink protocol, off by default."""
+    """The one option: deep starts over the Reolink protocol, on by default."""
     entry = MockConfigEntry(domain=DOMAIN, data={})
     entry.add_to_hass(hass)
     result = await hass.config_entries.options.async_init(entry.entry_id)
@@ -40,9 +40,9 @@ async def test_options_flow(hass: HomeAssistant) -> None:
     assert result["step_id"] == "init"
     schema = result["data_schema"]
     assert schema is not None
-    assert schema({}) == {CONF_BAICHUAN_DEEP_START: False}
+    assert schema({}) == {CONF_BAICHUAN_DEEP_START: True}
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {CONF_BAICHUAN_DEEP_START: True}
+        result["flow_id"], {CONF_BAICHUAN_DEEP_START: False}
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert entry.options == {CONF_BAICHUAN_DEEP_START: True}
+    assert entry.options == {CONF_BAICHUAN_DEEP_START: False}

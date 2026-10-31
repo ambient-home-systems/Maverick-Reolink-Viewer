@@ -366,24 +366,18 @@ export class RvEvents extends LitElement {
   ];
 }
 
+// Each page render shows the day: one formatter each, not one per render.
+const LONG_DAY = new Intl.DateTimeFormat(undefined, { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" });
+const SHORT_DAY = new Intl.DateTimeFormat(undefined, { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
+
 /** "Tuesday 27 October" (a calendar date, not a time: no time zone shift). */
 export function dayLabel(date: string): string {
-  return new Date(`${date}T00:00:00Z`).toLocaleDateString(undefined, {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    timeZone: "UTC",
-  });
+  return LONG_DAY.format(new Date(`${date}T00:00:00Z`));
 }
 
 /** "Tue 27 Oct". */
 export function shortDay(date: string): string {
-  return new Date(`${date}T00:00:00Z`).toLocaleDateString(undefined, {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-    timeZone: "UTC",
-  });
+  return SHORT_DAY.format(new Date(`${date}T00:00:00Z`));
 }
 
 if (!customElements.get("rv-events")) {

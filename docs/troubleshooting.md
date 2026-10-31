@@ -374,9 +374,9 @@ include the text under **Details** when you ask for help.
 When HD fails during playback, the player says "HD could not play", gives the reason,
 and goes back to SD.
 
-### A start deep in a recording is still slow, with the option on
+### A start deep in a recording is still slow
 
-With **Start deep in recordings over the Reolink protocol** on (see the user guide,
+With **Start deep in recordings over the Reolink protocol** on (the default; see the user guide,
 Playback), a start more than 30 seconds past what is copied should show its first
 picture in about a second. When it does not, **Details** under the player says why, on
 the line about the recording, after **Reolink protocol cut not used:**
@@ -393,6 +393,11 @@ the line about the recording, after **Reolink protocol cut not used:**
   for the copy instead.
 - **"the cut ended before that moment"**: the recorder had less of the recording
   than the search said.
+- **"not supported by this device (…)"**: the recorder or camera refused the
+  protocol (its port 9000 closed, or the sign-in or the request refused) before it
+  ever served a start this way, so it is left alone for six hours. If the Reolink app
+  works with that device, check that nothing blocks port 9000 from Home Assistant;
+  restarting Home Assistant asks it again at once.
 
 In each case the recording plays as it does without the option. Turning the option
 off stops it being tried.

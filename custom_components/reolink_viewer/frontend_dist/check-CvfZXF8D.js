@@ -1,5 +1,5 @@
-import { Gt as e, J as t, Kt as n, Lt as r, Nt as i, St as a } from "./home-ViA0Ttxx.js";
-import { a as o, n as s, o as c, r as l, s as u, t as d } from "./findings-CEnq86iQ.js";
+import { Gt as e, J as t, Kt as n, Lt as r, Nt as i, St as a } from "./home-BCavfCvE.js";
+import { a as o, n as s, o as c, r as l, s as u, t as d } from "./findings-1cCxoB2r.js";
 //#region src/playback/check-util.ts
 var f = (e) => /iPhone|iPad|iPod/.test(e);
 function p(e) {
@@ -99,7 +99,7 @@ function ne(e) {
 	return n && t.push(`placed by ${n.anchor ?? "?"}, counter ${n.counter_rate ?? "?"}/s${n.rate_learned ? " (learned)" : ""}`), `Reolink protocol cut: ${t.join(", ")}`;
 }
 function re(e) {
-	return e ? e.enabled ? `Reolink protocol: ${e.logged_in} host(s) logged in now, ${e.logins} logins, ${e.logouts} logouts, ${e.cuts_running} cuts running` : "Reolink protocol: off (the option is not set)" : "Reolink protocol: no statistics";
+	return e ? e.enabled ? `Reolink protocol: ${e.logged_in} host(s) logged in now, ${e.logins} logins, ${e.logouts} logouts, ${e.cuts_running} cuts running` + (e.unsupported?.length ? `; not supported by ${String(e.unsupported.length)} device(s): ${e.unsupported.join("; ")}` : "") : "Reolink protocol: off (turned off in the options)" : "Reolink protocol: no statistics";
 }
 //#endregion
 //#region src/playback/mse-sample.ts

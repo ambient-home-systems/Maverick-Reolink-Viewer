@@ -9,6 +9,7 @@ import "./player";
 import type { RvPlayer } from "./player";
 import "./timeline";
 import { HOVER_DEBOUNCE_MS, KEY_SEEK_MS, keyStep, type RvTimeline } from "./timeline";
+import { formatClock } from "./time";
 import { DAY, HOUR, MINUTE } from "./timeline-math";
 
 const T0 = Date.UTC(2026, 9, 17, 4, 0);
@@ -546,5 +547,31 @@ describe("rv-event-list", () => {
     el.events = [];
     await el.updateComplete;
     expect(el.renderRoot.textContent).toContain("No events");
+  });
+
+  it("renders again on a cursor move only when the marked event changes", async () => {
+    const el: RvEventList = await mount("rv-event-list");
+    el.events = events;
+    el.current = (events[PAGE + 3]?.start ?? 0) + 1_000;
+    await el.updateComplete;
+    const render = vi.spyOn(el as unknown as { render: () => unknown }, "render");
+    // Dragging within the event marks nothing new.
+    el.current = (events[PAGE + 3]?.start ?? 0) + 9_000;
+    await el.updateComplete;
+    el.current = (events[PAGE + 3]?.start ?? 0) + 15_000;
+    await el.updateComplete;
+    expect(render).not.toHaveBeenCalled();
+    // Past its end (none marked), then along the gap: once.
+    el.current = (events[PAGE + 3]?.start ?? 0) + 30_000;
+    await el.updateComplete;
+    el.current = (events[PAGE + 3]?.start ?? 0) + 40_000;
+    await el.updateComplete;
+    expect(render).toHaveBeenCalledTimes(1);
+    el.current = (events[PAGE + 4]?.start ?? 0) + 1_000;
+    await el.updateComplete;
+    expect(render).toHaveBeenCalledTimes(2);
+    expect(el.renderRoot.querySelector("button.row.active")?.textContent).toContain(
+      formatClock(events[PAGE + 4]?.start ?? 0, undefined, true).slice(0, -3),
+    );
   });
 });

@@ -3,6 +3,23 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.38.0
+
+Phase 5c, step 2: starting deep in a recording over the Reolink protocol is on
+by default.
+
+- **On by default** for every recorder and camera that takes the protocol. It can
+  be turned off in the options (Settings → Devices & services → Reolink Viewer →
+  Configure); a setting already made is kept.
+- **A device that does not take it is found out** at its first deep start (its
+  port closed, or the sign-in or the request refused) and left alone for six
+  hours: its starts wait for the copy, as with the option off. **Details** and the
+  playback check say "not supported by this device" and why.
+- **Dragging along the timeline is lighter**: the event list redraws only when the
+  marked event changes, the timeline no longer measures the page at each step,
+  and the day's name is not formatted afresh each time (a step a third cheaper on
+  a slow processor).
+
 ## 0.37.1
 
 - **The playback check** (v0.4.3): its link test reads the fragments the player

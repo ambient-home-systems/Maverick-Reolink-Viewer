@@ -230,8 +230,20 @@ describe("Phase 5b reports", () => {
       "Reolink protocol cut: slot 35 ms (the download's), 0 fragments, 0.0 MB, complete",
     );
     expect(loginReport(undefined)).toBe("Reolink protocol: no statistics");
+    expect(
+      loginReport({
+        enabled: true,
+        logged_in: 0,
+        logins: 1,
+        logouts: 1,
+        cuts_running: 0,
+        unsupported: ["connection refused (its port for the protocol is closed)"],
+      }),
+    ).toBe(
+      "Reolink protocol: 0 host(s) logged in now, 1 logins, 1 logouts, 0 cuts running; not supported by 1 device(s): connection refused (its port for the protocol is closed)",
+    );
     expect(loginReport({ enabled: false, logged_in: 0, logins: 0, logouts: 0, cuts_running: 0 })).toBe(
-      "Reolink protocol: off (the option is not set)",
+      "Reolink protocol: off (turned off in the options)",
     );
     expect(loginReport({ enabled: true, logged_in: 1, logins: 2, logouts: 1, cuts_running: 1 })).toBe(
       "Reolink protocol: 1 host(s) logged in now, 2 logins, 1 logouts, 1 cuts running",
