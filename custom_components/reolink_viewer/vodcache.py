@@ -1049,6 +1049,8 @@ class VodCache:
         if indexed is None or indexed.duration_ms < start:
             return False
         entry.stopped_ms = indexed.duration_ms
+        if (offset := _offset_ms(indexed, start)) is not None:
+            entry.timing["cut_offset_ms"] = offset
         return True
 
     async def _indexed_now(self, entry: Entry) -> FragmentIndex | None:
@@ -1606,6 +1608,20 @@ def _cache_id_of(path: Path) -> str:
     if name.endswith(CUT_SUFFIX):
         return name.removesuffix(CUT_SUFFIX).split(".", 1)[0]
     return name.removesuffix(FLAT_SUFFIX).removesuffix(SUFFIX)
+
+
+def _offset_ms(index: FragmentIndex, cut_start: float) -> float | None:
+    """Return how far the cut places its first key frame from the original.
+
+    The original's key frame nearest it is the same picture when the two are
+    less than half a group of pictures apart (Phase 5c measures what is left).
+    """
+    starts = [f.start_ms for f in index.fragments if f.sync]
+    if not starts:
+        return None
+    nearest = min(starts, key=lambda s: abs(s - cut_start))
+    offset = cut_start - nearest
+    return round(offset, 1) if abs(offset) < 1000 else None
 
 
 def _stopped(entry: Entry) -> bool:

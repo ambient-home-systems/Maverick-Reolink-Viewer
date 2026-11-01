@@ -1,5 +1,5 @@
-import { Gt as e, J as t, Kt as n, Lt as r, Nt as i, St as a } from "./home-BCavfCvE.js";
-import { a as o, n as s, o as c, r as l, s as u, t as d } from "./findings-1cCxoB2r.js";
+import { Gt as e, J as t, Kt as n, Lt as r, Nt as i, St as a } from "./home-CBSovcz7.js";
+import { a as o, n as s, o as c, r as l, s as u, t as d } from "./findings-bHVEwIgc.js";
 //#region src/playback/check-util.ts
 var f = (e) => /iPhone|iPad|iPod/.test(e);
 function p(e) {
@@ -96,7 +96,11 @@ function ne(e) {
 	let t = [];
 	typeof e.first_fragment_ms == "number" && t.push(`first fragment ${Math.round(e.first_fragment_ms)} ms`), typeof e.slot_ms == "number" && t.push(`slot ${Math.round(e.slot_ms)} ms${e.borrowed ? " (the download's)" : ""}`), e.login === "new" ? t.push(`login (an extra user)${typeof e.login_ms == "number" ? ` ${Math.round(e.login_ms)} ms` : ""}`) : e.login && t.push("login shared"), typeof e.reply_ms == "number" && t.push(`reply ${Math.round(e.reply_ms)} ms`), t.push(`${e.fragments ?? 0} fragments, ${((e.bytes ?? 0) / 1e6).toFixed(1)} MB`), typeof e.mbit_s == "number" && t.push(`${e.mbit_s} Mbit/s`), t.push(e.error ? `error ${e.error}` : e.complete ? "complete" : e.running ? "running" : "stopped");
 	let n = e.mux;
-	return n && t.push(`placed by ${n.anchor ?? "?"}, counter ${n.counter_rate ?? "?"}/s${n.rate_learned ? " (learned)" : ""}`), `Reolink protocol cut: ${t.join(", ")}`;
+	if (n) {
+		let e = n.rate_source ?? (n.rate_learned ? "learned" : "nominal");
+		t.push(`placed by ${n.anchor ?? "?"}, counter ${n.counter_rate ?? "?"}/s${e === "nominal" ? "" : ` (${e})`}`);
+	}
+	return typeof e.mux_ms == "number" && t.push(`mux ${Math.round(e.mux_ms)} ms`), `Reolink protocol cut: ${t.join(", ")}`;
 }
 function re(e) {
 	return e ? e.enabled ? `Reolink protocol: ${e.logged_in} host(s) logged in now, ${e.logins} logins, ${e.logouts} logouts, ${e.cuts_running} cuts running` + (e.unsupported?.length ? `; not supported by ${String(e.unsupported.length)} device(s): ${e.unsupported.join("; ")}` : "") : "Reolink protocol: off (turned off in the options)" : "Reolink protocol: no statistics";
@@ -225,7 +229,7 @@ function ce(e, t) {
 }
 //#endregion
 //#region src/playback/check.ts
-var le = "0.4.3", ue = [
+var le = "0.4.4", ue = [
 	"Desktop Chrome, LAN",
 	"Desktop Chrome, Tailscale",
 	"Desktop Chrome, Nabu Casa",
@@ -453,7 +457,7 @@ var H = (e) => new Date(e).toLocaleTimeString(), Se = class {
 			["ttfb_ms", "NVR first byte"],
 			["fill_ms", "download"]
 		]) typeof i[e] == "number" && o.push(`${t} ${g(i[e])}`);
-		typeof i.mbit_s == "number" && o.push(`${i.mbit_s} Mbit/s`), o.push(_(i.bytes)), typeof i.stopped_ms == "number" && o.push(`stopped at ${v(i.stopped_ms)} (the cut has the rest)`), typeof i.yields == "number" && o.push(`gave its slot to the cut ${String(i.yields)}×`), i.indexed !== void 0 && o.push(`index ${G(i.indexed)}`), (r || i.flat !== void 0) && o.push(`plain MP4 ${i.flat === void 0 ? "not yet" : G(i.flat)}`), typeof i.flat_ms == "number" && o.push(`rewrite ${g(i.flat_ms)}`), typeof i.flat_moov_bytes == "number" && o.push(`moov ${_(i.flat_moov_bytes)}`), i.error && o.push(`error ${i.error}`), typeof i.cut_error == "string" && o.push(`cut not used: ${i.cut_error}`);
+		typeof i.mbit_s == "number" && o.push(`${i.mbit_s} Mbit/s`), o.push(_(i.bytes)), typeof i.stopped_ms == "number" && o.push(`stopped at ${v(i.stopped_ms)} (the cut has the rest)`), typeof i.yields == "number" && o.push(`gave its slot to the cut ${String(i.yields)}×`), typeof i.cut_offset_ms == "number" && o.push(`cut ${i.cut_offset_ms >= 0 ? "+" : ""}${String(Math.round(i.cut_offset_ms))} ms from the copy`), i.indexed !== void 0 && o.push(`index ${G(i.indexed)}`), (r || i.flat !== void 0) && o.push(`plain MP4 ${i.flat === void 0 ? "not yet" : G(i.flat)}`), typeof i.flat_ms == "number" && o.push(`rewrite ${g(i.flat_ms)}`), typeof i.flat_moov_bytes == "number" && o.push(`moov ${_(i.flat_moov_bytes)}`), i.error && o.push(`error ${i.error}`), typeof i.cut_error == "string" && o.push(`cut not used: ${i.cut_error}`);
 		let s = i.cut;
 		return `server: ${o.join(", ")}${s ? ` | ${ne(s)}` : ""}`;
 	}

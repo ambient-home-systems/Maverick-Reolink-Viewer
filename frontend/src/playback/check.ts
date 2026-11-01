@@ -36,7 +36,7 @@ import type { StreamDecision } from "./codec";
 import { SHAPES, mseApi, mseSupports, pickSample, probeShape, type MseApi } from "./mse-probe";
 import type { RvPlayer } from "./player";
 
-export const CHECK_VERSION = "0.4.3";
+export const CHECK_VERSION = "0.4.4";
 export const SETUPS = [
   "Desktop Chrome, LAN",
   "Desktop Chrome, Tailscale",
@@ -530,6 +530,8 @@ export class PlaybackCheck {
     parts.push(mb(cache.bytes));
     if (typeof cache.stopped_ms === "number") parts.push(`stopped at ${span(cache.stopped_ms)} (the cut has the rest)`);
     if (typeof cache.yields === "number") parts.push(`gave its slot to the cut ${String(cache.yields)}×`);
+    // Phase 5c: where the copy and the cut meet, how far apart they place the same key frame.
+    if (typeof cache.cut_offset_ms === "number") parts.push(`cut ${cache.cut_offset_ms >= 0 ? "+" : ""}${String(Math.round(cache.cut_offset_ms))} ms from the copy`);
     if (cache.indexed !== undefined) parts.push(`index ${text(cache.indexed)}`);
     if (plain || cache.flat !== undefined) parts.push(`plain MP4 ${cache.flat === undefined ? "not yet" : text(cache.flat)}`);
     if (typeof cache.flat_ms === "number") parts.push(`rewrite ${ms(cache.flat_ms)}`);

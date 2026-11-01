@@ -229,6 +229,10 @@ describe("Phase 5b reports", () => {
     expect(cutReport({ slot_ms: 35, borrowed: 1, complete: true })).toBe(
       "Reolink protocol cut: slot 35 ms (the download's), 0 fragments, 0.0 MB, complete",
     );
+    // Phase 5c: the camera's rate kept from an earlier cut, and the muxer's time.
+    expect(
+      cutReport({ complete: true, mux_ms: 41.6, mux: { anchor: "key frame time", counter_rate: 999_790, rate_source: "stored" } }),
+    ).toBe("Reolink protocol cut: 0 fragments, 0.0 MB, complete, placed by key frame time, counter 999790/s (stored), mux 42 ms");
     expect(loginReport(undefined)).toBe("Reolink protocol: no statistics");
     expect(
       loginReport({

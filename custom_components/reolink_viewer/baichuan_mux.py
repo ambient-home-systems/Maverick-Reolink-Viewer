@@ -17,10 +17,14 @@ MSE player appends, in the layout :class:`fmp4.FragmentIndex` indexes:
 Times are the recording's media time (0 at ``origin_unix``, the recording's
 start in UTC), so a fragment cut deep in a recording sits where the same
 moment sits in the NVR's file. The first key frame is placed by its POSIX
-time (whole seconds); the frames after it by the counter, whose rate differs
-per camera by up to 2 % (§6.3), so the rate is learned from the key frames'
-POSIX times once they span a minute, and each later key frame is placed on
-that clock (the drift is taken up by the last frame of each group). The
+time (whole seconds, as the recording's start is: the two truncations cancel
+when the recording starts on a key frame and key frames come whole seconds
+apart, and the cache measures what is left where the two pieces meet, Phase
+5c). The frames after it are placed by the counter, whose rate differs per
+camera by up to 2 % (§6.3): a rate known from an earlier cut of the camera is
+used from the first frame, else it is learned from the key frames' POSIX times once they
+span a minute, and each later key frame is placed on that clock (the drift is
+taken up by the last frame of each group). The
 streams of run 2 hold I and P pictures only: decode order is presentation
 order, so no composition offsets are written.
 
@@ -59,8 +63,11 @@ AUDIO_TRACK = 2
 NOMINAL_RATE = 1_000_000
 RATE_MIN = 950_000
 RATE_MAX = 1_050_000
-# Key frames at least this far apart (POSIX seconds) set the counter's rate.
+# Key frames at least this far apart (POSIX seconds) set the counter's rate;
+# with a rate from an earlier cut, only this much farther (whole seconds make
+# a minute's estimate good to about 2 %, ten minutes' to 0.2 %).
 RATE_SPAN_S = 60
+STORED_RATE_SPAN_S = 600
 # The first key frame's POSIX time is trusted this close to the asked time.
 ANCHOR_TOLERANCE_S = 30.0
 # Audio this far from the video (s) is moved back into line (or dropped).
@@ -103,6 +110,10 @@ class MuxStats:
     bytes: int = 0
     rate: int = NOMINAL_RATE
     rate_learned: bool = False
+    # Where the rate came from: "nominal", "stored" (an earlier cut), "learned".
+    rate_source: str = "nominal"
+    # The key frames' span (s) the learned rate was measured over.
+    rate_span_s: int = 0
     anchor: str | None = None
     anchor_offset_s: float | None = None
     parameter_set_changes: int = 0
@@ -123,6 +134,8 @@ class MuxStats:
             "bytes": self.bytes,
             "counter_rate": self.rate,
             "rate_learned": self.rate_learned,
+            "rate_source": self.rate_source,
+            "rate_span_s": self.rate_span_s,
             "anchor": self.anchor,
             "anchor_offset_s": self.anchor_offset_s,
             "parameter_set_changes": self.parameter_set_changes,
@@ -190,12 +203,19 @@ class _Clock:
 class BaichuanMuxer:
     """Blocks in; the init segment, then fragments out (see the module doc)."""
 
-    def __init__(self, origin_unix: float, asked_unix: float | None = None) -> None:
+    def __init__(
+        self,
+        origin_unix: float,
+        asked_unix: float | None = None,
+        *,
+        rate: int | None = None,
+    ) -> None:
         """Mux a stream of one recording.
 
         ``origin_unix``: the recording's start (UTC POSIX seconds), media time
         0. ``asked_unix``: the moment asked for; the first key frame is placed
         there if its own POSIX time is far from it (a device clock off).
+        ``rate``: the camera's counter rate from an earlier cut, if known.
         """
         self._origin = origin_unix
         self._asked = asked_unix
@@ -208,6 +228,10 @@ class BaichuanMuxer:
         self._sets: dict[int, bytes] = {}
         self._init_sets: frozenset[bytes] = frozenset()
         self._clock = _Clock()
+        if rate is not None and RATE_MIN <= rate <= RATE_MAX:
+            self._clock.rate = rate
+            self.stats.rate = rate
+            self.stats.rate_source = "stored"
         self._started = False
         self._gop: list[_Video] = []
         self._last_time = 0.0
@@ -350,16 +374,17 @@ class BaichuanMuxer:
 
     def _learn_rate(self, counter: int, unix: int | None) -> None:
         clock = self._clock
-        if (
-            unix is None
-            or clock.first_unix is None
-            or unix - clock.first_unix < RATE_SPAN_S
-        ):
+        least = (
+            STORED_RATE_SPAN_S if self.stats.rate_source == "stored" else RATE_SPAN_S
+        )
+        if unix is None or clock.first_unix is None or unix - clock.first_unix < least:
             return
         rate = (counter - clock.first_counter) / (unix - clock.first_unix)
         clock.rate = round(min(max(rate, RATE_MIN), RATE_MAX))
         self.stats.rate = clock.rate
         self.stats.rate_learned = True
+        self.stats.rate_source = "learned"
+        self.stats.rate_span_s = unix - clock.first_unix
 
     def _keep_sets(self, units: list[bytes], hevc: bool) -> None:
         kinds = _H265_SETS if hevc else _H264_SETS
