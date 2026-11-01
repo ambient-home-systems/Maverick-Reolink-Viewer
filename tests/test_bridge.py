@@ -464,6 +464,38 @@ async def test_vod_url_start_at(
         await host.async_vod_url(0, FILE, VodMethod.FLV, start_at=when)
 
 
+async def test_the_device_zone_comes_from_its_own_settings(
+    hass: HomeAssistant, reolink_host: MagicMock, loaded_reolink: MockConfigEntry
+) -> None:
+    """Its DST rules, read right (reolink-aio's zone ends 2026's DST a week late)."""
+    (host,) = bridge.async_get_hosts(hass)
+    reolink_host._time_settings = {
+        "Time": {"timeZone": 18000},
+        "Dst": {
+            "enable": 1,
+            "offset": 1,
+            **{
+                f"{edge}{key}": value
+                for edge, values in (("start", (3, 2, 0, 2)), ("end", (11, 1, 0, 2)))
+                for key, value in zip(
+                    ("Mon", "Week", "Weekday", "Hour", "Min", "Sec"),
+                    (*values, 0, 0),
+                    strict=True,
+                )
+            },
+        },
+    }
+    tz = host.timezone()
+    assert tz is not None
+    when = datetime(2026, 11, 1, 18, 44, tzinfo=UTC)
+    assert when.astimezone(tz).hour == 13  # standard time since the 1st
+    reolink_host.timezone.assert_not_called()
+    # Without settings to build from: reolink-aio's zone.
+    reolink_host._time_settings = None
+    reolink_host.timezone.return_value = timezone(timedelta(hours=-5))
+    assert host.timezone() == timezone(timedelta(hours=-5))
+
+
 def test_with_start_param() -> None:
     """An existing start parameter is replaced; naive times are used as-is."""
     url = "https://h/api.cgi?cmd=Download&source=a.mp4&start=20260101000000&token=t"

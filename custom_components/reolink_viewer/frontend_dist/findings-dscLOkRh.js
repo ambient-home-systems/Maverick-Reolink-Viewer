@@ -1,4 +1,4 @@
-import { Jt as e, Xt as t, Yt as n, it as r, qt as i } from "./home-CBSovcz7.js";
+import { Jt as e, Xt as t, Yt as n, it as r, qt as i } from "./home-CqZ_OXeC.js";
 //#region src/plain.ts
 var a = {
 	good: "Good",
