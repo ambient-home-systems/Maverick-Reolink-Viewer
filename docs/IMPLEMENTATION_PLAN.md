@@ -4633,9 +4633,9 @@ hardware before the next:
 | --- | --- |
 | 1. One stream, the bytes once | **Done** (v0.37.0–v0.37.1, below): the owner's check passed (2026-10-31) |
 | 2. The method per host, on by default | **Done** (v0.38.0, below): the owner's check passed (2026-11-01) |
-| 3. The clock from the first second | **Built** (v0.39.0–v0.39.1, below): the rate kept per camera; the alignment measured. The owner's check found the device's zone a week off (reolink-aio's DST rules), fixed in v0.39.1; the alignment is measured again after it |
+| 3. The clock from the first second | **Done** (v0.39.0–v0.39.1, below): the rate kept per camera ("stored" on the hardware); the device's zone fixed (reolink-aio's DST rules); the alignment measured at 38–362 ms, a finer anchor not built |
 | 4. The HA host's load | **Done** (v0.39.0's check): the muxer takes 144–182 ms for a sub cut of 15–19 MB and 422–452 ms for an HD span of 124 MB, spread over its seconds of download in a block's worth at a time: it stays on the loop |
-| 5. One cut per channel per viewer | |
+| 5. One cut per channel per viewer | **Built** (v0.40.0, below) |
 
 #### Step 1: one stream, the bytes once (v0.37.0)
 
@@ -4808,6 +4808,55 @@ before (deep starts 360 and 442 ms from the cut, cached 101 and 94 ms, HD in
   999,790/s both times: the whole seconds cancel on these cameras). v0.39.1
   keeps a rate measured over 2 minutes.
 - **Step 4: no move needed** (the table above).
+
+**v0.39.1 on the hardware (the owner, 2026-11-01, Chrome over Nabu Casa, two
+runs):** the timeline at the right time again, and **every cut "placed by key
+frame time"**. The rate kept: the first run's deep start learned 1,001,100/s and
+the second run's first cut of the camera began on it ("stored"), as did its
+HD switch on 999,790/s. Where the copy and the cut meet, the same key frame
+sat **+252, −362, +324, −343 and +38 ms** apart: the whole seconds do not cancel
+on these cameras (the recording's first frame and the key frame each sit
+somewhere in their second, and nothing the device sends says where). It shows
+only where playback crosses from the copy into the cut (a jump back before a
+deep start, played on to it): a skip or repeat of up to 0.4 s. A finer anchor
+is not built: the overlap that would measure it exists only after the deep
+start has played; if ever wanted, the cut's later windows could be shifted by
+the offset once measured. The muxer: 412–434 ms for a sub cut of 41–44 MB,
+798 ms for 212 MB of HD, as before. Over Nabu Casa deep starts showed their
+first frame in 0.73–0.86 s.
+
+#### Step 5: one cut per channel per viewer (v0.40.0)
+
+Two viewers of one camera deep in its recordings (a phone in SD and a desktop
+in HD, or two hours) each had a cut; the device tells streams apart by
+channel, so a second cut on a channel stopped the first, and a second viewer's
+far seek in the same recording replaced the cut the first was reading (its
+windows refused as "replaced").
+
+- **Cuts of a channel take turns** (`BaichuanSource._turn`): one downloads at
+  a time and none stops another. A new cut that must wait (for the channel, or
+  for a stream slot) asks the channel's current cut to give way, which it does
+  at the next block once it has its first fragment: what it muxed is written,
+  its span ends (144) and it joins on later by the counter, as HD spans do
+  (`Cut.gave_way`). A viewer plays far ahead of what it watches, so the pause
+  goes unseen. Only a cut's first span asks: one resuming, or a later span,
+  waits its turn (two cuts would otherwise take turns block by block).
+- **A replaced cut is kept while read** (`Entry.old_cuts`, by generation): a
+  far seek's new cut no longer takes the first viewer's away; a window of the
+  old one is still served by its own number, and it goes once unread for
+  `OLD_CUT_KEEP_S` (30 s), at the next decision, or when the last viewer
+  leaves.
+- **Shown:** the check's cut line "gave way to another viewer N×".
+
+**Hardware checklist (the owner, two devices at once, e.g. the desktop and the
+iPhone app on the same camera):** start deep in one hour on the first device;
+while it plays, start deep in another hour (or in HD) on the second. Both should
+start in about a second and play on; the first keeps playing through. Then on
+the second device jump far in the first device's recording while the first plays
+it: the first plays on.
+
+**Exit criteria:** a second viewer's deep start on a camera starts from its cut
+in about a second without stopping the first viewer's playback.
 
 **Learned:** the 4 to 8 s before a clip of such a recording downloads is the
 price of a device that ignores Range; a clip is rare and the wait is said in

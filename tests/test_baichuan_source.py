@@ -3,6 +3,7 @@
 import asyncio
 from collections.abc import AsyncGenerator, Callable
 from datetime import datetime, tzinfo
+from itertools import pairwise
 import os
 from pathlib import Path
 import socket
@@ -217,10 +218,11 @@ async def test_a_cut_is_muxed_to_fragments_and_the_login_ends_when_idle(
     }
 
 
-async def test_cuts_share_one_login_and_a_new_start_on_a_channel_replaces_its_cut(
-    rig: Rig,
-) -> None:
+async def test_cuts_share_one_login_and_take_turns_on_a_channel(rig: Rig) -> None:
+    """A second cut of a channel is not stopped by, nor stops, the first."""
+    rig.nvr.media = camera_blocks(ASKED - 3, seconds=20)
     rig.nvr.gate = asyncio.Event()
+    rig.nvr.gate_at = 8
     first = await rig.cut(channel=3, name="a")
     other = await rig.cut(channel=5, stream="main", name="b")
     await _until(lambda: rig.cmds().count(143) == 2)
@@ -230,15 +232,25 @@ async def test_cuts_share_one_login_and_a_new_start_on_a_channel_replaces_its_cu
     main_xml = next(x for c, x in rig.nvr.requests if c == 143 and "<channelId>5<" in x)
     assert "<supportSub>0</supportSub>" in main_xml
     assert "<streamType>mainStream</streamType>" in main_xml
-    replacement = await rig.cut(channel=3, name="c")
-    assert first.error == "stopped"
-    assert not first.running
+    await _until(lambda: bool(first.index.fragments))
+    # Another viewer's cut of channel 3: the first gives its turn up (it has a
+    # fragment), its span ends (144), and the second downloads.
+    second = await rig.cut(channel=3, name="c")
+    await _until(lambda: first.gave_way == 1)
     assert 4 in rig.nvr.ended
+    await _until(lambda: bool(second.index.fragments))
+    assert first.error is None
     rig.nvr.gate.set()
-    await _done(replacement)
-    await _done(other)
-    assert replacement.complete
-    assert other.complete
+    for cut in (second, other, first):
+        await _done(cut)
+        assert cut.complete, cut.error
+    # The first joined on where it gave way: its fragments run on seamlessly.
+    starts = [(f.start_ms, f.duration_ms) for f in first.index.fragments]
+    for (start, length), (following, _length) in pairwise(starts):
+        assert abs(start + length - following) < 1, (start, length, following)
+    assert first.public()["gave_way"] == 1
+    assert first.muxer is not None
+    assert first.muxer.stats.overlap_skipped > 0
     assert rig.source.stats()["logins"] == 1
 
 
@@ -590,20 +602,45 @@ async def test_a_seek_far_past_the_cut_starts_another_and_the_last_viewer_stops_
     assert window.source == "cut"
     assert window.first // CUT_FIRST == 2
     assert entry.cut is not first
-    # A window asked of the first cut (its index) is refused.
-    with pytest.raises(VodCacheError, match="replaced"):
-        await _window(cache, entry, first=CUT_FIRST + 4)
-    assert first.error == "stopped"
-    assert not first.path.exists()
+    # The first cut was read just now (another viewer may be on it): kept,
+    # its windows still served by its own numbers.
+    kept = await _window(cache, entry, first=CUT_FIRST + 4)
+    assert kept.source == "cut"
+    assert kept.first == CUT_FIRST + 4
+    assert first.path.exists()
     assert entry.cuts == 2
     cut = entry.cut
     assert cut is not None
     await _done(cut)
+    # Unread for a while, it goes at the next decision.
+    with patch.object(vodcache, "OLD_CUT_KEEP_S", 0.0):
+        await _window(cache, entry, at_ms=AT_MS + 200_000)
+    assert first.error == "stopped"
+    assert not first.path.exists()
+    with pytest.raises(VodCacheError, match="replaced"):
+        await _window(cache, entry, first=CUT_FIRST + 4)
     # The viewer leaves; the download completes; the cut's file goes.
     media.gate.set()
     await cache.async_wait(entry, complete=True)
     cache.release("token1")
     await _until(lambda: entry.cut is None and not cut.path.exists())
+
+
+async def test_the_last_viewer_leaving_lets_replaced_cuts_go(
+    cached: tuple[VodCache, Rig],
+) -> None:
+    cache, rig = cached
+    entry = await cache.async_open(deep_rec())
+    cache.lease(entry, 600, "token1")
+    assert (await _window(cache, entry, at_ms=AT_MS)).source == "cut"
+    first = entry.cut
+    assert first is not None
+    await _done(first)
+    rig.nvr.media = camera_blocks(ASKED + 197)
+    assert (await _window(cache, entry, at_ms=AT_MS + 200_000)).source == "cut"
+    assert entry.old_cuts == {1: first}
+    cache.release("token1")
+    await _until(lambda: not entry.old_cuts and not first.path.exists())
 
 
 async def test_a_complete_cut_left_by_its_viewer_stays_with_the_part_copied(

@@ -78,6 +78,9 @@ class FakeNvr:
         # How a download ends: a 143 with this status, or an empty 143 (None).
         self.end_status = end_status
         self.ended: list[int] = []
+        # Each channel's current download: a 144 ends it (the device stops
+        # sending), whatever download comes on the channel next.
+        self._downloads: dict[int, int] = {}
         # A download's media (else a few synthetic blocks), in chunks of this
         # size, this far apart; with ``gate``, held before the chunk at
         # ``gate_at`` until it is set; ``silent`` sends no end marker.
@@ -211,13 +214,18 @@ class FakeNvr:
                     "</FileInfo></FileInfoList></body>"
                 )
                 writer.write(self._reply(143, ident, 200, ext + body, offset=len(ext)))
+                download = self._downloads.get(ident & 0xFF, 0) + 1
+                self._downloads[ident & 0xFF] = download
                 self.tasks.append(
                     asyncio.get_running_loop().create_task(
-                        self._stream(writer, ident, cmd=143, end=True)
+                        self._stream(
+                            writer, ident, cmd=143, end=True, download=download
+                        )
                     )
                 )
         elif cmd == 144:
             self.ended.append(ident & 0xFF)
+            self._downloads[ident & 0xFF] = self._downloads.get(ident & 0xFF, 0) + 1
             writer.write(self._reply(144, ident, 200))
         elif cmd == 2:
             writer.write(self._reply(2, ident, 200))
@@ -243,17 +251,24 @@ class FakeNvr:
         *,
         cmd: int = 5,
         end: bool = False,
+        download: int = 0,
     ) -> None:
         """Replay chunks in the NVR's own class, the first 1024 media bytes AES.
 
         A client that hangs up mid-stream (a test ending, a cut stopped) ends
-        it quietly, as the device does.
+        it quietly, as the device does; so does a download a 144 ended.
         """
         with contextlib.suppress(ConnectionError):
-            await self._send(writer, ident, cmd=cmd, end=end)
+            await self._send(writer, ident, cmd=cmd, end=end, download=download)
 
     async def _send(
-        self, writer: asyncio.StreamWriter, ident: int, *, cmd: int, end: bool
+        self,
+        writer: asyncio.StreamWriter,
+        ident: int,
+        *,
+        cmd: int,
+        end: bool,
+        download: int,
     ) -> None:
         data = media(frames=8) * self.chunks
         count = self.chunks
@@ -266,6 +281,8 @@ class FakeNvr:
                 await self.gate.wait()
             if self.stopped.is_set() and not end:
                 return
+            if download and self._downloads.get(ident & 0xFF) != download:
+                return  # ended by a 144
             piece = data[i * cut : (i + 1) * cut]
             if not piece:
                 break

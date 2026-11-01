@@ -12,8 +12,13 @@ indexed like it (``fmp4.FragmentIndex``), so the MSE view serves both alike.
 - One connection per host, logged in when the first cut needs it and logged
   out ``IDLE_LOGOUT_S`` after the last one ends: at most one extra logged-in
   user per host, whatever the number of viewers.
-- One cut per channel at a time (the device tells streams apart by channel);
-  a new start on a channel stops the cut running on it (144 closes it).
+- Cuts of one channel take turns (the device tells streams apart by channel,
+  so one downloads at a time; Phase 5c): a new cut never stops another. One
+  that must wait asks the channel's current cut to give its turn up, which it
+  does at the next block once it has its first fragment: it ends its span
+  there (144) and joins on later, by the counter, as spans join. A viewer
+  plays well ahead of what it watches, so the pause goes unseen. Only a new
+  cut asks: one resuming, or a later span, waits its turn.
 - An HD cut comes in spans (``span_ms`` of media, a few minutes) rather than
   to the recording's end: the cache asks for the next span as the viewer
   nears the end of one (:meth:`Cut.extend`), and the muxer joins them. The
@@ -127,6 +132,11 @@ class Cut:
     borrowed: int = 0
     # Time the muxer took (s, on the event loop).
     mux_s: float = 0.0
+    # Another cut of the channel waits: end this span at the next block.
+    give_way: bool = False
+    gave_way: int = 0
+    # Wakes the span's pump (to give way at once).
+    waker: asyncio.Event | None = None
     _more: asyncio.Event = field(default_factory=asyncio.Event)
 
     def extend(self) -> None:
@@ -168,6 +178,7 @@ class Cut:
             "paused": self.paused,
             "spans": self.spans,
             "borrowed": self.borrowed,
+            "gave_way": self.gave_way,
             "mux_ms": round(self.mux_s * 1000, 1),
             "error": self.error,
             **self.timing,
@@ -187,8 +198,12 @@ class _Feed:
     failures: list[str] = field(default_factory=list)
     arrived: asyncio.Event = field(default_factory=asyncio.Event)
     end_status: int | None = None
+    # The span gave its turn up: what still arrives is the next span's.
+    detached: bool = False
 
     def block(self, block: Block) -> None:
+        if self.detached:
+            return
         began = time.perf_counter()
         try:
             self.pieces.extend(self.muxer.feed(block))
@@ -201,6 +216,14 @@ class _Feed:
     def chunk(self, stats: StreamStats) -> None:
         self.end_status = stats.end_status
         self.arrived.set()
+
+
+@dataclass(slots=True)
+class _Channel:
+    """Whose turn it is to download from a channel."""
+
+    lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    holder: Cut | None = None
 
 
 @dataclass(slots=True)
@@ -239,7 +262,8 @@ class BaichuanSource:
         self._client_factory = client_factory
         self._idle_logout = idle_logout
         self._hosts: dict[str, _Host] = {}
-        self._cuts: dict[tuple[str, int], Cut] = {}
+        self._cuts: set[Cut] = set()
+        self._channels: dict[tuple[str, int], _Channel] = {}
         self._closed = False
         # Each camera's counter rate (entry|channel), as earlier cuts measured.
         self._rates_store: Store[dict[str, int]] = Store(hass, 1, RATES_STORE_KEY)
@@ -284,13 +308,10 @@ class BaichuanSource:
             if time.monotonic() < host.unsupported_until:
                 raise CutError(f"not supported by this device ({host.unsupported})")
             host.unsupported = None
-        previous = self._cuts.get((entry_id, channel))
-        if previous is not None:
-            await self.async_stop(previous)
         cut = Cut(
             entry_id, channel, stream, path, at_ms, span_ms=span_ms, borrow=borrow
         )
-        self._cuts[(entry_id, channel)] = cut
+        self._cuts.add(cut)
         cut.task = self._hass.async_create_background_task(
             self._run(cut, start_ms, end_ms, reserve, size),
             f"reolink_viewer baichuan cut ch{channel}",
@@ -298,9 +319,8 @@ class BaichuanSource:
         return cut
 
     async def async_stop(self, cut: Cut) -> None:
-        """Stop a cut (the viewer left, or another start replaced it)."""
-        if self._cuts.get((cut.entry_id, cut.channel)) is cut:
-            del self._cuts[(cut.entry_id, cut.channel)]
+        """Stop a cut (the viewer left, or the cache let it go)."""
+        self._cuts.discard(cut)
         task = cut.task
         if task is not None and not task.done():
             task.cancel()
@@ -341,20 +361,27 @@ class BaichuanSource:
                             client = None
                         client = await self._acquire(cut)
                     assert fd is not None
-                    cut.spans += 1
-                    await self._receive(
-                        cut,
-                        client,
-                        times=(
-                            _local(max(began - LEAD_S, origin), tz),
-                            _local(min(span_end, end), tz),
-                        ),
-                        final=final,
-                        fd=fd,
-                        reserve=reserve,
-                        size=size,
-                    )
+                    async with self._turn(cut):
+                        cut.spans += 1
+                        gave_way = await self._receive(
+                            cut,
+                            client,
+                            times=(
+                                _local(max(began - LEAD_S, origin), tz),
+                                _local(min(span_end, end), tz),
+                            ),
+                            final=final,
+                            fd=fd,
+                            reserve=reserve,
+                            size=size,
+                        )
                     self._hosts[cut.entry_id].worked = True
+                if gave_way:
+                    # Another cut of the channel goes first; then on from here.
+                    cut.gave_way += 1
+                    resume = muxer.resume_unix
+                    began = resume if resume is not None else began
+                    continue
                 if final:
                     return
                 # Between spans: hold the login, not the slot.
@@ -388,8 +415,7 @@ class BaichuanSource:
                 await self._hass.async_add_executor_job(os.close, fd)
             if client is not None:
                 self._release(cut.entry_id)
-            if self._cuts.get((cut.entry_id, cut.channel)) is cut:
-                del self._cuts[(cut.entry_id, cut.channel)]
+            self._cuts.discard(cut)
             cut.timing["total_ms"] = _ms(cut.began)
             async with cut.changed:
                 cut.changed.notify_all()
@@ -418,16 +444,48 @@ class BaichuanSource:
         rates[key] = stats.rate
         self._rates_store.async_delay_save(lambda: dict(rates), 10)
 
+    def _ask_way(self, cut: Cut) -> _Channel:
+        """Ask the cut downloading from ``cut``'s channel, if another, to give way.
+
+        Only for a cut's first span (a viewer waits for its first picture): a
+        later span, or one resuming after giving way, has its viewer well
+        ahead and waits its turn, so two cuts do not take turns block by block.
+        """
+        channel = self._channels.setdefault((cut.entry_id, cut.channel), _Channel())
+        holder = channel.holder
+        if cut.spans == 0 and holder is not None and holder is not cut:
+            holder.give_way = True
+            if holder.waker is not None:
+                holder.waker.set()
+        return channel
+
+    @contextlib.asynccontextmanager
+    async def _turn(self, cut: Cut) -> AsyncIterator[None]:
+        """Hold the channel's turn to download, asking its holder to give way."""
+        channel = self._ask_way(cut)
+        async with channel.lock:
+            channel.holder = cut
+            cut.give_way = False
+            try:
+                yield
+            finally:
+                channel.holder = None
+                cut.waker = None
+
     @contextlib.asynccontextmanager
     async def _slot(self, cut: Cut, wait: float) -> AsyncIterator[None]:
         """Hold a slot of the host's stream budget, or fail within ``wait``."""
         streams = self._scheduler.host(cut.entry_id).streams
         ticket = streams.request(Priority.PLAYBACK)
         try:
-            if not ticket.granted and cut.borrow is not None:
-                # Queued first, so the slot the download gives up is this one's.
-                cut.borrowed += 1
-                await cut.borrow()
+            if not ticket.granted:
+                # Queued first, so a slot given up is this one's: the channel's
+                # other cut gives its turn and slot up, and the recording's
+                # download its slot.
+                self._ask_way(cut)
+                if cut.borrow is not None:
+                    cut.borrowed += 1
+                    await cut.borrow()
             try:
                 async with asyncio.timeout(wait):
                     await ticket.wait()
@@ -451,11 +509,15 @@ class BaichuanSource:
         fd: int,
         reserve: Reserve,
         size: int,
-    ) -> None:
-        """Cut one span (device-local ``times``) into the open file."""
+    ) -> bool:
+        """Cut one span (device-local ``times``) into the open file.
+
+        Returns True when it ended early to give the channel to another cut.
+        """
         muxer = cut.muxer
         assert muxer is not None
         feed = _Feed(muxer, cut)
+        cut.waker = feed.arrived
         options: dict[str, Any] = {
             # With 1 the RLN36 sent the sub stream for a mainStream cut (run 1).
             "support_sub": 1 if cut.stream == "sub" else 0,
@@ -484,7 +546,7 @@ class BaichuanSource:
             cut.timing.setdefault("reply_ms", reply_ms)
             if stats.end_status is not None:
                 feed.end_status = stats.end_status
-            await self._pump(
+            return await self._pump(
                 cut, client, feed=feed, final=final, fd=fd, reserve=reserve, size=size
             )
         finally:
@@ -503,11 +565,13 @@ class BaichuanSource:
         fd: int,
         reserve: Reserve,
         size: int,
-    ) -> None:
+    ) -> bool:
         """Write what the muxer gives as it comes, until the device's end marker.
 
         At the end of the last span the muxer's open group is written; at the
-        end of another it is kept for the next span to join.
+        end of another it is kept for the next span to join. Returns True when
+        it stopped early to give the channel to another cut (once this one has
+        a fragment: its viewer is not kept waiting either).
         """
         pieces = feed.pieces
         lost = asyncio.ensure_future(client.lost.wait())
@@ -538,31 +602,44 @@ class BaichuanSource:
                         feed.muxer.pause()
                     cut.timing["end_status"] = feed.end_status
                 if pieces:
-                    data = b"".join(pieces)
-                    pieces.clear()
-                    if cut.written + len(data) > reserved:
-                        reserved = max(reserved * 5 // 4, cut.written + len(data))
-                        await reserve(cut.path, reserved)
-                    await self._hass.async_add_executor_job(_write_all, fd, data)
-                    cut.written += len(data)
-                    await self._hass.async_add_executor_job(
-                        _scan, cut.path, cut.index, cut.written
-                    )
-                    if cut.index.error is not None:
-                        raise CutError(f"not playable as fragments: {cut.index.error}")
-                    if cut.index.fragments and "first_fragment_ms" not in cut.timing:
-                        cut.timing["first_fragment_ms"] = _ms(cut.began)
-                    async with cut.changed:
-                        cut.changed.notify_all()
+                    reserved = await self._write(cut, pieces, fd, reserve, reserved)
                 if ended:
                     if final:
                         cut.complete = True
                         cut.timing["mbit_s"] = _rate(cut.written, cut.began)
-                    return
+                    return False
+                if cut.give_way and cut.index.fragments:
+                    # Nothing more is muxed; what was, is written; the open
+                    # group waits for the next span.
+                    feed.detached = True
+                    if pieces:
+                        await self._write(cut, pieces, fd, reserve, reserved)
+                    feed.muxer.pause()
+                    return True
                 if lost.done():
                     raise CutError("connection lost")
         finally:
             lost.cancel()
+
+    async def _write(
+        self, cut: Cut, pieces: list[bytes], fd: int, reserve: Reserve, reserved: int
+    ) -> int:
+        """Write the muxer's pieces to the cut's file; return the room reserved."""
+        data = b"".join(pieces)
+        pieces.clear()
+        if cut.written + len(data) > reserved:
+            reserved = max(reserved * 5 // 4, cut.written + len(data))
+            await reserve(cut.path, reserved)
+        await self._hass.async_add_executor_job(_write_all, fd, data)
+        cut.written += len(data)
+        await self._hass.async_add_executor_job(_scan, cut.path, cut.index, cut.written)
+        if cut.index.error is not None:
+            raise CutError(f"not playable as fragments: {cut.index.error}")
+        if cut.index.fragments and "first_fragment_ms" not in cut.timing:
+            cut.timing["first_fragment_ms"] = _ms(cut.began)
+        async with cut.changed:
+            cut.changed.notify_all()
+        return reserved
 
     # ---- The connection ----
 
@@ -646,7 +723,7 @@ class BaichuanSource:
     async def async_shutdown(self) -> None:
         """Stop every cut and log out."""
         self._closed = True
-        for cut in list(self._cuts.values()):
+        for cut in list(self._cuts):
             await self.async_stop(cut)
         for entry_id, host in self._hosts.items():
             if host.idle is not None:
@@ -668,8 +745,8 @@ class BaichuanSource:
             "logged_in": sum(1 for h in self._hosts.values() if h.client is not None),
             "logins": sum(h.logins for h in self._hosts.values()),
             "logouts": sum(h.logouts for h in self._hosts.values()),
-            "cuts_running": sum(1 for c in self._cuts.values() if c.running),
-            "cuts_paused": sum(1 for c in self._cuts.values() if c.paused),
+            "cuts_running": sum(1 for c in self._cuts if c.running),
+            "cuts_paused": sum(1 for c in self._cuts if c.paused),
             "unsupported": [
                 h.unsupported for h in self._hosts.values() if h.unsupported is not None
             ],

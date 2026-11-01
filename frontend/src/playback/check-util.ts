@@ -224,6 +224,8 @@ export interface CutStatus {
   slot_ms?: number;
   /** Times it took its recording's download's stream slot (none was free). */
   borrowed?: number;
+  /** Times it gave its channel to another viewer's new cut (Phase 5c). */
+  gave_way?: number;
   reply_ms?: number;
   login?: string;
   login_ms?: number;
@@ -269,6 +271,7 @@ export function cutReport(cut: CutStatus): string {
     parts.push("login shared");
   }
   if (typeof cut.reply_ms === "number") parts.push(`reply ${Math.round(cut.reply_ms)} ms`);
+  if (cut.gave_way) parts.push(`gave way to another viewer ${String(cut.gave_way)}×`);
   parts.push(`${cut.fragments ?? 0} fragments, ${((cut.bytes ?? 0) / 1_000_000).toFixed(1)} MB`);
   if (typeof cut.mbit_s === "number") parts.push(`${cut.mbit_s} Mbit/s`);
   parts.push(cut.error ? `error ${cut.error}` : cut.complete ? "complete" : cut.running ? "running" : "stopped");
