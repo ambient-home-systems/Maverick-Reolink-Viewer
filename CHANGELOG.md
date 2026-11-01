@@ -3,6 +3,18 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.39.0
+
+Phase 5c, step 3: the clock of a start deep in a recording.
+
+- **Each camera's clock rate is kept.** The frames of the recorder's answer are
+  placed on the camera's own clock, which runs up to 2 % off; that rate is now
+  kept once measured, so the next start of that camera is on it from the first
+  frame instead of after a minute.
+- **The playback check** (v0.4.4) says how far apart the copy and the recorder's
+  answer place the same moment where they meet, and how long Home Assistant spent
+  turning the answer into video.
+
 ## 0.38.0
 
 Phase 5c, step 2: starting deep in a recording over the Reolink protocol is on

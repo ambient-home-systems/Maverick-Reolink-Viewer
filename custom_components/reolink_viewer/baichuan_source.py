@@ -27,6 +27,10 @@ indexed like it (``fmp4.FragmentIndex``), so the MSE view serves both alike.
   cut of it came through is not asked again for ``UNSUPPORTED_RETRY_S``; its
   starts go straight to the download, and ``stats()`` says why. Timeouts, a lost connection or no free stream
   slot are passing failures and change nothing.
+- Each camera's counter rate, once a cut has measured it over
+  ``KEEP_RATE_SPAN_S``, is kept (an HA store) and given to the muxer of its
+  next cut, so its frames are on the right clock from the first one. The time
+  the muxer takes is counted (``mux_ms``: the HA host's load, Phase 5c).
 - The media times are the recording's (0 at its start); the cut's start and
   end are sent in the device's local time (``timeconv``'s zone, from the
   bridge), as the device keeps them.
@@ -48,6 +52,7 @@ import time
 from typing import Any
 
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.storage import Store
 
 from . import bridge
 from .baichuan_client import BaichuanClientError, BaichuanReplayClient, StreamStats
@@ -74,6 +79,9 @@ END_TIMEOUT_S = 3.0
 STREAM_TYPES = {"sub": "subStream", "main": "mainStream"}
 # A device that refused the protocol is asked again after this long.
 UNSUPPORTED_RETRY_S = 6 * 3600.0
+# A counter rate measured over at least this many seconds is kept.
+KEEP_RATE_SPAN_S = 300
+RATES_STORE_KEY = "reolink_viewer.baichuan_rates"
 ANY_CHANNEL_BITMAP = 255
 
 type ClientFactory = Callable[..., BaichuanReplayClient]
@@ -116,6 +124,8 @@ class Cut:
     # Asks the recording's download for its stream slot (none was free).
     borrow: Borrow | None = None
     borrowed: int = 0
+    # Time the muxer took (s, on the event loop).
+    mux_s: float = 0.0
     _more: asyncio.Event = field(default_factory=asyncio.Event)
 
     def extend(self) -> None:
@@ -157,6 +167,7 @@ class Cut:
             "paused": self.paused,
             "spans": self.spans,
             "borrowed": self.borrowed,
+            "mux_ms": round(self.mux_s * 1000, 1),
             "error": self.error,
             **self.timing,
         }
@@ -170,16 +181,19 @@ class _Feed:
     """What the muxer gave and the device said, between two writes."""
 
     muxer: BaichuanMuxer
+    cut: Cut
     pieces: list[bytes] = field(default_factory=list)
     failures: list[str] = field(default_factory=list)
     arrived: asyncio.Event = field(default_factory=asyncio.Event)
     end_status: int | None = None
 
     def block(self, block: Block) -> None:
+        began = time.perf_counter()
         try:
             self.pieces.extend(self.muxer.feed(block))
         except MuxError as err:
             self.failures.append(str(err))
+        self.cut.mux_s += time.perf_counter() - began
         if self.pieces or self.failures:
             self.arrived.set()
 
@@ -226,6 +240,9 @@ class BaichuanSource:
         self._hosts: dict[str, _Host] = {}
         self._cuts: dict[tuple[str, int], Cut] = {}
         self._closed = False
+        # Each camera's counter rate (entry|channel), as earlier cuts measured.
+        self._rates_store: Store[dict[str, int]] = Store(hass, 1, RATES_STORE_KEY)
+        self._rates: dict[str, int] | None = None
 
     @property
     def enabled(self) -> bool:
@@ -296,7 +313,9 @@ class BaichuanSource:
         origin = start_ms / 1000
         end = end_ms / 1000
         asked = origin + cut.asked_ms / 1000
-        muxer = BaichuanMuxer(origin, asked)
+        rates = await self._load_rates()
+        rate_key = f"{cut.entry_id}|{cut.channel}"
+        muxer = BaichuanMuxer(origin, asked, rate=rates.get(rate_key))
         cut.muxer = muxer
         client: BaichuanReplayClient | None = None
         fd: int | None = None
@@ -363,6 +382,7 @@ class BaichuanSource:
                 )
         finally:
             cut.paused = False
+            self._keep_rate(rate_key, muxer)
             if fd is not None:
                 await self._hass.async_add_executor_job(os.close, fd)
             if client is not None:
@@ -372,6 +392,30 @@ class BaichuanSource:
             cut.timing["total_ms"] = _ms(cut.began)
             async with cut.changed:
                 cut.changed.notify_all()
+
+    async def _load_rates(self) -> dict[str, int]:
+        if self._rates is None:
+            loaded = await self._rates_store.async_load()
+            self._rates = (
+                {k: int(v) for k, v in loaded.items() if isinstance(v, int)}
+                if isinstance(loaded, dict)
+                else {}
+            )
+        return self._rates
+
+    def _keep_rate(self, key: str, muxer: BaichuanMuxer) -> None:
+        """Keep a counter rate the cut measured over long enough."""
+        stats = muxer.stats
+        rates = self._rates
+        if (
+            rates is None
+            or stats.rate_source != "learned"
+            or stats.rate_span_s < KEEP_RATE_SPAN_S
+            or rates.get(key) == stats.rate
+        ):
+            return
+        rates[key] = stats.rate
+        self._rates_store.async_delay_save(lambda: dict(rates), 10)
 
     @contextlib.asynccontextmanager
     async def _slot(self, cut: Cut, wait: float) -> AsyncIterator[None]:
@@ -410,7 +454,7 @@ class BaichuanSource:
         """Cut one span (device-local ``times``) into the open file."""
         muxer = cut.muxer
         assert muxer is not None
-        feed = _Feed(muxer)
+        feed = _Feed(muxer, cut)
         options: dict[str, Any] = {
             # With 1 the RLN36 sent the sub stream for a mainStream cut (run 1).
             "support_sub": 1 if cut.stream == "sub" else 0,

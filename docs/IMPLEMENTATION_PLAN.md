@@ -4632,9 +4632,9 @@ hardware before the next:
 | 5c step | Status |
 | --- | --- |
 | 1. One stream, the bytes once | **Done** (v0.37.0–v0.37.1, below): the owner's check passed (2026-10-31) |
-| 2. The method per host, on by default | **Built** (v0.38.0, below) |
-| 3. The clock from the first second | |
-| 4. The HA host's load | |
+| 2. The method per host, on by default | **Done** (v0.38.0, below): the owner's check passed (2026-11-01) |
+| 3. The clock from the first second | **Built** (v0.39.0, below): the rate kept per camera; the alignment measured |
+| 4. The HA host's load | **Measured from v0.39.0** (the muxer's time per cut); moved off the loop only if it shows |
 | 5. One cut per channel per viewer | |
 
 #### Step 1: one stream, the bytes once (v0.37.0)
@@ -4737,6 +4737,48 @@ the copy. v0.37.1 reads the player's fragments instead (check v0.4.3).
 **Exit criteria:** on by default without a step by the owner; a device that
 refuses the protocol costs one try per 6 h, then its starts are the download's
 at once.
+
+**The owner's check (2026-11-01, v0.38.0): met.** The setting showed ticked
+after the update; a deep start came from the cut ("first fragment 426 ms, new
+login"); unticked, a deep start waited for the download, and ticked again it
+came from the cut; dragging the timeline was smooth.
+
+#### Step 3: the clock from the first second (v0.39.0), and step 4's measure
+
+The plan was to keep each camera's counter rate and to place the first key
+frame finer than its whole POSIX second. Building it showed the second part
+would do harm: **the recording's start is a whole second too**, so where a
+recording starts on a key frame and key frames come whole seconds apart (the
+owner's cameras), the cut's and the original's truncations cancel and the
+first key frame already sits where the original has it; placing it mid-second
+would add half a second (the muxer's tests, whose streams are built that way,
+failed at once). So step 3 keeps what is right and measures what is left:
+
+- **The rate kept per camera** (`BaichuanSource`, an HA store,
+  `reolink_viewer.baichuan_rates`, by entry and channel): a rate a cut learned
+  over at least `KEEP_RATE_SPAN_S` (300 s) is given to the muxer of the
+  camera's next cut, which places its frames on it from the first one
+  (`rate_source` "stored") and relearns only over `STORED_RATE_SPAN_S`
+  (600 s: whole seconds make a minute's estimate good to about 2 %, ten
+  minutes' to 0.2 %). Until a camera's first long cut, the minute's estimate
+  as before.
+- **The alignment measured where the two pieces meet:** when the download
+  stops at the cut, the original's key frame nearest the cut's first one is
+  the same picture (if less than a second apart), and the difference is
+  recorded (`cut_offset_ms`): the check's fill line "cut +N ms from the copy".
+- **Step 4's measure:** the time the muxer takes per cut (`mux_ms`, on HA's
+  event loop), in the check's cut line. Moved to the executor only if it shows
+  (an HD span of 3 minutes is about 240 MB).
+
+**Hardware checklist (the owner, LAN Chrome):** run the playback check with HD,
+twice, a few minutes apart (the second run's cuts use the rates the first kept,
+where the first measured five minutes or more). Send both reports: the D1 and H
+fill lines' "cut … ms from the copy", and the cut lines' "counter …/s
+(learned|stored)" and "mux … ms".
+
+**Exit criteria:** the cut within a frame or two of the copy where they meet
+(about 70–130 ms on these cameras), else a finer anchor is worth building; the
+muxer's time small beside the cut's own (an HD span's), else step 4 moves it.
 
 **Learned:** the 4 to 8 s before a clip of such a recording downloads is the
 price of a device that ignores Range; a clip is rare and the wait is said in

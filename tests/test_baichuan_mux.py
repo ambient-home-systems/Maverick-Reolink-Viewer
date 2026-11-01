@@ -200,6 +200,34 @@ def test_the_counter_rate_is_learned_from_the_key_frames() -> None:
     assert starts == sorted(starts)
 
 
+def test_a_stored_rate_places_frames_from_the_first_one() -> None:
+    """A rate from an earlier cut: right from the start, relearned only late."""
+    rate = 1_020_000
+    stored = BaichuanMuxer(ORIGIN, ASKED, rate=rate)
+    nominal = BaichuanMuxer(ORIGIN, ASKED)
+    first: list[int] = []
+    for muxer in (stored, nominal):
+        muxer.feed(_h264_key(0, ASKED))
+        muxer.feed(_frame(annexb(P), rate // 2))
+        pieces = muxer.feed(_h264_key(rate, ASKED + 1))
+        first.append(_trun_rows(pieces[-1], 1)[0][0])
+    # Half a second of the camera's counter is half a second of media; on the
+    # nominal clock it reads 2 % long.
+    assert first == [45_000, 45_900]
+    assert stored.stats.as_dict()["rate_source"] == "stored"
+    assert nominal.stats.rate_source == "nominal"
+    # A minute's key frames do not override it (a minute's estimate is coarse).
+    for second in range(2, 70):
+        stored.feed(_h264_key(second * rate, ASKED + second))
+    assert stored.stats.rate_source == "stored"
+    # Ten minutes' do.
+    stored.feed(_h264_key(601 * rate, ASKED + 601))
+    assert stored.stats.rate_source == "learned"
+    assert stored.stats.rate_span_s == 601
+    # A rate out of range is not used.
+    assert BaichuanMuxer(ORIGIN, ASKED, rate=10).stats.rate_source == "nominal"
+
+
 def test_rates_far_off_are_clamped_and_wraps_and_steps_back_are_absorbed() -> None:
     muxer = BaichuanMuxer(ORIGIN, ASKED)
     start = 2**32 - 500_000

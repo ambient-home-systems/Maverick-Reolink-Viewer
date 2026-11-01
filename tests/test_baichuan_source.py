@@ -6,6 +6,7 @@ from datetime import datetime, tzinfo
 import os
 from pathlib import Path
 import socket
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
@@ -13,7 +14,12 @@ from zoneinfo import ZoneInfo
 from aiohttp import ClientSession
 import pytest
 
-from custom_components.reolink_viewer import baichuan_source, bridge, vodcache
+from custom_components.reolink_viewer import (
+    baichuan_mux,
+    baichuan_source,
+    bridge,
+    vodcache,
+)
 from custom_components.reolink_viewer.baichuan_source import (
     BaichuanSource,
     Cut,
@@ -910,3 +916,47 @@ async def test_a_device_that_worked_is_not_left_alone_and_a_closed_port_is(
         await _done(cut)
     assert cut.error == "connection refused (its port for the protocol is closed)"
     assert rig.source.stats()["unsupported"] == [cut.error]
+
+
+async def test_a_cameras_counter_rate_is_kept_for_its_next_cut(rig: Rig) -> None:
+    rig.nvr.media = camera_blocks(ASKED - 3, seconds=8, rate=999_000)
+    with (
+        patch.object(baichuan_source, "KEEP_RATE_SPAN_S", 3),
+        patch.object(baichuan_mux, "RATE_SPAN_S", 3),
+    ):
+        first = await rig.cut()
+        await _done(first)
+    assert first.muxer is not None
+    assert first.muxer.stats.rate_source == "learned"
+    assert first.public()["mux_ms"] > 0
+    assert rig.source._rates == {"entry1|3": 999_000}
+    second = await rig.cut(name="b")
+    await _done(second)
+    assert second.muxer is not None
+    assert second.muxer.stats.rate_source == "stored"
+    assert second.muxer.stats.rate == 999_000
+    # Another channel has its own camera.
+    third = await rig.cut(channel=4, name="c")
+    await _done(third)
+    assert third.muxer is not None
+    assert third.muxer.stats.rate_source == "nominal"
+
+
+def test_the_cut_is_measured_against_the_original_where_they_meet() -> None:
+    index = SimpleNamespace(
+        fragments=[
+            SimpleNamespace(start_ms=t, sync=sync)
+            for t, sync in (
+                (0.0, True),
+                (1000.0, False),
+                (2000.0, True),
+                (4000.0, True),
+            )
+        ]
+    )
+    assert vodcache._offset_ms(index, 2040.4) == 40.4  # type: ignore[arg-type]
+    assert vodcache._offset_ms(index, 3950.0) == -50.0  # type: ignore[arg-type]
+    # Not the same picture, or nothing to compare with.
+    assert vodcache._offset_ms(index, 5500.0) is None  # type: ignore[arg-type]
+    empty = SimpleNamespace(fragments=[])
+    assert vodcache._offset_ms(empty, 10.0) is None  # type: ignore[arg-type]
