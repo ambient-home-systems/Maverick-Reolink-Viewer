@@ -16,7 +16,7 @@ occur on a device; it is converted with the offset the device's rules give.
 
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta, tzinfo
+from datetime import UTC, datetime, timedelta, timezone, tzinfo
 import re
 
 # How far apart a transition is looked for, and how close a hint must be.
@@ -235,3 +235,143 @@ def local_now(tz: tzinfo | None, now_utc: datetime | None = None) -> datetime:
 
 
 _SPAN = (timedelta(hours=-14), timedelta(0), timedelta(hours=14))
+
+
+# ---- The device's time zone, from its own settings ----
+
+
+@dataclass(frozen=True, slots=True)
+class _Rule:
+    """When DST starts or ends: month, week (1-4, 5 the last), weekday, time."""
+
+    month: int
+    week: int
+    weekday: int  # Python's (Monday 0)
+    hour: int
+    minute: int
+    second: int
+
+    def at(self, year: int) -> datetime:
+        """Return the local wall time it falls on in ``year``."""
+        first = datetime(year, self.month, 1)
+        if self.week >= 5:
+            # The last such weekday of the month.
+            nxt = datetime(year + self.month // 12, self.month % 12 + 1, 1)
+            last = nxt - timedelta(days=1)
+            day = last - timedelta(days=(last.weekday() - self.weekday) % 7)
+        else:
+            day = first + timedelta(days=(self.weekday - first.weekday()) % 7)
+            day += timedelta(weeks=max(self.week, 1) - 1)
+        return day.replace(hour=self.hour, minute=self.minute, second=self.second)
+
+
+class DeviceTimezone(tzinfo):
+    """A Reolink device's zone: its UTC offset and DST rules, as it keeps them.
+
+    Built from the device's GetTime answer, which reolink-aio also turns into a
+    zone; its rule arithmetic lands DST's start and end on the wrong day in
+    most years (in 2026, the end a week late: 8 November, not the 1st). The
+    rules here: week 1 to 4 is that occurrence of the weekday in the month,
+    5 the last; weekday 0 is Sunday.
+    """
+
+    def __init__(
+        self, offset: timedelta, dst: timedelta, start: _Rule, end: _Rule
+    ) -> None:
+        """Initialize from a standard offset, the DST shift and its two rules."""
+        super().__init__()
+        self._std = offset
+        self._dst = dst
+        self._start = start
+        self._end = end
+
+    def __repr__(self) -> str:
+        """Return the offset and the shift."""
+        return f"DeviceTimezone(offset={self._std!r}, dst={self._dst!r})"
+
+    def _bounds(self, year: int) -> tuple[datetime, datetime]:
+        return self._start.at(year), self._end.at(year)
+
+    def _in_dst(self, local: datetime) -> bool:
+        """Return whether wall time ``local`` is in DST (its first meaning)."""
+        start, end = self._bounds(local.year)
+        if start < end:
+            inside = start <= local < end
+            # The hour before the end happens twice: fold 1 is the second.
+            if inside and local.fold and local >= end - self._dst:
+                return False
+            return inside
+        # Southern hemisphere: DST spans the new year.
+        if end - self._dst <= local < end and local.fold:
+            return False
+        return local >= start or local < end
+
+    def utcoffset(self, dt: datetime | None) -> timedelta:
+        """Return the offset of wall time ``dt`` (the standard one for None)."""
+        if dt is None:
+            return self._std
+        local = dt.replace(tzinfo=None)
+        return self._std + self._dst if self._in_dst(local) else self._std
+
+    def dst(self, dt: datetime | None) -> timedelta:
+        """Return the DST shift in effect at wall time ``dt``."""
+        if dt is None:
+            return timedelta(0)
+        return self._dst if self._in_dst(dt.replace(tzinfo=None)) else timedelta(0)
+
+    def tzname(self, dt: datetime | None) -> str:
+        """Return a name such as UTC-05:00."""
+        offset = self.utcoffset(dt)
+        sign = "-" if offset < timedelta(0) else "+"
+        minutes = abs(int(offset.total_seconds())) // 60
+        return f"UTC{sign}{minutes // 60:02d}:{minutes % 60:02d}"
+
+    def fromutc(self, dt: datetime) -> datetime:
+        """Return the wall time of a UTC instant (``dt`` carries this zone)."""
+        standard = dt.replace(tzinfo=None) + self._std
+        start, end = self._bounds(standard.year)
+        # The transitions in standard time: DST from ``start`` until ``end``
+        # minus the shift (the end is given in DST wall time).
+        stop = end - self._dst
+        inside = (
+            start <= standard < stop
+            if start < end
+            else standard >= start or standard < stop
+        )
+        if inside:
+            return (standard + self._dst).replace(tzinfo=self)
+        # Just after the end, the repeated hour's second meaning.
+        fold = 1 if stop <= standard < end else 0
+        return standard.replace(tzinfo=self, fold=fold)
+
+
+def device_timezone(settings: Mapping[str, object]) -> tzinfo | None:
+    """Return the zone of a device's GetTime answer (``{"Time": …, "Dst": …}``)."""
+    time_part = settings.get("Time")
+    dst_part = settings.get("Dst")
+    if not isinstance(time_part, Mapping) or not isinstance(
+        time_part.get("timeZone"), int
+    ):
+        return None
+    # Reolink counts the offset west of UTC as positive.
+    offset = timedelta(seconds=-int(time_part["timeZone"]))
+    if not isinstance(dst_part, Mapping) or not dst_part.get("enable"):
+        return timezone(offset)
+    try:
+        rules = [
+            _Rule(
+                int(dst_part[f"{edge}Mon"]),
+                int(dst_part[f"{edge}Week"]),
+                (int(dst_part[f"{edge}Weekday"]) - 1) % 7,
+                int(dst_part[f"{edge}Hour"]),
+                int(dst_part[f"{edge}Min"]),
+                int(dst_part[f"{edge}Sec"]),
+            )
+            for edge in ("start", "end")
+        ]
+        shift = timedelta(hours=int(dst_part["offset"]))
+        for rule in rules:
+            rule.at(2000)  # a month or time out of range fails here
+    except KeyError, TypeError, ValueError:
+        return None
+    return DeviceTimezone(offset, shift, rules[0], rules[1])

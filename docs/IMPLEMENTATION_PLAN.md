@@ -4633,8 +4633,8 @@ hardware before the next:
 | --- | --- |
 | 1. One stream, the bytes once | **Done** (v0.37.0–v0.37.1, below): the owner's check passed (2026-10-31) |
 | 2. The method per host, on by default | **Done** (v0.38.0, below): the owner's check passed (2026-11-01) |
-| 3. The clock from the first second | **Built** (v0.39.0, below): the rate kept per camera; the alignment measured |
-| 4. The HA host's load | **Measured from v0.39.0** (the muxer's time per cut); moved off the loop only if it shows |
+| 3. The clock from the first second | **Built** (v0.39.0–v0.39.1, below): the rate kept per camera; the alignment measured. The owner's check found the device's zone a week off (reolink-aio's DST rules), fixed in v0.39.1; the alignment is measured again after it |
+| 4. The HA host's load | **Done** (v0.39.0's check): the muxer takes 144–182 ms for a sub cut of 15–19 MB and 422–452 ms for an HD span of 124 MB, spread over its seconds of download in a block's worth at a time: it stays on the loop |
 | 5. One cut per channel per viewer | |
 
 #### Step 1: one stream, the bytes once (v0.37.0)
@@ -4779,6 +4779,35 @@ fill lines' "cut … ms from the copy", and the cut lines' "counter …/s
 **Exit criteria:** the cut within a frame or two of the copy where they meet
 (about 70–130 ms on these cameras), else a finer anchor is worth building; the
 muxer's time small beside the cut's own (an HD span's), else step 4 moves it.
+
+**The owner's check (2026-11-01, v0.39.0, two runs with HD):** every row as
+before (deep starts 360 and 442 ms from the cut, cached 101 and 94 ms, HD in
+0.56 and 0.72 s). Three findings:
+
+- **Every cut was "placed by asked time"**, the fallback for a key frame more
+  than 30 s from the moment asked, where every check since 5b read "key frame
+  time". The day was 1 November 2026, when US DST ended, and the device's zone
+  (reolink-aio's `Reolink_timezone`, built from GetTime) put the end on
+  **8 November**: its rule arithmetic adds the day difference where it should
+  subtract it, and its week count starts a week late when the month begins on
+  the weekday, so most years land DST's start and end on the wrong day (in
+  2025 on a Friday, 31 October). From 1 to 8 November every local time this
+  integration converted was an hour off: the timeline an hour early (the
+  hour's recording, 13:00 to 13:39, shown at 12:00), its starts consistent
+  with it (the same zone both ways), and the cuts' key frames an hour from the
+  asked moment. **v0.39.1** builds the zone from the same GetTime answer
+  (`timeconv.DeviceTimezone`, `bridge.timezone()`): week 1 to 4 that
+  occurrence of the weekday, 5 the last; checked against the tz database for
+  New York, Berlin and Sydney, every half hour of 2020 to 2030, both ways.
+  reolink-aio's zone remains the fallback. To report upstream (5d).
+- **So the offsets measured (−313, −256, +663 ms) say nothing**: anchored at the
+  asked moment, a cut's first key frame lands anywhere in its group of
+  pictures. The alignment is measured again on v0.39.1.
+- **No rate was kept**: the cuts measured about 3.5 minutes (sub) and 3 minutes
+  (HD), short of the 5 asked for, so the second run's read "learned" again (at
+  999,790/s both times: the whole seconds cancel on these cameras). v0.39.1
+  keeps a rate measured over 2 minutes.
+- **Step 4: no move needed** (the table above).
 
 **Learned:** the 4 to 8 s before a clip of such a recording downloads is the
 price of a device that ignores Range; a clip is rare and the wait is said in
