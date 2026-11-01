@@ -229,6 +229,10 @@ describe("Phase 5b reports", () => {
     expect(cutReport({ slot_ms: 35, borrowed: 1, complete: true })).toBe(
       "Reolink protocol cut: slot 35 ms (the download's), 0 fragments, 0.0 MB, complete",
     );
+    // Phase 5c: it paused for another viewer's new cut of the camera.
+    expect(cutReport({ gave_way: 2, complete: true })).toBe(
+      "Reolink protocol cut: gave way to another viewer 2×, 0 fragments, 0.0 MB, complete",
+    );
     // Phase 5c: the camera's rate kept from an earlier cut, and the muxer's time.
     expect(
       cutReport({ complete: true, mux_ms: 41.6, mux: { anchor: "key frame time", counter_rate: 999_790, rate_source: "stored" } }),

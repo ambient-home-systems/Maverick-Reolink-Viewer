@@ -34,6 +34,10 @@ served from the cache, with Range, by ``views.py``:
   (``baichuan_source.py``): its fragments in a file of their own beside the
   original, numbered from ``CUT_FIRST`` so a window's ``first`` says which
   file it reads; any failure of the cut falls back to the download;
+- a start far from a recording's cut makes a new one; the cut it replaces is
+  kept while a viewer still reads it (another viewer of the recording, within
+  ``OLD_CUT_KEEP_S``), its windows numbered by its own generation, and let go
+  once none does (Phase 5c);
 - such a recording is fetched once, in two pieces (Phase 5c): the download
   stops where the cut's media begins (the original then holds the part
   before it, and a window past that part reads the cut), and gives its stream
@@ -148,6 +152,8 @@ COVER_MARGIN_MS = 60_000
 FRAGMENT_BATCH = 4 * 1024 * 1024
 # A cut that asked for the download's stream slot waits this long for it.
 LEND_TIMEOUT_S = 2.0
+# A replaced cut read this recently is kept for whoever reads it.
+OLD_CUT_KEEP_S = 30.0
 
 
 class VodCacheError(Exception):
@@ -242,6 +248,8 @@ class Entry:
     cut: Cut | None = None
     cuts: int = 0
     cut_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    # Cuts a newer one replaced that a viewer still reads, by generation.
+    old_cuts: dict[int, Cut] = field(default_factory=dict)
     # Where the download stopped (ms of media): the cut has what follows, and
     # the original holds only what precedes it (Phase 5c).
     stopped_ms: float | None = None
@@ -537,7 +545,7 @@ class VodCache:
             return
         if (entry := self._entries.get(item[0])) is not None:
             entry.leases.pop(token, None)
-            if not entry.leases and entry.cut is not None:
+            if not entry.leases and (entry.cut is not None or entry.old_cuts):
                 self._hass.async_create_background_task(
                     self._end_cut(entry), "reolink_viewer end cut"
                 )
@@ -753,8 +761,8 @@ class VodCache:
         """
 
         if first is not None and first >= CUT_FIRST:
-            cut = entry.cut
-            if cut is None or first // CUT_FIRST != cut.generation:
+            cut = _cut_of(entry, first)
+            if cut is None:
                 raise VodCacheError("that cut of the recording was replaced")
             position = first % CUT_FIRST
             handover = await self._handover_ms(entry, cut, position)
@@ -815,7 +823,7 @@ class VodCache:
         index = entry.fragments
         candidates = self._candidates(entry)
         first = window.first
-        cut = entry.cut
+        cut = _cut_of(entry, first) if window.source == "cut" else None
         if window.source == "cut":
             if cut is None:
                 raise VodCacheError("no cut of this recording")
@@ -870,6 +878,7 @@ class VodCache:
         self, entry: Entry, source: BaichuanSource, at_ms: float
     ) -> Cut | None:
         """Return the cut covering ``at_ms``, a new one, or None (the original)."""
+        await self._prune_cuts(entry)
         indexed = await self._indexed_now(entry)
         if indexed is not None and indexed.find(at_ms) is not None:
             return None
@@ -909,9 +918,24 @@ class VodCache:
         old, entry.cut = entry.cut, cut
         if cut.task is not None:
             cut.task.add_done_callback(lambda _t: self._reserved.pop(path, None))
-        if old is not None and old.readers == 0:
-            await self._hass.async_add_executor_job(_unlink, old.path)
+        if old is not None:
+            # Another viewer of the recording may still read it.
+            entry.old_cuts[old.generation] = old
+        await self._prune_cuts(entry)
         return cut
+
+    async def _prune_cuts(self, entry: Entry, *, all_of_them: bool = False) -> None:
+        """Let go of the replaced cuts no viewer read lately (or all)."""
+        now = time.monotonic()
+        for generation, cut in list(entry.old_cuts.items()):
+            if cut.readers or (
+                not all_of_them and now - cut.last_read < OLD_CUT_KEEP_S
+            ):
+                continue
+            del entry.old_cuts[generation]
+            if self._baichuan is not None:
+                await self._baichuan.async_stop(cut)
+            await self._hass.async_add_executor_job(_unlink, cut.path)
 
     async def _first_fragment(self, entry: Entry, cut: Cut, at_ms: float) -> Cut | None:
         """Wait for the cut to reach ``at_ms``; None (and stop it) if it fails."""
@@ -1078,9 +1102,15 @@ class VodCache:
             raise CutError(str(err)) from err
 
     async def _end_cut(self, entry: Entry) -> None:
-        """Stop the cut (the last viewer left); drop it once the original is whole."""
+        """Stop the cut (the last viewer left); drop it once the original is whole.
+
+        Replaced cuts go at once (nobody reads them now).
+        """
+        if entry.leases:
+            return
+        await self._prune_cuts(entry, all_of_them=True)
         cut = entry.cut
-        if cut is None or entry.leases:
+        if cut is None:
             return
         if self._baichuan is not None:
             await self._baichuan.async_stop(cut)
@@ -1622,6 +1652,15 @@ def _offset_ms(index: FragmentIndex, cut_start: float) -> float | None:
     nearest = min(starts, key=lambda s: abs(s - cut_start))
     offset = cut_start - nearest
     return round(offset, 1) if abs(offset) < 1000 else None
+
+
+def _cut_of(entry: Entry, first: int) -> Cut | None:
+    """Return the cut a window index (``CUT_FIRST * generation + i``) reads."""
+    generation = first // CUT_FIRST
+    cut = entry.cut
+    if cut is not None and cut.generation == generation:
+        return cut
+    return entry.old_cuts.get(generation)
 
 
 def _stopped(entry: Entry) -> bool:

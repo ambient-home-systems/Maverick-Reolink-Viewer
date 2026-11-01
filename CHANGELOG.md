@@ -3,6 +3,18 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.40.0
+
+Phase 5c, step 5: two people watching the same camera's recordings at once.
+
+- **A second viewer no longer stops the first.** Two starts deep in one camera's
+  recordings (on two devices, or SD and HD) used to cancel each other's request
+  to the recorder; now they take turns, the second going first for its first
+  picture, and the first playing on from what it already has.
+- **Jumping far in a recording someone else is watching** no longer takes their
+  video away.
+- **The playback check** (v0.4.5) says when a start gave way to another viewer.
+
 ## 0.39.1
 
 - **Recordings at the right time after a DST change.** The recorder's time zone
