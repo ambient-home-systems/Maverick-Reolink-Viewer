@@ -3,6 +3,17 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.39.1
+
+- **Recordings at the right time after a DST change.** The recorder's time zone
+  came from reolink-aio, which puts the start and end of daylight saving time on
+  the wrong day in most years: in 2026 it ends DST on 8 November instead of the
+  1st. From 1 to 8 November the timeline showed recordings an hour early (and a
+  start deep in a recording fell back to placing its video by the time asked).
+  The zone is now built from the recorder's own settings, read correctly.
+- **Each camera's clock rate** is kept once measured over two minutes (five
+  before, which a start near an hour's end never reached).
+
 ## 0.39.0
 
 Phase 5c, step 3: the clock of a start deep in a recording.

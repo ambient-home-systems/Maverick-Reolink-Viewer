@@ -32,6 +32,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr
 
 from .const import REOLINK_DOMAIN
+from .timeconv import device_timezone
 
 if TYPE_CHECKING:
     from reolink_aio.api import Host
@@ -583,7 +584,16 @@ class ReolinkHostHandle:
         return self._api.rtmp_enabled
 
     def timezone(self) -> tzinfo | None:
-        """Return the device time zone, if known."""
+        """Return the device time zone, if known.
+
+        Built from the device's own time settings (``timeconv.device_timezone``:
+        reolink-aio's zone lands DST's start and end on the wrong day in most
+        years, a week late in November 2026); reolink-aio's when they are not
+        there.
+        """
+        settings = getattr(self._api, "_time_settings", None)
+        if isinstance(settings, dict) and (tz := device_timezone(settings)) is not None:
+            return tz
         tz = _safe(self._api.timezone)
         return tz if isinstance(tz, tzinfo) else None
 

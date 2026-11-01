@@ -79,8 +79,9 @@ END_TIMEOUT_S = 3.0
 STREAM_TYPES = {"sub": "subStream", "main": "mainStream"}
 # A device that refused the protocol is asked again after this long.
 UNSUPPORTED_RETRY_S = 6 * 3600.0
-# A counter rate measured over at least this many seconds is kept.
-KEEP_RATE_SPAN_S = 300
+# A counter rate measured over at least this many seconds is kept (a deep
+# start near an hour's end, or an HD span, is cut over 3 minutes).
+KEEP_RATE_SPAN_S = 120
 RATES_STORE_KEY = "reolink_viewer.baichuan_rates"
 ANY_CHANNEL_BITMAP = 255
 

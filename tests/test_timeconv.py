@@ -9,7 +9,9 @@ from reolink_aio.typings import Reolink_timezone
 from custom_components.reolink_viewer.timeconv import (
     Converted,
     DayConverter,
+    DeviceTimezone,
     Recording,
+    device_timezone,
     epoch_ms,
     from_ms,
     local_day_bounds,
@@ -42,8 +44,34 @@ REOLINK_EASTERN = Reolink_timezone(
         },
     }
 )
+
+
+def _settings(
+    offset_s: int,
+    start: tuple[int, int, int, int],
+    end: tuple[int, int, int, int],
+    *,
+    enable: int = 1,
+) -> dict[str, dict[str, int]]:
+    """A GetTime answer: (month, week, weekday Sunday 0, hour) per edge."""
+    dst: dict[str, int] = {"enable": enable, "offset": 1}
+    for edge, (month, week, weekday, hour) in (("start", start), ("end", end)):
+        dst |= {
+            f"{edge}Mon": month,
+            f"{edge}Week": week,
+            f"{edge}Weekday": weekday,
+            f"{edge}Hour": hour,
+            f"{edge}Min": 0,
+            f"{edge}Sec": 0,
+        }
+    return {"Time": {"timeZone": offset_s}, "Dst": dst}
+
+
+US_RULES = _settings(18000, (3, 2, 0, 2), (11, 1, 0, 2))
+# The same device, its zone built here (bridge.timezone uses it).
+DEVICE_EASTERN = device_timezone(US_RULES)
 ZONES = pytest.mark.parametrize(
-    "tz", [NEW_YORK, REOLINK_EASTERN], ids=["zoneinfo", "reolink"]
+    "tz", [NEW_YORK, DEVICE_EASTERN], ids=["zoneinfo", "device"]
 )
 
 
@@ -289,3 +317,65 @@ def test_event_through_the_fall_back_keeps_its_length(tz: tzinfo) -> None:
     assert first.ambiguous
     assert last.ambiguous
     assert last.utc - first.utc == timedelta(minutes=1)
+
+
+# ---- The device's zone (reolink-aio's lands DST on the wrong days) ----
+
+
+@pytest.mark.parametrize(
+    ("settings", "reference"),
+    [
+        (US_RULES, NEW_YORK),
+        # Last Sunday of March 2:00 to last Sunday of October 3:00 (wall time).
+        (_settings(-3600, (3, 5, 0, 2), (10, 5, 0, 3)), ZoneInfo("Europe/Berlin")),
+        # The southern hemisphere: first Sunday of October to first of April.
+        (_settings(-36000, (10, 1, 0, 2), (4, 1, 0, 3)), ZoneInfo("Australia/Sydney")),
+    ],
+    ids=["new-york", "berlin", "sydney"],
+)
+def test_the_device_zone_matches_the_tz_database(
+    settings: dict[str, dict[str, int]], reference: tzinfo
+) -> None:
+    """Every hour of 2020-2030, both ways, folds included."""
+    tz = device_timezone(settings)
+    assert isinstance(tz, DeviceTimezone)
+    utc = datetime(2020, 1, 1, tzinfo=UTC)
+    while utc.year < 2031:
+        mine, theirs = utc.astimezone(tz), utc.astimezone(reference)
+        assert (mine.replace(tzinfo=None), mine.fold) == (
+            theirs.replace(tzinfo=None),
+            theirs.fold,
+        ), utc
+        assert mine.utcoffset() == theirs.utcoffset(), utc
+        assert tz.dst(mine) == theirs.dst(), utc
+        utc += timedelta(minutes=30)
+
+
+def test_reolink_aio_ends_dst_a_week_late_in_november_2026() -> None:
+    """Why the device zone is built here: the owner's playback on 1 November."""
+    first = datetime(2026, 11, 1, 18, 44, tzinfo=UTC)  # 1:44 PM in New York
+    assert first.astimezone(REOLINK_EASTERN).hour == 14  # still DST
+    assert first.astimezone(DEVICE_EASTERN).hour == 13
+    assert first.astimezone(NEW_YORK).hour == 13
+
+
+def test_device_zone_names_and_odd_settings() -> None:
+    tz = DEVICE_EASTERN
+    assert tz is not None
+    assert tz.tzname(datetime(2026, 7, 1)) == "UTC-04:00"
+    assert tz.tzname(None) == "UTC-05:00"
+    assert tz.utcoffset(None) == timedelta(hours=-5)
+    assert tz.dst(None) == timedelta(0)
+    assert "DeviceTimezone" in repr(tz)
+    # DST off: a fixed offset; India's half hour too.
+    off = device_timezone(_settings(-19800, (3, 2, 0, 2), (11, 1, 0, 2), enable=0))
+    assert off == timezone(timedelta(hours=5, minutes=30))
+    assert device_timezone({"Time": {"timeZone": 0}}) == timezone(timedelta(0))
+    # Nothing to build from, or rules out of range: None (reolink-aio's then).
+    assert device_timezone({}) is None
+    assert device_timezone({"Time": {}}) is None
+    bad = _settings(18000, (13, 2, 0, 2), (11, 1, 0, 2))
+    assert device_timezone(bad) is None
+    missing = _settings(18000, (3, 2, 0, 2), (11, 1, 0, 2))
+    del missing["Dst"]["endHour"]
+    assert device_timezone(missing) is None
