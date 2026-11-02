@@ -78,7 +78,8 @@ through v0.40.1: a start deep in an uncached recording shows its first frame in 
 half a second; see the [plan](docs/IMPLEMENTATION_PLAN.md#phase-5-status). Phases 6 to
 13 are the second round. Phase 6, the Doorbell's events, is done (v0.43.0): they show
 beside the other cameras', presses included, and open as pictures. Under way: the
-dashboard card (Phase 7, its first step in v0.44.0). Planned: unusual
+dashboard card (Phase 7): the Reolink camera card is out (v0.44.0) and checked on a wall
+tablet and an iPhone; next, how it behaves when a wall tablet turns its screen off and on. Planned: unusual
 events, the Wall (a monitor-style Live page), scrubbing that shows the picture, and more; see
 [Phases 6–13](docs/IMPLEMENTATION_PLAN.md#phases-613-the-second-round-planned-2026-11-02).
 
