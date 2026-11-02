@@ -85,7 +85,8 @@ async def test_events_check_on_the_wired_doorbell(
     assert events["ok"] is True
     assert events["storage"] == "ready"
     (channel,) = events["channels"]
-    assert channel["clock"] == {"timezone_known": False, "source": "device"}
+    # A Baichuan-only device has Home Assistant's zone (v0.42.0).
+    assert channel["clock"] == {"timezone_known": True, "source": "device"}
     assert channel["is_battery"] is True
     assert channel["wired_power"] is True
     assert channel["supports_replay"] is False
@@ -309,7 +310,7 @@ async def test_events_check_clock_fallbacks(
     clock = channel["clock"]
     assert clock["source"] == "baichuan"
     assert clock["device_error"] == "NotSupportedError: get_time: failed"
-    assert clock["timezone_known"] is False
+    assert clock["timezone_known"] is True
     assert isinstance(clock["home_assistant_utc_offset_s"], int)
     baichuan = clock["baichuan"]
     assert baichuan["ok"] is True

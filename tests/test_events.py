@@ -8,9 +8,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from pytest_homeassistant_custom_component.typing import WebSocketGenerator
+from reolink_aio.exceptions import ReolinkError
+from reolink_aio.typings import VOD_trigger
 
 from custom_components.reolink_viewer import bridge, events, timeline
 from homeassistant.core import HomeAssistant
+
+from .conftest import make_vod_file
 
 TODAY = datetime(2026, 10, 17, 12)
 
@@ -195,3 +199,50 @@ async def test_a_given_day_and_the_days_with_recordings(
         client, {"type": "reolink_viewer/events/days", "year": 2026, "month": 10}
     )
     assert msg["error"]["code"] == "not_loaded"
+
+
+async def test_a_camera_whose_recordings_cannot_be_played(
+    hass: HomeAssistant,
+    hass_ws_client: WebSocketGenerator,
+    reolink_host: MagicMock,
+    loaded_with_entities: MockConfigEntry,
+    viewer_entry: MockConfigEntry,
+    today: None,
+) -> None:
+    """The battery Doorbell's events, from its event search alone (Phase 6)."""
+    handle = bridge.ReolinkHostHandle
+    # Its SD card keeps recordings this integration cannot play, and it has no
+    # HTTP Search (Baichuan only).
+    reolink_host.request_vod_files = AsyncMock(side_effect=ReolinkError("no HTTP"))
+    press = make_vod_file(datetime(2026, 10, 17, 11), 1, name="20261017110000")
+    press.bc_triggers = VOD_trigger.DOORBELL | VOD_trigger.PERSON
+    reolink_host.baichuan.search_vod_type = AsyncMock(
+        return_value=({}, {VOD_trigger.DOORBELL: [press]})
+    )
+    wired = {"is_battery": True, "wired_power": True, "is_doorbell": True}
+    client = await hass_ws_client(hass)
+    with (
+        patch.object(handle, "records_locally", return_value=False),
+        patch.object(handle, "channel_details", return_value=wired),
+    ):
+        msg = await _ws(client, {"type": "reolink_viewer/events/recent"})
+        result = msg["result"]
+        assert result["cameras"] == 1
+        assert result["failed"] == []
+        [event] = result["events"]
+        assert event["types"] == ["PERSON", "DOORBELL"]
+        assert event["segment"] is None
+        reolink_host.request_vod_files.assert_not_awaited()
+        msg = await _ws(
+            client, {"type": "reolink_viewer/events/days", "year": 2026, "month": 10}
+        )
+        assert msg["result"]["days"] == list(range(1, 18))
+
+        # On its battery it is left out, so the feed does not wake it.
+        on_battery = {"is_battery": True, "wired_power": False}
+        with patch.object(handle, "channel_details", return_value=on_battery):
+            msg = await _ws(
+                client, {"type": "reolink_viewer/events/recent", "date": "2026-10-16"}
+            )
+        assert msg["result"]["cameras"] == 0
+        assert msg["result"]["events"] == []

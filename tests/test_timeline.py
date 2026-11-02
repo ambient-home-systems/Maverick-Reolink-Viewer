@@ -55,6 +55,7 @@ class FakeHost:
         self.files: dict[str, list[VodFile]] = {"sub": [], "main": []}
         self.events: list[VodEvent] = []
         self.searches: list[tuple[datetime, datetime, str]] = []
+        self.event_searches: list[tuple[datetime, datetime, str]] = []
         self.day_searches = 0
         self.fail = False
         self.events_fail = False
@@ -78,6 +79,16 @@ class FakeHost:
             return DaySearch(files, [], "ApiError")
         events = [e for e in self.events if e.end >= start and e.start <= end]
         return DaySearch(files, events)
+
+    async def async_search_day_events(
+        self, channel: int, start: datetime, end: datetime, stream: str
+    ) -> DaySearch:
+        """The events alone, as for a camera whose recordings cannot be played."""
+        self.event_searches.append((start, end, stream))
+        if self.fail or self.events_fail:
+            raise RuntimeError("device busy")
+        events = [e for e in self.events if e.end >= start and e.start <= end]
+        return DaySearch([], events, timing={"events_ms": 12.0})
 
     async def async_recording_days(
         self, channel: int, start: datetime, end: datetime
@@ -588,3 +599,53 @@ async def test_segment_lookup_uses_a_recent_copy_of_today(
     found = await service.async_segment(SOURCE, date(2026, 10, 17), "sub", newer)
     assert str(found.start) == newer
     assert len(host.searches) == searches + 1
+
+
+EVENTS_ONLY = PlaybackSource("door", "Doorbell", "entry2", 0, playable=False)
+
+
+async def test_a_camera_whose_recordings_cannot_be_played(
+    host: FakeHost, service: TimelineService, clock: Clock
+) -> None:
+    """Days of events and no recordings, from the event search alone (Phase 6)."""
+    # Its recordings are never asked for.
+    host.files["sub"] = [vf(wall(2026, 10, 16, 9, 0), 2)]
+    host.events = [
+        VodEvent(
+            wall(2026, 10, 16, 9, 0, 30),
+            wall(2026, 10, 16, 9, 1),
+            ("PERSON", "DOORBELL"),
+            "20261016090000",
+        )
+    ]
+    day, timing = await service.async_day(EVENTS_ONLY, date(2026, 10, 16))
+    assert host.searches == []
+    assert host.event_searches == [
+        (wall(2026, 10, 16), wall(2026, 10, 16, 23, 59, 59), "sub")
+    ]
+    assert day.segments == []
+    (event,) = day.events
+    assert event.segment is None
+    assert event.types == ["PERSON", "DOORBELL"]
+    assert event.start == epoch_ms(datetime(2026, 10, 16, 13, 0, 30, tzinfo=UTC))
+    assert day.complete
+    assert day.events_error is None
+    assert timing["events_ms"] == 12.0
+
+    # A search that fails is a failed event search: today keeps the events
+    # found before, says so, and is not final.
+    host.events = [
+        VodEvent(wall(2026, 10, 17, 10, 0), wall(2026, 10, 17, 10, 1), ("MOTION",), "x")
+    ]
+    today, _ = await service.async_day(EVENTS_ONLY, date(2026, 10, 17))
+    assert [e.types for e in today.events] == [["MOTION"]]
+    host.events_fail = True
+    clock.advance(timeline.TODAY_TTL + 1)
+    today, _ = await service.async_day(EVENTS_ONLY, date(2026, 10, 17))
+    assert today.events_error == "RuntimeError"
+    assert [e.types for e in today.events] == [["MOTION"]]
+    assert not today.complete
+    # Its days come from the day search, as for any camera.
+    host.days = [date(2026, 10, 16), date(2026, 10, 17)]
+    days, _ = await service.async_days(EVENTS_ONLY, 2026, 10)
+    assert days == [16, 17]

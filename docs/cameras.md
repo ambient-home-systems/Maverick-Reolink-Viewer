@@ -138,6 +138,11 @@ the hardware probe unless you tick them, all to save their battery. Recordings k
 an NVR or Home Hub play without waking the camera.
 On wired power, a battery doorbell plays like any other camera.
 
+A battery Video Doorbell added directly keeps its recordings on its own SD card and
+speaks only the Reolink app's protocol. On wired power, its events (people, vehicles,
+animals, motion, presses) show on the **Events** tab and under the board, found by
+the doorbell's own search. Its recordings play only in the Reolink app for now.
+
 ### Cameras that keep no recordings
 
 With no SD card and no NVR, a camera's tile shows its latest picture with the time it

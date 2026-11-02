@@ -165,6 +165,49 @@ async def test_a_camera_records_without_playback(
             assert source.records is False
 
 
+async def test_event_sources(
+    hass: HomeAssistant,
+    reolink_host: MagicMock,
+    loaded_with_entities: MockConfigEntry,
+) -> None:
+    """Every camera that records has its events searched, playable or not."""
+    (playable,) = devices.async_event_sources(hass)
+    assert playable == devices.async_playback_sources(hass)[0]
+    assert playable.playable is True
+
+    handle = bridge.ReolinkHostHandle
+    # Recordings kept where they cannot be played here (the battery Doorbell's
+    # SD card): its events are still searched, from the same connection.
+    with patch.object(handle, "records_locally", return_value=False):
+        (source,) = devices.async_event_sources(hass)
+        assert source.playable is False
+        assert (source.camera_id, source.entry_id, source.channel) == (
+            playable.camera_id,
+            playable.entry_id,
+            playable.channel,
+        )
+        assert source.key == playable.key
+        # A battery camera on wired power never sleeps: searched.
+        details = {"is_battery": True, "wired_power": True, "is_doorbell": True}
+        with patch.object(handle, "channel_details", return_value=details):
+            (source,) = devices.async_event_sources(hass)
+            assert (source.is_doorbell, source.on_battery) == (True, False)
+        # On its battery: left out, since searching would wake it.
+        details = {"is_battery": True, "wired_power": False}
+        with patch.object(handle, "channel_details", return_value=details):
+            assert devices.async_event_sources(hass) == []
+            # A battery camera on an NVR is searched there, so it stays.
+            with patch.object(handle, "records_locally", return_value=True):
+                (source,) = devices.async_event_sources(hass)
+                assert (source.playable, source.on_battery) == (True, True)
+        # Nothing kept anywhere: no events to search.
+        with patch.object(handle, "stores_recordings", return_value=False):
+            assert devices.async_event_sources(hass) == []
+        # A host that cannot say where it records keeps none here.
+        with patch.object(handle, "stores_recordings", side_effect=RuntimeError):
+            assert devices.async_event_sources(hass) == []
+
+
 async def test_where_a_cameras_recordings_are(
     hass: HomeAssistant,
     reolink_host: MagicMock,

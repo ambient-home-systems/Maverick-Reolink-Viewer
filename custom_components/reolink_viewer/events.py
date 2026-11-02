@@ -2,7 +2,10 @@
 
 Every camera that records gives that day (by default its camera-local today)
 from the timeline service (cached, and searched through the scheduler like
-any other day), and the events are merged newest first. An event is new for a Home Assistant user
+any other day), and the events are merged newest first. That includes a camera
+whose recordings cannot be played here (Phase 6: the battery Doorbell's SD
+card), from its event search alone, unless it runs on its battery
+(``devices.async_event_sources``). An event is new for a Home Assistant user
 until they open it or mark everything seen: from the first time a user reads
 the feed, events after that moment count, so a first visit is not a wall of
 new events. What each user has seen is stored, so a phone and a desktop agree.
@@ -129,7 +132,7 @@ async def async_recent(
     """
     now = now_ms()
     since, opened = seen.marks(user_id, now)
-    sources = devices.async_playback_sources(hass)
+    sources = devices.async_event_sources(hass)
 
     async def one(source: devices.PlaybackSource) -> Any:
         wanted = day
@@ -186,7 +189,7 @@ async def async_days(
     priority: Priority = Priority.PLAYBACK,
 ) -> dict[str, Any]:
     """Return the days of a month that have recordings on any camera."""
-    sources = devices.async_playback_sources(hass)
+    sources = devices.async_event_sources(hass)
     results = await asyncio.gather(
         *(timeline.async_days(s, year, month, priority) for s in sources),
         return_exceptions=True,

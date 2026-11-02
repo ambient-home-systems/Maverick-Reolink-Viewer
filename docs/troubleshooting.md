@@ -407,6 +407,10 @@ off stops it being tried.
 - Events come from the cameras' own detections (person, vehicle, animal, face,
   package, a doorbell press) and motion, as the recorder saved them. A camera that
   keeps no recordings has no events.
+- A battery doorbell that keeps its recordings on its SD card lists its events only
+  while it runs on wired power: on its battery, asking it for them would wake it every
+  few minutes. Its first look at a day can take about 15 seconds; after that the day
+  comes at once.
 - New events appear in the board's **Today** list within 2 minutes.
 - In the calendar, a dot marks each day with recordings.
 - A detection the camera does not offer (a camera without AI detection has motion

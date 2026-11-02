@@ -24,6 +24,7 @@ from custom_components.reolink_viewer.bridge import (
     with_start_param,
 )
 from homeassistant.core import HomeAssistant
+from homeassistant.util import dt as dt_util
 
 from .conftest import (
     SECRETS,
@@ -494,6 +495,13 @@ async def test_the_device_zone_comes_from_its_own_settings(
     reolink_host._time_settings = None
     reolink_host.timezone.return_value = timezone(timedelta(hours=-5))
     assert host.timezone() == timezone(timedelta(hours=-5))
+    # Neither (a device that answers no HTTP GetTime): none, unless it is
+    # Baichuan only, as the battery Doorbell is: then Home Assistant's own.
+    reolink_host.timezone.return_value = None
+    reolink_host.baichuan_only = False
+    assert host.timezone() is None
+    reolink_host.baichuan_only = True
+    assert host.timezone() == dt_util.get_default_time_zone()
 
 
 def test_with_start_param() -> None:
