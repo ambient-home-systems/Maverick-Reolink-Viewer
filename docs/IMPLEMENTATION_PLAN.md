@@ -5459,9 +5459,9 @@ Phase 6's press check waits for the house to wake.
   - The panel's own module now holds the panel and imports all three at once,
     where before it was a facade over `home`: one fetch less in the chain.
 - **The card's module** is only its settings (`card/config.ts`), its size, its
-  card picker entry and Lit: **8.2 KB gzipped**, on every page. A shown card
+  card picker entry and Lit: **8.1 KB gzipped**, on every page. A shown card
   fetches its body (`card/camera-card.ts`, with `live`): **37.2 KB in all**.
-  Its editor fetches 2.3 KB more. `npm run budget` holds the module to 12 KB and
+  Its editor fetches 2.4 KB more. `npm run budget` holds the module to 12 KB and
   a shown card to 60 KB. The panel's home view is 52.3 KB, from 49.3 KB.
 - **Registered by the integration:** `frontend.add_extra_js_url` with the
   module's content hash, removed on unload. Pages already open load it at
