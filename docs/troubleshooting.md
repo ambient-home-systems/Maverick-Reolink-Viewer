@@ -265,6 +265,24 @@ wired power is watched like any other camera. The
 [soak report](user-guide.md#the-soak-report) checks that battery cameras slept while
 nobody was watching.
 
+### A camera card on a dashboard
+
+The [Reolink camera card](user-guide.md#a-camera-on-a-dashboard) shows a camera's
+tile as the board does, with the same words and messages. It can also say:
+
+- **"Choose a camera in this card's settings."** The card has no camera yet: edit
+  it, and choose one.
+- **"This camera cannot be watched live. Choose another in this card's settings."**
+  The camera chosen is no longer in Home Assistant's Reolink integration, or has no
+  live stream. Choose it again, or another one.
+- **"Could not load live view: …"** Reolink Viewer did not answer. See
+  [A page could not load](#a-page-could-not-load); **Try again** asks again.
+- **"Could not load the camera card: …"** The browser could not fetch the card's
+  files, usually after an update while the page was open. Reload the page.
+- **The card is not in the card picker,** or the dashboard says
+  "Custom element doesn't exist: reolink-viewer-camera": reload the page once
+  Reolink Viewer is installed and Home Assistant has restarted.
+
 ### A camera is missing from the live board
 
 Every camera Home Assistant's Reolink integration has set up appears once, numbered.

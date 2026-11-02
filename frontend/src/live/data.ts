@@ -19,6 +19,11 @@ import type {
 import { rtcIceServers } from "./check-util";
 
 export class LiveData implements ReactiveController {
+  /**
+   * The cameras whose pictures are watched (a dashboard card's one), set
+   * before it loads (reload() after a change); undefined: every camera's.
+   */
+  cameraIds: readonly string[] | undefined;
   cameras: LiveCamera[] | undefined;
   images: Record<string, LiveImage> = {};
   /** Undefined until loaded (WebRTC waits for them; MSE does not need them). */
@@ -73,11 +78,15 @@ export class LiveData implements ReactiveController {
   }
 
   private async _load(hass: HomeAssistant, run: number): Promise<void> {
-    const images = subscribeLiveImages(hass, (event) => {
-      if (run !== this._run) return;
-      this.images = { ...this.images, ...event.images };
-      this._host.requestUpdate();
-    });
+    const images = subscribeLiveImages(
+      hass,
+      (event) => {
+        if (run !== this._run) return;
+        this.images = { ...this.images, ...event.images };
+        this._host.requestUpdate();
+      },
+      this.cameraIds,
+    );
     const ice = fetchIceServers(hass).then(rtcIceServers, () => []);
     try {
       const [unsubscribe, { cameras }, iceServers] = await Promise.all([

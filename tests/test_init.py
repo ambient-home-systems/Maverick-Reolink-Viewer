@@ -14,7 +14,7 @@ from custom_components.reolink_viewer.const import (
     PANEL_URL_PATH,
     STATIC_URL_PATH,
 )
-from homeassistant.components.frontend import DATA_PANELS
+from homeassistant.components.frontend import DATA_EXTRA_MODULE_URL, DATA_PANELS
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import EVENT_HOMEASSISTANT_STOP
 from homeassistant.core import HomeAssistant
@@ -35,6 +35,13 @@ async def test_setup_registers_panel(
         f"{STATIC_URL_PATH}/reolink-viewer-panel.js?v="
     )
     assert panel.sidebar_title == "Reolink"
+    # The dashboard card's module is on every page, from the same static path.
+    (card,) = [
+        url
+        for url in hass.data[DATA_EXTRA_MODULE_URL].urls
+        if url.startswith(f"{STATIC_URL_PATH}/reolink-viewer-card.js?v=")
+    ]
+    assert re.fullmatch(r".*\?v=[0-9a-f]{12}", card)
     assert not ir.async_get(hass).async_get_issue(DOMAIN, ISSUE_INCOMPATIBLE)
     # Deep starts follow the option, read at each start: on unless turned off.
     baichuan = loaded_viewer.runtime_data.baichuan
@@ -56,6 +63,9 @@ async def test_unload_and_reload(
     """Unloading removes the panel; reloading does not re-register static paths."""
     assert await hass.config_entries.async_unload(loaded_viewer.entry_id)
     assert PANEL_URL_PATH not in hass.data[DATA_PANELS]
+    assert not any(
+        "reolink-viewer-card" in url for url in hass.data[DATA_EXTRA_MODULE_URL].urls
+    )
     assert await hass.config_entries.async_setup(loaded_viewer.entry_id)
     await hass.async_block_till_done()
     assert loaded_viewer.state is ConfigEntryState.LOADED
@@ -79,16 +89,22 @@ async def test_static_bundle_served(
     hass_client: ClientSessionGenerator,
     loaded_viewer: MockConfigEntry,
 ) -> None:
-    """The built panel bundle is served: the entry and the home view it imports."""
+    """The built panel and card are served: their modules and what they import."""
     assert await async_setup_component(hass, "http", {})
     client = await hass_client()
-    resp = await client.get(f"{STATIC_URL_PATH}/reolink-viewer-panel.js")
-    assert resp.status == 200
-    imported = re.search(r'from "\./([\w-]+\.js)"', await resp.text())
-    assert imported is not None
-    resp = await client.get(f"{STATIC_URL_PATH}/{imported[1]}")
-    assert resp.status == 200
-    assert PANEL_COMPONENT_NAME in await resp.text()
+    for entry, name in (
+        ("reolink-viewer-panel.js", PANEL_COMPONENT_NAME),
+        ("reolink-viewer-card.js", "reolink-viewer-camera"),
+    ):
+        resp = await client.get(f"{STATIC_URL_PATH}/{entry}")
+        assert resp.status == 200
+        text = await resp.text()
+        assert name in text
+        imported = re.findall(r'(?:from |import\()"\./([\w~-]+\.js)"', text)
+        assert imported
+        for module in imported:
+            resp = await client.get(f"{STATIC_URL_PATH}/{module}")
+            assert resp.status == 200, module
 
 
 async def test_incompatible_creates_issue(

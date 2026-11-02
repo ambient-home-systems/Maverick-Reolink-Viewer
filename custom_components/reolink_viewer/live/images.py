@@ -9,7 +9,9 @@ it from memory:
   the NVR where the camera has one; each is a scheduler job at thumbnail
   priority, so it never delays live view or playback;
 - while a live page watches (``live/images``), a mains-powered camera's
-  picture is taken again every REFRESH_S, and at once if it is older;
+  picture is taken again every REFRESH_S, and at once if it is older; a watch
+  may name its cameras (a dashboard card watches one), and then only theirs
+  are taken for it;
 - a battery camera's is never taken in the background, so it can sleep: it is
   taken when one of its streams starts (the camera is awake then), and once if
   there is none at all;
@@ -55,11 +57,22 @@ type Listener = Callable[[str, CameraImage], None]
 class Watch:
     """A live page watching the pictures; ``close()`` it once."""
 
-    def __init__(self, images: LiveImages, listener: Listener) -> None:
+    def __init__(
+        self,
+        images: LiveImages,
+        listener: Listener,
+        cameras: frozenset[str] | None = None,
+    ) -> None:
         """Initialize (use LiveImages.watch)."""
         self._images = images
         self.listener = listener
+        # The camera ids it watches; None: every camera.
+        self.cameras = cameras
         self.closed = False
+
+    def wants(self, camera_id: str) -> bool:
+        """Return whether it watches this camera."""
+        return self.cameras is None or camera_id in self.cameras
 
     def close(self) -> None:
         """Stop watching."""
@@ -105,18 +118,23 @@ class LiveImages:
         return None if source is None else self._images.get(source.key)
 
     @callback
-    def images(self) -> dict[str, CameraImage]:
-        """Return every camera's last picture, by camera id."""
+    def images(self, cameras: frozenset[str] | None = None) -> dict[str, CameraImage]:
+        """Return every camera's last picture (or these cameras'), by camera id."""
         return {
             camera_id: image
             for camera_id, source in devices.async_image_sources(self._hass).items()
-            if (image := self._images.get(source.key)) is not None
+            if (cameras is None or camera_id in cameras)
+            and (image := self._images.get(source.key)) is not None
         }
 
     @callback
-    def watch(self, listener: Listener) -> Watch:
-        """Start watching: pictures are taken, and each new one is passed on."""
-        watch = Watch(self, listener)
+    def watch(self, listener: Listener, cameras: frozenset[str] | None = None) -> Watch:
+        """Start watching: pictures are taken, and each new one is passed on.
+
+        ``cameras`` limits the watch to these camera ids: only their pictures
+        are taken for it, and only theirs passed on.
+        """
+        watch = Watch(self, listener, cameras)
         self._watches.append(watch)
         if self._task is None or self._task.done():
             self._task = self._hass.async_create_background_task(
@@ -148,6 +166,8 @@ class LiveImages:
         while self._watches:
             delay = REFRESH_S
             for camera_id, source in devices.async_image_sources(self._hass).items():
+                if not any(watch.wants(camera_id) for watch in self._watches):
+                    continue
                 due = self._due_in(source)
                 if due is None:
                     continue
@@ -211,7 +231,8 @@ class LiveImages:
         self._failed.pop(key, None)
         image = self._images[key] = CameraImage(data, time.time())
         for watch in list(self._watches):
-            watch.listener(camera_id, image)
+            if watch.wants(camera_id):
+                watch.listener(camera_id, image)
         try:
             await self._hass.async_add_executor_job(self._write, key, data)
         except OSError as err:

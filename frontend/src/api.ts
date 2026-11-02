@@ -381,8 +381,13 @@ export const sendLiveCandidate = (hass: HomeAssistant, sessionId: string, candid
 export const subscribeLiveImages = (
   hass: HomeAssistant,
   onEvent: (event: LiveImagesEvent) => void,
+  /** Only these cameras' (a dashboard card's): the others are not refreshed for it. */
+  cameraIds?: readonly string[],
 ): Promise<() => Promise<void>> =>
-  hass.connection.subscribeMessage<LiveImagesEvent>(onEvent, { type: "reolink_viewer/live/images" });
+  hass.connection.subscribeMessage<LiveImagesEvent>(onEvent, {
+    type: "reolink_viewer/live/images",
+    ...(cameraIds ? { camera_ids: [...cameraIds] } : {}),
+  });
 
 /** Run the capacity test of a host (admin). Resolves with the unsubscribe. */
 export const subscribeCapacity = (

@@ -86,12 +86,15 @@ def notes(release: str) -> str:
 
 
 def check_frontend() -> None:
-    """Check that every file the built panel imports, and every font it asks for, is there."""
-    entry = FRONTEND / "reolink-viewer-panel.js"
-    if not entry.is_file():
-        raise ReleaseError(
-            "The built panel is missing: run `npm run build` in frontend/."
-        )
+    """Check that every file the built panel and card import, and every font, is there."""
+    for name, entry in (
+        ("panel", "reolink-viewer-panel.js"),
+        ("dashboard card", "reolink-viewer-card.js"),
+    ):
+        if not (FRONTEND / entry).is_file():
+            raise ReleaseError(
+                f"The built {name} is missing: run `npm run build` in frontend/."
+            )
     missing: set[str] = set()
     for module in FRONTEND.glob("*.js"):
         text = module.read_text()

@@ -1,4 +1,5 @@
-import { Jt as e, Xt as t, Yt as n, it as r, qt as i } from "./home-CHdiWzrD.js";
+import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
+import { O as i } from "./live-D27fF3SV.js";
 //#region src/plain.ts
 var a = {
 	good: "Good",
@@ -63,31 +64,31 @@ function m(e) {
 }
 //#endregion
 //#region src/components/findings.ts
-var h = class extends i {
+var h = class extends r {
 	static properties = { summary: { attribute: !1 } };
 	render() {
-		let t = this.summary;
-		if (!t) return e;
+		let e = this.summary;
+		if (!e) return t;
 		let r = [
 			"good",
 			"fine",
 			"slow",
 			"problem",
 			"pending"
-		].filter((e) => t.findings.some((t) => t.grade === e));
-		return n`<p class="headline">${t.headline}</p>
-      ${t.findings.length ? n`<ul>
-            ${t.findings.map((t) => n`<li class=${t.grade}>
-                <span class="grade">${a[t.grade]}</span>
+		].filter((t) => e.findings.some((e) => e.grade === t));
+		return n`<p class="headline">${e.headline}</p>
+      ${e.findings.length ? n`<ul>
+            ${e.findings.map((e) => n`<li class=${e.grade}>
+                <span class="grade">${a[e.grade]}</span>
                 <span class="what">
-                  <span>${t.text}</span>
-                  ${t.advice ? n`<span class="advice">${t.advice}</span>` : e}
+                  <span>${e.text}</span>
+                  ${e.advice ? n`<span class="advice">${e.advice}</span>` : t}
                 </span>
               </li>`)}
           </ul>
-          ${r.length > 1 ? n`<p class="key">${r.map((e) => `${a[e]}: ${o[e]}`).join(" · ")}</p>` : e}` : e}`;
+          ${r.length > 1 ? n`<p class="key">${r.map((e) => `${a[e]}: ${o[e]}`).join(" · ")}</p>` : t}` : t}`;
 	}
-	static styles = [r, t`
+	static styles = [i, e`
       :host {
         display: block;
       }

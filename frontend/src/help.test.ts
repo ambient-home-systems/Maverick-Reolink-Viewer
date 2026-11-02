@@ -85,6 +85,11 @@ describe("help", () => {
       ...[...source("components/device-page.ts").matchAll(/<h2>([^<$]+)<\/h2>/g)].map((m) => m[1]),
       ...[...source("components/event-pictures.ts").matchAll(/<h2>([^<$]+)<\/h2>/g)].map((m) => m[1]),
       "No picture of this moment.",
+      // The dashboard card's own.
+      "Choose a camera in this card's settings.",
+      "This camera cannot be watched live. Choose another in this card's settings.",
+      "Could not load live view:",
+      "Could not load the camera card:",
     ];
     expect(shown.length).toBeGreaterThan(30);
     const missing = shown.map(plain).filter((text) => !guide.includes(text));

@@ -3,13 +3,20 @@
 // stays under BUDGET_KB. The other views are their own files, loaded the first
 // time they are shown; this prints what each adds.
 //
+// The dashboard card's (Phase 7 step 1): its module, on every Home Assistant
+// page, stays under CARD_PAGE_KB, and with what a shown card fetches (the live
+// tile) under CARD_BUDGET_KB. Its editor, fetched when opened, is printed.
+//
 //   node scripts/bundle-budget.mjs [dist-dir]
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { gzipSync } from "node:zlib";
 
 const BUDGET_KB = 200;
+const CARD_PAGE_KB = 12;
+const CARD_BUDGET_KB = 60;
 const ENTRY = "reolink-viewer-panel.js";
+const CARD = "reolink-viewer-card.js";
 const dist = process.argv[2] ?? new URL("../../custom_components/reolink_viewer/frontend_dist", import.meta.url).pathname;
 
 const source = (file) => readFileSync(join(dist, file), "utf8");
@@ -43,11 +50,31 @@ for (const file of [...lazy].sort()) {
     lines.push(`    + ${inner.replace(/-[\w-]{8}\.js$/, "")}: ${sum(more).toFixed(1)} KB`);
   }
 }
+// The card: its module on every page, then its body (the live tile) and its editor.
+const card = closure(CARD);
+const cardKb = sum(card);
+const [bodyFile, editorFile] = ["camera-card", "editor"].map((name) =>
+  dynamicImports(CARD).find((f) => f.startsWith(`${name}-`)),
+);
+const more = (file) => (file ? [...closure(file)].filter((f) => !card.has(f)) : []);
+const bodyKb = sum(more(bodyFile));
+const editorKb = sum(more(editorFile).filter((f) => !more(bodyFile).includes(f)));
+const shownKb = cardKb + bodyKb;
+lines.push(
+  `Card: ${cardKb.toFixed(1)} KB gzipped on every page in ${fileCount(card.size)} (budget ${CARD_PAGE_KB} KB); ` +
+    `${shownKb.toFixed(1)} KB once shown (budget ${CARD_BUDGET_KB} KB); its editor ${editorKb.toFixed(1)} KB more`,
+);
+
 const all = readdirSync(dist).filter((f) => f.endsWith(".js"));
 lines.push(`Every file: ${sum(all).toFixed(1)} KB gzipped in ${fileCount(all.length)}`);
 console.log(lines.join("\n"));
 
-if (initialKb > BUDGET_KB) {
-  console.error(`The home view's JavaScript is ${initialKb.toFixed(1)} KB gzipped, over the ${BUDGET_KB} KB budget.`);
+const over = [];
+if (initialKb > BUDGET_KB) over.push(`The home view's JavaScript is ${initialKb.toFixed(1)} KB gzipped, over the ${BUDGET_KB} KB budget.`);
+if (!bodyFile) over.push("The card's module does not fetch its body (camera-card) on its own.");
+if (cardKb > CARD_PAGE_KB) over.push(`The card's module is ${cardKb.toFixed(1)} KB gzipped on every page, over its ${CARD_PAGE_KB} KB budget.`);
+if (shownKb > CARD_BUDGET_KB) over.push(`A shown card fetches ${shownKb.toFixed(1)} KB gzipped, over its ${CARD_BUDGET_KB} KB budget.`);
+if (over.length) {
+  console.error(over.join("\n"));
   process.exit(1);
 }

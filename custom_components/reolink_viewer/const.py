@@ -14,6 +14,8 @@ PANEL_TITLE: Final = "Reolink"
 PANEL_ICON: Final = "mdi:cctv"
 PANEL_COMPONENT_NAME: Final = "reolink-viewer-panel"
 PANEL_FILENAME: Final = "reolink-viewer-panel.js"
+# The dashboard card's module, added to every page (frontend.add_extra_js_url).
+CARD_FILENAME: Final = "reolink-viewer-card.js"
 STATIC_URL_PATH: Final = "/reolink_viewer_static"
 FRONTEND_DIST_DIR: Final = "frontend_dist"
 

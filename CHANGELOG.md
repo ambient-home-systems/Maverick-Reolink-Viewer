@@ -3,6 +3,29 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.44.0
+
+Phase 7, step 1: a camera on any dashboard.
+
+- **The Reolink camera card.** Edit a dashboard, **Add card**, and search for
+  **Reolink camera**: it shows one camera the way the panel's board does, with its
+  last picture at once, then live video. On a camera kept warm, the video starts in a
+  fraction of a second. There is nothing to add to the dashboard's resources: the
+  card comes with Reolink Viewer.
+- **Its settings:** the camera; SD, or HD on the card itself; what a tap does (full
+  screen in HD, open the camera in the Reolink panel, or nothing); whether the name
+  and state show over the picture; and whether the picture fills the card or shows
+  whole. The editor says when the camera is not kept warm, with its **Keep warm**
+  switch beside it.
+- **For every user,** admin or not. Like the board, it plays only while it is on
+  screen and the page is visible, a battery camera waits for a tap, and while one card
+  is full screen the others on the page pause.
+- **Lighter on the cameras:** a card keeps only its own camera's picture fresh, not
+  every camera's.
+- The panel's files are split differently, so the card and the panel share them; the
+  panel's first download is about the same.
+- See [A camera on a dashboard](docs/user-guide.md#a-camera-on-a-dashboard).
+
 ## 0.43.0
 
 Phase 6, step 3: pictures of the Doorbell's events.

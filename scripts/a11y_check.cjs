@@ -33,6 +33,7 @@ const VIEWS = {
   soak: "#soak",
   "no-recordings": "#device/cam-laundry/playback",
   "event-pictures": "&elsewhere=cam-door#device/cam-door/playback",
+  dashboard: "&dashboard=1",
   "offline-board": "&offline=cam-dogs,cam-garage",
   "tile-errors": "&fail=tiles",
   "day-error": "&fail=day#device/cam-fyr/playback",

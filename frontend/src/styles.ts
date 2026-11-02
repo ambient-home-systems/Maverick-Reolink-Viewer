@@ -7,7 +7,8 @@
 // the action blue marks only what can be pressed; faults are amber.
 import { css } from "lit";
 
-export const themeTokens = css`
+/** The panel's own colours and fonts, light and dark (a dashboard card uses them too). */
+export const rvTokens = css`
   :host {
     --rv-rail: #1b2a6e;
     --rv-on-rail: #f4f4f1;
@@ -49,6 +50,11 @@ export const themeTokens = css`
     --rv-recording: #5a6cb4;
     color-scheme: dark;
   }
+`;
+
+/** The panel: its tokens, and Home Assistant's theme variables mapped onto them for what is inside. */
+export const themeTokens = css`
+  ${rvTokens}
   :host {
     --primary-color: var(--rv-action);
     --accent-color: var(--rv-action);

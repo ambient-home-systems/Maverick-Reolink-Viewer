@@ -39,6 +39,7 @@ def test_the_package_ships_the_integration_and_its_built_panel(tmp_path: Path) -
             "catalog/settings-catalog.json",
         } <= names
         assert "frontend_dist/reolink-viewer-panel.js" in names
+        assert "frontend_dist/reolink-viewer-card.js" in names
         assert "frontend_dist/fonts/OFL.txt" in names
         assert not [n for n in names if "__pycache__" in n or n.endswith(".pyc")]
         # Every module in it is valid Python.
