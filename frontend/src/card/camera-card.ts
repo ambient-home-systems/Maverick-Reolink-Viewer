@@ -2,16 +2,23 @@
 // the panel's live tile for one camera, with its last picture at once, warm
 // MSE, the WebRTC fallback, HD in full screen and its error states. Fetched
 // the first time a card is shown, beside the panel's own files.
+//
+// On a wall tablet (Phase 7 step 2) it notes what it sees for the panel's
+// "Dashboard cards" report (./tablet.ts), sleeps while Fully Kiosk's screen is
+// off or its screensaver on, and a doorbell's card can go full screen for a
+// while when it rings (ring_full_screen), waking Fully's screen first.
 import { LitElement, css, html, nothing, type PropertyValues, type TemplateResult } from "lit";
 
 import "../components/live-tile";
-import type { RvLiveTile } from "../components/live-tile";
+import type { PlayerDetail, RvLiveTile } from "../components/live-tile";
 import { loadFonts } from "../fonts";
 import { LiveData, cameraFor, isWarm, liveConnection } from "../live/data";
+import { explainLive } from "../live/explain";
 import { chooseHd } from "../live/hd";
 import { rvTokens, sharedStyles } from "../styles";
 import type { HomeAssistant, LiveCamera, LiveConnection, LiveStreamKind } from "../types";
 import { rememberRatio, type CameraCardConfig } from "./config";
+import { tablet } from "./tablet";
 
 /** The panel's address (const.py's PANEL_URL_PATH). */
 export const PANEL_PATH = "/reolink-viewer";
@@ -25,6 +32,11 @@ function setFull(card: RvCameraCard | undefined): void {
   fullCard = card;
   for (const other of cards) other.requestUpdate();
 }
+
+// Fully Kiosk's screen off or screensaver on: every card stops, and starts again.
+tablet.onSleep(() => {
+  for (const card of cards) card.requestUpdate();
+});
 
 /** Open a camera's Live tab in the panel, as Home Assistant's own links do. */
 export function openInPanel(cameraId: string): void {
@@ -55,17 +67,113 @@ export class RvCameraCard extends LitElement {
   private readonly _data = new LiveData(this);
   /** The connection an HD stream is being chosen for. */
   private _choosing: string | undefined;
+  private _unwatch: (() => void) | undefined;
+  /** What the log says it is doing, and since when each player started. */
+  private _doing = "loading";
+  private readonly _startedAt = new Map<string, number>();
+  /** The visitor sensor's state last seen (`state@last_changed`); undefined until first seen. */
+  private _ringSeen: string | undefined;
+  /** It went full screen for a ring, and leaves it at this timer. */
+  private _ringTimer: ReturnType<typeof setTimeout> | undefined;
+  private _ringFull = false;
+
+  /** The camera's name, as the log says it. */
+  private get _name(): string {
+    const camera = this._data.cameras && this.config?.camera ? cameraFor(this._data.cameras, this.config.camera) : undefined;
+    return camera?.name ?? this.config?.camera ?? "Card";
+  }
 
   override connectedCallback(): void {
     super.connectedCallback();
     loadFonts(import.meta.url);
     cards.add(this);
+    tablet.start(() => this.hass);
+    this._unwatch = tablet.watch({
+      name: () => this._name,
+      video: () => this._tileElement()?.renderRoot.querySelector<HTMLVideoElement>("video.sub") ?? null,
+      state: () => this._doing,
+    });
   }
 
   override disconnectedCallback(): void {
     super.disconnectedCallback();
     cards.delete(this);
     if (fullCard === this) setFull(undefined);
+    this._unwatch?.();
+    this._unwatch = undefined;
+    clearTimeout(this._ringTimer);
+    this._ringFull = false;
+    this._ringSeen = undefined;
+  }
+
+  private _tileElement(): RvLiveTile | null {
+    return this.renderRoot.querySelector<RvLiveTile>("rv-live-tile");
+  }
+
+  protected override updated(): void {
+    const camera = this._data.cameras && this.config?.camera ? cameraFor(this._data.cameras, this.config.camera) : undefined;
+    if (camera) this._ring(camera);
+  }
+
+  /**
+   * A doorbell's ring (its visitor sensor turning on, as Home Assistant says
+   * at once): wake Fully Kiosk's screen, and go full screen for the card's
+   * seconds. A ring before the card was shown is not one.
+   */
+  private _ring(camera: LiveCamera): void {
+    const entity = camera.visitor_entity;
+    const state = entity ? this.hass?.states[entity] : undefined;
+    const seen = state ? `${state.state}@${state.last_changed}` : "";
+    const first = this._ringSeen === undefined;
+    if (seen === this._ringSeen) return;
+    this._ringSeen = seen;
+    const seconds = this.config?.ring_full_screen ?? 0;
+    if (first || !seconds || state?.state !== "on") return;
+    const tile = this._tileElement();
+    if (!tile) return;
+    const woke = tablet.wake();
+    tablet.note("ring", camera.name, `full screen for ${String(seconds)} s${woke ? "; woke Fully Kiosk's screen" : ""}`);
+    // Already full screen by hand: it stays so, and is not left for the ring.
+    if (!tile.full) {
+      tile.enterFull();
+      this._ringFull = true;
+    }
+    clearTimeout(this._ringTimer);
+    this._ringTimer = setTimeout(() => {
+      // Still full screen from the ring (not left by hand): back to the card.
+      if (this._ringFull) this._tileElement()?.exitFull();
+      this._ringFull = false;
+    }, seconds * 1000);
+  }
+
+  /** What one of the tile's players did, for the log. */
+  private _logPlayer(name: string, detail: PlayerDetail): void {
+    const { which, state } = detail;
+    const now = Date.now();
+    switch (state.kind) {
+      case "starting":
+        this._startedAt.set(which, now);
+        this._doing = "starting";
+        tablet.note("starting", name, `${which} ${state.transport}`);
+        break;
+      case "playing": {
+        const since = this._startedAt.get(which);
+        this._doing = "playing";
+        tablet.note(
+          "playing",
+          name,
+          `${which} ${state.transport}${since === undefined ? "" : `, ${((now - since) / 1000).toFixed(1)} s`}`,
+        );
+        break;
+      }
+      case "waiting":
+        this._doing = "retrying";
+        tablet.note("retrying", name, `${which}: ${explainLive(state.error).text}`);
+        break;
+      default:
+        if (which === "SD" || this.config?.quality === "hd") this._doing = "stopped";
+        tablet.note("stopped", name, which);
+    }
   }
 
   protected override willUpdate(changed: PropertyValues<this>): void {
@@ -150,7 +258,7 @@ export class RvCameraCard extends LitElement {
       .iceServers=${this._data.iceServers}
       .warm=${stream === "sub" ? isWarm(this.hass, camera) : undefined}
       .controls=${camera.controls}
-      .suspended=${fullCard !== undefined && fullCard !== this}
+      .suspended=${tablet.asleep || (fullCard !== undefined && fullCard !== this)}
       .hideName=${config?.show_name === false}
       .hideState=${config?.show_state === false}
       .tapLabel=${tap === "open_panel" ? `Open ${name} in Reolink` : `${name} full screen`}
@@ -163,7 +271,13 @@ export class RvCameraCard extends LitElement {
       @rv-live-full=${(e: CustomEvent<{ full: boolean }>) => {
         e.stopPropagation();
         if (e.detail.full) setFull(this);
-        else if (fullCard === this) setFull(undefined);
+        else {
+          this._ringFull = false;
+          if (fullCard === this) setFull(undefined);
+        }
+      }}
+      @rv-live-player=${(e: CustomEvent<PlayerDetail>) => {
+        this._logPlayer(name, e.detail);
       }}
     ></rv-live-tile>`;
   }

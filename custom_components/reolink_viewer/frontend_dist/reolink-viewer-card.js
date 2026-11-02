@@ -1,9 +1,9 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
-import { a as i, i as a, n as o, o as s, r as c, t as l } from "./config-BH0q64XG.js";
+import { a as i, i as a, n as o, o as s, r as c, t as l } from "./config-D80frQMF.js";
 //#region src/card/index.ts
 var u;
 function d() {
-	return u ??= import("./camera-card-M0iAFvBK.js").catch((e) => {
+	return u ??= import("./camera-card-DCZFZn4y.js").catch((e) => {
 		throw u = void 0, e;
 	}), u;
 }
@@ -23,7 +23,7 @@ var f = class extends r {
 		return a;
 	}
 	static async getConfigElement() {
-		return await import("./editor-Cm-Qo2uO.js"), document.createElement(c);
+		return await import("./editor-C2d_Ojkv.js"), document.createElement(c);
 	}
 	static async getStubConfig(e) {
 		try {

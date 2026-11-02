@@ -463,6 +463,22 @@ export interface LiveStreamInfo {
   warm?: boolean;
 }
 
+/** One thing a dashboard card's page saw (card/tablet.ts, live/card_log). */
+export interface TabletEvent {
+  at: number;
+  what: string;
+  card?: string;
+  detail?: string;
+}
+
+/** What the dashboard cards on one device saw (live/card_log). */
+export interface CardLogDevice {
+  device: string;
+  /** When it last reported (ISO 8601, UTC). */
+  updated: string;
+  events: TabletEvent[];
+}
+
 export interface LiveCamera {
   id: string;
   name: string;
@@ -474,6 +490,8 @@ export interface LiveCamera {
   keep_warm_entity?: string | null;
   /** Home Assistant's entities to control it with while watching. */
   controls?: LiveControls;
+  /** A doorbell's visitor sensor: on while it rings. */
+  visitor_entity?: string | null;
 }
 
 /** A PTZ move: a press of its button starts it, PTZ stop ends it. */

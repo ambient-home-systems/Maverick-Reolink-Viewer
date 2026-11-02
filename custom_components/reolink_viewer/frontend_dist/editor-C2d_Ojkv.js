@@ -1,6 +1,6 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
-import { $ as i, M as a, N as o, xt as s } from "./live-D27fF3SV.js";
-import { a as c, c as l, r as u } from "./config-BH0q64XG.js";
+import { Et as i, I as a, L as o, at as s } from "./live-BRQnJ2GG.js";
+import { a as c, c as l, r as u } from "./config-D80frQMF.js";
 //#region src/card/editor.ts
 var d = "config-changed", f = class extends r {
 	static properties = {
@@ -30,9 +30,9 @@ var d = "config-changed", f = class extends r {
 	async _load(e) {
 		this._loading = !0;
 		try {
-			this._cameras = (await i(e)).cameras;
+			this._cameras = (await s(e)).cameras;
 		} catch (e) {
-			this._error = s(e).message;
+			this._error = i(e).message;
 		} finally {
 			this._loading = !1;
 		}
@@ -80,6 +80,7 @@ var d = "config-changed", f = class extends r {
           <option value="none" ?selected=${e.tap_action === "none"}>Nothing</option>
         </select>
       </label>
+      ${i?.visitor_entity ? this._renderRing(e) : t}
 
       <fieldset>
         <legend class="name">Over the picture</legend>
@@ -99,9 +100,9 @@ var d = "config-changed", f = class extends r {
         A battery camera is never kept warm, so it can sleep: the card shows its last picture, and its video plays when
         tapped.
       </p>`;
-		let i = e.keep_warm_entity;
-		if (!i) return t;
-		let c = a(this.hass, e), l = this.hass?.states[i]?.state;
+		let s = e.keep_warm_entity;
+		if (!s) return t;
+		let c = a(this.hass, e), l = this.hass?.states[s]?.state;
 		return n`<div class=${c ? "warm" : "warm cold"}>
       ${c || r.quality === "hd" ? t : n`<p class="warning" role="status">
             Not kept warm: its video starts in 2–10 s. Keep it warm to start at once.
@@ -113,8 +114,8 @@ var d = "config-changed", f = class extends r {
           ?disabled=${l !== "on" && l !== "off"}
           @change=${(e) => {
 			let t = e.target.checked;
-			this._switchError = void 0, this.hass?.callService("switch", t ? "turn_on" : "turn_off", { entity_id: i }).catch((e) => {
-				this._switchError = s(e).message;
+			this._switchError = void 0, this.hass?.callService("switch", t ? "turn_on" : "turn_off", { entity_id: s }).catch((e) => {
+				this._switchError = i(e).message;
 			});
 		}}
         />
@@ -138,6 +139,43 @@ var d = "config-changed", f = class extends r {
       />
       <span>${i} <span class="note">${a}</span></span>
     </label>`;
+	}
+	_renderRing(e) {
+		let r = e.ring_full_screen;
+		return n`<fieldset>
+      <legend class="name">When it rings</legend>
+      <label class="check">
+        <input
+          type="checkbox"
+          .checked=${r > 0}
+          @change=${(e) => {
+			this._change({ ring_full_screen: e.target.checked ? 30 : 0 });
+		}}
+        />
+        <span
+          >Go full screen
+          <span class="note"
+            >On every screen showing this card. On a Fully Kiosk tablet with its JavaScript interface on, it wakes the
+            screen first.</span
+          ></span
+        >
+      </label>
+      ${r > 0 ? n`<label class="seconds">
+            For
+            <input
+              type="number"
+              min=${5}
+              max=${600}
+              step="5"
+              .value=${String(r)}
+              @change=${(e) => {
+			let t = e.target, n = Math.round(Number(t.value)), r = Number.isFinite(n) ? Math.min(600, Math.max(5, n)) : 30;
+			t.value = String(r), this._change({ ring_full_screen: r });
+		}}
+            />
+            seconds
+          </label>` : t}
+    </fieldset>`;
 	}
 	_check(e, t, r) {
 		return n`<label class="check">
@@ -202,6 +240,22 @@ var d = "config-changed", f = class extends r {
     .check > span {
       display: flex;
       flex-direction: column;
+    }
+    .seconds {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      padding-left: 24px;
+    }
+    .seconds input {
+      width: 5em;
+      min-height: 36px;
+      padding: 0 8px;
+      border: 1px solid var(--divider-color, rgba(0, 0, 0, 0.2));
+      border-radius: 4px;
+      color: var(--primary-text-color);
+      background: var(--card-background-color, transparent);
+      font: inherit;
     }
     .note {
       margin: 0;

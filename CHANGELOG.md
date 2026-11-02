@@ -3,6 +3,23 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.45.0
+
+Phase 7, step 2: the camera card on a wall tablet.
+
+- **When the doorbell rings,** a doorbell's card can go full screen for a while
+  (**When it rings**, in the card's settings; 30 seconds to start with), and back.
+  On a Fully Kiosk tablet it wakes the screen first. No browser_mod needed.
+- **Fully Kiosk's screensaver and screen off stop the cards' video,** so a wall
+  tablet stays cool while nobody looks, and it starts again when the screen is back.
+  This needs Fully's JavaScript interface (**Settings → Advanced Web Settings →
+  Enable JavaScript Interface**, a Fully PLUS feature).
+- **Devices → Dashboard cards:** what the cards saw on each device, the screen going
+  off and on, how soon video came back, whether any played while nobody could see
+  it, the rings. A tablet's night can be read the next morning on any device, and
+  downloaded.
+- See [A camera on a dashboard](https://github.com/ambient-home-systems/Maverick-Reolink-Viewer/blob/v0.45.0/docs/user-guide.md#a-camera-on-a-dashboard).
+
 ## 0.44.0
 
 Phase 7, step 1: a camera on any dashboard.
@@ -24,7 +41,7 @@ Phase 7, step 1: a camera on any dashboard.
   every camera's.
 - The panel's files are split differently, so the card and the panel share them; the
   panel's first download is about the same.
-- See [A camera on a dashboard](docs/user-guide.md#a-camera-on-a-dashboard).
+- See [A camera on a dashboard](https://github.com/ambient-home-systems/Maverick-Reolink-Viewer/blob/v0.44.0/docs/user-guide.md#a-camera-on-a-dashboard).
 
 ## 0.43.0
 

@@ -46,6 +46,7 @@ const VIEW_NAMES: Record<Route["view"], string> = {
   device: "Device",
   "live-check": "Live check",
   soak: "Soak report",
+  cards: "Dashboard cards",
 };
 const TOAST_MS = 6_000;
 
@@ -356,6 +357,11 @@ export class ReolinkViewerPanel extends LitElement {
           <h1>Soak report</h1>
           ${note}
           <rv-live-soak .hass=${this.hass}></rv-live-soak>`;
+      case "cards":
+        return html`${this._renderBack()}
+          <h1>Dashboard cards</h1>
+          ${note}
+          <rv-card-report .hass=${this.hass}></rv-card-report>`;
       case "list":
         return html`<div class="heading">
             <h1>Devices</h1>
@@ -442,6 +448,11 @@ export class ReolinkViewerPanel extends LitElement {
           "Soak report",
           "Whether live view keeps working through a day of use: video that drops, connections that pile up, battery cameras that stay awake.",
           { view: "soak" },
+        )}
+        ${check(
+          "Dashboard cards",
+          "What the Reolink camera cards saw on each device: a wall tablet's screen going off and on, and how soon video came back.",
+          { view: "cards" },
         )}
       </ul>
       <p class="muted small">

@@ -17,6 +17,7 @@ from aiohttp import ClientSession, ClientWebSocketResponse
 from custom_components.reolink_viewer.scheduler import Scheduler
 from homeassistant.core import HomeAssistant
 
+from .card_log import CardLog
 from .go2rtc import Go2rtcServer
 from .images import LiveImages
 from .relay import MseRelay
@@ -68,6 +69,8 @@ class LiveService:
         self.warm = WarmKeeper(hass, self.relay)
         # Samples for the soak report (started by setup).
         self.soak = SoakRecorder(hass, self)
+        # What the dashboard cards saw, per device (call card_log.async_load).
+        self.card_log = CardLog(hass)
         self.sessions: dict[str, WebRtcSession] = {}
         # One capacity test at a time (it holds a host for itself).
         self.capacity_lock = asyncio.Lock()

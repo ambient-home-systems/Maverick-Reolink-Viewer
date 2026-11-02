@@ -1,5 +1,6 @@
 import type {
   CacheStatusResult,
+  CardLogDevice,
   CapacityEvent,
   IceServer,
   LiveCamera,
@@ -297,6 +298,14 @@ export const fetchMediaInfo = (hass: HomeAssistant, deviceId: string): Promise<M
 
 export const fetchLiveStatus = (hass: HomeAssistant): Promise<LiveStatus> =>
   hass.callWS<LiveStatus>({ type: "reolink_viewer/live/status" });
+
+/** What the dashboard cards saw, per device (the one heard from last first). */
+export const fetchCardLog = (hass: HomeAssistant): Promise<{ devices: CardLogDevice[] }> =>
+  hass.callWS<{ devices: CardLogDevice[] }>({ type: "reolink_viewer/live/card_log" });
+
+/** Start the dashboard cards' log over. */
+export const clearCardLog = (hass: HomeAssistant): Promise<unknown> =>
+  hass.callWS({ type: "reolink_viewer/live/card_log/clear" });
 
 export const fetchLiveCameras = (hass: HomeAssistant): Promise<{ cameras: LiveCamera[] }> =>
   hass.callWS<{ cameras: LiveCamera[] }>({ type: "reolink_viewer/live/cameras" });

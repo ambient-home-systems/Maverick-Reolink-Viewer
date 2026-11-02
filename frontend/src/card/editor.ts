@@ -8,7 +8,15 @@ import { LitElement, css, html, nothing, type TemplateResult } from "lit";
 import { fetchLiveCameras, toError } from "../api";
 import { isWarm, liveConnection } from "../live/data";
 import type { HomeAssistant, LiveCamera } from "../types";
-import { EDITOR_ELEMENT, cardConfig, storedConfig, type CameraCardConfig } from "./config";
+import {
+  EDITOR_ELEMENT,
+  RING_DEFAULT_S,
+  RING_MAX_S,
+  RING_MIN_S,
+  cardConfig,
+  storedConfig,
+  type CameraCardConfig,
+} from "./config";
 
 /** Fired with the new settings: Home Assistant's editor event. */
 export const CONFIG_CHANGED = "config-changed";
@@ -119,6 +127,7 @@ export class ReolinkViewerCameraEditor extends LitElement {
           <option value="none" ?selected=${config.tap_action === "none"}>Nothing</option>
         </select>
       </label>
+      ${camera?.visitor_entity ? this._renderRing(config) : nothing}
 
       <fieldset>
         <legend class="name">Over the picture</legend>
@@ -196,6 +205,50 @@ export class ReolinkViewerCameraEditor extends LitElement {
     </label>`;
   }
 
+  /** A doorbell's card: full screen when it rings, for a while (Home Assistant's visitor sensor). */
+  private _renderRing(config: CameraCardConfig): TemplateResult {
+    const seconds = config.ring_full_screen;
+    return html`<fieldset>
+      <legend class="name">When it rings</legend>
+      <label class="check">
+        <input
+          type="checkbox"
+          .checked=${seconds > 0}
+          @change=${(e: Event) => {
+            this._change({ ring_full_screen: (e.target as HTMLInputElement).checked ? RING_DEFAULT_S : 0 });
+          }}
+        />
+        <span
+          >Go full screen
+          <span class="note"
+            >On every screen showing this card. On a Fully Kiosk tablet with its JavaScript interface on, it wakes the
+            screen first.</span
+          ></span
+        >
+      </label>
+      ${seconds > 0
+        ? html`<label class="seconds">
+            For
+            <input
+              type="number"
+              min=${RING_MIN_S}
+              max=${RING_MAX_S}
+              step="5"
+              .value=${String(seconds)}
+              @change=${(e: Event) => {
+                const input = e.target as HTMLInputElement;
+                const value = Math.round(Number(input.value));
+                const clamped = Number.isFinite(value) ? Math.min(RING_MAX_S, Math.max(RING_MIN_S, value)) : RING_DEFAULT_S;
+                input.value = String(clamped);
+                this._change({ ring_full_screen: clamped });
+              }}
+            />
+            seconds
+          </label>`
+        : nothing}
+    </fieldset>`;
+  }
+
   private _check(key: "show_name" | "show_state", checked: boolean, label: string): TemplateResult {
     return html`<label class="check">
       <input
@@ -260,6 +313,22 @@ export class ReolinkViewerCameraEditor extends LitElement {
     .check > span {
       display: flex;
       flex-direction: column;
+    }
+    .seconds {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      padding-left: 24px;
+    }
+    .seconds input {
+      width: 5em;
+      min-height: 36px;
+      padding: 0 8px;
+      border: 1px solid var(--divider-color, rgba(0, 0, 0, 0.2));
+      border-radius: 4px;
+      color: var(--primary-text-color);
+      background: var(--card-background-color, transparent);
+      font: inherit;
     }
     .note {
       margin: 0;

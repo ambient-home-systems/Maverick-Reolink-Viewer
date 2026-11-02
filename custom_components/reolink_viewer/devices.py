@@ -699,7 +699,8 @@ def async_live_cameras(
     enabled entity of the camera whose state says whether Home Assistant
     reaches it (the Reolink integration makes a camera's entities unavailable
     while it is offline). Each camera lists the entities a live view controls
-    it with (``_live_controls``).
+    it with (``_live_controls``), and a doorbell its visitor sensor, which
+    turns on at a press (a dashboard card can go full screen then).
     """
     model = _async_build(hass, degraded=False)
     ent_reg = er.async_get(hass)
@@ -767,9 +768,25 @@ def async_live_cameras(
                     "records": _records_somewhere(camera),
                     "connections": connections,
                     "controls": _live_controls(ent_reg, camera.connections),
+                    "visitor_entity": _visitor_entity(ent_reg, camera.connections),
                 }
             )
     return cameras
+
+
+def _visitor_entity(
+    ent_reg: er.EntityRegistry, connections: Iterable[_Connection]
+) -> str | None:
+    """Return a doorbell's enabled visitor sensor (on at a press), if it has one."""
+    for conn in sorted(connections, key=lambda c: c.via != "nvr"):
+        for entity in _reolink_entities(ent_reg, [conn.device.id]):
+            if (
+                entity.domain == "binary_sensor"
+                and entity.translation_key == "visitor"
+                and entity.disabled_by is None
+            ):
+                return entity.entity_id
+    return None
 
 
 def _live_controls(

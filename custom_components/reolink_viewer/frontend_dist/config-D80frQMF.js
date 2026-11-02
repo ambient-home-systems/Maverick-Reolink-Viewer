@@ -4,7 +4,8 @@ var e = "reolink-viewer-camera", t = `custom:${e}`, n = "reolink-viewer-camera-e
 	tap_action: "full_screen",
 	show_name: !0,
 	show_state: !0,
-	fit: "cover"
+	fit: "cover",
+	ring_full_screen: 0
 }, a = {
 	quality: ["sd", "hd"],
 	tap_action: [
@@ -36,6 +37,11 @@ function s(e) {
 			if (typeof t != "boolean") throw Error(`${e}: true or false.`);
 			s[e] = t;
 		}
+	}
+	let c = n.ring_full_screen;
+	if (c !== void 0) {
+		if (typeof c != "number" || !Number.isInteger(c) || c !== 0 && (c < 5 || c > 600)) throw Error("ring_full_screen: seconds, 5 to 600 (0: not).");
+		s.ring_full_screen = c;
 	}
 	return s;
 }

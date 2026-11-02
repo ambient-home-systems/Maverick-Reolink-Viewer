@@ -25,6 +25,8 @@ export interface CameraCardConfig {
   show_name: boolean;
   show_state: boolean;
   fit: Fit;
+  /** A doorbell's card: when it rings, full screen for this many seconds (0: not). */
+  ring_full_screen: number;
 }
 
 export const DEFAULTS = {
@@ -33,6 +35,7 @@ export const DEFAULTS = {
   show_name: true,
   show_state: true,
   fit: "cover",
+  ring_full_screen: 0,
 } as const satisfies Omit<CameraCardConfig, "type" | "camera">;
 
 const CHOICES = {
@@ -42,6 +45,11 @@ const CHOICES = {
 } as const;
 
 const FLAGS = ["show_name", "show_state"] as const;
+
+/** How long a doorbell's card may stay full screen after a ring, in seconds. */
+export const RING_MIN_S = 5;
+export const RING_MAX_S = 600;
+export const RING_DEFAULT_S = 30;
 
 /** The card's settings from what the dashboard has; throws, in plain words, on a wrong value. */
 export function cardConfig(raw: unknown): CameraCardConfig {
@@ -70,6 +78,13 @@ export function cardConfig(raw: unknown): CameraCardConfig {
     if (value === undefined) continue;
     if (typeof value !== "boolean") throw new Error(`${key}: true or false.`);
     config[key] = value;
+  }
+  const ring = given.ring_full_screen;
+  if (ring !== undefined) {
+    if (typeof ring !== "number" || !Number.isInteger(ring) || (ring !== 0 && (ring < RING_MIN_S || ring > RING_MAX_S))) {
+      throw new Error(`ring_full_screen: seconds, ${String(RING_MIN_S)} to ${String(RING_MAX_S)} (0: not).`);
+    }
+    config.ring_full_screen = ring;
   }
   return config;
 }

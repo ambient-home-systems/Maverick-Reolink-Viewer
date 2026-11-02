@@ -32,6 +32,15 @@ export const TILE_FULL_EVENT = "rv-live-full";
 export const TILE_COUNT_EVENT = "rv-live-count";
 /** Fired (bubbling) when the tile starts or stops playing live: `{ cameraId, live }`. */
 export const TILE_STATE_EVENT = "rv-live-state";
+/** Fired at each change of a player's state (a dashboard card logs them): PlayerDetail. */
+export const TILE_PLAYER_EVENT = "rv-live-player";
+
+export interface PlayerDetail {
+  /** The tile's own stream (SD, or a card's HD), or the HD stream full screen adds. */
+  which: "SD" | "HD";
+  stream: LiveStreamKind;
+  state: PlayerState;
+}
 
 export interface LiveCountDetail {
   camera: string;
@@ -435,11 +444,16 @@ export class RvLiveTile extends LitElement {
             new CustomEvent(TILE_STATE_EVENT, { detail: { cameraId: this.camera?.id ?? "", live }, bubbles: true }),
           );
         }
+        if (state.kind !== this._state.kind) this._playerChanged(this.playsHd ? "HD" : "SD", this.stream, state);
         this._state = state;
       },
     );
     this._player.onCount = this._count;
     return this._player;
+  }
+
+  private _playerChanged(which: PlayerDetail["which"], stream: LiveStreamKind, state: PlayerState): void {
+    this.dispatchEvent(new CustomEvent<PlayerDetail>(TILE_PLAYER_EVENT, { detail: { which, stream, state } }));
   }
 
   private _ensureHdPlayer(): LivePlayer | undefined {
@@ -454,6 +468,7 @@ export class RvLiveTile extends LitElement {
       { connectionId: connection.connection_id, stream },
       { warm: connection.streams[stream]?.warm === true, iceServers: [] },
       (state) => {
+        if (state.kind !== this._hdState.kind) this._playerChanged("HD", stream, state);
         this._hdState = state;
       },
     );

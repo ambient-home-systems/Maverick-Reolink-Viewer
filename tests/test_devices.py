@@ -233,6 +233,32 @@ async def test_where_a_cameras_recordings_are(
         assert recordings() == {"where": "none", "storage": None}
 
 
+async def test_a_doorbells_visitor_sensor(
+    hass: HomeAssistant,
+    reolink_host: MagicMock,
+    loaded_with_entities: MockConfigEntry,
+) -> None:
+    """A doorbell lists its enabled visitor sensor (on at a press); others none."""
+    (camera,) = devices.async_live_cameras(hass)
+    assert camera["visitor_entity"] is None
+    ent_reg = er.async_get(hass)
+    entry = ent_reg.async_get_or_create(
+        "binary_sensor",
+        "reolink",
+        "test_visitor",
+        device_id=camera["connections"][0]["connection_id"],
+        translation_key="visitor",
+        suggested_object_id="test_reolink_cam_visitor",
+    )
+    (camera,) = devices.async_live_cameras(hass)
+    assert camera["visitor_entity"] == entry.entity_id
+    ent_reg.async_update_entity(
+        entry.entity_id, disabled_by=er.RegistryEntryDisabler.USER
+    )
+    (camera,) = devices.async_live_cameras(hass)
+    assert camera["visitor_entity"] is None
+
+
 async def test_live_controls(
     hass: HomeAssistant,
     reolink_host: MagicMock,
