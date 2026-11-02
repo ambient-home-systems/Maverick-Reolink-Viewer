@@ -213,11 +213,12 @@ var d = "config-changed", f = class extends r {
       flex-direction: column;
       gap: 8px;
     }
+    /* As Home Assistant's own alerts: a light tint of its warning colour. */
     .warning {
       margin: 0;
       padding: 8px 12px;
-      border-left: 4px solid var(--warning-color, #f2b100);
-      background: var(--secondary-background-color, rgba(0, 0, 0, 0.04));
+      border-radius: 4px;
+      background: color-mix(in srgb, var(--warning-color, #ffa600) 16%, transparent);
     }
   `;
 };

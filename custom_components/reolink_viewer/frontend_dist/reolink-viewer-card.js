@@ -23,7 +23,7 @@ var f = class extends r {
 		return a;
 	}
 	static async getConfigElement() {
-		return await import("./editor-CIyJ2k4I.js"), document.createElement(c);
+		return await import("./editor-Cm-Qo2uO.js"), document.createElement(c);
 	}
 	static async getStubConfig(e) {
 		try {

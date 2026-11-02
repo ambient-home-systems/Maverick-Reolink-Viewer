@@ -113,7 +113,7 @@ function dashboard(): void {
     ).getConfigElement();
     (editor as HTMLElement & { setConfig(c: unknown): void; hass: unknown }).setConfig({
       type: "custom:reolink-viewer-camera",
-      camera: "cam-fyr",
+      camera: "cam-laundry", // not kept warm: the editor's warning shows
     });
     (editor as HTMLElement & { hass: unknown }).hass = hass;
     box.append(heading, editor);
