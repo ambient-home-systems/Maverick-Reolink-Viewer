@@ -280,6 +280,13 @@ async def test_chromium_shows_the_dashboard_card(
     assert result["tapLabel"].endswith(" full screen"), result
     assert result["editorCameras"], result
     assert result["full"] is True, result
+    # Full screen without a person's tap (a ring) fills the window from the top
+    # layer, whatever the dashboard's layout; and leaves it after.
+    assert result["topLayer"] is True, result
+    assert [result["filled"]["width"], result["filled"]["height"]] == result["filled"][
+        "window"
+    ], result
+    assert result["afterFull"] == {"topLayer": False, "popover": None}, result
     # The card went away: nothing holds the stream, nobody watches the pictures.
     assert result["after"] == {"sessions": 0, "running": {}}, result
     assert service.images.stats()["watches"] == 0

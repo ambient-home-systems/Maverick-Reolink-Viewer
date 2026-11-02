@@ -306,7 +306,7 @@ nothing to add to the dashboard's resources.
 1. Edit the dashboard, choose **Add card**, and search for **Reolink camera**.
 2. Choose the camera, and how the card shows it:
    - **Quality:** **SD**, the camera's light sub stream (the default), or **HD** on
-     the card itself. HD starts in 2 to 10 seconds each time, and uses one more of
+     the card itself. HD takes a few seconds to start each time, and uses one more of
      the NVR's or camera's video slots while it shows. Full screen plays HD either
      way.
    - **Tap the card to:** go full screen, in HD (the default); open the camera in

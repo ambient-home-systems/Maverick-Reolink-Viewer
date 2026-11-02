@@ -111,7 +111,7 @@ export class ReolinkViewerCameraEditor extends LitElement {
           "hd",
           config.quality,
           "HD",
-          "Its full-quality stream on the card itself. It starts in 2–10 s each time, and takes one more of the NVR's or camera's streams while shown. Full screen plays HD either way.",
+          "Its full-quality stream on the card itself. It takes a few seconds to start each time, and one more of the NVR's or camera's streams while shown. Full screen plays HD either way.",
         )}
       </fieldset>
 
@@ -159,7 +159,7 @@ export class ReolinkViewerCameraEditor extends LitElement {
       ${warm || config.quality === "hd"
         ? nothing
         : html`<p class="warning" role="status">
-            Not kept warm: its video starts in 2–10 s. Keep it warm to start at once.
+            Not kept warm: its video takes a few seconds to start. Keep it warm to start at once.
           </p>`}
       <label class="check">
         <input

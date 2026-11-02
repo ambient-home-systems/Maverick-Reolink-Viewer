@@ -159,6 +159,8 @@ export class RvLiveTile extends LitElement {
   private _hdChoosing: LiveConnection | undefined;
   /** In the browser's full screen (not just filling the window). */
   private _native = false;
+  /** Filling the window from the top layer (a popover). */
+  private _topLayer = false;
   private _observer: IntersectionObserver | undefined;
   private _offscreenTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -321,9 +323,40 @@ export class RvLiveTile extends LitElement {
           // Left again before the browser was done.
           if (!this._full) void document.exitFullscreen().catch(() => undefined);
         })
-        .catch(() => undefined); // it fills the window instead
-    }
+        .catch(() => {
+          this._fillWindow();
+        });
+    } else this._fillWindow();
     this._fullChanged();
+  }
+
+  /**
+   * The browser's full screen refused (asked without a tap: a doorbell's
+   * ring) or missing (the iPhone): fill the window from the top layer, where
+   * no ancestor's layout (a dashboard's grid) holds a fixed position in its
+   * place (the owner's tablet, 2026-11-02). A browser without popovers fills
+   * what its fixed position reaches, as before.
+   */
+  private _fillWindow(): void {
+    if (!this._full || this._topLayer || typeof this.showPopover !== "function") return;
+    try {
+      this.popover = "manual";
+      this.showPopover();
+      this._topLayer = true;
+    } catch {
+      this.removeAttribute("popover");
+    }
+  }
+
+  private _leaveTopLayer(): void {
+    if (!this._topLayer) return;
+    this._topLayer = false;
+    try {
+      this.hidePopover();
+    } catch {
+      // Already hidden (the tile left the page).
+    }
+    this.removeAttribute("popover");
   }
 
   /** Back from full screen (to the sub stream). */
@@ -334,6 +367,7 @@ export class RvLiveTile extends LitElement {
       void document.exitFullscreen().catch(() => undefined);
     }
     this._native = false;
+    this._leaveTopLayer();
     this._fullChanged();
   }
 
@@ -634,9 +668,10 @@ export class RvLiveTile extends LitElement {
     }
     const hd = this._hd;
     if (!hd?.stream) {
+      // A dashboard card keeps why off the picture (a wall tablet's doorbell): it is the badge's title.
       return html`<div class="hd-status" title=${hd?.reason ?? nothing}>
         <span class="badge">SD</span>
-        <span class="small">${hd ? hd.reason : "Choosing the HD stream…"}</span>
+        ${this.compact ? nothing : html`<span class="small">${hd ? hd.reason : "Choosing the HD stream…"}</span>`}
       </div>`;
     }
     const hdState = this._hdState;
@@ -742,6 +777,15 @@ export class RvLiveTile extends LitElement {
       :host([full]) {
         position: fixed;
         inset: 0;
+        /* Over a popover's own look, in the top layer. */
+        width: auto;
+        height: auto;
+        max-width: none;
+        max-height: none;
+        margin: 0;
+        border: 0;
+        overflow: hidden;
+        color: inherit;
         z-index: 10000;
         box-sizing: border-box;
         padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px)

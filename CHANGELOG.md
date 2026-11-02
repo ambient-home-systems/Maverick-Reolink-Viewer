@@ -3,6 +3,19 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.45.1
+
+From the wall tablet's test.
+
+- **A doorbell's card now really fills the screen when it rings.** Without a tap, the
+  tablet's browser refuses its own full screen, and the card's stand-in stayed in its
+  place on the dashboard. It now covers the whole screen, whatever the dashboard's
+  layout. The same goes for a card's full screen in the iPhone app.
+- **A card's full screen shows SD without the note** explaining why over the picture
+  (the Doorbell's main stream is H.265, which the tablet cannot decode at its size).
+- **The editor's warnings** say what the tablet measured: a camera not kept warm takes
+  a few seconds to start.
+
 ## 0.45.0
 
 Phase 7, step 2: the camera card on a wall tablet.

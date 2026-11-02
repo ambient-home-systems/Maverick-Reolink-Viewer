@@ -424,6 +424,17 @@ describe("custom:reolink-viewer-camera", () => {
 
   it("goes full screen when the doorbell rings, for its seconds, waking Fully Kiosk's screen", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
+    // The top layer, which happy-dom lacks: a ring's full screen fills the window from it.
+    const shown: Element[] = [];
+    const hidden: Element[] = [];
+    Object.assign(HTMLElement.prototype, {
+      showPopover(this: HTMLElement) {
+        shown.push(this);
+      },
+      hidePopover(this: HTMLElement) {
+        hidden.push(this);
+      },
+    });
     try {
       const note = vi.spyOn(tablet, "note");
       const wake = vi.spyOn(tablet, "wake");
@@ -439,6 +450,14 @@ describe("custom:reolink-viewer-camera", () => {
       card.hass = withVisitor(hass, "on", "2026-11-03T03:01:00Z");
       await settle();
       expect(tile()?.full).toBe(true);
+      // Without a tap the browser refuses its own full screen: the top layer
+      // fills the window, out of the dashboard's layout.
+      expect(shown).toEqual([tile()]);
+      expect(tile()?.getAttribute("popover")).toBe("manual");
+      // A card says SD over the picture, and why only in its title.
+      const status = tile()?.shadowRoot?.querySelector(".hd-status");
+      expect(status?.textContent.trim()).toBe("SD");
+      expect(status?.getAttribute("title")).toMatch(/^SD only: /);
       expect(wake).toHaveBeenCalledTimes(1);
       expect(note).toHaveBeenCalledWith("ring", "Doorbell", "full screen for 5 s");
       // The battery doorbell plays: someone asked for it.
@@ -450,6 +469,8 @@ describe("custom:reolink-viewer-camera", () => {
       await vi.advanceTimersByTimeAsync(5000);
       await settle();
       expect(tile()?.full).toBe(false);
+      expect(hidden).toEqual([tile()]);
+      expect(tile()?.hasAttribute("popover")).toBe(false);
 
       // Full screen by hand before a ring: it stays when the ring's time is up.
       tile()?.enterFull();
@@ -470,6 +491,8 @@ describe("custom:reolink-viewer-camera", () => {
     } finally {
       vi.useRealTimers();
       vi.restoreAllMocks();
+      Reflect.deleteProperty(HTMLElement.prototype, "showPopover");
+      Reflect.deleteProperty(HTMLElement.prototype, "hidePopover");
     }
   });
 
@@ -559,7 +582,7 @@ describe("the card's editor", () => {
   it("warns when the camera is not kept warm, with its switch", async () => {
     const { hass, services } = fakeHass();
     const { text, root } = await mountEditor(hass, { camera: "cam1" });
-    expect(text()).toContain("Not kept warm: its video starts in 2–10 s. Keep it warm to start at once.");
+    expect(text()).toContain("Not kept warm: its video takes a few seconds to start. Keep it warm to start at once.");
     const keepWarm = root()?.querySelector<HTMLInputElement>(".warm input");
     expect(keepWarm?.checked).toBe(false);
     keepWarm?.click();

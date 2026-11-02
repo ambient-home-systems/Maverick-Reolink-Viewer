@@ -1,5 +1,5 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
-import { Et as i, I as a, L as o, at as s } from "./live-BRQnJ2GG.js";
+import { Et as i, I as a, L as o, at as s } from "./live-Ck8ZOIpy.js";
 import { a as c, c as l, r as u } from "./config-D80frQMF.js";
 //#region src/card/editor.ts
 var d = "config-changed", f = class extends r {
@@ -65,7 +65,7 @@ var d = "config-changed", f = class extends r {
       <fieldset>
         <legend class="name">Quality</legend>
         ${this._radio("quality", "sd", e.quality, "SD", "The camera's sub stream: light, and at once on a camera kept warm.")}
-        ${this._radio("quality", "hd", e.quality, "HD", "Its full-quality stream on the card itself. It starts in 2–10 s each time, and takes one more of the NVR's or camera's streams while shown. Full screen plays HD either way.")}
+        ${this._radio("quality", "hd", e.quality, "HD", "Its full-quality stream on the card itself. It takes a few seconds to start each time, and one more of the NVR's or camera's streams while shown. Full screen plays HD either way.")}
       </fieldset>
 
       <label class="field">
@@ -105,7 +105,7 @@ var d = "config-changed", f = class extends r {
 		let c = a(this.hass, e), l = this.hass?.states[s]?.state;
 		return n`<div class=${c ? "warm" : "warm cold"}>
       ${c || r.quality === "hd" ? t : n`<p class="warning" role="status">
-            Not kept warm: its video starts in 2–10 s. Keep it warm to start at once.
+            Not kept warm: its video takes a few seconds to start. Keep it warm to start at once.
           </p>`}
       <label class="check">
         <input
