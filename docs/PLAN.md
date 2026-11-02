@@ -314,7 +314,7 @@ with its copyright notice kept.
 | reolink-aio's DST rules land on the wrong days | Already done (v0.39.1, reported as reolink_aio#239) |
 | Pinch, drag and double-tap zoom on the video | Build (Phase 11): our player has none, and HA's `user-scalable=no` stops the browser's own pinch |
 | An MP4 of one event | Build (Phase 11), from the download cut or the cached copy; ours downloads only the whole recording today |
-| A copy of each detection's clip on a NAS or cloud | Not planned: big, and Stamina does it by reusing HA's storage integrations; the two can run side by side |
+| A copy of each detection's clip on a NAS or cloud | TBD: the owner may want it built here later (sketched as Phase 14). Meanwhile Stamina does it by reusing HA's storage integrations, and the two can run side by side |
 | Exact detection times from HA's history | As the Doorbell's fallback only (Phase 6); the camera's event search already gives event times |
 | Motion-only events hidden by default | Phase 11, a small filter default |
 | A cross-camera list; playback fallbacks (FLV, remux, re-encode, HLS for iOS); probing each recorder's route | Skip: equivalents exist. Its RLN36 finding (whole-file download only) matches ours |

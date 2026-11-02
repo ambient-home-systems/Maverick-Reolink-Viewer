@@ -30,11 +30,13 @@ put on it:
 | 11 | Playback and settings extras: zoom, event clips, filters, copying settings | Standard | 1–2 wk | Planned. See "Phase 11" |
 | 12 | Optional R&D: the Doorbell's recordings and talk | Very high | 3–5 wk, gated | Planned. See "Phase 12" |
 | 13 | Optional: live picture integrity and outside live sources | High | 1–1.5 wk, gated | Planned. See "Phase 13" |
+| 14 | Copies of detection clips on a NAS or cloud | High | — | **TBD** (the owner, 2026-11-02): may be built here later; sketched, not scheduled. See "Phase 14" |
 
 Phases 1 and 2 can overlap once Phase 0 is done. Phase 5 can start any time after
 Phase 0 as a separate track. Phases 6–13 are the second round, planned in
 "Phases 6–13: the second round"; most of them are independent of each other,
-and the order there is a recommendation.
+and the order there is a recommendation. Phase 14 is a sketch, kept until the
+owner decides.
 
 ---
 
@@ -5001,6 +5003,8 @@ Recommended, the owner's to change:
 6. **Phase 11**, at any time; its steps are independent.
 7. **Phases 12 and 13 are optional and gated.** Each starts with a
    measurement that decides whether it goes on.
+8. **Phase 14 is TBD** (decision 7): a sketch, to be planned if the owner
+   picks it up.
 
 Before Phase 6, two records are still open from the first round: Phase 5's
 v0.40.1 hardware check (this plan still says "not run yet"), and Phase 4's
@@ -5008,17 +5012,18 @@ exit item (an install through HACS on a clean Home Assistant).
 
 ### Decisions for the owner
 
-Each phase assumes the default shown until the owner decides otherwise.
+The owner answered these on 2026-11-02. One thing is still open: the
+monitor's name (decision 1).
 
-| # | Decision | Default assumed | Needed by |
+| # | Decision | The owner's answer | Needed by |
 | --- | --- | --- | --- |
-| 1 | The monitor: replace the home view's timetable, or a switch | A **Board / Monitor** switch on the Live view, remembered per device; Board stays as today, Monitor shows feeds only | 9.1 |
-| 2 | Saved monitor layouts: per Home Assistant user, or per screen | Named layouts per HA user, kept on the server; each device remembers which one it shows | 9.1 |
-| 3 | The wall tablet: its model, browser and HA login (admin or not) | None; asked before Phase 7's exit check | 7 |
-| 4 | Unusual events: port Stamina's model (MIT, credited) or write our own | Port it, adapted to our types, with its copyright notice and its tests | 8.2 |
-| 5 | Unusual events on by default | Off: an option to turn on, since the journal is a record of when people come and go | 8.1 |
-| 6 | Running reostream as a separate service | No: Doorbell talk through our own UDP client (Phase 12), and Phase 13.2 built only if 13.1 finds corruption | 12, 13 |
-| 7 | Copies of detection clips on a NAS or cloud | Not planned; Stamina does it and can run beside Reolink Viewer | — |
+| 1 | The monitor: replace the home view's timetable, or a switch | **A switch** on the Live view between the board, as today, and the monitor (feeds only), remembered per device. **Its name is open:** "Monitor" stands in for it in this plan; the candidates are Wall, Monitor, Lookout and Signal box | 9.1; the name before 9.1's release |
+| 2 | Saved monitor layouts: per Home Assistant user, or per screen | **Named layouts per HA user**, kept on the server; each device remembers which one it shows | 9.1 |
+| 3 | The wall tablet | **A Samsung Galaxy Tab A9+ running Fully Kiosk Browser**, which draws pages with Android System WebView (Chromium). Its HA login (admin or not) is not known; the card works with either (Phase 7) | 7 |
+| 4 | Unusual events: port Stamina's model (MIT, credited) or write our own | **Port it**, adapted to our types, with its copyright notice and its tests | 8.2 |
+| 5 | Unusual events on by default | **Off**: an option to turn on, since the journal is a record of when people come and go | 8.1 |
+| 6 | Running reostream as a separate service | **No**: Doorbell talk goes through our own UDP client (Phase 12), and Phase 13.2 is built only if 13.1 finds corruption | 12, 13 |
+| 7 | Copies of detection clips on a NAS or cloud | **TBD**: the owner may want it built here later. Sketched as Phase 14, not scheduled; Stamina does it meanwhile and can run beside Reolink Viewer | — |
 
 ### Rules for Phases 6–13
 
@@ -5148,6 +5153,25 @@ an SD card is untried; the Doorbell may limit its sessions.
 Goal: the wall tablet's dashboard shows the Doorbell and a front-yard camera
 as fast and as reliably as the panel does (PLAN.md §6.1).
 
+**The tablet** (decision 3) is a Samsung Galaxy Tab A9+ running Fully Kiosk
+Browser. Fully draws pages with Android System WebView, the same Chromium
+engine Chrome uses, embedded in an app. This shapes the work:
+
+- **What the tile needs, WebView has:** MSE and WebRTC. HD over MSE is chosen
+  by `MediaCapabilities` as everywhere, so H.265 plays only if the tablet's
+  decoder takes it.
+- **What WebView lacks:** the Screen Wake Lock API, as far as is known (step
+  7.2 checks it). On this tablet, keeping the screen on is Fully's own "Keep
+  Screen On" and screensaver settings, not ours.
+- **Fully turns the screen off and on itself** (on a schedule, or on motion in
+  front of the tablet). It may reload the page, and WebView may or may not tell
+  the page it is hidden. Step 7.2 measures what this does to the tile.
+- **HA's Fully Kiosk Browser integration** can turn the tablet's screen on.
+  An automation on the Doorbell's `visitor` sensor can therefore wake the
+  screen while the card enlarges the Doorbell; the user guide shows it.
+- The WebView's version is shown in Fully's device info, and is recorded with
+  each check.
+
 | Step | Status |
 | --- | --- |
 | 1. The camera card | Not started |
@@ -5189,11 +5213,22 @@ as fast and as reliably as the panel does (PLAN.md §6.1).
 - **The screen waking:** when the page becomes visible again, the tile is
   playing again within the warm-start figures (it already pauses while
   hidden).
-- **Keep the screen awake:** a card option, through the Screen Wake Lock API
-  where the browser has it.
+- **Under Fully Kiosk, measured first:** the page's visibility events, timers
+  and the tile's state when Fully turns the screen off and on, when its
+  screensaver comes and goes, and when it reloads the page.
+  - If WebView keeps the page "visible" with the screen off, the tile would
+    play to a dark screen and hold its streams. The fix is then to stop the
+    tile when nothing has been painted for a while, or to read the screen's
+    state from HA's Fully Kiosk Browser integration.
+  - A reload costs only the first picture from the image cache (0.02 s) and a
+    warm start.
+- **Keep the screen awake:** a card option through the Screen Wake Lock API,
+  where the browser has it. Under Fully, the user guide points to Fully's own
+  settings instead.
 - **On a doorbell press:** an option to enlarge the card or go full screen for
   N seconds when the camera's `visitor` sensor turns on (read from `hass`, so
-  at once).
+  at once). The user guide pairs it with an automation that turns the tablet's
+  screen on through HA's Fully Kiosk Browser integration.
 - **Network loss:** recovery without a reload (the tile's own retries).
   Measured on the tablet with the soak's rule: 8 visible hours, no tile stuck.
 
@@ -5212,17 +5247,25 @@ app's camera views faster too.
 
 **Exit criteria:**
 
-- On the wall tablet (decision 3), both cards show a picture in under 0.1 s and
-  video in a median under 1 s after the dashboard opens or the screen wakes,
-  on warm cameras.
+- **On the Galaxy Tab A9+ under Fully Kiosk**, on warm cameras, both cards
+  show a picture in under 0.1 s, and video in a median under 1 s, after:
+  - the dashboard opens;
+  - Fully turns the screen back on;
+  - the screensaver ends;
+  - a reload.
+- With the screen off, the cards hold no stream beyond the cameras'
+  keep-warm.
 - No tile is stuck over 8 visible hours.
 - The same on the iPhone app's dashboard.
 - A non-admin user's dashboard plays.
 - The card's module is within its budget.
 
-**Risks:** an old Android WebView without MSE (the tile falls back to WebRTC:
-0.39–0.40 s on the Doorbell in Phase 3); kiosk apps that hide or reload pages
-in their own way.
+**Risks:**
+
+- **An out-of-date WebView without MSE:** the tile falls back to WebRTC
+  (0.39–0.40 s on the Doorbell in Phase 3). Fully's device info shows the
+  version, and Android updates WebView through the Play Store.
+- **Fully's screen-off and reload behaviour** (measured in 7.2).
 
 ---
 
@@ -5353,8 +5396,11 @@ the owner (PLAN.md §6.3).
 
 #### Step 9.1: monitor mode, layouts, saved
 
-- **A Board / Monitor switch** on the Live view (decision 1), remembered per
-  device. Board is today's view.
+- **A switch on the Live view between Board and Monitor** (decision 1; the
+  name "Monitor" stands in until the owner picks one), remembered per device.
+  Board is today's view.
+- **An address per saved layout** (`#monitor/<layout>`), so a kiosk's start
+  page (Fully Kiosk on the wall tablet) opens a layout directly.
 - **Monitor shows feeds only, fitted to the screen:**
   - rows sized from the screen's height as well as its width, with no page
     scroll;
@@ -5460,7 +5506,7 @@ Added to the probe's Reolink protocol section and to the playback check:
   - beside a playback cut running on the same channel (5c step 5's turns).
 - **Decoding in the browser:** `VideoDecoder` support, and the time to decode
   one key frame per codec, on Chrome, the iPhone app (WKWebView) and the wall
-  tablet.
+  tablet (Fully Kiosk's Android WebView).
 
 **Gate:** a median cut of 300 ms or less back to back, and decoding in 30 ms
 or less → step 1. Otherwise → step 5.
@@ -5754,10 +5800,43 @@ a cleaner source.
 - If step 2 is built, the stream it serves shows no corruption in the strips,
   and starts within its current figures.
 
+---
+
+## Phase 14 — TBD: copies of detection clips on a NAS or cloud (difficulty: High; not scheduled)
+
+**Status: TBD** (decision 7). The owner may want this built here later.
+Until then, Reolink Stamina does it and can run beside Reolink Viewer. This
+sketch keeps the idea from being lost; it is planned properly, with an
+estimate, if it is picked up.
+
+Goal: footage of what mattered outlives the recorder that wrote it, if the
+NVR is stolen, fails or is wiped.
+
+**The shape, after Stamina's cloud sync (PLAN.md §6.5):**
+
+- **Per NVR, a copy job.** It is a device with a switch, which an alarm
+  automation can turn on and off, and with sensors for the quota used, the
+  queue and the last upload.
+- **What is copied:**
+  - one clip per detection of the kinds chosen (person, vehicle and animal by
+    default), from the event's start − 10 s to its end + 10 s;
+  - optionally, every event Phase 8 marks unusual, whatever its kind.
+  - One event is one clip, however many sensors fired.
+- **How a clip is made:** by Phase 11.2's "save this event" (the download cut,
+  or the cached copy), with the original samples untouched and SD by default.
+- **Where it goes:** through a storage integration HA already holds, reusing
+  its connection (Stamina uses Synology DSM, WebDAV, SFTP Storage, OneDrive and
+  Google Drive), so there is nothing to sign in to again.
+  - A quota, oldest first out.
+  - Names that sort by date.
+- **Device I/O** goes through the scheduler at prefetch priority, behind
+  anything someone is watching.
+
+**Depends on:** Phase 11.2 (making the clip), and Phase 8 for the
+unusual-event rule.
+
 ### Not planned
 
-- **Copies of detection clips on a NAS or cloud** (Stamina's cloud sync):
-  decision 7.
 - **Storyboards:** only as Phase 10.5's fallback.
 - **Marks on settings changed from factory:** only if Phase 11.5 finds the
   values.
