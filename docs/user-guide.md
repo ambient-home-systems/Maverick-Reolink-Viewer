@@ -334,7 +334,9 @@ and recorded video work on each of your cameras, and how fast. Run it when you r
 a problem with a camera model: it makes a file to attach to your report. It only reads
 from your cameras, and leaves passwords, addresses, serial numbers and other private
 details out of the file. Battery cameras are left out unless you tick them, since the
-test wakes them.
+test wakes them. A battery camera on wired power never sleeps, so the test of events on
+cameras whose recordings Reolink Viewer cannot play (a doorbell's SD card) checks it
+either way.
 
 ## On a phone
 

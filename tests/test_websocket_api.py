@@ -196,6 +196,31 @@ async def test_probe_baichuan_options(
         assert msg["success"] is False, bad
 
 
+async def test_probe_events_options(
+    hass: HomeAssistant,
+    hass_ws_client: WebSocketGenerator,
+    loaded_viewer: MockConfigEntry,
+) -> None:
+    """The panel's events check options (Phase 6) reach the probe."""
+    client = await hass_ws_client(hass)
+    with patch.object(
+        probe.Prober, "async_run", autospec=True, return_value={"ok": 1}
+    ) as run:
+        events = await _collect_probe(
+            client, {"events_test": True, "events_only": True}
+        )
+    assert events[-1] == {"type": "result", "report": {"ok": 1}}
+    options = run.call_args.args[0]._options.events
+    assert (options.enabled, options.only) == (True, True)
+    # Off by default.
+    with patch.object(
+        probe.Prober, "async_run", autospec=True, return_value={"ok": 1}
+    ) as run:
+        await _collect_probe(client, {})
+    options = run.call_args.args[0]._options.events
+    assert (options.enabled, options.only) == (False, False)
+
+
 async def test_probe_requires_admin(
     hass: HomeAssistant,
     hass_ws_client: WebSocketGenerator,

@@ -3,6 +3,24 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.41.0
+
+Phase 6, step 1: finding out whether a doorbell's events can be listed.
+
+- **A new test in the hardware probe** (Devices → Hardware probe, for
+  administrators): "Test the events of cameras that record where Reolink Viewer
+  cannot play it". It is for cameras like the battery Doorbell, which keeps its
+  recordings on its SD card and is left off the Events page today. On each such
+  camera it asks for this month's days with recordings, today's and yesterday's
+  events in SD and HD, and a picture from the newest events, and says how long
+  each took. It only reads.
+- **A battery camera on wired power is tested without ticking "Include battery
+  cameras"**, since it never sleeps; one on its battery still needs the tick.
+- **The file says what was found, not when:** it holds the counts, types and
+  lengths of the events, never their times of day.
+- The result decides how the Doorbell's events come to the Events page in the next
+  release.
+
 ## 0.40.1
 
 Fixes from a review of the deep starts over the Reolink protocol (Phases 5b and

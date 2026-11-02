@@ -1096,6 +1096,21 @@ class ReolinkHostHandle:
         _by_id, by_trigger = events_result
         return DaySearch(files, _events(by_trigger), timing=timing)
 
+    async def async_search_day_events(
+        self, channel: int, start: datetime, end: datetime, stream: str
+    ) -> DaySearch:
+        """Search the events of one window, without its recordings.
+
+        For a channel that records where this integration cannot play it (the
+        battery Doorbell's SD card): such a camera speaks Baichuan only, so it
+        has no HTTP Search, but its Baichuan event search may still list the
+        events. ``start``/``end`` are device wall-clock times. A failure raises.
+        """
+        began = time.monotonic()
+        _by_id, by_trigger = await self._search_events(channel, start, end, stream)
+        timing = {"events_ms": round((time.monotonic() - began) * 1000, 1)}
+        return DaySearch([], _events(by_trigger), timing=timing)
+
     async def _search_events(
         self, channel: int, start: datetime, end: datetime, stream: str
     ) -> Any:

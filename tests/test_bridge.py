@@ -664,3 +664,43 @@ async def test_search_day_and_recording_days(
     )
     days = await host.async_recording_days(0, month_start, month_end)
     assert [d.day for d in days] == [2]
+
+
+async def test_search_day_events(
+    hass: HomeAssistant,
+    reolink_host: MagicMock,
+    loaded_reolink: MockConfigEntry,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A camera that records but cannot be played: its events without HTTP."""
+    (host,) = bridge.async_get_hosts(hass)
+    start = TEST_NOW - timedelta(hours=2)
+    press = make_vod_file(start, 1, name="20261017100000")
+    press.bc_triggers = VOD_trigger.DOORBELL | VOD_trigger.PERSON
+    reolink_host.baichuan.search_vod_type = AsyncMock(
+        return_value=(
+            {},
+            {VOD_trigger.DOORBELL: [press], VOD_trigger.PERSON: [press]},
+        )
+    )
+    # A Baichuan-only device has no HTTP Search: it is never asked.
+    reolink_host.request_vod_files = AsyncMock(side_effect=ReolinkError("no HTTP"))
+    day = await host.async_search_day_events(0, start, TEST_NOW, "sub")
+    assert day.files == []
+    assert [(e.types, e.file_id) for e in day.events] == [
+        (("PERSON", "DOORBELL"), "20261017100000")
+    ]
+    assert day.events_error is None
+    assert day.timing["events_ms"] >= 0
+    reolink_host.request_vod_files.assert_not_awaited()
+    reolink_host.baichuan.search_vod_type.assert_awaited_once_with(
+        channel=0, start=start, end=TEST_NOW, stream="sub"
+    )
+
+    # Asked again once after a failure, as the day search is; a second failure raises.
+    monkeypatch.setattr(bridge, "EVENT_SEARCH_RETRY_DELAY", 0)
+    failing = AsyncMock(side_effect=ReolinkError("busy"))
+    reolink_host.baichuan.search_vod_type = failing
+    with pytest.raises(ReolinkError):
+        await host.async_search_day_events(0, start, TEST_NOW, "sub")
+    assert failing.await_count == 2
