@@ -18,6 +18,7 @@ The pictures in this guide show the panel with sample cameras.
 - [Events](#events)
 - [Devices](#devices)
 - [A camera's page](#a-cameras-page)
+- [A camera on a dashboard](#a-camera-on-a-dashboard)
 - [Checks](#checks)
 - [On a phone](#on-a-phone)
 - [From the keyboard](#from-the-keyboard)
@@ -294,6 +295,53 @@ line saying what it does. **About this setting** opens a fuller explanation.
 
 Every change goes through Home Assistant, as if made on a Home Assistant dashboard,
 and the panel always shows what the camera reports back.
+
+## A camera on a dashboard
+
+Any Home Assistant dashboard can show a camera the way the panel does: its last
+picture at once, then live video, in a fraction of a second on a camera kept warm.
+It is the **Reolink camera** card, there as soon as Reolink Viewer is installed, with
+nothing to add to the dashboard's resources.
+
+1. Edit the dashboard, choose **Add card**, and search for **Reolink camera**.
+2. Choose the camera, and how the card shows it:
+   - **Quality:** **SD**, the camera's light sub stream (the default), or **HD** on
+     the card itself. HD starts in 2 to 10 seconds each time, and uses one more of
+     the NVR's or camera's video slots while it shows. Full screen plays HD either
+     way.
+   - **Tap the card to:** go full screen, in HD (the default); open the camera in
+     the Reolink panel; or nothing.
+   - **Over the picture:** the camera's name, and its state (**Live**,
+     **Starting**). A problem always shows.
+   - **The picture:** fill the card, cropping the picture where the card's shape
+     differs from it; or show it whole, with bars.
+3. If the camera is not kept warm, the editor says so, with its
+   [Keep warm](#keep-warm) switch beside it: kept warm, the card's video starts at
+   once.
+
+The card is as tall as the camera's picture. In a sections view you can resize it,
+and **The picture** decides how it fits.
+
+The same card in YAML (the camera's id is easiest to set in the editor):
+
+```yaml
+type: custom:reolink-viewer-camera
+camera: 0d1f2e3c4b5a69788796a5b4c3d2e1f0
+quality: sd # or hd
+tap_action: full_screen # or open_panel, none
+show_name: true
+show_state: true
+fit: cover # or contain
+```
+
+- **Every Home Assistant user** can have the card, admin or not.
+- **Like the panel's tiles,** it plays only while it is on screen and the page is
+  visible, and a battery camera waits for a tap, so it is woken only when someone
+  wants to watch. While one card is full screen, the others on the page pause.
+- **Only its own camera's picture** is kept fresh for the card (every 30 seconds
+  while it shows), not every camera's, as the panel does.
+- **On a wall tablet,** keep the screen on with the tablet app's own settings (in
+  Fully Kiosk Browser, **Keep Screen On**).
 
 ## Checks
 

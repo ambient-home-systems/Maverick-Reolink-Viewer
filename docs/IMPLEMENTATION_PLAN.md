@@ -22,8 +22,8 @@ put on it:
 | 3 | Live view via go2rtc, grid, fullscreen, PTZ | High | 3–4 wk | Done (2026-10-27, v0.15.1). Our own go2rtc and the live check (v0.4.0, runs 5–13); the key-frame cache, the image cache, the Live grid and Live tab, keep warm, full-screen HD, PTZ and the camera's controls, the picture first, battery cameras on wired power, a debug view per tile and the soak report (v0.5.0–v0.15.1). Exit runs: the soak passed (run 15), every tile's first image in a median 0.02 s on the iPhone and the Mac (runs 16–17), and the Phase 2 playback criteria held with live view running (runs 18–19) |
 | 4 | Design, performance, mobile, packaging, first release | Standard | 3–4 wk | Done (2026-10-28, v0.32.3). Step 1, the design (the Timetable), in v0.16.0–v0.22.0; step 2, the performance budget, in v0.23.0; step 3, mobile, in v0.24.0–v0.26.0; step 4, error states, in v0.27.0–v0.29.0; step 5, accessibility, in v0.30.0; step 6, packaging, in v0.31.0, the first release; step 7, docs, in v0.32.0, released the same day; v0.32.1 starts live video sooner where WebRTC cannot connect, from the work PC's check, v0.32.2 keeps the capacity test from blaming the NVR for a stream that plays no video, from the owner's live check, and v0.32.3 fixes full screen and the timeline's pinch on the iPhone, from the owner's iPhone. The rest of the exit checklist was not run: the owner closed the phase on v0.32.0 working in daily use. See "Phase 4 status" |
 | 5 | Optional R&D: Baichuan live/playback | Very high | 4–8 wk, time-boxed with gates | **5a done, go** (2026-10-29, v0.34.1): prior art surveyed, the capture tool and the owner's captures, `docs/baichuan-playback.md`, and the read-only check: a deep start over Baichuan costs the NVR 0.2 s against 4.7 s of HTTP download for the same point of a short recording. 5b–5d estimated at 3.5–5 wk, deep starts only; talk deferred. **5b step 1 built** (2026-10-29, v0.35.0): the probe measures the replay and the download cut (143) 75 % into sub and main recordings, decodes what arrives and counts the sessions; the source (replay, 143 or both) is chosen from the owner's report before step 2, the prototype. **Step 1 done** (2026-10-30, v0.35.5): the download cut (143) is the source. **5b step 2 built** (2026-10-30, v0.36.0): the muxer, one Baichuan connection per host, deep starts served from the cut behind an option (off by default), the fallback to the download. **Hardware check passed** (2026-10-30): an uncached deep start 52 min into an hour shows its first frame in 0.51 s on Chrome and 0.60 s on the iPhone (9.0 s from the download with the option off); v0.36.1 cuts HD in 3-minute spans and searches the day's HD list ahead. **5b done** (2026-10-30, v0.36.2): every exit criterion met on the hardware, the NVR's own list of online users included (one more session while deep starts are in use, gone when idle). **5c done** (2026-10-30 to 2026-11-02, v0.37.0–v0.40.0): a deep start fetches the recording once, in two pieces, on one stream; on by default, a device that refuses the protocol left alone; each camera's counter rate kept; the device's zone built from its own DST rules (reolink-aio's land on the wrong days); two viewers of a camera take turns. **5d reports posted** (2026-11-02): the time zone bug as [starkillerOG/reolink_aio#239](https://github.com/starkillerOG/reolink_aio/issues/239), the download cut (143/144) and the media message class as [#240](https://github.com/starkillerOG/reolink_aio/issues/240); the rest is the maintainer's. **v0.40.1** (2026-11-02): six findings of a review of 5b/5c fixed (chief among them, an HD cut left by a closed tab held the recorder's login until restart); the owner's check of it closes the phase. See "Phase 5 status" |
-| 6 | The Doorbell's events: a camera that records but cannot be played lists its events | Standard / High | 0.5–1 wk | **Started** (2026-11-02). **Step 1 done** (v0.41.0–v0.41.1): run 2 found the Doorbell's event and day searches working, its zone Home Assistant's, and its pictures refused by reolink-aio (a `1002` header). **Step 2 built** (v0.42.0): the Doorbell's events in the feed, the Events view and the calendar, on wired power. **Step 3 built** (v0.43.0): its pictures read here, and its Playback tab shows each event as pictures. The owner's check of both is next. See "Phase 6" |
-| 7 | Live video on dashboards: a Reolink Viewer camera card | Standard | 1–1.5 wk | Planned. See "Phase 7" |
+| 6 | The Doorbell's events: a camera that records but cannot be played lists its events | Standard / High | 0.5–1 wk | **Started** (2026-11-02). **Step 1 done** (v0.41.0–v0.41.1): run 2 found the Doorbell's event and day searches working, its zone Home Assistant's, and its pictures refused by reolink-aio (a `1002` header). **Step 2 built** (v0.42.0): the Doorbell's events in the feed, the Events view and the calendar, on wired power. **Step 3 built** (v0.43.0): its pictures read here, and its Playback tab shows each event as pictures. **The owner's first check** (2026-11-02): the Doorbell's events show, and open as pictures. Still to check: a doorbell press, which decides step 4, and the counts, kinds and times against the Reolink app. Phase 7 started meanwhile, at the owner's request. See "Phase 6" |
+| 7 | Live video on dashboards: a Reolink Viewer camera card | Standard | 1–1.5 wk | **Started** (2026-11-02). **Step 1 built** (v0.44.0): the Reolink camera card, `custom:reolink-viewer-camera`, with its editor, on any dashboard and for any user. The owner's check on the wall tablet is next. See "Phase 7" |
 | 8 | Unusual events: learning what is normal | High | 2–3 wk, then a week of learning | Planned. See "Phase 8" |
 | 9 | The Wall: the Live page as a security monitor, with layouts, arranging, HD large tiles and the detection strip | Standard / High | 2–3 wk | Planned. See "Phase 9" |
 | 10 | Scrubbing that shows the picture while dragging | Very high | 2–4 wk | Planned. See "Phase 10" |
@@ -5068,9 +5068,9 @@ knows that the Doorbell records.
 | Step | Status |
 | --- | --- |
 | 1. Probe the Doorbell's searches | **Done** (2026-11-02, v0.41.0–v0.41.1, below). Run 1 stopped at the Doorbell's clock (no HTTP GetTime on a Baichuan-only device); v0.41.1 reads it over Baichuan (104). Run 2: the event search works (677 events in two days, yesterday's in 13–16 s), the day search too, its zone is Home Assistant's; pictures fail on a `1002` header reolink-aio refuses |
-| 2. Event sources beside playback sources | **Built** (2026-11-02, v0.42.0, below); the owner's check deferred to step 3's (night at the door) |
-| 3. Opening an event that cannot play | **Built** (2026-11-02, v0.43.0, below): the Doorbell's pictures read here (its `1002` header), and its Playback tab shows its events as pictures; the owner's check with step 2's |
-| 4. Fallback: events from HA's detection sensors | Not started; only if step 1 finds no event search |
+| 2. Event sources beside playback sources | **Built** (2026-11-02, v0.42.0, below). The owner's first check (2026-11-02, v0.43.0): the Doorbell's events show. Still to check: a press, and the counts, kinds and times against the Reolink app |
+| 3. Opening an event that cannot play | **Built** (2026-11-02, v0.43.0, below): the Doorbell's pictures read here (its `1002` header), and its Playback tab shows its events as pictures. The owner's first check (2026-11-02): its events open as pictures. Still to check: how often a picture is missing, and the probe's `thumbnails` |
+| 4. Fallback: events from HA's detection sensors | **Waits for the press check** (the owner, 2026-11-02). Built only if a doorbell press is missing from the Doorbell's own search: presses would then come from Home Assistant's visitor sensor. If presses show, Phase 6 closes without it |
 
 #### Step 6.1: probe the Doorbell's searches
 
@@ -5412,7 +5412,7 @@ engine Chrome uses, embedded in an app. This shapes the work:
 
 | Step | Status |
 | --- | --- |
-| 1. The camera card | Not started |
+| 1. The camera card | **Built** (2026-11-02, v0.44.0, below); the owner's check on the wall tablet is next |
 | 2. Wall-tablet behaviour | Not started |
 | 3. Optional: faster camera entities for every card | Not started; gated on the owner wanting stock cards faster |
 
@@ -5445,6 +5445,86 @@ engine Chrome uses, embedded in an app. This shapes the work:
   - unit tests;
   - the Chromium test (`tests/live_grid_browser.cjs`'s harness) renders the
     card in a fake dashboard as an admin and as a non-admin.
+
+**As built (v0.44.0).** Started at the owner's request (2026-11-02) while
+Phase 6's press check waits for the house to wake.
+
+- **The modules.** Vite builds two entries, the panel and
+  `reolink-viewer-card.js`, which share their chunks:
+  - `lit`: Lit, for both;
+  - `live`: the live tile and what it needs (the player, its sessions, the
+    controls, the debug view, the styles, the API), for the panel's home view
+    and the card's body;
+  - `home`: the rest of the home view.
+  - The panel's own module now holds the panel and imports all three at once,
+    where before it was a facade over `home`: one fetch less in the chain.
+- **The card's module** is only its settings (`card/config.ts`), its size, its
+  card picker entry and Lit: **8.1 KB gzipped**, on every page. A shown card
+  fetches its body (`card/camera-card.ts`, with `live`): **37.2 KB in all**.
+  Its editor fetches 2.4 KB more. `npm run budget` holds the module to 12 KB and
+  a shown card to 60 KB. The panel's home view is 52.3 KB, from 49.3 KB.
+- **Registered by the integration:** `frontend.add_extra_js_url` with the
+  module's content hash, removed on unload. Pages already open load it at
+  once (Home Assistant's `frontend/subscribe_extra_js`).
+- **In the card picker** as "Reolink camera", without a preview: one would
+  start a stream. A new card starts on the first camera (`getStubConfig`).
+- **The settings** (`camera`, `quality: sd|hd`,
+  `tap_action: full_screen|open_panel|none`, `show_name`, `show_state`,
+  `fit: cover|contain`): a wrong value is Home Assistant's error card, in plain
+  words. The editor writes only what differs from the defaults.
+- **The editor:** plain form controls in Home Assistant's theme colours. It
+  warns when the camera is not kept warm ("Not kept warm: its video starts in
+  2–10 s. Keep it warm to start at once."), with the keep-warm switch beside it,
+  and says a battery camera is never kept warm.
+- **The card's body** is the panel's `rv-live-tile`, in a `ha-card`:
+  - **Compact** (a new tile property): its controls and picture-in-picture
+    only in full screen, as on the board.
+  - **Its height** is the camera's picture (`aspect-ratio`), unless the
+    dashboard sets it (a sections view's rows); `fit` then decides. The
+    shapes it has seen size later cards before their camera list arrives
+    (`getCardSize`). In a sections view it starts full width, with
+    `rows: "auto"`.
+  - **Tap:** full screen in HD; or the panel's Live tab for the camera
+    (`history.pushState` and `location-changed`, as Home Assistant's own links);
+    or nothing. The tile's button says which to a screen reader (`tapLabel`).
+  - **HD on the card** plays the stream full screen would choose (`chooseHd`);
+    full screen then shows that stream, without a second player.
+  - **Name and state** can be hidden; a hidden state is still read out, and
+    a problem always shows.
+  - **One full screen:** while one card is full screen, the page's other
+    cards stop, as the board's tiles do.
+  - Colours and fonts are the panel's around the video only; the card itself
+    keeps Home Assistant's theme.
+- **Only its camera's picture.** `live/images` takes `camera_ids`: a card
+  watches its own camera, and only the watched cameras are taken every 30 s.
+  Before, any watch refreshed every camera's, which a wall tablet would have
+  done all day.
+- **Checks:**
+  - unit tests of the settings, the card (sub and HD, warm, the taps, one
+    full screen, a battery camera, a change of camera, its messages), the
+    editor, and the image watch by camera;
+  - the Chromium test (`tests/live_card_browser.cjs`), as an admin and as a
+    read-only user: the card picker, the picture, the stream held through
+    Home Assistant, the card's height from the picture, the editor's cameras,
+    full screen on a tap, and nothing held once the card goes;
+  - the design preview's `?dashboard=1`, with axe and the keyboard in light
+    and dark, desktop and phone;
+  - the user guide's "A camera on a dashboard" and the troubleshooting
+    guide's "A camera card on a dashboard", checked by `help.test.ts`.
+
+**Hardware checklist (the owner):**
+
+1. Update to v0.44.0 and restart Home Assistant, then reload the tablet's page
+   (Fully: **Reload Start URL**).
+2. On the wall tablet's dashboard, **Add card** → **Reolink camera**: the
+   Doorbell, then the front-yard camera. Say whether the editor's warning shows
+   for a camera that is not kept warm.
+3. Watch them for a while: the first picture at once, video within about a
+   second on a camera kept warm. Tap one: full screen in HD; back.
+4. Say how the dashboard was laid out (masonry, sections or panel view), and
+   whether the cards' shapes look right.
+5. Fully's device info: the Android System WebView version, for the record.
+6. Optional: the same cards on the iPhone app's dashboard.
 
 #### Step 7.2: wall-tablet behaviour
 

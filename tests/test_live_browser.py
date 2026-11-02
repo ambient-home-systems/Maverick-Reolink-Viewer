@@ -7,7 +7,9 @@ fake camera's stream there is Opus audio only: the signaling, ICE and media
 paths are the same as for video. Then the panel's live grid, from the bundle
 Home Assistant serves: the camera's picture, then its stream starting over
 WebRTC (go2rtc sends only H.264 or H.265 video, which this Chromium cannot
-decode, so frames are left to the hardware runs).
+decode, so frames are left to the hardware runs). Then the dashboard card
+(Phase 7 step 1), from its module as Home Assistant serves it, for an admin
+and for a user who is not one.
 
 Needs go2rtc, ffmpeg (libopus), node and Playwright with Chromium; skipped
 without them unless RV_BROWSER_TESTS=1 (CI), where it fails instead.
@@ -34,6 +36,7 @@ from .test_mse_browser import _missing, _node_path
 
 SCRIPT = Path(__file__).with_name("live_browser.cjs")
 GRID_SCRIPT = Path(__file__).with_name("live_grid_browser.cjs")
+CARD_SCRIPT = Path(__file__).with_name("live_card_browser.cjs")
 
 
 @pytest.fixture
@@ -223,4 +226,60 @@ async def test_chromium_starts_the_live_grid(
     assert result["after"] == {"sessions": 0, "running": {}}, result
     service = grid_live.runtime_data.live
     assert service is not None
+    assert service.images.stats()["watches"] == 0
+
+
+@pytest.mark.timeout(120)
+@pytest.mark.parametrize("admin", [True, False], ids=["admin", "not-admin"])
+async def test_chromium_shows_the_dashboard_card(
+    hass: HomeAssistant,
+    hass_client: ClientSessionGenerator,
+    hass_access_token: str,
+    hass_read_only_access_token: str,
+    grid_live: MockConfigEntry,
+    admin: bool,
+) -> None:
+    """The card is in the picker, shows its camera's picture and plays it, for anyone."""
+    node_path = await hass.async_add_executor_job(_node_path)
+    if node_path is None:
+        _missing("node with Playwright is not installed")
+    http = await hass_client()
+    origin = str(http.make_url("/")).rstrip("/")
+    process = await asyncio.create_subprocess_exec(
+        "node",
+        str(CARD_SCRIPT),
+        origin,
+        hass_access_token if admin else hass_read_only_access_token,
+        "admin" if admin else "user",
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        env={**os.environ, "NODE_PATH": node_path},
+    )
+    stdout, stderr = await asyncio.wait_for(process.communicate(), 100)
+    assert process.returncode == 0, stderr.decode()
+    result = json.loads(stdout.decode().strip().splitlines()[-1])
+    assert "error" not in result, result
+    assert result["pageErrors"] == [], result
+    # In the card picker, and a new card starts on the first camera.
+    assert result["picker"] == ["Reolink camera"], result
+    service = grid_live.runtime_data.live
+    assert service is not None
+    camera_id = result["stub"]["camera"]
+    assert camera_id, result
+    # Its camera's picture from the image cache, then its stream held through
+    # Home Assistant (over MSE kept warm, or WebRTC).
+    assert result["pictureWidth"] == 64, result
+    assert result["state"]["kind"] == "starting", result
+    assert result["state"]["transport"] in ("MSE", "WebRTC"), result
+    assert list(result["running"].values()) == [1], result
+    # As tall as the picture (the camera reports none here: 16:9).
+    assert result["frame"]["width"] == 480, result
+    assert abs(result["frame"]["height"] - 270) <= 1, result
+    assert result["cardSize"] >= 2, result
+    assert result["gridOptions"]["columns"] == 12, result
+    assert result["tapLabel"].endswith(" full screen"), result
+    assert result["editorCameras"], result
+    assert result["full"] is True, result
+    # The card went away: nothing holds the stream, nobody watches the pictures.
+    assert result["after"] == {"sessions": 0, "running": {}}, result
     assert service.images.stats()["watches"] == 0

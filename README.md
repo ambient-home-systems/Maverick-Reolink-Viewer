@@ -9,6 +9,8 @@ It adds a **Reolink** panel to Home Assistant's sidebar:
 - **Live:** every camera on one board, each starting from its last picture; full
   screen in HD; picture-in-picture; the camera's own controls (pan and tilt, zoom,
   presets, floodlight, siren).
+- **On dashboards:** the **Reolink camera** card shows a camera live on any
+  dashboard, as fast as the panel does: on a wall tablet, for instance.
 - **Events:** today's events from every camera under the board, and any day's in the
   Events tab, filtered by camera and by what was seen (person, vehicle, animal,
   package, a doorbell press).
@@ -74,7 +76,8 @@ Mac and an iPhone, and playback holding up with live view running.
 Phase 5 (starting deep in recordings over the Reolink app's own protocol) is built
 through v0.40.1: a start deep in an uncached recording shows its first frame in about
 half a second; see the [plan](docs/IMPLEMENTATION_PLAN.md#phase-5-status). Phases 6 to
-13, the second round, are planned: the Doorbell's events, a dashboard card, unusual
+13 are the second round. Under way: the Doorbell's events (Phase 6, built through
+v0.43.0) and the dashboard card (Phase 7, its first step in v0.44.0). Planned: unusual
 events, the Wall (a monitor-style Live page), scrubbing that shows the picture, and more; see
 [Phases 6–13](docs/IMPLEMENTATION_PLAN.md#phases-613-the-second-round-planned-2026-11-02).
 

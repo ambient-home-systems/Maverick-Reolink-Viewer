@@ -126,6 +126,32 @@ async def test_refreshes_while_watched_only(setup: Setup) -> None:
         assert len(setup.host.calls) == stopped
 
 
+async def test_a_watch_of_some_cameras_takes_only_theirs(setup: Setup) -> None:
+    """A dashboard card's watch takes and passes on its camera's picture only."""
+    with patch.object(images, "REFRESH_S", 0.05):
+        card = setup.service.watch(setup.listener, frozenset({"cam2"}))
+        await setup.settle()
+        await asyncio.sleep(0.15)
+        await setup.settle()
+        # Only the Hallway, again and again; the others are left alone.
+        assert set(setup.host.calls) == {2}
+        assert len(setup.host.calls) > 1
+        assert set(setup.seen) == {"cam2"}
+        assert set(setup.service.images(frozenset({"cam2"}))) == {"cam2"}
+        assert set(setup.service.images(frozenset())) == set()
+
+        # A page watching every camera takes the rest; the card still hears
+        # of its own only.
+        seen_all: list[str] = []
+        page = setup.service.watch(lambda camera_id, _image: seen_all.append(camera_id))
+        await setup.settle()
+        assert set(setup.host.calls) == {0, 1, 2}
+        assert {"cam1", "cam3"} <= set(seen_all)
+        assert set(setup.seen) == {"cam2"}
+        page.close()
+        card.close()
+
+
 async def test_fresh_pictures_are_not_taken_again(setup: Setup) -> None:
     """A second page soon after the first takes nothing: the pictures are fresh."""
     first = setup.service.watch(setup.listener)

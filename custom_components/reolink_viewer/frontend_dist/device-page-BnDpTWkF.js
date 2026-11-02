@@ -1,4 +1,6 @@
-import { Ct as e, F as t, Gt as n, Jt as r, Xt as i, Yt as a, bt as o, i as s, it as c, qt as l, wt as u } from "./home-CHdiWzrD.js";
+import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
+import { G as i, J as a, O as o, Y as s, xt as c } from "./live-D27fF3SV.js";
+import { r as l, z as u } from "./home-BiyzfIBx.js";
 //#region src/render-filter.ts
 function d(e, t, n) {
 	if (e === t) return !1;
@@ -9,11 +11,11 @@ function d(e, t, n) {
 //#endregion
 //#region src/components/device-page.ts
 var f = {
-	overview: () => import("./overview-BY5NqVzf.js"),
-	playback: () => import("./playback-C1klOICp.js"),
-	pictures: () => import("./event-pictures-DKzRrjoW.js"),
-	settings: () => import("./settings-EUfOOS96.js")
-}, p = 1e3, m = class extends l {
+	overview: () => import("./overview-DoiJYVOg.js"),
+	playback: () => import("./playback-DdGrHOoN.js"),
+	pictures: () => import("./event-pictures-wsng5pgU.js"),
+	settings: () => import("./settings-DhXRNg_h.js")
+}, p = 1e3, m = class extends r {
 	static properties = {
 		hass: { attribute: !1 },
 		deviceId: { attribute: !1 },
@@ -57,7 +59,7 @@ var f = {
 	}
 	_loadTab(e) {
 		e !== "live" && e !== "no-recordings" && (this._tabError = void 0, f[e]().catch((e) => {
-			this._tabError = n(e).message;
+			this._tabError = c(e).message;
 		}));
 	}
 	updated() {
@@ -66,18 +68,18 @@ var f = {
 	async reload() {
 		await this._load(!0);
 	}
-	async _load(t = !1) {
-		let r = this.hass;
-		if (!r || !this.deviceId) return;
-		let i = ++this._loadSeq;
-		t || (this._device = void 0, this._error = void 0);
+	async _load(e = !1) {
+		let t = this.hass;
+		if (!t || !this.deviceId) return;
+		let n = ++this._loadSeq;
+		e || (this._device = void 0, this._error = void 0);
 		try {
-			let [t, n] = await Promise.all([u(r, this.deviceId), e(r)]);
-			if (i !== this._loadSeq) return;
-			this._catalog = n, this._device = t, this._error = void 0, this._watched = w(t);
+			let [e, r] = await Promise.all([s(t, this.deviceId), a(t)]);
+			if (n !== this._loadSeq) return;
+			this._catalog = r, this._device = e, this._error = void 0, this._watched = w(e);
 		} catch (e) {
-			if (i !== this._loadSeq) return;
-			this._error = n(e).message;
+			if (n !== this._loadSeq) return;
+			this._error = c(e).message;
 		}
 	}
 	_subscribeRegistry(e) {
@@ -91,28 +93,28 @@ var f = {
 	}
 	render() {
 		this.renderCount += 1;
-		let e = this._device, n = e?.node;
-		return a`
+		let e = this._device, r = e?.node;
+		return n`
       <div class="header">
         <button class="text with-icon back" @click=${() => {
-			t(this, { view: "list" });
-		}}>${o("back")}All devices</button>
+			u(this, { view: "list" });
+		}}>${i("back")}All devices</button>
       </div>
-      ${this._error ? a`<div class="banner error" role="alert">Could not load the device: ${this._error}</div>` : r}
-      ${n ? a`<div class="title">
-              ${this._number(n.id) === void 0 ? r : a`<span class="plat" aria-hidden="true">${this._number(n.id)}</span>`}
-              <h1>${n.name ?? "Reolink device"}</h1>
+      ${this._error ? n`<div class="banner error" role="alert">Could not load the device: ${this._error}</div>` : t}
+      ${r ? n`<div class="title">
+              ${this._number(r.id) === void 0 ? t : n`<span class="plat" aria-hidden="true">${this._number(r.id)}</span>`}
+              <h1>${r.name ?? "Reolink device"}</h1>
               <p class="kind muted">${y(e)}</p>
             </div>
             <div
               class="tabs"
               role="tablist"
-              aria-label=${n.name ?? "Device"}
+              aria-label=${r.name ?? "Device"}
               @keydown=${(t) => {
 			this._onTabKey(t, C(e));
 		}}
             >
-              ${C(e).map((e) => a`<button
+              ${C(e).map((e) => n`<button
                   role="tab"
                   id=${`tab-${e}`}
                   aria-controls="tab-panel"
@@ -120,7 +122,7 @@ var f = {
                   tabindex=${this.tab === e ? "0" : "-1"}
                   class=${this.tab === e ? "active" : ""}
                   @click=${() => {
-			t(this, {
+			u(this, {
 				view: "device",
 				id: this.deviceId,
 				tab: e
@@ -130,7 +132,7 @@ var f = {
                   ${b[e]}
                 </button>`)}
             </div>
-            ${this._tabError ? a`<div class="banner error" role="alert">
+            ${this._tabError ? n`<div class="banner error" role="alert">
                   Could not load this tab: ${this._tabError}.
                   <button
                     @click=${() => {
@@ -139,36 +141,36 @@ var f = {
                   >
                     Try again
                   </button>
-                </div>` : r}
+                </div>` : t}
             <div class="panel" role="tabpanel" id="tab-panel" aria-labelledby=${`tab-${this.tab}`}>
-            ${h(this.tab, e) === "live" ? a`<rv-live-camera .hass=${this.hass} .deviceId=${n.id}></rv-live-camera>` : h(this.tab, e) === "playback" ? a`<rv-playback
+            ${h(this.tab, e) === "live" ? n`<rv-live-camera .hass=${this.hass} .deviceId=${r.id}></rv-live-camera>` : h(this.tab, e) === "playback" ? n`<rv-playback
                   .hass=${this.hass}
-                  .deviceId=${n.id}
-                  .cameraName=${n.name ?? ""}
+                  .deviceId=${r.id}
+                  .cameraName=${r.name ?? ""}
                   .at=${this.at}
                   .offline=${_(e)}
-                  .storage=${n.kind === "camera" ? n.recordings?.storage ?? null : null}
+                  .storage=${r.kind === "camera" ? r.recordings?.storage ?? null : null}
                   .recorder=${g(e)}
-                ></rv-playback>` : h(this.tab, e) === "pictures" ? a`<rv-event-pictures
+                ></rv-playback>` : h(this.tab, e) === "pictures" ? n`<rv-event-pictures
                   .hass=${this.hass}
-                  .deviceId=${n.id}
-                  .cameraName=${n.name ?? ""}
+                  .deviceId=${r.id}
+                  .cameraName=${r.name ?? ""}
                   .at=${this.at}
-                ></rv-event-pictures>` : h(this.tab, e) === "no-recordings" ? v(e) : h(this.tab, e) === "overview" ? a`<rv-overview
+                ></rv-event-pictures>` : h(this.tab, e) === "no-recordings" ? v(e) : h(this.tab, e) === "overview" ? n`<rv-overview
                   .hass=${this.hass}
                   .device=${e}
                   .devices=${this.devices}
                   .cameras=${this.cameras}
-                ></rv-overview>` : a`<rv-settings
+                ></rv-overview>` : n`<rv-settings
                   .hass=${this.hass}
                   .device=${e}
                   .catalog=${this._catalog}
                   @rv-entity-enabled=${() => void this.reload()}
                 ></rv-settings>`}
-            </div>` : this._error ? r : a`<p class="muted">Loading…</p>`}
+            </div>` : this._error ? t : n`<p class="muted">Loading…</p>`}
     `;
 	}
-	static styles = [c, i`
+	static styles = [o, e`
       :host {
         display: flex;
         flex-direction: column;
@@ -267,20 +269,20 @@ function _(e) {
 }
 function v(e) {
 	let t = e.node.name ?? "This camera";
-	return e.degraded ? a`<div class="empty-tab">
+	return e.degraded ? n`<div class="empty-tab">
       <h2>Recordings cannot be played right now</h2>
       <p>
         ${e.compat.ok ? `Home Assistant's Reolink integration is not running, so ${t}'s recordings cannot be read.` : `Reolink Viewer needs an update to read ${t}'s recordings since Home Assistant's last update.`}
         Whatever it has recorded plays here again once this is fixed.
       </p>
-    </div>` : a`<div class="empty-tab">
+    </div>` : n`<div class="empty-tab">
     <h2>No recordings to play</h2>
     <p>${t} keeps no recordings: it has no SD card, and it is not on a Reolink NVR in Home Assistant.</p>
     <p class="muted">To record, put a microSD card in it and format it in the Reolink app, or add it to a Reolink NVR. Its live view and pictures work either way.</p>
   </div>`;
 }
 function y(e) {
-	let t = e.node, n = [s(t.kind), t.model ?? void 0];
+	let t = e.node, n = [l(t.kind), t.model ?? void 0];
 	if (t.kind === "camera" && t.connections.length > 1) {
 		let e = new Set(t.connections.map((e) => e.via));
 		n.push(e.has("nvr") && e.has("direct") ? "on the NVR and added directly" : `${String(t.connections.length)} connections`);

@@ -350,7 +350,13 @@ def ws_live_frame(
 
 
 @callback
-@websocket_api.websocket_command({probatio.Required("type"): f"{DOMAIN}/live/images"})
+@websocket_api.websocket_command(
+    {
+        probatio.Required("type"): f"{DOMAIN}/live/images",
+        # A dashboard card watches its own camera only.
+        probatio.Optional("camera_ids"): [str],
+    }
+)
 def ws_live_images(
     hass: HomeAssistant,
     connection: websocket_api.ActiveConnection,
@@ -360,6 +366,7 @@ def ws_live_images(
     if (resolved := _live(hass, connection, msg["id"])) is None:
         return
     live_entry, live = resolved
+    cameras = frozenset(msg["camera_ids"]) if "camera_ids" in msg else None
     # Later events are sent from a background task: sign for this user.
     refresh_token_id = connection.refresh_token_id
 
@@ -384,7 +391,7 @@ def ws_live_images(
             )
         )
 
-    watch = live.images.watch(new_image)
+    watch = live.images.watch(new_image, cameras)
     connection.subscriptions[msg["id"]] = watch.close
     connection.send_result(msg["id"])
     connection.send_message(
@@ -393,7 +400,7 @@ def ws_live_images(
             {
                 "images": {
                     camera_id: describe(camera_id, image)
-                    for camera_id, image in live.images.images().items()
+                    for camera_id, image in live.images.images(cameras).items()
                 }
             },
         )

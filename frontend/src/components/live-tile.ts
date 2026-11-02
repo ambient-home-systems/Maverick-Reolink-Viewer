@@ -58,6 +58,10 @@ export interface LiveCountDetail {
  * back. When video cannot play, the tile says why in plain words and what to
  * do (live/explain.ts); the technical text is in its debug view.
  *
+ * A dashboard card (card/camera-card.ts) is a compact tile: its controls and
+ * picture-in-picture only in full screen, as on the board; it may play an HD
+ * stream itself, and full screen then shows that one larger.
+ *
  * Picture-in-picture (in full screen, and on the camera's own view) takes the
  * video showing. The stream in it keeps playing while the tile is off screen
  * or the page is hidden, and when HD replaces it or another tile goes full
@@ -73,6 +77,10 @@ export class RvLiveTile extends LitElement {
     iceServers: { attribute: false },
     warm: { attribute: false },
     openable: { type: Boolean },
+    compact: { type: Boolean },
+    tapLabel: { attribute: false },
+    hideName: { attribute: false },
+    hideState: { type: Boolean, reflect: true, attribute: "hide-state" },
     fill: { type: Boolean, reflect: true },
     fit: { reflect: true },
     number: { attribute: false },
@@ -101,6 +109,14 @@ export class RvLiveTile extends LitElement {
   declare warm: boolean | undefined;
   /** Clicking it opens the camera (the grid); otherwise it is the camera's own view. */
   declare openable: boolean;
+  /** Its controls and picture-in-picture only in full screen (a dashboard card); an openable tile is. */
+  declare compact: boolean;
+  /** What a tap on an openable tile does, said to a screen reader ("Open <camera>" otherwise). */
+  declare tapLabel: string | undefined;
+  /** The camera's name is not shown over the picture (it is still read out). */
+  declare hideName: boolean;
+  /** Its state ("Live", "Starting") is not shown, only read out; what goes wrong still shows. */
+  declare hideState: boolean;
   /** On the board: fill the grid cell, the picture cropped to it. */
   declare fill: boolean;
   /** Filling its cell: crop the picture to it, or show it whole (the board says which). */
@@ -141,6 +157,9 @@ export class RvLiveTile extends LitElement {
     super();
     this.stream = "sub";
     this.openable = false;
+    this.compact = false;
+    this.hideName = false;
+    this.hideState = false;
     this.fill = false;
     this.fit = "cover";
     this.suspended = false;
@@ -263,6 +282,11 @@ export class RvLiveTile extends LitElement {
     return this.connection?.is_battery === true || this.camera?.records === false;
   }
 
+  /** It plays an HD stream itself (a dashboard card in HD): full screen shows that one. */
+  get playsHd(): boolean {
+    return this.stream !== "sub";
+  }
+
   /** Full screen, with HD showing (the sub stream is stopped). */
   get hdShown(): boolean {
     return this._full && this._hdState.kind === "playing";
@@ -364,6 +388,7 @@ export class RvLiveTile extends LitElement {
   }
 
   private _driveHd(): void {
+    if (this.playsHd) return;
     const connection = this.connection;
     const full = this._full && this.shouldPlay;
     const wanted = (full && this._hdWanted) || this._pip === "hd";
@@ -458,6 +483,8 @@ export class RvLiveTile extends LitElement {
     const playing = state.kind === "playing";
     const name = this.camera?.name ?? "Camera";
     const interactive = !this._full && (this.openable || !this._wanted);
+    // The camera's own view, with its controls and picture-in-picture beside it.
+    const own = !this.openable && !this.compact;
     return html`<div class="frame">
       <div
         class="tile ${playing ? "playing" : ""} ${this.hdShown ? "hd-on" : ""} ${interactive ? "interactive" : ""}"
@@ -492,7 +519,7 @@ export class RvLiveTile extends LitElement {
           ? // The whole tile is this button (its click is the tile's); it says what the tile shows.
             html`<button
               class="open"
-              aria-label=${this._wanted ? `Open ${name}` : `Watch ${name}`}
+              aria-label=${this._wanted ? (this.tapLabel ?? `Open ${name}`) : `Watch ${name}`}
               aria-describedby="state status"
             ></button>`
           : nothing}
@@ -500,7 +527,7 @@ export class RvLiveTile extends LitElement {
           ? html`<span class="num" aria-hidden="true">${this.number}</span>`
           : nothing}
         <div class="label">
-          <span class="name">${name}</span>
+          ${this.hideName ? nothing : html`<span class="name">${name}</span>`}
           ${this._wanted
             ? nothing
             : html`<span class="hint">
@@ -534,14 +561,14 @@ export class RvLiveTile extends LitElement {
       >
         ${icon("info")}
       </button>
-      ${this.controls && (this._full || !this.openable)
+      ${this.controls && (this._full || own)
         ? html`<rv-live-controls
             .hass=${this.hass}
             .controls=${this.controls}
             .cameraName=${name}
           ></rv-live-controls>`
         : nothing}
-      ${(this._full || !this.openable) && (playing || this.hdShown || this._pip) && pipSupported()
+      ${(this._full || own) && (playing || this.hdShown || this._pip) && pipSupported()
         ? html`<button
             class="corner-button pip"
             aria-label=${this._pip ? "Leave picture in picture" : `${name} in picture in picture`}
@@ -587,6 +614,9 @@ export class RvLiveTile extends LitElement {
   /** Full screen: SD or HD, a button to switch where there is an HD stream, and why. */
   private _renderHd(): TemplateResult | typeof nothing {
     if (!this._full) return nothing;
+    if (this.playsHd) {
+      return html`<div class="hd-status"><span class="badge">HD</span></div>`;
+    }
     const hd = this._hd;
     if (!hd?.stream) {
       return html`<div class="hd-status" title=${hd?.reason ?? nothing}>
@@ -820,6 +850,15 @@ export class RvLiveTile extends LitElement {
       /* Full screen says SD or HD, top left. */
       :host([full]) .state {
         display: none;
+      }
+      /* A card that hides its state still says it to a screen reader. */
+      :host([hide-state]) .state {
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
       }
       .state .dot {
         width: 7px;

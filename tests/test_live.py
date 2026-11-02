@@ -653,6 +653,17 @@ async def test_live_images(
     msg = await _ws(client, {"type": "unsubscribe_events", "subscription": watching})
     assert msg["success"]
     assert service.images.stats()["watches"] == 1
+    # A dashboard card watches its own camera: it gets that one's only.
+    card_camera = sorted(cameras)[0]
+    msg = await _ws(
+        reader, {"type": "reolink_viewer/live/images", "camera_ids": [card_camera]}
+    )
+    assert msg["success"]
+    card = msg["id"]
+    assert set((await reader.receive_json())["event"]["images"]) == {card_camera}
+    assert service.images.stats()["watches"] == 2
+    msg = await _ws(reader, {"type": "unsubscribe_events", "subscription": card})
+    assert msg["success"]
     msg = await _ws(reader, {"type": "unsubscribe_events", "subscription": reading})
     assert msg["success"]
     assert service.images.stats()["watches"] == 0

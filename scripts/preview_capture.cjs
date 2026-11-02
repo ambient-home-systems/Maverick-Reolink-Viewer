@@ -9,7 +9,8 @@
 // A view is one of the names below, or any hash (#device/cam-fyl/live), after
 // the preview's query if any (&offline=cam-dogs#device/cam-dogs/live).
 // Views: live (home), events, devices, overview, live-tab, settings, playback, live-check, soak,
-// event-pictures (a camera whose recordings are kept where they cannot be played).
+// event-pictures (a camera whose recordings are kept where they cannot be played),
+// dashboard (the Reolink camera card on a dashboard, and its editor).
 // `errors` takes every error state instead (ERRORS below). `guide` takes the
 // user docs' pictures (GUIDE below): light, as JPEGs, each at its own size.
 // The pictures are synthetic (frontend/preview/make-media.sh).
@@ -30,6 +31,7 @@ const VIEWS = {
   "live-check": "#live-check",
   soak: "#soak",
   "event-pictures": "&elsewhere=cam-door#device/cam-door/playback",
+  dashboard: "&dashboard=1",
 };
 // Every error state the panel has (Phase 4 step 4), as the preview shows them.
 const ERRORS = {

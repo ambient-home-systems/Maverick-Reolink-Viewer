@@ -21,6 +21,7 @@ from .baichuan_source import BaichuanSource
 from .checks import CheckReports
 from .const import (
     CAMERA_HOST_CONCURRENCY,
+    CARD_FILENAME,
     CONF_BAICHUAN_DEEP_START,
     DEFAULT_BAICHUAN_DEEP_START,
     DEFAULT_HOST_CONCURRENCY,
@@ -82,12 +83,10 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     return True
 
 
-def _bundle_version() -> str:
-    """Return a short content hash of the panel bundle for cache busting."""
+def _bundle_version(filename: str = PANEL_FILENAME) -> str:
+    """Return a short content hash of a built module for cache busting."""
     try:
-        return hashlib.sha256((FRONTEND_DIR / PANEL_FILENAME).read_bytes()).hexdigest()[
-            :12
-        ]
+        return hashlib.sha256((FRONTEND_DIR / filename).read_bytes()).hexdigest()[:12]
     except OSError:
         return "missing"
 
@@ -231,6 +230,12 @@ async def async_setup_entry(
         require_admin=False,
         config={},
     )
+    # The dashboard card (custom:reolink-viewer-camera): its module on every
+    # page, so it needs no dashboard resource; pages already open load it too.
+    card_version = await hass.async_add_executor_job(_bundle_version, CARD_FILENAME)
+    card_url = f"{STATIC_URL_PATH}/{CARD_FILENAME}?v={card_version}"
+    frontend.add_extra_js_url(hass, card_url)
+    entry.async_on_unload(lambda: frontend.remove_extra_js_url(hass, card_url))
     return True
 
 
