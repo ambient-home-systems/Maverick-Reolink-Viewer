@@ -1,6 +1,6 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
-import { G as i, O as a } from "./live-D27fF3SV.js";
-import { r as o, z as s } from "./home-BiyzfIBx.js";
+import { A as i, Y as a } from "./live-BRQnJ2GG.js";
+import { r as o, z as s } from "./home-CGDOgkeW.js";
 //#region src/components/device-list.ts
 var c = class extends r {
 	static properties = {
@@ -72,7 +72,7 @@ var c = class extends r {
       </ul>`;
 	}
 	_renderCamera(e, r) {
-		let a = r ? e.connections.find((e) => e.host_id === r.id)?.channel : void 0, o = r !== void 0 && e.connections.some((e) => e.via === "direct"), c = this.cameras.find((t) => t.id === e.id)?.number, u = [o ? "Also added directly" : void 0, e.primary_view === "snapshot" ? "Snapshots only" : void 0].filter((e) => e !== void 0);
+		let i = r ? e.connections.find((e) => e.host_id === r.id)?.channel : void 0, o = r !== void 0 && e.connections.some((e) => e.via === "direct"), c = this.cameras.find((t) => t.id === e.id)?.number, u = [o ? "Also added directly" : void 0, e.primary_view === "snapshot" ? "Snapshots only" : void 0].filter((e) => e !== void 0);
 		return n`<li>
       <button
         class="row"
@@ -86,14 +86,14 @@ var c = class extends r {
       >
         <span class="plat-cell">${c === void 0 ? t : n`<span class="plat" aria-hidden="true">${c}</span>`}</span>
         <span class="name">${e.name ?? "Camera"}</span>
-        <span class="ch muted">${a == null ? "Direct" : `Ch ${String(a + 1)}`}</span>
+        <span class="ch muted">${i == null ? "Direct" : `Ch ${String(i + 1)}`}</span>
         <span class="model muted">${e.model ?? ""}</span>
         <span class="state">${l(e)}${u.length ? n`<span class="flags muted">${u.join(" · ")}</span>` : t}</span>
-        ${i("chevron")}
+        ${a("chevron")}
       </button>
     </li>`;
 	}
-	static styles = [a, e`
+	static styles = [i, e`
       :host {
         display: flex;
         flex-direction: column;

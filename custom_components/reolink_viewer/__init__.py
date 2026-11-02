@@ -182,6 +182,7 @@ async def async_setup_entry(
     )
     await live.images.async_setup()
     await live.soak.async_load()
+    await live.card_log.async_load()
     entry.runtime_data = ReolinkViewerData(
         scheduler=scheduler,
         timeline=TimelineService(hass, scheduler),

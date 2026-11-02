@@ -315,6 +315,9 @@ nothing to add to the dashboard's resources.
      **Starting**). A problem always shows.
    - **The picture:** fill the card, cropping the picture where the card's shape
      differs from it; or show it whole, with bars.
+   - **When it rings** (a doorbell's card): go full screen for a number of seconds
+     (30 to start with) when someone presses the doorbell, on every screen showing
+     the card. On a Fully Kiosk tablet it wakes the screen first (see below).
 3. If the camera is not kept warm, the editor says so, with its
    [Keep warm](#keep-warm) switch beside it: kept warm, the card's video starts at
    once.
@@ -332,6 +335,7 @@ tap_action: full_screen # or open_panel, none
 show_name: true
 show_state: true
 fit: cover # or contain
+ring_full_screen: 30 # a doorbell: seconds full screen when it rings (0: not)
 ```
 
 - **Every Home Assistant user** can have the card, admin or not.
@@ -342,6 +346,14 @@ fit: cover # or contain
   while it shows), not every camera's, as the panel does.
 - **On a wall tablet,** keep the screen on with the tablet app's own settings (in
   Fully Kiosk Browser, **Keep Screen On**).
+- **In Fully Kiosk Browser,** turn on its JavaScript interface (Fully's
+  **Settings → Advanced Web Settings → Enable JavaScript Interface**, a Fully PLUS
+  feature). The cards then stop their video while Fully's screen is off or its
+  screensaver shows, so the tablet stays cool, and start again when it is back; and
+  a doorbell's card that goes full screen when it rings wakes the screen first.
+  Without it, the cards stop only when the page is hidden.
+- **What the cards saw** on each device, the screen going off and on and how soon
+  video came back, is in the [Dashboard cards](#the-dashboard-cards-report) report.
 
 ## Checks
 
@@ -380,6 +392,17 @@ whenever it is on screen, 8 hours in all, across any devices and sittings. Open 
 any time to see how it is going; **Start over…** begins a new day.
 
 ![The soak report, in plain words](images/soak-report.jpg)
+
+### The dashboard cards report
+
+**Devices → Dashboard cards.** What the [Reolink camera cards](#a-camera-on-a-dashboard)
+saw on each device: the page hidden and shown, Fully Kiosk's screen and screensaver,
+each card's video starting, playing and stopping, doorbell rings, and whether any
+video played while nobody could see it. Each device's page sends it every minute, so a
+wall tablet's night can be read the next morning on a computer. In short for each
+device, how soon video came back after the screen came on; every event under
+**Every event**, to copy; **Download** for all of it. **Start over…** clears it,
+before a night's check say.
 
 ### The hardware probe
 

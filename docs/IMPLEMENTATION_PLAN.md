@@ -23,7 +23,7 @@ put on it:
 | 4 | Design, performance, mobile, packaging, first release | Standard | 3–4 wk | Done (2026-10-28, v0.32.3). Step 1, the design (the Timetable), in v0.16.0–v0.22.0; step 2, the performance budget, in v0.23.0; step 3, mobile, in v0.24.0–v0.26.0; step 4, error states, in v0.27.0–v0.29.0; step 5, accessibility, in v0.30.0; step 6, packaging, in v0.31.0, the first release; step 7, docs, in v0.32.0, released the same day; v0.32.1 starts live video sooner where WebRTC cannot connect, from the work PC's check, v0.32.2 keeps the capacity test from blaming the NVR for a stream that plays no video, from the owner's live check, and v0.32.3 fixes full screen and the timeline's pinch on the iPhone, from the owner's iPhone. The rest of the exit checklist was not run: the owner closed the phase on v0.32.0 working in daily use. See "Phase 4 status" |
 | 5 | Optional R&D: Baichuan live/playback | Very high | 4–8 wk, time-boxed with gates | **5a done, go** (2026-10-29, v0.34.1): prior art surveyed, the capture tool and the owner's captures, `docs/baichuan-playback.md`, and the read-only check: a deep start over Baichuan costs the NVR 0.2 s against 4.7 s of HTTP download for the same point of a short recording. 5b–5d estimated at 3.5–5 wk, deep starts only; talk deferred. **5b step 1 built** (2026-10-29, v0.35.0): the probe measures the replay and the download cut (143) 75 % into sub and main recordings, decodes what arrives and counts the sessions; the source (replay, 143 or both) is chosen from the owner's report before step 2, the prototype. **Step 1 done** (2026-10-30, v0.35.5): the download cut (143) is the source. **5b step 2 built** (2026-10-30, v0.36.0): the muxer, one Baichuan connection per host, deep starts served from the cut behind an option (off by default), the fallback to the download. **Hardware check passed** (2026-10-30): an uncached deep start 52 min into an hour shows its first frame in 0.51 s on Chrome and 0.60 s on the iPhone (9.0 s from the download with the option off); v0.36.1 cuts HD in 3-minute spans and searches the day's HD list ahead. **5b done** (2026-10-30, v0.36.2): every exit criterion met on the hardware, the NVR's own list of online users included (one more session while deep starts are in use, gone when idle). **5c done** (2026-10-30 to 2026-11-02, v0.37.0–v0.40.0): a deep start fetches the recording once, in two pieces, on one stream; on by default, a device that refuses the protocol left alone; each camera's counter rate kept; the device's zone built from its own DST rules (reolink-aio's land on the wrong days); two viewers of a camera take turns. **5d reports posted** (2026-11-02): the time zone bug as [starkillerOG/reolink_aio#239](https://github.com/starkillerOG/reolink_aio/issues/239), the download cut (143/144) and the media message class as [#240](https://github.com/starkillerOG/reolink_aio/issues/240); the rest is the maintainer's. **v0.40.1** (2026-11-02): six findings of a review of 5b/5c fixed (chief among them, an HD cut left by a closed tab held the recorder's login until restart); the owner's check of it closes the phase. See "Phase 5 status" |
 | 6 | The Doorbell's events: a camera that records but cannot be played lists its events | Standard / High | 0.5–1 wk | **Done** (2026-11-02, v0.43.0). **Step 1 done** (v0.41.0–v0.41.1): run 2 found the Doorbell's event and day searches working, its zone Home Assistant's, and its pictures refused by reolink-aio (a `1002` header). **Step 2 built** (v0.42.0): the Doorbell's events in the feed, the Events view and the calendar, on wired power. **Step 3 built** (v0.43.0): its pictures read here, and its Playback tab shows each event as pictures. **The owner's check** (2026-11-02): the Doorbell's events show and open as pictures, and a press of the doorbell is listed as a "Doorbell" event at the right time, so step 4 (the fallback) was not needed. Phase 7 started meanwhile, at the owner's request. See "Phase 6" |
-| 7 | Live video on dashboards: a Reolink Viewer camera card | Standard | 1–1.5 wk | **Started** (2026-11-02). **Step 1 done** (v0.44.0): the Reolink camera card, `custom:reolink-viewer-camera`, with its editor, on any dashboard and for any user. The owner's check (2026-11-02): on the wall tablet (Galaxy Tab A9+, Fully Kiosk, a sections view) and the iPhone app's dashboard, the Doorbell's and the front-yard camera's cards show their picture at once and their video quickly, kept warm or not, and go full screen in HD and back. Step 2, the tablet's screen off and on, is next. See "Phase 7" |
+| 7 | Live video on dashboards: a Reolink Viewer camera card | Standard | 1–1.5 wk | **Started** (2026-11-02). **Step 1 done** (v0.44.0): the Reolink camera card, `custom:reolink-viewer-camera`, with its editor, on any dashboard and for any user. The owner's check (2026-11-02): on the wall tablet (Galaxy Tab A9+, Fully Kiosk, a sections view) and the iPhone app's dashboard, the Doorbell's and the front-yard camera's cards show their picture at once and their video quickly, kept warm or not, and go full screen in HD and back. **Step 2 built** (v0.45.0): what the cards see is logged per device (Devices → Dashboard cards), they sleep while Fully Kiosk's screen is off or its screensaver on, and a doorbell's card can wake the screen and go full screen when it rings. The owner's overnight check is next. See "Phase 7" |
 | 8 | Unusual events: learning what is normal | High | 2–3 wk, then a week of learning | Planned. See "Phase 8" |
 | 9 | The Wall: the Live page as a security monitor, with layouts, arranging, HD large tiles and the detection strip | Standard / High | 2–3 wk | Planned. See "Phase 9" |
 | 10 | Scrubbing that shows the picture while dragging | Very high | 2–4 wk | Planned. See "Phase 10" |
@@ -5420,7 +5420,7 @@ engine Chrome uses, embedded in an app. This shapes the work:
 | Step | Status |
 | --- | --- |
 | 1. The camera card | **Done** (2026-11-02, v0.44.0, below): the owner's check passed on the wall tablet and the iPhone |
-| 2. Wall-tablet behaviour | Not started |
+| 2. Wall-tablet behaviour | **Built** (2026-11-02, v0.45.0, below): the cards' log and its report, sleep under Fully Kiosk's screensaver, and a doorbell's ring. The owner's overnight check is next |
 | 3. Optional: faster camera entities for every card | Not started; gated on the owner wanting stock cards faster |
 
 #### Step 7.1: the camera card
@@ -5573,6 +5573,81 @@ Phase 6's press check waits for the house to wake.
   screen on through HA's Fully Kiosk Browser integration.
 - **Network loss:** recovery without a reload (the tile's own retries).
   Measured on the tablet with the soak's rule: 8 visible hours, no tile stuck.
+
+**The owner's setup** (2026-11-02): Fully keeps the screen on all day; at 11
+pm it shows a dark clock with no camera feeds, to let the tablet cool for its
+battery's sake. The ring is to be a card option, simpler than browser_mod.
+Whether the clock is Fully's screensaver or another page is not known yet: the
+log tells.
+
+**As built (v0.45.0).** Measuring and the fixes the owner's setup asks for at
+once, since both were clear:
+
+- **The cards' log** (`card/tablet.ts`, one per page): the page loaded (with
+  whether Fully's JavaScript interface is on), hidden and shown, `pagehide`,
+  `pageshow` from the cache, `freeze` and `resume`, offline and online;
+  Fully's screen off and on and screensaver on and off; each card's players
+  starting, playing (with the time from starting), retrying (in plain words)
+  and stopped; rings; and every 5 minutes each card's decoded frames,
+  `"<n> frames; visible|hidden[; asleep]; <state>"`, noted while it decodes
+  any. Page events are noted only while a card is on the page.
+  - Sent every minute, and when the page is hidden, to
+    `live/card_log/add` (any user; bounded: 300 events a report, 40/80/200
+    characters). What Home Assistant cannot take is kept for the next try,
+    the newest 300.
+  - Kept by `live/card_log.py` in Home Assistant's storage: the newest 3000
+    events per device, for the 10 devices heard from last.
+- **The report**, Devices → **Dashboard cards** (`#cards`,
+  `components/card-report.ts`), for any device: per device, Fully's
+  interface, how often the screen or screensaver slept and the page was
+  hidden, how soon video was back after each wake (median and slowest), cards
+  that started and were not back by the next wake, frames decoded while the
+  page was hidden or Fully asleep, rings, failed starts; every event, to copy;
+  Download; Start over.
+- **Sleep under Fully Kiosk** (its JavaScript interface on, a Fully PLUS
+  feature): the page binds Fully's `screenOff`, `screenOn`,
+  `onScreensaverStart` and `onScreensaverStop`; while the screen is off or the
+  screensaver on, every card is suspended (its streams stop) and starts again
+  after. Without the interface the cards stop only when the page is hidden,
+  which the log will show is or is not enough.
+- **A doorbell's ring** (`ring_full_screen`, 5–600 s, off by default; in the
+  editor only for a camera with a visitor sensor): `live/cameras` gives a
+  doorbell's enabled visitor binary sensor (`visitor_entity`). When it turns
+  on while the card is shown (a ring before is not one), the card wakes
+  Fully's screen (`stopScreensaver`, `turnScreenOn`), goes full screen, and
+  leaves it after the seconds, unless it was full screen by hand before. On
+  every screen showing the card, so a tablet-only dashboard keeps it to the
+  tablet. Full screen without a user's tap fills the window (the browser
+  refuses its own).
+- **Not built:** the Screen Wake Lock option (Fully keeps the screen on, and
+  no other screen asked for it); a stuck-tile measure beyond the report's
+  failed starts and cards not back (the 8 visible hours are read from the
+  log).
+- **Checks:** unit tests of the log (the page's events, sending and keeping,
+  Fully's events and wake, frames), the report (a night summed up, its lines),
+  the card (the ring, sleep, what it notes), the editor's ring, the settings,
+  the store and its commands (any user, bounds), the visitor sensor; the
+  report and the dashboard in the design preview, with axe and the keyboard.
+
+**Hardware checklist (the owner):**
+
+1. Update to v0.45.0, restart Home Assistant, reload the tablet's page.
+2. In Fully, turn on **Settings → Advanced Web Settings → Enable JavaScript
+   Interface** (Fully PLUS), and reload. Then, on any device, **Devices →
+   Dashboard cards → Start over…**.
+3. On the Doorbell's card, turn on **When it rings: go full screen** (30 s).
+   Press the doorbell: the tablet's card goes full screen, then back.
+4. Leave the tablet overnight, through 11 pm's clock and the morning.
+5. In the morning, open **Devices → Dashboard cards** and send the
+   **Download**: whether video stopped under the clock, frames decoded while
+   nobody could see them, and how soon video came back.
+6. Say how the 11 pm clock comes up (Fully's screensaver, or another page),
+   and the Android System WebView version from Fully's device info.
+
+**Exit criteria (this step's):** under the clock, no video decoded and no
+stream held beyond keep-warm; video back in a median under 1 s on warm cameras
+after the screen comes on; a ring wakes the screen and shows the Doorbell full
+screen; no card stuck over 8 visible hours.
 
 #### Step 7.3: optional, faster camera entities for every card
 

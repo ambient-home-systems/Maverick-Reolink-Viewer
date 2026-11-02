@@ -345,6 +345,7 @@ function liveCamera(cam: Cam): LiveCamera {
       : cam.id === "cam-fyl"
         ? { floodlight: `light.${prefix}_floodlight`, siren: `siren.${prefix}_siren` }
         : {},
+    visitor_entity: cam.doorbell ? `binary_sensor.${prefix}_visitor` : null,
   };
 }
 
@@ -532,6 +533,7 @@ export function fakeHass(options: {
     "reolink_viewer/device": (m) => device(String(m.device_id)),
     "reolink_viewer/catalog": () => catalog,
     "reolink_viewer/live/cameras": () => ({ cameras: CAMS.map(liveCamera) }),
+    "reolink_viewer/live/card_log": () => ({ devices: CARD_LOG }),
     "reolink_viewer/live/status": () => ({ go2rtc: { state: "running", version: "1.9.14", restarts: 0 }, running: {}, preloaded: [], sessions: 0 }),
     "web_rtc/ice_servers": () => [],
     "reolink_viewer/timeline/days": () => ({ days: [21, 22, 23, 24, 25, 26, 27], timing: { cache: "memory", total_ms: 0 } }),
@@ -594,3 +596,23 @@ export function fakeHass(options: {
 }
 
 export const PREVIEW_NOW = NOW;
+
+/** A wall tablet's evening, as its dashboard cards noted it (the Dashboard cards report). */
+const CARD_LOG = (() => {
+  const at = (minutes: number) => NOW - 3 * 3_600_000 + minutes * 60_000;
+  const events = [
+    { at: at(0), what: "page loaded", detail: "visible; Fully Kiosk's JavaScript interface on" },
+    { at: at(0.01), what: "starting", card: "Doorbell", detail: "SD MSE" },
+    { at: at(0.02), what: "playing", card: "Doorbell", detail: "SD MSE, 0.4 s" },
+    { at: at(0.01), what: "starting", card: "Front Yard Right", detail: "SD MSE" },
+    { at: at(0.03), what: "playing", card: "Front Yard Right", detail: "SD MSE, 0.9 s" },
+    { at: at(60), what: "screensaver on", detail: "Fully Kiosk" },
+    { at: at(60), what: "stopped", card: "Doorbell", detail: "SD" },
+    { at: at(60), what: "stopped", card: "Front Yard Right", detail: "SD" },
+    { at: at(120), what: "ring", card: "Doorbell", detail: "full screen for 30 s; woke Fully Kiosk's screen" },
+    { at: at(120.01), what: "screensaver off", detail: "Fully Kiosk" },
+    { at: at(120.02), what: "playing", card: "Doorbell", detail: "HD WebRTC, 1.8 s" },
+    { at: at(120.03), what: "playing", card: "Front Yard Right", detail: "SD MSE, 0.6 s" },
+  ];
+  return [{ device: "Android · Fully Kiosk", updated: new Date(at(125)).toISOString(), events }];
+})();

@@ -1,6 +1,6 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
-import { G as i, J as a, O as o, Y as s, xt as c } from "./live-D27fF3SV.js";
-import { r as l, z as u } from "./home-BiyzfIBx.js";
+import { A as i, Et as a, Y as o, et as s, tt as c } from "./live-BRQnJ2GG.js";
+import { r as l, z as u } from "./home-CGDOgkeW.js";
 //#region src/render-filter.ts
 function d(e, t, n) {
 	if (e === t) return !1;
@@ -11,10 +11,10 @@ function d(e, t, n) {
 //#endregion
 //#region src/components/device-page.ts
 var f = {
-	overview: () => import("./overview-DoiJYVOg.js"),
-	playback: () => import("./playback-DdGrHOoN.js"),
-	pictures: () => import("./event-pictures-wsng5pgU.js"),
-	settings: () => import("./settings-DhXRNg_h.js")
+	overview: () => import("./overview-Bd1a5qbu.js"),
+	playback: () => import("./playback-B0ibxCb0.js"),
+	pictures: () => import("./event-pictures-RGIfME4R.js"),
+	settings: () => import("./settings-ByuJ5BwA.js")
 }, p = 1e3, m = class extends r {
 	static properties = {
 		hass: { attribute: !1 },
@@ -59,7 +59,7 @@ var f = {
 	}
 	_loadTab(e) {
 		e !== "live" && e !== "no-recordings" && (this._tabError = void 0, f[e]().catch((e) => {
-			this._tabError = c(e).message;
+			this._tabError = a(e).message;
 		}));
 	}
 	updated() {
@@ -74,12 +74,12 @@ var f = {
 		let n = ++this._loadSeq;
 		e || (this._device = void 0, this._error = void 0);
 		try {
-			let [e, r] = await Promise.all([s(t, this.deviceId), a(t)]);
+			let [e, r] = await Promise.all([c(t, this.deviceId), s(t)]);
 			if (n !== this._loadSeq) return;
 			this._catalog = r, this._device = e, this._error = void 0, this._watched = w(e);
 		} catch (e) {
 			if (n !== this._loadSeq) return;
-			this._error = c(e).message;
+			this._error = a(e).message;
 		}
 	}
 	_subscribeRegistry(e) {
@@ -98,7 +98,7 @@ var f = {
       <div class="header">
         <button class="text with-icon back" @click=${() => {
 			u(this, { view: "list" });
-		}}>${i("back")}All devices</button>
+		}}>${o("back")}All devices</button>
       </div>
       ${this._error ? n`<div class="banner error" role="alert">Could not load the device: ${this._error}</div>` : t}
       ${r ? n`<div class="title">
@@ -170,7 +170,7 @@ var f = {
             </div>` : this._error ? t : n`<p class="muted">Loading…</p>`}
     `;
 	}
-	static styles = [o, e`
+	static styles = [i, e`
       :host {
         display: flex;
         flex-direction: column;

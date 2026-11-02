@@ -56,6 +56,7 @@ const { ReolinkViewerCameraCard } = await import("./index");
 const { CARD_DOCS, cardConfig, cardSize, rememberRatio, storedConfig, GRID_OPTIONS } = await import("./config");
 const { PANEL_PATH, pictureRatio } = await import("./camera-card");
 await import("./editor");
+const { tablet } = await import("./tablet");
 
 type Card = InstanceType<typeof ReolinkViewerCameraCard>;
 type Tile = HTMLElementTagNameMap["rv-live-tile"];
@@ -94,8 +95,17 @@ const CAMERAS: LiveCamera[] = [
         streams: { sub: { encoding: { ...sd, width: 480, height: 640 }, entity_id: null } },
       },
     ],
+    visitor_entity: "binary_sensor.doorbell_visitor",
   },
 ];
+
+/** Home Assistant's next state: the same, with the Doorbell's visitor sensor as given. */
+function withVisitor(hass: HomeAssistant, state: string, at: string): HomeAssistant {
+  return {
+    ...hass,
+    states: { ...hass.states, "binary_sensor.doorbell_visitor": { state, last_changed: at } },
+  } as unknown as HomeAssistant;
+}
 
 function fakeHass({ fail = false, warm = "off" }: { fail?: boolean; warm?: string } = {}) {
   const sent: Record<string, unknown>[] = [];
@@ -202,12 +212,18 @@ describe("the card's settings", () => {
       show_name: true,
       show_state: true,
       fit: "cover",
+      ring_full_screen: 0,
     });
     expect(cardConfig({ type: "x" }).camera).toBeUndefined();
     expect(() => cardConfig({ quality: "4k" })).toThrow("quality: one of sd, hd.");
     expect(() => cardConfig({ tap_action: "more-info" })).toThrow("tap_action: one of full_screen, open_panel, none.");
     expect(() => cardConfig({ show_name: "yes" })).toThrow("show_name: true or false.");
     expect(() => cardConfig({ camera: 3 })).toThrow("camera: the camera's id");
+    expect(cardConfig({ ring_full_screen: 45 }).ring_full_screen).toBe(45);
+    expect(cardConfig({ ring_full_screen: 0 }).ring_full_screen).toBe(0);
+    for (const ring of [3, 601, 12.5, "30"]) {
+      expect(() => cardConfig({ ring_full_screen: ring })).toThrow("ring_full_screen: seconds, 5 to 600 (0: not).");
+    }
     expect(() => cardConfig(null)).toThrow("The card needs its settings.");
   });
 
@@ -406,6 +422,90 @@ describe("custom:reolink-viewer-camera", () => {
     expect(unsubscribed).toHaveLength(1);
   });
 
+  it("goes full screen when the doorbell rings, for its seconds, waking Fully Kiosk's screen", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const note = vi.spyOn(tablet, "note");
+      const wake = vi.spyOn(tablet, "wake");
+      const { hass } = fakeHass();
+      const quiet = withVisitor(hass, "off", "2026-11-03T03:00:00Z");
+      const { card, tile, settle } = await mount(quiet, { camera: "cam2", ring_full_screen: 5 });
+      // A ring before the card was shown is not one.
+      const ringing = await mount(withVisitor(hass, "on", "2026-11-03T02:59:00Z"), { camera: "cam2", ring_full_screen: 5 });
+      expect(ringing.tile()?.full).toBe(false);
+      ringing.card.remove();
+      expect(tile()?.full).toBe(false);
+
+      card.hass = withVisitor(hass, "on", "2026-11-03T03:01:00Z");
+      await settle();
+      expect(tile()?.full).toBe(true);
+      expect(wake).toHaveBeenCalledTimes(1);
+      expect(note).toHaveBeenCalledWith("ring", "Doorbell", "full screen for 5 s");
+      // The battery doorbell plays: someone asked for it.
+      expect(players.find((p) => p.ref.connectionId === "bell")?.running).toBe(true);
+      // Its state stays on a while: still the same ring.
+      card.hass = withVisitor(hass, "on", "2026-11-03T03:01:00Z");
+      await settle();
+      expect(wake).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(5000);
+      await settle();
+      expect(tile()?.full).toBe(false);
+
+      // Full screen by hand before a ring: it stays when the ring's time is up.
+      tile()?.enterFull();
+      card.hass = withVisitor(hass, "off", "2026-11-03T03:02:00Z");
+      await settle();
+      card.hass = withVisitor(hass, "on", "2026-11-03T03:03:00Z");
+      await settle();
+      await vi.advanceTimersByTimeAsync(5000);
+      await settle();
+      expect(tile()?.full).toBe(true);
+      tile()?.exitFull();
+
+      // Without the setting, a ring does nothing.
+      const plain = await mount(quiet, { camera: "cam2" });
+      plain.card.hass = withVisitor(hass, "on", "2026-11-03T03:04:00Z");
+      await plain.settle();
+      expect(plain.tile()?.full).toBe(false);
+    } finally {
+      vi.useRealTimers();
+      vi.restoreAllMocks();
+    }
+  });
+
+  it("sleeps while Fully Kiosk's screensaver shows, and plays again after", async () => {
+    const fullyEvent = (event: string) => {
+      (tablet as unknown as { _fullyEvent(event: string): void })._fullyEvent(event);
+    };
+    const { hass } = fakeHass();
+    const { tile, settle } = await mount(hass, { camera: "cam1" });
+    const player = players.find((p) => p.ref.connectionId === "nvr1");
+    expect(player?.running).toBe(true);
+    fullyEvent("onScreensaverStart");
+    await settle();
+    expect(tile()?.suspended).toBe(true);
+    expect(player?.running).toBe(false);
+    fullyEvent("onScreensaverStop");
+    await settle();
+    expect(tile()?.suspended).toBe(false);
+    expect(player?.running).toBe(true);
+  });
+
+  it("notes for the report what its video does", async () => {
+    const note = vi.spyOn(tablet, "note");
+    try {
+      const { hass } = fakeHass();
+      await mount(hass, { camera: "cam1" });
+      expect(note).toHaveBeenCalledWith("starting", "Front Yard", "SD WebRTC");
+      players[0]?.setState({ kind: "playing", transport: "WebRTC", result: {} as never });
+      expect(note).toHaveBeenLastCalledWith("playing", "Front Yard", expect.stringMatching(/^SD WebRTC, \d+\.\d s$/));
+      players[0]?.setState({ kind: "waiting", error: "camera unreachable", retryAt: 0 });
+      expect(note).toHaveBeenLastCalledWith("retrying", "Front Yard", expect.stringMatching(/^SD: /));
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+
   it("refuses wrong settings, which Home Assistant shows", () => {
     const card: Card = document.createElement("reolink-viewer-camera");
     expect(() => {
@@ -444,7 +544,9 @@ describe("the card's editor", () => {
     const hdRadio = [...(root()?.querySelectorAll<HTMLInputElement>('input[name="quality"]') ?? [])].at(1);
     hdRadio?.click();
     expect(changes.at(-1)).toEqual({ type: "custom:reolink-viewer-camera", camera: "cam2", quality: "hd" });
-    const showName = [...(root()?.querySelectorAll<HTMLInputElement>('fieldset input[type="checkbox"]') ?? [])].at(0);
+    const showName = [...(root()?.querySelectorAll<HTMLLabelElement>("fieldset label.check") ?? [])]
+      .find((label) => label.textContent.includes("The camera's name"))
+      ?.querySelector("input");
     showName?.click();
     expect(changes.at(-1)).toMatchObject({ show_name: false });
     const tap = root()?.querySelectorAll("select")[1];
@@ -471,6 +573,26 @@ describe("the card's editor", () => {
     const { text } = await mountEditor(hass, { camera: "cam2" });
     expect(text()).toContain("A battery camera is never kept warm");
     expect(text()).not.toContain("Not kept warm");
+  });
+
+  it("offers a doorbell's card full screen when it rings, for a number of seconds", async () => {
+    const { hass } = fakeHass();
+    const front = await mountEditor(hass, { camera: "cam1" });
+    expect(front.text()).not.toContain("When it rings");
+    const { root, changes, text, editor } = await mountEditor(hass, { camera: "cam2" });
+    expect(text()).toContain("When it rings");
+    const ring = root()?.querySelector<HTMLInputElement>("fieldset input[type=checkbox]");
+    ring?.click();
+    expect(changes.at(-1)).toEqual({ type: "custom:reolink-viewer-camera", camera: "cam2", ring_full_screen: 30 });
+    await editor.updateComplete;
+    const seconds = root()?.querySelector<HTMLInputElement>("input[type=number]");
+    if (!seconds) throw new Error("no seconds");
+    seconds.value = "2";
+    seconds.dispatchEvent(new Event("change"));
+    expect(changes.at(-1)).toMatchObject({ ring_full_screen: 5 });
+    seconds.value = "45";
+    seconds.dispatchEvent(new Event("change"));
+    expect(changes.at(-1)).toMatchObject({ ring_full_screen: 45 });
   });
 
   it("leaves settings it cannot show to the YAML", async () => {

@@ -84,6 +84,9 @@ def async_register_live_commands(hass: HomeAssistant) -> None:
         ws_live_soak,
         ws_live_soak_count,
         ws_live_soak_start,
+        ws_live_card_log,
+        ws_live_card_log_add,
+        ws_live_card_log_clear,
     ):
         websocket_api.async_register_command(hass, command)
 
@@ -510,6 +513,69 @@ def ws_live_soak_start(
         return
     run = resolved[1].soak.start_over(msg["device"], grid_open=msg["grid_open"])
     connection.send_result(msg["id"], {"run": run})
+
+
+# One event a dashboard card's page saw (live/card_log.py): when (epoch ms),
+# what, which card, and a few words.
+_CARD_EVENT = probatio.Schema(
+    {
+        probatio.Required("at"): probatio.All(int, probatio.Range(min=0)),
+        probatio.Required("what"): probatio.All(str, probatio.Length(min=1, max=40)),
+        probatio.Optional("card"): probatio.All(str, probatio.Length(max=80)),
+        probatio.Optional("detail"): probatio.All(str, probatio.Length(max=200)),
+    }
+)
+
+
+@callback
+@websocket_api.websocket_command({probatio.Required("type"): f"{DOMAIN}/live/card_log"})
+def ws_live_card_log(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Return what the dashboard cards saw, per device."""
+    if (resolved := _live(hass, connection, msg["id"])) is None:
+        return
+    connection.send_result(msg["id"], {"devices": resolved[1].card_log.logs()})
+
+
+@callback
+@websocket_api.websocket_command(
+    {
+        probatio.Required("type"): f"{DOMAIN}/live/card_log/add",
+        probatio.Required("device"): _SOAK_DEVICE,
+        probatio.Required("events"): probatio.All(
+            [_CARD_EVENT], probatio.Length(max=300)
+        ),
+    }
+)
+def ws_live_card_log_add(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Add what a page's dashboard cards saw since its last report."""
+    if (resolved := _live(hass, connection, msg["id"])) is None:
+        return
+    resolved[1].card_log.add(msg["device"], msg["events"])
+    connection.send_result(msg["id"])
+
+
+@callback
+@websocket_api.websocket_command(
+    {probatio.Required("type"): f"{DOMAIN}/live/card_log/clear"}
+)
+def ws_live_card_log_clear(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Start the cards' log over (before a night's check, say)."""
+    if (resolved := _live(hass, connection, msg["id"])) is None:
+        return
+    resolved[1].card_log.clear()
+    connection.send_result(msg["id"])
 
 
 @websocket_api.websocket_command(

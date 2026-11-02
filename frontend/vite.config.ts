@@ -14,7 +14,7 @@ import { defineConfig } from "vitest/config";
 //   home view), comes once a card is shown; its editor once that opens.
 //   `npm run budget` holds each to its budget.
 const HOME_EXCLUDES = /[\\/]src[\\/](card[\\/]|reolink-viewer-panel\.ts$)/;
-const LIVE = /[\\/]src[\\/](components[\\/]live-tile|live[\\/]data|live[\\/]hd|fonts|styles)\.ts$/;
+const LIVE = /[\\/]src[\\/](components[\\/]live-tile|live[\\/](data|hd|explain|soak-tally)|fonts|styles)\.ts$/;
 
 export default defineConfig({
   build: {

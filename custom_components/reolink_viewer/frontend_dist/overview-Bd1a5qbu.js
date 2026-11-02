@@ -1,7 +1,7 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
-import { G as i, O as a } from "./live-D27fF3SV.js";
-import { a as o, i as s, n as c, r as l } from "./home-BiyzfIBx.js";
-import "./device-list-B3_WdSJ1.js";
+import { A as i, Y as a } from "./live-BRQnJ2GG.js";
+import { a as o, i as s, n as c, r as l } from "./home-CGDOgkeW.js";
+import "./device-list-CnIAPDHT.js";
 //#region src/components/overview.ts
 var u = 3e4, d = {
 	people: "person",
@@ -51,8 +51,8 @@ var u = 3e4, d = {
     `;
 	}
 	_renderSnapshot(e) {
-		let r = this.snapshotUrl(), a = e.primary_view === "snapshot";
-		return n`<figure class="snapshot ${a ? "primary" : ""}">
+		let r = this.snapshotUrl(), i = e.primary_view === "snapshot";
+		return n`<figure class="snapshot ${i ? "primary" : ""}">
       <div class="frame">
         ${r ? n`<img src=${r} alt="Latest snapshot of ${e.name ?? "the camera"}" />` : n`<p class="none">
               No snapshot: enable one of this camera's stream entities (for example
@@ -68,10 +68,10 @@ var u = 3e4, d = {
 			this._stamp = Date.now();
 		}}
         >
-          ${i("refresh")}Refresh
+          ${a("refresh")}Refresh
         </button>
       </figcaption>
-      ${a ? n`<p class="muted small">
+      ${i ? n`<p class="muted small">
             This camera does not record, so snapshots are its main view. The picture refreshes
             every ${u / 1e3} seconds while this page is open.
           </p>` : t}
@@ -108,7 +108,7 @@ var u = 3e4, d = {
       </p>
     </section>`;
 	}
-	static styles = [a, e`
+	static styles = [i, e`
       :host {
         display: flex;
         flex-direction: column;
