@@ -12,6 +12,13 @@ alone. This check finds out first whether they answer on it, and how fast:
 - ``snapshot_past`` (298) a few seconds into the newest events, as the
   thumbnails and the picture sequence will ask.
 
+The searches take the device's wall-clock times, so the check needs its
+clock. A Baichuan-only device answers no HTTP GetTime (v0.41.0's run on the
+Doorbell stopped there), so the check falls back to Baichuan's own time query
+(104), then to Home Assistant's clock, and says which it used. What 104
+carries (its time zone field, the names of its fields) is recorded too: step 2
+needs the Doorbell's zone, and reolink-aio holds none for it.
+
 Same safety rules as the rest of the probe: read-only, and every request is a
 scheduler job at prefetch priority. These requests wake a camera that runs on
 its battery, so one is checked only with "Include battery cameras"; a battery
@@ -28,6 +35,8 @@ from functools import partial
 import statistics
 import time
 from typing import Any
+
+from homeassistant.util import dt as dt_util
 
 from .bridge import ChannelInfo, HostInfo, ReolinkHostHandle, VodEvent
 from .probe_playback import JobRunner
@@ -130,13 +139,7 @@ class EventsCheck:
         if (reason := self._skip_reason(channel)) is not None:
             result["skipped"] = reason
             return result
-        try:
-            now = await self._job(self._host.async_get_time)
-        except Exception as err:  # noqa: BLE001 - recorded in the report
-            result["ok"] = False
-            result["error"] = f"cannot read device time: {_err(err)}"
-            return result
-        wall = now.replace(tzinfo=None)
+        result["clock"], wall = await self._clock()
         today = datetime.combine(wall.date(), datetime.min.time())
 
         self._progress(f"ch{ch} events: day search")
@@ -169,6 +172,49 @@ class EventsCheck:
             "thumbnails": _thumbnails(result["snapshot_past"]),
         }
         return result
+
+    async def _clock(self) -> tuple[dict[str, Any], datetime]:
+        """Return what is known of the device's clock, and its wall time now.
+
+        The device's time as reolink-aio reads it; else Baichuan's time query
+        (104); else Home Assistant's own clock (the camera is at home).
+        """
+        clock: dict[str, Any] = {"timezone_known": self._host.timezone() is not None}
+        try:
+            now = await self._job(self._host.async_get_time)
+        except Exception as err:  # noqa: BLE001 - recorded in the report
+            clock["device_error"] = _err(err)
+        else:
+            clock["source"] = "device"
+            return clock, now.replace(tzinfo=None)
+
+        local = dt_util.now()
+        offset = local.utcoffset()
+        clock["home_assistant_utc_offset_s"] = (
+            round(offset.total_seconds()) if offset is not None else None
+        )
+        began = time.monotonic()
+        try:
+            answer = await self._job(self._host.async_baichuan_clock)
+        except Exception as err:  # noqa: BLE001 - recorded in the report
+            clock["baichuan"] = {"ok": False, "error": _err(err)}
+        else:
+            baichuan: dict[str, Any] = {
+                "ok": answer.wall is not None,
+                "latency_ms": _ms(began),
+                "time_zone": answer.time_zone,
+                "fields": list(answer.fields),
+            }
+            clock["baichuan"] = baichuan
+            if answer.wall is not None:
+                # Its wall clock against Home Assistant's: the zones agree when
+                # this is a few seconds, not hours.
+                ahead = answer.wall - local.replace(tzinfo=None)
+                baichuan["ahead_of_home_assistant_s"] = round(ahead.total_seconds())
+                clock["source"] = "baichuan"
+                return clock, answer.wall
+        clock["source"] = "home_assistant"
+        return clock, local.replace(tzinfo=None)
 
     async def _days(self, ch: int, start: datetime, end: datetime) -> dict[str, Any]:
         began = time.monotonic()

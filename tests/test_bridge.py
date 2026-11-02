@@ -704,3 +704,51 @@ async def test_search_day_events(
     with pytest.raises(ReolinkError):
         await host.async_search_day_events(0, start, TEST_NOW, "sub")
     assert failing.await_count == 2
+
+
+async def test_baichuan_clock(
+    hass: HomeAssistant, reolink_host: MagicMock, loaded_reolink: MockConfigEntry
+) -> None:
+    """Baichuan's time query (104): the device's wall clock, zone and fields."""
+    (host,) = bridge.async_get_hosts(hass)
+    answer = (
+        '<?xml version="1.0" encoding="UTF-8" ?>\n<body><SystemGeneral version="1.1">'
+        "<timeZone>18000</timeZone><year>2026</year><month>11</month><day>1</day>"
+        "<hour>23</hour><minute>51</minute><second>40</second>"
+        "</SystemGeneral></body>"
+    )
+    reolink_host.baichuan.send = AsyncMock(return_value=answer)
+    clock = await host.async_baichuan_clock()
+    reolink_host.baichuan.send.assert_awaited_once_with(cmd_id=104)
+    assert clock.wall == datetime(2026, 11, 1, 23, 51, 40)
+    assert clock.time_zone == 18000
+    assert clock.fields == (
+        "SystemGeneral",
+        "body",
+        "day",
+        "hour",
+        "minute",
+        "month",
+        "second",
+        "timeZone",
+        "year",
+    )
+    # A missing, unreadable or impossible time: no wall clock, the rest kept.
+    for broken in (
+        answer.replace("<second>40</second>", ""),
+        answer.replace("<hour>23</hour>", "<hour>x</hour>"),
+        answer.replace("<month>11</month>", "<month>13</month>"),
+    ):
+        reolink_host.baichuan.send = AsyncMock(return_value=broken)
+        clock = await host.async_baichuan_clock()
+        assert clock.wall is None
+        assert clock.time_zone == 18000
+    # No zone field.
+    reolink_host.baichuan.send = AsyncMock(
+        return_value=answer.replace("<timeZone>18000</timeZone>", "")
+    )
+    assert (await host.async_baichuan_clock()).time_zone is None
+    # A reolink-aio without send: not applicable, nothing sent.
+    del reolink_host.baichuan.send
+    with pytest.raises(bridge.NotApplicableError):
+        await host.async_baichuan_clock()
