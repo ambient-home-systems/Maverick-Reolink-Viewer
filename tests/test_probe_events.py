@@ -1,6 +1,6 @@
 """Tests for the events check of cameras that record but cannot be played (Phase 6)."""
 
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Generator
 from datetime import datetime, timedelta
 import json
 from typing import Any
@@ -17,7 +17,7 @@ from custom_components.reolink_viewer.probe_events import NO_TARGET, EventsOptio
 from custom_components.reolink_viewer.scheduler import Priority, Scheduler
 from homeassistant.core import HomeAssistant
 
-from .conftest import TEST_NOW, make_vod_file
+from .conftest import PICTURE_FRAME, TEST_NOW, make_vod_file, picture_answer
 
 EVENTS_ONLY = ProbeOptions(events=EventsOptions(enabled=True, only=True))
 
@@ -42,6 +42,14 @@ def _prober(hass: HomeAssistant, scheduler: Scheduler, options: ProbeOptions) ->
     )
 
 
+@pytest.fixture(autouse=True)
+def jpeg() -> Generator[AsyncMock]:
+    """reolink-aio's key frame to JPEG (ffmpeg), for pictures read here."""
+    convert = AsyncMock(return_value=b"\xff\xd8jpegdata")
+    with patch("reolink_aio.baichuan.util.i_frame_to_jpeg", convert):
+        yield convert
+
+
 def _doorbell(host: MagicMock, *, wired: bool = True) -> None:
     """Make the mocked host the battery Doorbell: direct, Baichuan only, SD card."""
     host.is_nvr = False
@@ -53,6 +61,10 @@ def _doorbell(host: MagicMock, *, wired: bool = True) -> None:
     host.supported.side_effect = lambda _ch, cap, *_args: cap != "replay"
     host.is_doorbell.return_value = True
     host._battery = {0: {"powerSupplyStatus": "normal" if wired else "none"}}
+    # Its pictures come with a 1002 stream header, read here (not reolink-aio).
+    host.baichuan.send_payload = AsyncMock(
+        return_value=("", picture_answer(b"1002", PICTURE_FRAME))
+    )
 
 
 async def _run(
@@ -68,6 +80,7 @@ async def test_events_check_on_the_wired_doorbell(
     reolink_host: MagicMock,
     loaded_reolink: MockConfigEntry,
     scheduler: Scheduler,
+    jpeg: AsyncMock,
 ) -> None:
     """On wired power the Doorbell is checked without the battery opt-in."""
     _doorbell(reolink_host)
@@ -128,10 +141,14 @@ async def test_events_check_on_the_wired_doorbell(
         (midnight - timedelta(days=1), midnight - timedelta(seconds=1), "sub"),
         (midnight - timedelta(days=1), midnight - timedelta(seconds=1), "main"),
     }
-    # The picture is asked a little into the event, on the sub stream.
-    reolink_host.baichuan.snapshot_past.assert_awaited_once_with(
-        0, TEST_NOW - timedelta(hours=1) + timedelta(seconds=2), "sub", "ffmpeg"
-    )
+    # The picture is asked a little into the event, on the sub stream, and its
+    # 1002 answer read here; reolink-aio's snapshot_past is not used.
+    request = reolink_host.baichuan.send_payload.await_args
+    assert request.kwargs["cmd_id"] == 298
+    for field in ("<hour>11</hour>", "<second>2</second>", "<streamType>sub"):
+        assert field in request.kwargs["body"]
+    reolink_host.baichuan.snapshot_past.assert_not_awaited()
+    jpeg.assert_awaited_once_with(PICTURE_FRAME, "ffmpeg")
     # Never the HTTP Search, which a Baichuan-only device does not have.
     reolink_host.request_vod_files.assert_not_awaited()
     # No event's time of day in the report.
@@ -219,6 +236,7 @@ async def test_events_check_records_failures(
     loaded_reolink: MockConfigEntry,
     scheduler: Scheduler,
     monkeypatch: pytest.MonkeyPatch,
+    jpeg: AsyncMock,
 ) -> None:
     """Searches that fail, and pictures that fail or are not JPEGs, are recorded."""
     _doorbell(reolink_host)
@@ -253,9 +271,11 @@ async def test_events_check_records_failures(
             },
         )
     )
-    reolink_host.baichuan.snapshot_past = AsyncMock(
-        side_effect=[b"not a jpeg", ReolinkError("298"), b"\xff\xd8ok"]
+    good = ("", picture_answer(b"1002", PICTURE_FRAME))
+    reolink_host.baichuan.send_payload = AsyncMock(
+        side_effect=[good, ReolinkError("298"), good]
     )
+    jpeg.side_effect = [b"not a jpeg", b"\xff\xd8ok"]
     host = await _run(hass, scheduler)
     (channel,) = host["events"]["channels"]
     samples = channel["snapshot_past"]["samples"]
@@ -266,10 +286,13 @@ async def test_events_check_records_failures(
     assert samples[1] == {"ok": False, "error": "ReolinkError: 298"}
     assert samples[2]["ok"] is True
     assert channel["gate"]["thumbnails"] is True
-    asked = [c.args[1] for c in reolink_host.baichuan.snapshot_past.await_args_list]
-    assert asked == [
-        TEST_NOW - timedelta(hours=h) + timedelta(seconds=2) for h in (1, 2, 3)
+    asked = [
+        c.kwargs["body"] for c in reolink_host.baichuan.send_payload.await_args_list
     ]
+    assert [
+        f"<hour>{12 - h}</hour>" in body
+        for h, body in zip((1, 2, 3), asked, strict=True)
+    ] == [True] * 3
 
 
 # Baichuan's answer to its time query (104), as reolink-aio's synchronize_time

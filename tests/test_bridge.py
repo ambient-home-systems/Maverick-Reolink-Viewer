@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from reolink_aio.enums import VodRequestType
-from reolink_aio.exceptions import ApiError, ReolinkError
+from reolink_aio.exceptions import ApiError, ReolinkError, UnexpectedDataError
 from reolink_aio.typings import VOD_search_status, VOD_trigger
 
 from custom_components.reolink_viewer import bridge
@@ -27,12 +27,14 @@ from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
 from .conftest import (
+    PICTURE_FRAME,
     SECRETS,
     TEST_NOW,
     TEST_PASSWORD,
     TEST_SERIAL,
     TEST_TOKEN,
     make_vod_file,
+    picture_answer,
 )
 from .ha_reolink_mock import (
     TEST_CAM_MODEL,
@@ -760,3 +762,65 @@ async def test_baichuan_clock(
     del reolink_host.baichuan.send
     with pytest.raises(bridge.NotApplicableError):
         await host.async_baichuan_clock()
+
+
+async def test_snapshot_past_read_here(
+    hass: HomeAssistant, reolink_host: MagicMock, loaded_reolink: MockConfigEntry
+) -> None:
+    """A past picture reolink-aio cannot read (a 1002 header) is read here."""
+    (host,) = bridge.async_get_hosts(hass)
+    when = datetime(2026, 11, 1, 23, 50, 7)
+    send = AsyncMock(return_value=("", picture_answer(b"1002", PICTURE_FRAME)))
+    reolink_host.baichuan.send_payload = send
+    convert = AsyncMock(return_value=b"\xff\xd8here")
+    with patch("reolink_aio.baichuan.util.i_frame_to_jpeg", convert):
+        # reolink-aio reads it: its picture.
+        assert await host.async_snapshot_past(0, when, "sub", "ffmpeg") == (
+            b"\xff\xd8jpegdata"
+        )
+        send.assert_not_awaited()
+        # It refuses the answer (the Doorbell's 1002): asked again, read here.
+        reolink_host.baichuan.snapshot_past = AsyncMock(
+            side_effect=UnexpectedDataError("did not start with b'1001'")
+        )
+        assert await host.async_snapshot_past(0, when, "main", "ffmpeg") == (
+            b"\xff\xd8here"
+        )
+        request = send.await_args
+        assert request is not None
+        body = request.kwargs["body"]
+        assert request.kwargs["cmd_id"] == 298
+        for field in (
+            "<channelId>0</channelId>",
+            "<streamType>mainStream</streamType>",
+            "<hour>23</hour>",
+            "<second>7</second>",
+            "<second>17</second>",  # ten seconds on, as reolink-aio asks
+        ):
+            assert field in body, field
+        convert.assert_awaited_with(PICTURE_FRAME, "ffmpeg")
+        # Any other failure is the device's: not asked again.
+        reolink_host.baichuan.snapshot_past = AsyncMock(side_effect=ReolinkError("400"))
+        send.reset_mock()
+        with pytest.raises(ReolinkError):
+            await host.async_snapshot_past(0, when, "sub", "ffmpeg")
+        send.assert_not_awaited()
+
+        # A Baichuan-only device (the Doorbell) is read here at once, whatever
+        # its header.
+        reolink_host.baichuan_only = True
+        send.return_value = ("", picture_answer(b"1001", PICTURE_FRAME))
+        assert await host.async_snapshot_past(0, when, "sub", "ffmpeg") == (
+            b"\xff\xd8here"
+        )
+        request = send.await_args
+        assert request is not None
+        assert "<streamType>subStream</streamType>" in request.kwargs["body"]
+        # An answer without a key frame.
+        send.return_value = ("", picture_answer(b"1002"))
+        with pytest.raises(bridge.BridgeError, match="no key frame"):
+            await host.async_snapshot_past(0, when, "sub", "ffmpeg")
+        # A reolink-aio that cannot send it.
+        del reolink_host.baichuan.send_payload
+        with pytest.raises(bridge.NotApplicableError):
+            await host.async_snapshot_past(0, when, "sub", "ffmpeg")

@@ -11,15 +11,17 @@ import type { BoardCamera } from "./live-grid";
 import { navigate, type Tab } from "./navigation";
 
 /**
- * What a tab shows: the camera live, its recordings (or why there are none to
- * play), its overview or its settings.
+ * What a tab shows: the camera live, its recordings (or, for recordings kept
+ * where they cannot be played here, its events and their pictures; or why
+ * there are none to play), its overview or its settings.
  */
-type Shown = "live" | "playback" | "no-recordings" | "overview" | "settings";
+type Shown = "live" | "playback" | "pictures" | "no-recordings" | "overview" | "settings";
 
 /** Each tab's elements load the first time it is shown (Live is the home view's). */
 const TAB_LOADERS: Record<Exclude<Shown, "live" | "no-recordings">, () => Promise<unknown>> = {
   overview: () => import("./overview"),
   playback: () => import("./playback"),
+  pictures: () => import("./event-pictures"),
   settings: () => import("./settings"),
 };
 
@@ -260,6 +262,13 @@ export class RvDevicePage extends LitElement {
                   .storage=${node.kind === "camera" ? (node.recordings?.storage ?? null) : null}
                   .recorder=${playbackRecorder(device)}
                 ></rv-playback>`
+              : shownTab(this.tab, device) === "pictures"
+              ? html`<rv-event-pictures
+                  .hass=${this.hass}
+                  .deviceId=${node.id}
+                  .cameraName=${node.name ?? ""}
+                  .at=${this.at}
+                ></rv-event-pictures>`
               : shownTab(this.tab, device) === "no-recordings"
               ? noRecordings(device)
               : shownTab(this.tab, device) === "overview"
@@ -379,7 +388,11 @@ export function shownTab(tab: Tab, device: DeviceResponse): Shown {
   if (tab === "live") return hasLive(device) ? "live" : "overview";
   if (tab === "playback") {
     if (hasPlayback(device)) return "playback";
-    return device.node.kind === "camera" ? "no-recordings" : "overview";
+    if (device.node.kind !== "camera") return "overview";
+    // Kept where they cannot be played here (Phase 6): its events, with
+    // pictures, from its own search.
+    if (device.node.recordings?.where === "elsewhere" && !device.degraded) return "pictures";
+    return "no-recordings";
   }
   return tab;
 }
@@ -398,11 +411,13 @@ export function playbackOffline(device: DeviceResponse): boolean {
   return device.node.kind === "camera" && playbackRecorder(device) === "camera" && device.node.status.online === false;
 }
 
-/** The Playback tab of a camera with nothing to play here: why, and what to do. */
+/**
+ * The Playback tab of a camera with nothing to play here: why, and what to do.
+ * (Recordings kept where they cannot be played show their events instead.)
+ */
 function noRecordings(device: DeviceResponse): TemplateResult {
   const node = device.node;
   const name = node.name ?? "This camera";
-  const where = node.kind === "camera" ? node.recordings?.where : undefined;
   if (device.degraded) {
     // The panel says why above, and what to do.
     return html`<div class="empty-tab">
@@ -412,19 +427,6 @@ function noRecordings(device: DeviceResponse): TemplateResult {
           ? `Home Assistant's Reolink integration is not running, so ${name}'s recordings cannot be read.`
           : `Reolink Viewer needs an update to read ${name}'s recordings since Home Assistant's last update.`}
         Whatever it has recorded plays here again once this is fixed.
-      </p>
-    </div>`;
-  }
-  if (where === "elsewhere") {
-    // On an NVR, the NVR keeps them; else its own SD card does.
-    const nvr = node.kind === "camera" ? node.connections.find((c) => c.via === "nvr") : undefined;
-    return html`<div class="empty-tab">
-      <h2>Recordings kept where they cannot be played here</h2>
-      <p>
-        ${nvr
-          ? `${name}'s recordings are on ${nvr.host_name ?? "its NVR"}, which cannot send them to Home Assistant.`
-          : `${name} records to its SD card, but cannot send its recordings to Home Assistant.`}
-        Play them in the Reolink app.
       </p>
     </div>`;
   }

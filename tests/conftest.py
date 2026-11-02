@@ -7,6 +7,7 @@ the real Reolink integration is set up on top of the mock.
 
 from collections.abc import Generator
 from datetime import datetime, timedelta
+import struct
 from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -330,3 +331,21 @@ async def loaded_viewer(
     assert await hass.config_entries.async_setup(viewer_entry.entry_id)
     await hass.async_block_till_done()
     return viewer_entry
+
+
+def picture_answer(header: bytes = b"1002", frame: bytes | None = None) -> bytes:
+    """A device's answer to a past-picture request (298): a stream header, a key frame.
+
+    The battery Doorbell's header is ``1002`` (Phase 6 run 2), which reolink-aio's
+    ``snapshot_past`` refuses; the key frame carries an 8-byte extra header.
+    ``frame`` None leaves the key frame out.
+    """
+    info = header + struct.pack("<I", 32) + bytes(24)
+    if frame is None:
+        return info
+    key = b"00dc" + b"H264" + struct.pack("<IIII", len(frame), 8, 0, 0)
+    block = key + struct.pack("<II", 1_792_000_000, 0) + frame
+    return info + block + bytes(-len(block) % 8)
+
+
+PICTURE_FRAME = b"\x00\x00\x00\x01\x65" + b"\x88" * 11

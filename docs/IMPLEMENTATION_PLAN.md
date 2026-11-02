@@ -22,7 +22,7 @@ put on it:
 | 3 | Live view via go2rtc, grid, fullscreen, PTZ | High | 3–4 wk | Done (2026-10-27, v0.15.1). Our own go2rtc and the live check (v0.4.0, runs 5–13); the key-frame cache, the image cache, the Live grid and Live tab, keep warm, full-screen HD, PTZ and the camera's controls, the picture first, battery cameras on wired power, a debug view per tile and the soak report (v0.5.0–v0.15.1). Exit runs: the soak passed (run 15), every tile's first image in a median 0.02 s on the iPhone and the Mac (runs 16–17), and the Phase 2 playback criteria held with live view running (runs 18–19) |
 | 4 | Design, performance, mobile, packaging, first release | Standard | 3–4 wk | Done (2026-10-28, v0.32.3). Step 1, the design (the Timetable), in v0.16.0–v0.22.0; step 2, the performance budget, in v0.23.0; step 3, mobile, in v0.24.0–v0.26.0; step 4, error states, in v0.27.0–v0.29.0; step 5, accessibility, in v0.30.0; step 6, packaging, in v0.31.0, the first release; step 7, docs, in v0.32.0, released the same day; v0.32.1 starts live video sooner where WebRTC cannot connect, from the work PC's check, v0.32.2 keeps the capacity test from blaming the NVR for a stream that plays no video, from the owner's live check, and v0.32.3 fixes full screen and the timeline's pinch on the iPhone, from the owner's iPhone. The rest of the exit checklist was not run: the owner closed the phase on v0.32.0 working in daily use. See "Phase 4 status" |
 | 5 | Optional R&D: Baichuan live/playback | Very high | 4–8 wk, time-boxed with gates | **5a done, go** (2026-10-29, v0.34.1): prior art surveyed, the capture tool and the owner's captures, `docs/baichuan-playback.md`, and the read-only check: a deep start over Baichuan costs the NVR 0.2 s against 4.7 s of HTTP download for the same point of a short recording. 5b–5d estimated at 3.5–5 wk, deep starts only; talk deferred. **5b step 1 built** (2026-10-29, v0.35.0): the probe measures the replay and the download cut (143) 75 % into sub and main recordings, decodes what arrives and counts the sessions; the source (replay, 143 or both) is chosen from the owner's report before step 2, the prototype. **Step 1 done** (2026-10-30, v0.35.5): the download cut (143) is the source. **5b step 2 built** (2026-10-30, v0.36.0): the muxer, one Baichuan connection per host, deep starts served from the cut behind an option (off by default), the fallback to the download. **Hardware check passed** (2026-10-30): an uncached deep start 52 min into an hour shows its first frame in 0.51 s on Chrome and 0.60 s on the iPhone (9.0 s from the download with the option off); v0.36.1 cuts HD in 3-minute spans and searches the day's HD list ahead. **5b done** (2026-10-30, v0.36.2): every exit criterion met on the hardware, the NVR's own list of online users included (one more session while deep starts are in use, gone when idle). **5c done** (2026-10-30 to 2026-11-02, v0.37.0–v0.40.0): a deep start fetches the recording once, in two pieces, on one stream; on by default, a device that refuses the protocol left alone; each camera's counter rate kept; the device's zone built from its own DST rules (reolink-aio's land on the wrong days); two viewers of a camera take turns. **5d reports posted** (2026-11-02): the time zone bug as [starkillerOG/reolink_aio#239](https://github.com/starkillerOG/reolink_aio/issues/239), the download cut (143/144) and the media message class as [#240](https://github.com/starkillerOG/reolink_aio/issues/240); the rest is the maintainer's. **v0.40.1** (2026-11-02): six findings of a review of 5b/5c fixed (chief among them, an HD cut left by a closed tab held the recorder's login until restart); the owner's check of it closes the phase. See "Phase 5 status" |
-| 6 | The Doorbell's events: a camera that records but cannot be played lists its events | Standard / High | 0.5–1 wk | **Started** (2026-11-02). **Step 1 done** (v0.41.0–v0.41.1): run 2 found the Doorbell's event and day searches working, its zone Home Assistant's, and its pictures refused by reolink-aio (a `1002` header). **Step 2 built** (v0.42.0): the Doorbell's events in the feed, the Events view and the calendar, on wired power. See "Phase 6" |
+| 6 | The Doorbell's events: a camera that records but cannot be played lists its events | Standard / High | 0.5–1 wk | **Started** (2026-11-02). **Step 1 done** (v0.41.0–v0.41.1): run 2 found the Doorbell's event and day searches working, its zone Home Assistant's, and its pictures refused by reolink-aio (a `1002` header). **Step 2 built** (v0.42.0): the Doorbell's events in the feed, the Events view and the calendar, on wired power. **Step 3 built** (v0.43.0): its pictures read here, and its Playback tab shows each event as pictures. The owner's check of both is next. See "Phase 6" |
 | 7 | Live video on dashboards: a Reolink Viewer camera card | Standard | 1–1.5 wk | Planned. See "Phase 7" |
 | 8 | Unusual events: learning what is normal | High | 2–3 wk, then a week of learning | Planned. See "Phase 8" |
 | 9 | The Wall: the Live page as a security monitor, with layouts, arranging, HD large tiles and the detection strip | Standard / High | 2–3 wk | Planned. See "Phase 9" |
@@ -5068,8 +5068,8 @@ knows that the Doorbell records.
 | Step | Status |
 | --- | --- |
 | 1. Probe the Doorbell's searches | **Done** (2026-11-02, v0.41.0–v0.41.1, below). Run 1 stopped at the Doorbell's clock (no HTTP GetTime on a Baichuan-only device); v0.41.1 reads it over Baichuan (104). Run 2: the event search works (677 events in two days, yesterday's in 13–16 s), the day search too, its zone is Home Assistant's; pictures fail on a `1002` header reolink-aio refuses |
-| 2. Event sources beside playback sources | **Built** (2026-11-02, v0.42.0, below); the owner's check next |
-| 3. Opening an event that cannot play | Not started |
+| 2. Event sources beside playback sources | **Built** (2026-11-02, v0.42.0, below); the owner's check deferred to step 3's (night at the door) |
+| 3. Opening an event that cannot play | **Built** (2026-11-02, v0.43.0, below): the Doorbell's pictures read here (its `1002` header), and its Playback tab shows its events as pictures; the owner's check with step 2's |
 | 4. Fallback: events from HA's detection sensors | Not started; only if step 1 finds no event search |
 
 #### Step 6.1: probe the Doorbell's searches
@@ -5293,6 +5293,71 @@ Reolink app.
   which Reolink Viewer cannot play yet." The note goes into the troubleshooting
   guide, and its test.
 - "New" and "seen" work as for every camera.
+
+**As built (v0.43.0).** Built without the owner's check of step 2: it was
+night at the door (2026-11-02), and the owner asked for step 3 to go ahead.
+
+- **Pictures, read here (run 2's finding).** `bridge.async_snapshot_past`
+  reads a Baichuan-only device's answer to 298 itself.
+  - It sends the request reolink-aio sends (its `CoverPreview` template,
+    through `send_payload`), finds the first key frame with Phase 5's
+    `baichuan_media.BlockReader`, which takes any `100x` stream header, and
+    makes the JPEG with reolink-aio's `i_frame_to_jpeg`.
+  - Other devices keep reolink-aio's `snapshot_past`. An answer it refuses
+    (`UnexpectedDataError`) is asked again and read here.
+  - An answer with no key frame is an error.
+- **The commands a camera that cannot be played may use.** `timeline/day`,
+  `timeline/days` and `thumbnail/urls` take `devices.async_event_source`: the
+  playback source, else the not-playable one. Unlike the feed, a camera on its
+  battery is not left out, because someone opened it. The playback commands
+  keep needing a playable source.
+  - The Doorbell's rows in the timetable get thumbnails from this.
+- **Its Playback tab: `rv-event-pictures`.** The device page shows it for a
+  camera whose `recordings.where` is "elsewhere" (`shownTab` "pictures"); in
+  degraded mode the page still says why nothing can be read.
+  - **The note**, as a heading the troubleshooting guide has ("Pictures of its
+    events"), checked word for word by `help.test.ts`.
+  - **The day** of the time opened, with the day before and after (never past
+    today), and the day's events, newest first, the opened one marked.
+  - **The event's pictures** every **5 s** (the smallest thumbnail bucket, not
+    2 s as planned), at most 15, from its start.
+    - Previous, play (one a second, stopping at the last) and next.
+    - "Asking the camera for the picture…" while one comes, and "No picture of
+      this moment." when none does.
+    - The next picture is asked for ahead.
+  - The old note "Recordings kept where they cannot be played here" is no
+    longer reachable, and went.
+- **Checks:**
+  - `scripts/a11y_check.cjs` and `preview_capture.cjs` have an
+    `event-pictures` view, from the preview's new `?elsewhere=cam-door`; axe and
+    the keyboard pass in light and dark, desktop and phone.
+  - Tests:
+    - the bridge's picture paths: reolink-aio, its refusal, Baichuan-only, no
+      key frame, no `send_payload`;
+    - the websocket commands for a camera that cannot be played;
+    - the probe's pictures, now read here;
+    - the device page;
+    - the component: the pictures, opening, playing, the days, a failed load.
+
+**Hardware checklist (the owner, with step 2's):**
+
+1. Update to v0.43.0. On the home view, the Doorbell's rows now have
+   thumbnails.
+2. Tap one of its rows. Its **Playback** tab opens on that event, with "Pictures
+   of its events" above.
+   - The first picture comes in about a second.
+   - **›** and the play button step through the event, one picture every 5 s of
+     it.
+   - Say whether any picture reads "No picture of this moment.", and how often.
+3. Tap another event in the list beside it, and step to the day before.
+4. Run the probe's events test again: its `thumbnails` should now be true.
+
+**Exit criteria:**
+
+- The Doorbell's events open on pictures from the event, the first in under
+  2 s.
+- Most of an event's pictures come; the probe's `thumbnails` is true.
+- The other cameras' Playback tabs and thumbnails are unchanged.
 
 #### Step 6.4: fallback, events from HA's detection sensors
 

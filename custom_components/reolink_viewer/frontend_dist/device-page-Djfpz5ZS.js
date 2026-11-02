@@ -1,4 +1,4 @@
-import { Ct as e, F as t, Gt as n, Jt as r, Xt as i, Yt as a, bt as o, i as s, it as c, qt as l, wt as u } from "./home-CwvceVd6.js";
+import { Ct as e, F as t, Gt as n, Jt as r, Xt as i, Yt as a, bt as o, i as s, it as c, qt as l, wt as u } from "./home-CHdiWzrD.js";
 //#region src/render-filter.ts
 function d(e, t, n) {
 	if (e === t) return !1;
@@ -9,9 +9,10 @@ function d(e, t, n) {
 //#endregion
 //#region src/components/device-page.ts
 var f = {
-	overview: () => import("./overview-CXkzaNcb.js"),
-	playback: () => import("./playback-DIrzIUVT.js"),
-	settings: () => import("./settings-DqkVrwtj.js")
+	overview: () => import("./overview-BY5NqVzf.js"),
+	playback: () => import("./playback-C1klOICp.js"),
+	pictures: () => import("./event-pictures-DKzRrjoW.js"),
+	settings: () => import("./settings-EUfOOS96.js")
 }, p = 1e3, m = class extends l {
 	static properties = {
 		hass: { attribute: !1 },
@@ -148,7 +149,12 @@ var f = {
                   .offline=${_(e)}
                   .storage=${n.kind === "camera" ? n.recordings?.storage ?? null : null}
                   .recorder=${g(e)}
-                ></rv-playback>` : h(this.tab, e) === "no-recordings" ? v(e) : h(this.tab, e) === "overview" ? a`<rv-overview
+                ></rv-playback>` : h(this.tab, e) === "pictures" ? a`<rv-event-pictures
+                  .hass=${this.hass}
+                  .deviceId=${n.id}
+                  .cameraName=${n.name ?? ""}
+                  .at=${this.at}
+                ></rv-event-pictures>` : h(this.tab, e) === "no-recordings" ? v(e) : h(this.tab, e) === "overview" ? a`<rv-overview
                   .hass=${this.hass}
                   .device=${e}
                   .devices=${this.devices}
@@ -251,7 +257,7 @@ var f = {
     `];
 };
 function h(e, t) {
-	return e === "live" ? S(t) ? "live" : "overview" : e === "playback" ? x(t) ? "playback" : t.node.kind === "camera" ? "no-recordings" : "overview" : e;
+	return e === "live" ? S(t) ? "live" : "overview" : e === "playback" ? x(t) ? "playback" : t.node.kind === "camera" ? t.node.recordings?.where === "elsewhere" && !t.degraded ? "pictures" : "no-recordings" : "overview" : e;
 }
 function g(e) {
 	return (e.node.kind === "camera" ? e.node.connections.find((e) => e.playback_source) : void 0)?.via === "nvr" ? "nvr" : "camera";
@@ -260,27 +266,16 @@ function _(e) {
 	return e.node.kind === "camera" && g(e) === "camera" && e.node.status.online === !1;
 }
 function v(e) {
-	let t = e.node, n = t.name ?? "This camera", r = t.kind === "camera" ? t.recordings?.where : void 0;
-	if (e.degraded) return a`<div class="empty-tab">
+	let t = e.node.name ?? "This camera";
+	return e.degraded ? a`<div class="empty-tab">
       <h2>Recordings cannot be played right now</h2>
       <p>
-        ${e.compat.ok ? `Home Assistant's Reolink integration is not running, so ${n}'s recordings cannot be read.` : `Reolink Viewer needs an update to read ${n}'s recordings since Home Assistant's last update.`}
+        ${e.compat.ok ? `Home Assistant's Reolink integration is not running, so ${t}'s recordings cannot be read.` : `Reolink Viewer needs an update to read ${t}'s recordings since Home Assistant's last update.`}
         Whatever it has recorded plays here again once this is fixed.
       </p>
-    </div>`;
-	if (r === "elsewhere") {
-		let e = t.kind === "camera" ? t.connections.find((e) => e.via === "nvr") : void 0;
-		return a`<div class="empty-tab">
-      <h2>Recordings kept where they cannot be played here</h2>
-      <p>
-        ${e ? `${n}'s recordings are on ${e.host_name ?? "its NVR"}, which cannot send them to Home Assistant.` : `${n} records to its SD card, but cannot send its recordings to Home Assistant.`}
-        Play them in the Reolink app.
-      </p>
-    </div>`;
-	}
-	return a`<div class="empty-tab">
+    </div>` : a`<div class="empty-tab">
     <h2>No recordings to play</h2>
-    <p>${n} keeps no recordings: it has no SD card, and it is not on a Reolink NVR in Home Assistant.</p>
+    <p>${t} keeps no recordings: it has no SD card, and it is not on a Reolink NVR in Home Assistant.</p>
     <p class="muted">To record, put a microSD card in it and format it in the Reolink app, or add it to a Reolink NVR. Its live view and pictures work either way.</p>
   </div>`;
 }

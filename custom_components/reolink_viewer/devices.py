@@ -553,6 +553,25 @@ def async_playback_source(hass: HomeAssistant, device_id: str) -> PlaybackSource
     raise DeviceNotFoundError(device_id)
 
 
+@callback
+def async_event_source(hass: HomeAssistant, device_id: str) -> PlaybackSource:
+    """Return where a camera's events can be searched; ``device_id`` as above.
+
+    Its playback source, or for a camera whose recordings cannot be played here
+    (Phase 6), that connection, not playable. Unlike ``async_event_sources``, a
+    camera on its battery is not left out: someone asked for it.
+    """
+    model = _async_build(hass, degraded=False)
+    for camera in model.cameras:
+        if any(device_id in c.device_ids for c in camera.connections) or (
+            device_id == camera.group_id
+        ):
+            if (source := _event_source(camera)) is None:
+                raise NoPlaybackError(device_id)
+            return source
+    raise DeviceNotFoundError(device_id)
+
+
 def _live_source(camera: _Camera, conn: _Connection) -> LiveSource | None:
     if conn.channel is None or conn.handle is None:
         return None

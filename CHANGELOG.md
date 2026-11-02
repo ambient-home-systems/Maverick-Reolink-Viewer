@@ -3,6 +3,21 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.43.0
+
+Phase 6, step 3: pictures of the Doorbell's events.
+
+- **Tapping one of the Doorbell's events opens it as pictures.** Its **Playback**
+  tab shows the event: a picture from every 5 seconds of it (up to 15), with buttons
+  to step through them or play them one a second, and the day's other events beside
+  it, with the days before. Its recordings still play only in the Reolink app.
+- **The Doorbell's events have thumbnails** on the home view and the **Events** tab.
+- **Why they had none:** the doorbell sends its pictures in a form Home Assistant's
+  Reolink library does not read. Reolink Viewer now reads them itself (as it already
+  does for a start deep in an NVR's recording).
+- The same goes for any camera whose recordings are kept where Reolink Viewer cannot
+  play them.
+
 ## 0.42.0
 
 Phase 6, step 2: the Doorbell on the Events page.
