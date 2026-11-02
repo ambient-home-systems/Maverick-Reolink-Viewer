@@ -269,7 +269,10 @@ projects. This section holds the reasoning; Phases 6–13 of
   (sprite sheets, as YouTube's). They need every sub hour copied off the NVR
   (58–260 MB an hour per camera), where the cut fetches a key frame on demand.
 
-### 6.3 The Live page as a security monitor
+### 6.3 The Live page as a security monitor (the Wall)
+
+The owner named it "the Wall" (2026-11-02): a switch on the Live view between
+the board and it.
 
 - **Today:** the home view is the live board (2–5 columns by width, rows at
   16:9, so the board can run past the bottom of the screen; a fixed order; sub

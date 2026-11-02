@@ -75,14 +75,14 @@ Phase 5 (starting deep in recordings over the Reolink app's own protocol) is bui
 through v0.40.1: a start deep in an uncached recording shows its first frame in about
 half a second; see the [plan](docs/IMPLEMENTATION_PLAN.md#phase-5-status). Phases 6 to
 13, the second round, are planned: the Doorbell's events, a dashboard card, unusual
-events, a monitor-style Live page, scrubbing that shows the picture, and more; see
+events, the Wall (a monitor-style Live page), scrubbing that shows the picture, and more; see
 [Phases 6–13](docs/IMPLEMENTATION_PLAN.md#phases-613-the-second-round-planned-2026-11-02).
 
 ## For developers
 
 | Document | What it covers |
 | --- | --- |
-| [docs/PLAN.md](docs/PLAN.md) | Evaluation: what the Reolink integration and `reolink-aio` already provide, the recommended architecture, live/playback design, the Reolink-app (Baichuan) reverse-engineering assessment, and the second round's evaluation (dashboards, scrubbing, the monitor, the Doorbell, Reolink Stamina and reostream) |
+| [docs/PLAN.md](docs/PLAN.md) | Evaluation: what the Reolink integration and `reolink-aio` already provide, the recommended architecture, live/playback design, the Reolink-app (Baichuan) reverse-engineering assessment, and the second round's evaluation (dashboards, scrubbing, the Wall, the Doorbell, Reolink Stamina and reostream) |
 | [DESIGN.md](DESIGN.md) | The panel's design: the Timetable world, its tokens (light and dark), type, components and rules |
 | [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) | Phased implementation plan with tasks, exit criteria, risks and the testing strategy |
 | [docs/hardware-matrix.md](docs/hardware-matrix.md) | Measured behavior per camera model, filled from the probe |

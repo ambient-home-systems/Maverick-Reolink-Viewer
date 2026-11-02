@@ -25,7 +25,7 @@ put on it:
 | 6 | The Doorbell's events: a camera that records but cannot be played lists its events | Standard / High | 0.5–1 wk | Planned (2026-11-02). See "Phase 6" |
 | 7 | Live video on dashboards: a Reolink Viewer camera card | Standard | 1–1.5 wk | Planned. See "Phase 7" |
 | 8 | Unusual events: learning what is normal | High | 2–3 wk, then a week of learning | Planned. See "Phase 8" |
-| 9 | The Live page as a monitor: layouts, arranging, HD large tiles, the detection strip | Standard / High | 2–3 wk | Planned. See "Phase 9" |
+| 9 | The Wall: the Live page as a security monitor, with layouts, arranging, HD large tiles and the detection strip | Standard / High | 2–3 wk | Planned. See "Phase 9" |
 | 10 | Scrubbing that shows the picture while dragging | Very high | 2–4 wk | Planned. See "Phase 10" |
 | 11 | Playback and settings extras: zoom, event clips, filters, copying settings | Standard | 1–2 wk | Planned. See "Phase 11" |
 | 12 | Optional R&D: the Doorbell's recordings and talk | Very high | 3–5 wk, gated | Planned. See "Phase 12" |
@@ -4996,7 +4996,7 @@ Recommended, the owner's to change:
    marks need a week of history before they show anything, so the journal
    should collect while the other phases are built. Steps 8.2–8.4 follow
    whenever convenient.
-4. **Phase 9, the monitor.** Its step 9.4 shows Phase 8's marks if Phase 8 is
+4. **Phase 9, the Wall.** Its step 9.4 shows Phase 8's marks if Phase 8 is
    built, and its step 9.5 needs Phase 7's card.
 5. **Phase 10, scrubbing.** This is the largest risk. It builds on Phase 5's
    download cut and its turns per channel.
@@ -5012,13 +5012,12 @@ exit item (an install through HACS on a clean Home Assistant).
 
 ### Decisions for the owner
 
-The owner answered these on 2026-11-02. One thing is still open: the
-monitor's name (decision 1).
+The owner answered all of these on 2026-11-02.
 
 | # | Decision | The owner's answer | Needed by |
 | --- | --- | --- | --- |
-| 1 | The monitor: replace the home view's timetable, or a switch | **A switch** on the Live view between the board, as today, and the monitor (feeds only), remembered per device. **Its name is open:** "Monitor" stands in for it in this plan; the candidates are Wall, Monitor, Lookout and Signal box | 9.1; the name before 9.1's release |
-| 2 | Saved monitor layouts: per Home Assistant user, or per screen | **Named layouts per HA user**, kept on the server; each device remembers which one it shows | 9.1 |
+| 1 | The monitor: replace the home view's timetable, or a switch | **A switch** on the Live view between the board, as today, and **the Wall** (feeds only, like the NVR's HDMI monitor), remembered per device. The owner chose the name "Wall" from Wall, Monitor, Lookout and Signal box | 9.1 |
+| 2 | Saved Wall layouts: per Home Assistant user, or per screen | **Named layouts per HA user**, kept on the server; each device remembers which one it shows | 9.1 |
 | 3 | The wall tablet | **A Samsung Galaxy Tab A9+ running Fully Kiosk Browser**, which draws pages with Android System WebView (Chromium). Its HA login (admin or not) is not known; the card works with either (Phase 7) | 7 |
 | 4 | Unusual events: port Stamina's model (MIT, credited) or write our own | **Port it**, adapted to our types, with its copyright notice and its tests | 8.2 |
 | 5 | Unusual events on by default | **Off**: an option to turn on, since the journal is a record of when people come and go | 8.1 |
@@ -5381,27 +5380,27 @@ tests, adapted to our camera ids and types (decision 4).
 
 ---
 
-## Phase 9 — The Live page as a monitor (difficulty: Standard / High, 2–3 wk)
+## Phase 9 — The Wall: the Live page as a security monitor (difficulty: Standard / High, 2–3 wk)
 
-Goal: a live screen like the NVR's HDMI output: feeds only, large, arranged by
-the owner (PLAN.md §6.3).
+Goal: **the Wall**, a live screen like the NVR's HDMI output: feeds only,
+large, arranged by the owner (PLAN.md §6.3). The owner named it "Wall" on
+2026-11-02 (decision 1).
 
 | Step | Status |
 | --- | --- |
-| 1. Monitor mode, layouts, saved | Not started |
+| 1. The Wall, its layouts, saved | Not started |
 | 2. Arranging, pages and tours | Not started |
 | 3. HD in large tiles | Not started |
 | 4. The detection strip and instant highlights | Not started |
-| 5. Wall-display touches, and the monitor as a dashboard card | Not started; the card after Phase 7 |
+| 5. Kiosk touches, and the Wall as a dashboard card | Not started; the card after Phase 7 |
 
-#### Step 9.1: monitor mode, layouts, saved
+#### Step 9.1: the Wall, its layouts, saved
 
-- **A switch on the Live view between Board and Monitor** (decision 1; the
-  name "Monitor" stands in until the owner picks one), remembered per device.
-  Board is today's view.
-- **An address per saved layout** (`#monitor/<layout>`), so a kiosk's start
-  page (Fully Kiosk on the wall tablet) opens a layout directly.
-- **Monitor shows feeds only, fitted to the screen:**
+- **A switch on the Live view between Board and Wall** (decision 1),
+  remembered per device. Board is today's view.
+- **An address per saved layout** (`#wall/<layout>`), so a kiosk's start page
+  (Fully Kiosk on the wall tablet) opens a layout directly.
+- **The Wall shows feeds only, fitted to the screen:**
   - rows sized from the screen's height as well as its width, with no page
     scroll;
   - the band shrinks to a thin bar with the clock, the layout's name and an
@@ -5411,8 +5410,8 @@ the owner (PLAN.md §6.3).
   1+7. A square or portrait camera in a cell keeps the board's rule: its
   picture's sides are never cropped.
 - **Saved layouts (decision 2):**
-  - named layouts per HA user, kept on the server (a `monitor/layouts`
-    command and store, like `events/seen`);
+  - named layouts per HA user, kept on the server (a `wall/layouts` command
+    and store, like `events/seen`);
   - each device remembers which one it shows;
   - a layout holds the grid, the camera in each cell, the pages and the tour.
 
@@ -5457,12 +5456,13 @@ the owner (PLAN.md §6.3).
   - the strip is asked again when a sensor turns off, not only every 2
     minutes.
 
-#### Step 9.5: wall-display touches, and the monitor as a dashboard card
+#### Step 9.5: kiosk touches, and the Wall as a dashboard card
 
-- **Wall display:** keep the screen awake; hide the cursor after 3 s of no
-  movement; a clock in the bar.
-- **The monitor as a dashboard card:** `custom:reolink-viewer-monitor` shows a
-  saved layout. It is built on Phase 7's card.
+- **Kiosk touches:** keep the screen awake (under Fully Kiosk, Fully's own
+  settings, as in Phase 7); hide the cursor after 3 s of no movement; a clock
+  in the bar.
+- **The Wall as a dashboard card:** `custom:reolink-viewer-wall` shows a saved
+  layout. It is built on Phase 7's card.
 
 **Exit criteria (the owner's desktop and the wall tablet):**
 
