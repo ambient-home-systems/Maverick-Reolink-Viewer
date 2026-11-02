@@ -32,6 +32,7 @@ const VIEWS = {
   "live-check": "#live-check",
   soak: "#soak",
   "no-recordings": "#device/cam-laundry/playback",
+  "event-pictures": "&elsewhere=cam-door#device/cam-door/playback",
   "offline-board": "&offline=cam-dogs,cam-garage",
   "tile-errors": "&fail=tiles",
   "day-error": "&fail=day#device/cam-fyr/playback",

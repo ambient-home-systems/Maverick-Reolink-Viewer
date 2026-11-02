@@ -362,8 +362,14 @@ def _playback_source(
     hass: HomeAssistant,
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
+    *,
+    events: bool = False,
 ) -> tuple[ReolinkViewerConfigEntry, devices.PlaybackSource] | None:
-    """Resolve the camera to its recording host, or send the error."""
+    """Resolve the camera to its recording host, or send the error.
+
+    ``events``: a camera whose recordings cannot be played here will do too
+    (``devices.async_event_source``), for its days, events and pictures.
+    """
     if (entry := _loaded_entry(hass)) is None:
         connection.send_error(msg["id"], ERR_NOT_LOADED, "Reolink Viewer is not loaded")
         return None
@@ -376,7 +382,8 @@ def _playback_source(
         )
         return None
     try:
-        return entry, devices.async_playback_source(hass, msg["device_id"])
+        lookup = devices.async_event_source if events else devices.async_playback_source
+        return entry, lookup(hass, msg["device_id"])
     except devices.DeviceNotFoundError:
         connection.send_error(
             msg["id"], websocket_api.ERR_NOT_FOUND, "Reolink device not found"
@@ -407,7 +414,7 @@ async def ws_timeline_days(
     msg: dict[str, Any],
 ) -> None:
     """Return the days of a month that have recordings (calendar dots)."""
-    if (resolved := _playback_source(hass, connection, msg)) is None:
+    if (resolved := _playback_source(hass, connection, msg, events=True)) is None:
         return
     entry, source = resolved
     try:
@@ -441,7 +448,7 @@ async def ws_timeline_day(
     msg: dict[str, Any],
 ) -> None:
     """Return a camera-local day: recording segments and events, in UTC ms."""
-    if (resolved := _playback_source(hass, connection, msg)) is None:
+    if (resolved := _playback_source(hass, connection, msg, events=True)) is None:
         return
     entry, source = resolved
     try:
@@ -830,7 +837,7 @@ def ws_thumbnail_urls(
     msg: dict[str, Any],
 ) -> None:
     """Return signed thumbnail URLs for times (one per bucket)."""
-    if (resolved := _playback_source(hass, connection, msg)) is None:
+    if (resolved := _playback_source(hass, connection, msg, events=True)) is None:
         return
     entry, source = resolved
     data = entry.runtime_data

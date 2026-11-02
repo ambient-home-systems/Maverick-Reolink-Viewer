@@ -15,7 +15,7 @@ import {
 } from "../test-fixtures";
 import type { DeviceDetails } from "../types";
 import "./device-page";
-import { hasPlayback, tabsFor, watchedEntities, type RvDevicePage } from "./device-page";
+import { hasPlayback, shownTab, tabsFor, watchedEntities, type RvDevicePage } from "./device-page";
 import type { Tab } from "./navigation";
 import { SNAPSHOT_REFRESH_MS, type RvOverview } from "./overview";
 
@@ -203,26 +203,25 @@ describe("rv-device-page", () => {
     expect(why()).toContain("No recordings to play");
     expect(why()).toContain("it has no SD card, and it is not on a Reolink NVR");
     expect(why()).toContain("put a microSD card in it");
-    // Kept where they cannot be played here: on an NVR, or the battery Doorbell's SD card.
-    hass.responses["reolink_viewer/device"] = makeDevice({
-      node: makeCamera({
-        connections: [{ ...nvrConnection, playback_source: false }],
-        recordings: { where: "elsewhere", storage: "ready" },
-      }),
-    });
-    await el.reload();
-    await el.updateComplete;
-    expect(why()).toContain("Front Yard's recordings are on Garage NVR, which cannot send them to Home Assistant.");
-    expect(why()).toContain("Play them in the Reolink app");
-    hass.responses["reolink_viewer/device"] = makeDevice({
+    // Kept where they cannot be played here (the battery Doorbell's SD card):
+    // its events, with pictures (Phase 6), opened at the time asked.
+    const elsewhere = makeDevice({
       node: makeCamera({
         connections: [{ ...nvrConnection, via: "direct", host_id: null, host_name: null, playback_source: false }],
         recordings: { where: "elsewhere", storage: "ready" },
       }),
     });
+    expect(shownTab("playback", elsewhere)).toBe("pictures");
+    expect(shownTab("playback", { ...elsewhere, degraded: true })).toBe("no-recordings");
+    hass.responses["reolink_viewer/device"] = elsewhere;
+    el.at = 1_792_000_000_000;
     await el.reload();
     await el.updateComplete;
-    expect(why()).toContain("Front Yard records to its SD card, but cannot send its recordings to Home Assistant.");
+    const pictures = el.shadowRoot?.querySelector("rv-event-pictures");
+    expect(pictures?.deviceId).toBe("dev-cam");
+    expect(pictures?.at).toBe(1_792_000_000_000);
+    expect(el.shadowRoot?.querySelector(".empty-tab")).toBeNull();
+    el.at = undefined;
     hass.responses["reolink_viewer/device"] = snapshotOnly;
     await el.reload();
     await el.updateComplete;

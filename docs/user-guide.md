@@ -157,9 +157,10 @@ board.
 - Tap a row to play its recording.
 
 A battery doorbell that keeps its recordings on its own SD card lists its events
-too, while it runs on wired power. Its recordings cannot be played in the panel yet,
-so tapping one of its rows opens its **Playback** tab, which says so; play them in
-the Reolink app.
+too, while it runs on wired power. Its recordings cannot be played in the panel yet:
+tapping one of its rows opens its **Playback** tab on that event, with pictures from it
+(one every 5 seconds) and the day's other events beside them. Play the recordings
+themselves in the Reolink app.
 
 ## Devices
 

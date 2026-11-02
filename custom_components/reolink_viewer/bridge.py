@@ -16,7 +16,7 @@ Methods on :class:`ReolinkHostHandle` that perform device I/O are prefixed with
 import asyncio
 from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import asdict, dataclass, field, fields, is_dataclass
-from datetime import date, datetime, tzinfo
+from datetime import date, datetime, timedelta, tzinfo
 from enum import StrEnum
 import hashlib
 import importlib
@@ -33,6 +33,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr
 from homeassistant.util import dt as dt_util
 
+from .baichuan_media import BlockReader
 from .const import REOLINK_DOMAIN
 from .timeconv import device_timezone
 
@@ -1242,12 +1243,66 @@ class ReolinkHostHandle:
     async def async_snapshot_past(
         self, channel: int, when: datetime, stream: str, ffmpeg_binary: str
     ) -> bytes:
-        """Return a JPEG frame from a past recording (Baichuan cmd 298)."""
+        """Return a JPEG frame from a past recording (Baichuan cmd 298).
+
+        reolink-aio reads the answer only when its stream header is ``1001``;
+        the battery Doorbell answers ``1002`` (Phase 6 run 2). So a Baichuan-only
+        device's answer is read here, with this integration's own media reader
+        (``baichuan_media``, which takes any ``100x`` header), and an answer
+        reolink-aio refuses from any other device is asked again and read here.
+        """
         if (camera_tz := self.timezone()) is not None and when.tzinfo is not None:
             when = when.astimezone(camera_tz)
-        return bytes(
-            await self._api.baichuan.snapshot_past(channel, when, stream, ffmpeg_binary)
+        if _safe(lambda: self._api.baichuan_only) is True:
+            return await self._snapshot_past_here(channel, when, stream, ffmpeg_binary)
+        try:
+            return bytes(
+                await self._api.baichuan.snapshot_past(
+                    channel, when, stream, ffmpeg_binary
+                )
+            )
+        except Exception as err:
+            if type(err).__name__ != "UnexpectedDataError":
+                raise
+            _LOGGER.debug("reolink-aio refused a picture's answer (%s)", err)
+            return await self._snapshot_past_here(channel, when, stream, ffmpeg_binary)
+
+    async def _snapshot_past_here(
+        self, channel: int, when: datetime, stream: str, ffmpeg_binary: str
+    ) -> bytes:
+        """Ask for a past picture (298) as reolink-aio does, and read it here."""
+        from reolink_aio.baichuan import xmls  # noqa: PLC0415 - only on this path
+        from reolink_aio.baichuan.util import i_frame_to_jpeg  # noqa: PLC0415
+
+        send_payload = getattr(self._api.baichuan, "send_payload", None)
+        template = getattr(xmls, "CoverPreview", None)
+        if send_payload is None or not isinstance(template, str):
+            raise NotApplicableError("reolink-aio cannot send a picture request")
+        kind = "main" if "main" in stream else stream if stream == "ext" else "sub"
+        end = when + timedelta(seconds=10)
+        body = template.format(
+            channel=channel,
+            stream=kind,
+            start_year=when.year,
+            start_month=when.month,
+            start_day=when.day,
+            start_hour=when.hour,
+            start_minute=when.minute,
+            start_second=when.second,
+            end_year=end.year,
+            end_month=end.month,
+            end_day=end.day,
+            end_hour=end.hour,
+            end_minute=end.minute,
+            end_second=end.second,
         )
+        _message, payload = await send_payload(cmd_id=298, body=body)
+        reader = BlockReader()
+        blocks = [*reader.feed(bytes(payload)), *reader.finish()]
+        frame = next((b.payload for b in blocks if b.kind == "key" and b.payload), None)
+        if frame is None:
+            raise BridgeError("the picture's answer holds no key frame")
+        return bytes(await i_frame_to_jpeg(frame, ffmpeg_binary))
 
 
 class DeviceRole(StrEnum):

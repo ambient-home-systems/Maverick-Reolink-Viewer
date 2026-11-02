@@ -98,6 +98,12 @@ let badDisks: readonly string[] = [];
 /** Cameras Home Assistant cannot reach (?offline=). */
 let offlineCams: readonly string[] = [];
 /**
+ * Cameras whose recordings are kept where they cannot be played (?elsewhere=),
+ * as the owner's battery Doorbell's SD card (Phase 6): their Playback tab
+ * shows their events with pictures.
+ */
+let elsewhereCams: readonly string[] = [];
+/**
  * Reolink Viewer cannot reach the cameras (?degraded=): an update changed the
  * Reolink integration, it is not running, or no devices are set up yet.
  */
@@ -114,7 +120,7 @@ function cameraNode(cam: Cam): CameraNode {
     connections.push({ device_id: `${cam.id}-nvr`, entry_id: "entry-nvr", entry_title: "NVR", via: "nvr", channel: cam.channel, host_id: "dev-nvr", host_name: "NVR", playback_source: true, entities: 24, disabled_entities: 6 });
   }
   if (cam.direct) {
-    connections.push({ device_id: `${cam.id}-direct`, entry_id: `entry-${cam.id}`, entry_title: cam.name, via: "direct", channel: 0, host_id: null, host_name: null, playback_source: cam.channel === null && cam.records, entities: 38, disabled_entities: 11 });
+    connections.push({ device_id: `${cam.id}-direct`, entry_id: `entry-${cam.id}`, entry_title: cam.name, via: "direct", channel: 0, host_id: null, host_name: null, playback_source: cam.channel === null && cam.records && !elsewhereCams.includes(cam.id), entities: 38, disabled_entities: 11 });
   }
   return {
     id: cam.id,
@@ -133,7 +139,7 @@ function cameraNode(cam: Cam): CameraNode {
     connections,
     status: { online: !offlineCams.includes(cam.id), sleeping: false, is_battery: cam.battery === true, is_doorbell: cam.doorbell === true },
     primary_view: cam.snapshot ? "snapshot" : "live",
-    recordings: cam.records ? { where: "playable", storage: diskOf(cam) } : { where: "none", storage: null },
+    recordings: cam.records ? { where: elsewhereCams.includes(cam.id) ? "elsewhere" : "playable", storage: diskOf(cam) } : { where: "none", storage: null },
     snapshot_entity_id: `camera.${cam.media.replace(/-/g, "_")}_fluent`,
     entities: connections.reduce((n, c) => n + c.entities, 0),
     disabled_entities: connections.reduce((n, c) => n + c.disabled_entities, 0),
@@ -501,11 +507,13 @@ export function fakeHass(options: {
   dark: boolean;
   offline?: readonly string[];
   disks?: readonly string[];
+  elsewhere?: readonly string[];
   degraded?: string | null;
   fail?: readonly string[];
 }): HomeAssistant {
   badDisks = options.disks ?? [];
   offlineCams = options.offline ?? [];
+  elsewhereCams = options.elsewhere ?? [];
   trouble = options.degraded === "changed" || options.degraded === "stopped" || options.degraded === "none" ? options.degraded : undefined;
   const fails = options.fail ?? [];
   /** The error a request fails with, when the preview is told to fail it. */

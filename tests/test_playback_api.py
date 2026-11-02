@@ -14,6 +14,7 @@ from pytest_homeassistant_custom_component.typing import (
     ClientSessionGenerator,
     WebSocketGenerator,
 )
+from reolink_aio.exceptions import ReolinkError
 
 from custom_components.reolink_viewer import bridge, timeline, views, vodcache
 from custom_components.reolink_viewer.devices import PlaybackSource
@@ -626,10 +627,26 @@ async def test_degraded_and_no_playback(
     reolink_host.supported.side_effect = lambda ch, cap, *a: (
         cap not in ("battery", "replay")
     )
+    # Without replay support, its recordings cannot be played: refused.
     msg = await _ws(
         client,
-        {"type": "reolink_viewer/timeline/day", "device_id": camera, "date": DAY},
+        {
+            "type": "reolink_viewer/playback/url",
+            "device_id": camera,
+            "date": DAY,
+            "segment_id": "1",
+            "stream": "sub",
+        },
     )
+    assert msg["error"]["code"] == "no_playback"
+    # Kept nowhere at all: no events to search either.
+    with patch.object(
+        bridge.ReolinkHostHandle, "stores_recordings", return_value=False
+    ):
+        msg = await _ws(
+            client,
+            {"type": "reolink_viewer/timeline/day", "device_id": camera, "date": DAY},
+        )
     assert msg["error"]["code"] == "no_playback"
     with patch.object(
         bridge,
@@ -912,3 +929,59 @@ async def test_check_reports_are_stored(hass: HomeAssistant, hass_storage: Any) 
     broken = checks.CheckReports(hass)
     await broken.async_load()
     assert broken.reports() == []
+
+
+async def test_a_camera_whose_recordings_cannot_be_played(
+    hass: HomeAssistant,
+    hass_ws_client: WebSocketGenerator,
+    reolink_host: MagicMock,
+    wired: MockConfigEntry,
+) -> None:
+    """Its days, events and pictures can be asked for; its recordings cannot."""
+    client = await hass_ws_client(hass)
+    camera = await _camera_id(client)
+    # The battery Doorbell's SD card: no replay support, no HTTP Search.
+    reolink_host.request_vod_files = AsyncMock(side_effect=ReolinkError("no HTTP"))
+    with patch.object(bridge.ReolinkHostHandle, "records_locally", return_value=False):
+        msg = await _ws(
+            client,
+            {"type": "reolink_viewer/timeline/day", "device_id": camera, "date": DAY},
+        )
+        day = msg["result"]
+        assert day["segments"] == []
+        (event,) = day["events"]
+        assert event["segment"] is None
+        msg = await _ws(
+            client,
+            {
+                "type": "reolink_viewer/timeline/days",
+                "device_id": camera,
+                "year": 2026,
+                "month": 10,
+            },
+        )
+        assert msg["result"]["days"] == list(range(1, 18))
+        msg = await _ws(
+            client,
+            {
+                "type": "reolink_viewer/thumbnail/urls",
+                "device_id": camera,
+                "times": [event["start"], event["start"] + 5000],
+                "bucket": 5,
+            },
+        )
+        assert [u["url"].split("?")[0][:25] for u in msg["result"]["urls"]] == [
+            "/api/reolink_viewer/thumb"
+        ] * 2
+        # Its recordings are still refused.
+        msg = await _ws(
+            client,
+            {
+                "type": "reolink_viewer/playback/url",
+                "device_id": camera,
+                "date": DAY,
+                "segment_id": "1",
+                "stream": "sub",
+            },
+        )
+        assert msg["error"]["code"] == "no_playback"

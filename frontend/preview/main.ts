@@ -60,6 +60,7 @@ panel.hass = fakeHass({
   dark: params.get("theme") === "dark",
   offline: (params.get("offline") ?? "").split(",").filter(Boolean),
   disks: (params.get("disk") ?? "").split(",").filter(Boolean),
+  elsewhere: (params.get("elsewhere") ?? "").split(",").filter(Boolean),
   degraded: params.get("degraded"),
   fail: (params.get("fail") ?? "").split(",").filter(Boolean),
 });

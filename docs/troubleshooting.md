@@ -292,6 +292,19 @@ Its live view and pictures work either way.
 The camera records, but its NVR or SD card cannot send recordings to Home Assistant.
 Play them in the Reolink app.
 
+### Pictures of its events
+
+A camera whose recordings Reolink Viewer cannot play, such as a battery doorbell
+that keeps them on its SD card, shows its events on its **Playback** tab instead,
+with pictures from each: one every 5 seconds through the event, up to 15. **‹** and
+**›** step through them, and the play button shows them one a second.
+
+- **"Asking the camera for the picture…"**: each picture comes from the camera itself,
+  about half a second apart.
+- **"No picture of this moment."**: the camera had no picture to give at that second.
+  The next one is often there.
+- The recordings themselves play in the Reolink app.
+
 ### Recordings cannot be played right now
 
 Reolink Viewer cannot reach the Reolink integration: the box at the top of the page
