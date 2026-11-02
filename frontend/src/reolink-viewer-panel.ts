@@ -78,6 +78,8 @@ export class ReolinkViewerPanel extends LitElement {
     _baichuanSession: { state: true },
     _baichuanCameras: { state: true },
     _baichuanHold: { state: true },
+    _events: { state: true },
+    _eventsOnly: { state: true },
     _copied: { state: true },
     _route: { state: true },
     _toast: { state: true },
@@ -107,6 +109,9 @@ export class ReolinkViewerPanel extends LitElement {
   declare _baichuanSession: boolean;
   declare _baichuanCameras: string;
   declare _baichuanHold: number;
+  /** The events check of cameras that record but cannot be played (Phase 6). */
+  declare _events: boolean;
+  declare _eventsOnly: boolean;
   declare _copied: boolean;
   declare _route: Route;
   /** The current view's file could not be loaded. */
@@ -142,6 +147,8 @@ export class ReolinkViewerPanel extends LitElement {
     this._baichuanSession = false;
     this._baichuanCameras = "";
     this._baichuanHold = 5;
+    this._events = false;
+    this._eventsOnly = true;
     this._copied = false;
     this._route = { view: "live" };
     this.addEventListener(NAVIGATE_EVENT, (e) => {
@@ -703,6 +710,33 @@ export class ReolinkViewerPanel extends LitElement {
             seconds (90 leaves time to run the Live check's capacity test alongside)</span
           >
         </label>
+        <label class="option">
+          <input
+            type="checkbox"
+            .checked=${this._events}
+            ?disabled=${running}
+            @change=${(e: Event) => {
+              this._events = (e.target as HTMLInputElement).checked;
+            }}
+          />
+          <span
+            >Test the events of cameras that record where Reolink Viewer cannot play it, such as a
+            doorbell's SD card (Phase 6): the day and event searches, and a few pictures. Read-only.
+            A camera on its battery is tested only with "Include battery cameras"; one on wired
+            power is tested either way.</span
+          >
+        </label>
+        <label class="option nested">
+          <input
+            type="checkbox"
+            .checked=${this._eventsOnly}
+            ?disabled=${running || !this._events}
+            @change=${(e: Event) => {
+              this._eventsOnly = (e.target as HTMLInputElement).checked;
+            }}
+          />
+          <span>Only this test (skip the live video and recording checks on every camera)</span>
+        </label>
       </div>
       <div class="actions">
         ${running
@@ -786,6 +820,8 @@ export class ReolinkViewerPanel extends LitElement {
         baichuan_cameras: this._baichuanCameras.trim(),
         baichuan_hold: this._baichuanHold,
         baichuan_cut: 20,
+        events_test: this._events,
+        events_only: this._events && this._eventsOnly,
       },
       (message) => {
         if (this._probe.status !== "running") return;

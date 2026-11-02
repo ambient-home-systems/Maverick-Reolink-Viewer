@@ -23,6 +23,7 @@ from .const import DOMAIN, PROBE_HARD_MAX_STREAMS, PROBE_PLAYBACK_HARD_MAX_STREA
 from .models import ReolinkViewerConfigEntry
 from .probe import ProbeOptions, Prober
 from .probe_baichuan import BaichuanOptions
+from .probe_events import EventsOptions
 from .probe_playback import PlaybackOptions
 from .scheduler import Priority
 from .thumbnails import BUCKETS_S
@@ -239,6 +240,8 @@ def _redacted_error(err: Exception, hosts: list[bridge.ReolinkHostHandle]) -> st
         probatio.Optional("baichuan_cut", default=20): probatio.All(
             int, probatio.Range(min=5, max=120)
         ),
+        probatio.Optional("events_test", default=False): bool,
+        probatio.Optional("events_only", default=False): bool,
     }
 )
 @websocket_api.require_admin
@@ -305,6 +308,7 @@ async def ws_probe(
             cameras=msg["baichuan_cameras"],
             cut_seconds=msg["baichuan_cut"],
         ),
+        events=EventsOptions(enabled=msg["events_test"], only=msg["events_only"]),
     )
 
     def progress(message: str) -> None:

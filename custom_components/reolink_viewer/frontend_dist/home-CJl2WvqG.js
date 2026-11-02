@@ -998,7 +998,7 @@ function Bt(e) {
 }
 //#endregion
 //#region src/version.ts
-var I = "0.40.1", Vt = "https://github.com/ambient-home-systems/Maverick-Reolink-Viewer", Ht = {
+var I = "0.41.0", Vt = "https://github.com/ambient-home-systems/Maverick-Reolink-Viewer", Ht = {
 	guide: ["user-guide"],
 	troubleshooting: ["troubleshooting"],
 	cameras: ["cameras"],
@@ -4926,11 +4926,11 @@ function Fi(e) {
 //#endregion
 //#region src/views.ts
 var Ii = {
-	events: () => import("./events-view-W2p32-4N.js"),
-	list: () => import("./device-list-BrtFfP43.js"),
-	device: () => import("./device-page-Dw9zaDgZ.js"),
-	"live-check": () => import("./live-check--APU9fW7.js"),
-	soak: () => import("./live-soak-CVl3fD8I.js")
+	events: () => import("./events-view-CJAeLx5x.js"),
+	list: () => import("./device-list-DEW1N7OC.js"),
+	device: () => import("./device-page-BboaFLBI.js"),
+	"live-check": () => import("./live-check-BfN-EJnU.js"),
+	soak: () => import("./live-soak-CBH4qPj2.js")
 }, Li = /* @__PURE__ */ new Map();
 function Ri(e) {
 	let t = Ii[e];
@@ -4975,6 +4975,8 @@ var zi = {
 		_baichuanSession: { state: !0 },
 		_baichuanCameras: { state: !0 },
 		_baichuanHold: { state: !0 },
+		_events: { state: !0 },
+		_eventsOnly: { state: !0 },
 		_copied: { state: !0 },
 		_route: { state: !0 },
 		_toast: { state: !0 },
@@ -4989,7 +4991,7 @@ var zi = {
 		this._route = jr(window.location.hash);
 	};
 	constructor() {
-		super(), this.narrow = !1, this._now = Date.now(), this._board = [], this._probe = { status: "idle" }, this._includeBattery = !1, this._concurrency = !1, this._maxStreams = 4, this._playback = !1, this._playbackOnly = !1, this._playbackConcurrency = !1, this._playbackStreams = 4, this._baichuan = !1, this._baichuanOnly = !0, this._baichuanMain = !1, this._baichuanDownload = !0, this._baichuanSession = !1, this._baichuanCameras = "", this._baichuanHold = 5, this._copied = !1, this._route = { view: "live" }, this.addEventListener(Dr, (e) => {
+		super(), this.narrow = !1, this._now = Date.now(), this._board = [], this._probe = { status: "idle" }, this._includeBattery = !1, this._concurrency = !1, this._maxStreams = 4, this._playback = !1, this._playbackOnly = !1, this._playbackConcurrency = !1, this._playbackStreams = 4, this._baichuan = !1, this._baichuanOnly = !0, this._baichuanMain = !1, this._baichuanDownload = !0, this._baichuanSession = !1, this._baichuanCameras = "", this._baichuanHold = 5, this._events = !1, this._eventsOnly = !0, this._copied = !1, this._route = { view: "live" }, this.addEventListener(Dr, (e) => {
 			this.navigate(e.detail);
 		}), this.addEventListener(Or, (e) => {
 			this.showToast(e.detail);
@@ -5467,6 +5469,33 @@ var zi = {
             seconds (90 leaves time to run the Live check's capacity test alongside)</span
           >
         </label>
+        <label class="option">
+          <input
+            type="checkbox"
+            .checked=${this._events}
+            ?disabled=${e}
+            @change=${(e) => {
+			this._events = e.target.checked;
+		}}
+          />
+          <span
+            >Test the events of cameras that record where Reolink Viewer cannot play it, such as a
+            doorbell's SD card (Phase 6): the day and event searches, and a few pictures. Read-only.
+            A camera on its battery is tested only with "Include battery cameras"; one on wired
+            power is tested either way.</span
+          >
+        </label>
+        <label class="option nested">
+          <input
+            type="checkbox"
+            .checked=${this._eventsOnly}
+            ?disabled=${e || !this._events}
+            @change=${(e) => {
+			this._eventsOnly = e.target.checked;
+		}}
+          />
+          <span>Only this test (skip the live video and recording checks on every camera)</span>
+        </label>
       </div>
       <div class="actions">
         ${e ? C`<button @click=${() => {
@@ -5542,7 +5571,9 @@ var zi = {
 			baichuan_session: this._baichuanSession,
 			baichuan_cameras: this._baichuanCameras.trim(),
 			baichuan_hold: this._baichuanHold,
-			baichuan_cut: 20
+			baichuan_cut: 20,
+			events_test: this._events,
+			events_only: this._events && this._eventsOnly
 		}, (e) => {
 			this._probe.status === "running" && (this._probe = {
 				...this._probe,

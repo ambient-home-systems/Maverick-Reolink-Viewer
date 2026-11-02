@@ -22,9 +22,21 @@ put on it:
 | 3 | Live view via go2rtc, grid, fullscreen, PTZ | High | 3–4 wk | Done (2026-10-27, v0.15.1). Our own go2rtc and the live check (v0.4.0, runs 5–13); the key-frame cache, the image cache, the Live grid and Live tab, keep warm, full-screen HD, PTZ and the camera's controls, the picture first, battery cameras on wired power, a debug view per tile and the soak report (v0.5.0–v0.15.1). Exit runs: the soak passed (run 15), every tile's first image in a median 0.02 s on the iPhone and the Mac (runs 16–17), and the Phase 2 playback criteria held with live view running (runs 18–19) |
 | 4 | Design, performance, mobile, packaging, first release | Standard | 3–4 wk | Done (2026-10-28, v0.32.3). Step 1, the design (the Timetable), in v0.16.0–v0.22.0; step 2, the performance budget, in v0.23.0; step 3, mobile, in v0.24.0–v0.26.0; step 4, error states, in v0.27.0–v0.29.0; step 5, accessibility, in v0.30.0; step 6, packaging, in v0.31.0, the first release; step 7, docs, in v0.32.0, released the same day; v0.32.1 starts live video sooner where WebRTC cannot connect, from the work PC's check, v0.32.2 keeps the capacity test from blaming the NVR for a stream that plays no video, from the owner's live check, and v0.32.3 fixes full screen and the timeline's pinch on the iPhone, from the owner's iPhone. The rest of the exit checklist was not run: the owner closed the phase on v0.32.0 working in daily use. See "Phase 4 status" |
 | 5 | Optional R&D: Baichuan live/playback | Very high | 4–8 wk, time-boxed with gates | **5a done, go** (2026-10-29, v0.34.1): prior art surveyed, the capture tool and the owner's captures, `docs/baichuan-playback.md`, and the read-only check: a deep start over Baichuan costs the NVR 0.2 s against 4.7 s of HTTP download for the same point of a short recording. 5b–5d estimated at 3.5–5 wk, deep starts only; talk deferred. **5b step 1 built** (2026-10-29, v0.35.0): the probe measures the replay and the download cut (143) 75 % into sub and main recordings, decodes what arrives and counts the sessions; the source (replay, 143 or both) is chosen from the owner's report before step 2, the prototype. **Step 1 done** (2026-10-30, v0.35.5): the download cut (143) is the source. **5b step 2 built** (2026-10-30, v0.36.0): the muxer, one Baichuan connection per host, deep starts served from the cut behind an option (off by default), the fallback to the download. **Hardware check passed** (2026-10-30): an uncached deep start 52 min into an hour shows its first frame in 0.51 s on Chrome and 0.60 s on the iPhone (9.0 s from the download with the option off); v0.36.1 cuts HD in 3-minute spans and searches the day's HD list ahead. **5b done** (2026-10-30, v0.36.2): every exit criterion met on the hardware, the NVR's own list of online users included (one more session while deep starts are in use, gone when idle). **5c done** (2026-10-30 to 2026-11-02, v0.37.0–v0.40.0): a deep start fetches the recording once, in two pieces, on one stream; on by default, a device that refuses the protocol left alone; each camera's counter rate kept; the device's zone built from its own DST rules (reolink-aio's land on the wrong days); two viewers of a camera take turns. **5d reports posted** (2026-11-02): the time zone bug as [starkillerOG/reolink_aio#239](https://github.com/starkillerOG/reolink_aio/issues/239), the download cut (143/144) and the media message class as [#240](https://github.com/starkillerOG/reolink_aio/issues/240); the rest is the maintainer's. **v0.40.1** (2026-11-02): six findings of a review of 5b/5c fixed (chief among them, an HD cut left by a closed tab held the recorder's login until restart); the owner's check of it closes the phase. See "Phase 5 status" |
+| 6 | The Doorbell's events: a camera that records but cannot be played lists its events | Standard / High | 0.5–1 wk | **Started** (2026-11-02). **Step 1 built** (v0.41.0): the probe's events test, the gate for steps 2–4, waiting on the owner's run. See "Phase 6" |
+| 7 | Live video on dashboards: a Reolink Viewer camera card | Standard | 1–1.5 wk | Planned. See "Phase 7" |
+| 8 | Unusual events: learning what is normal | High | 2–3 wk, then a week of learning | Planned. See "Phase 8" |
+| 9 | The Wall: the Live page as a security monitor, with layouts, arranging, HD large tiles and the detection strip | Standard / High | 2–3 wk | Planned. See "Phase 9" |
+| 10 | Scrubbing that shows the picture while dragging | Very high | 2–4 wk | Planned. See "Phase 10" |
+| 11 | Playback and settings extras: zoom, event clips, filters, copying settings | Standard | 1–2 wk | Planned. See "Phase 11" |
+| 12 | Optional R&D: the Doorbell's recordings and talk | Very high | 3–5 wk, gated | Planned. See "Phase 12" |
+| 13 | Optional: live picture integrity and outside live sources | High | 1–1.5 wk, gated | Planned. See "Phase 13" |
+| 14 | Copies of detection clips on a NAS or cloud | High | — | **TBD** (the owner, 2026-11-02): may be built here later; sketched, not scheduled. See "Phase 14" |
 
 Phases 1 and 2 can overlap once Phase 0 is done. Phase 5 can start any time after
-Phase 0 as a separate track.
+Phase 0 as a separate track. Phases 6–13 are the second round, planned in
+"Phases 6–13: the second round"; most of them are independent of each other,
+and the order there is a recommendation. Phase 14 is a sketch, kept until the
+owner decides.
 
 ---
 
@@ -4951,6 +4963,936 @@ minute of closing the tab; both viewers play through without a stall.
 left of 5d waits on the maintainer
 ([#239](https://github.com/starkillerOG/reolink_aio/issues/239),
 [#240](https://github.com/starkillerOG/reolink_aio/issues/240)).
+
+---
+
+## Phases 6–13: the second round (planned 2026-11-02)
+
+After using Phases 0–5 day to day, the owner asked for:
+
+- live scrubbing, as UniFi Protect and Nest have it;
+- a Live page like the NVR's HDMI monitor;
+- the Doorbell on the Events page;
+- faster, more reliable camera feeds on a wall tablet's dashboard;
+- whatever is worth taking from two other Reolink projects, Reolink Stamina
+  and reostream.
+
+The evaluation, with its evidence, is in [PLAN.md §6](PLAN.md#6-second-round-evaluation-2026-11-02).
+These phases build it. The re-review before planning found these already done:
+
+- reolink-aio's DST rules (v0.39.1, reported as reolink_aio#239);
+- fast uncached deep starts (Phase 5);
+- a whole-recording "Download clip".
+
+### Order
+
+Recommended, the owner's to change:
+
+1. **Phase 6, the Doorbell's events.** It is small, and a camera that records
+   is missing from the Events page.
+2. **Phase 7, the dashboard card.** The wall tablet is slow every day, and the
+   card reuses the panel's live tile.
+3. **Phase 8, step 1 (the detection journal), as early as possible.** Unusual
+   marks need a week of history before they show anything, so the journal
+   should collect while the other phases are built. Steps 8.2–8.4 follow
+   whenever convenient.
+4. **Phase 9, the Wall.** Its step 9.4 shows Phase 8's marks if Phase 8 is
+   built, and its step 9.5 needs Phase 7's card.
+5. **Phase 10, scrubbing.** This is the largest risk. It builds on Phase 5's
+   download cut and its turns per channel.
+6. **Phase 11**, at any time; its steps are independent.
+7. **Phases 12 and 13 are optional and gated.** Each starts with a
+   measurement that decides whether it goes on.
+8. **Phase 14 is TBD** (decision 7): a sketch, to be planned if the owner
+   picks it up.
+
+Before Phase 6, two records are still open from the first round: Phase 5's
+v0.40.1 hardware check (this plan still says "not run yet"), and Phase 4's
+exit item (an install through HACS on a clean Home Assistant).
+
+### Decisions for the owner
+
+The owner answered all of these on 2026-11-02.
+
+| # | Decision | The owner's answer | Needed by |
+| --- | --- | --- | --- |
+| 1 | The monitor: replace the home view's timetable, or a switch | **A switch** on the Live view between the board, as today, and **the Wall** (feeds only, like the NVR's HDMI monitor), remembered per device. The owner chose the name "Wall" from Wall, Monitor, Lookout and Signal box | 9.1 |
+| 2 | Saved Wall layouts: per Home Assistant user, or per screen | **Named layouts per HA user**, kept on the server; each device remembers which one it shows | 9.1 |
+| 3 | The wall tablet | **A Samsung Galaxy Tab A9+ running Fully Kiosk Browser**, which draws pages with Android System WebView (Chromium). Its HA login (admin or not) is not known; the card works with either (Phase 7) | 7 |
+| 4 | Unusual events: port Stamina's model (MIT, credited) or write our own | **Port it**, adapted to our types, with its copyright notice and its tests | 8.2 |
+| 5 | Unusual events on by default | **Off**: an option to turn on, since the journal is a record of when people come and go | 8.1 |
+| 6 | Running reostream as a separate service | **No**: Doorbell talk goes through our own UDP client (Phase 12), and Phase 13.2 is built only if 13.1 finds corruption | 12, 13 |
+| 7 | Copies of detection clips on a NAS or cloud | **TBD**: the owner may want it built here later. Sketched as Phase 14, not scheduled; Stamina does it meanwhile and can run beside Reolink Viewer | — |
+
+### Rules for Phases 6–13
+
+- **The six cross-cutting rules hold.** In particular:
+  - The Doorbell's searches and the UDP client get the host's address,
+    credentials and time zone from `bridge.py`, and run through the scheduler.
+  - An outside live source's URL is stored in the options and given only to
+    go2rtc, never to the browser.
+  - Copying settings goes through HA actions.
+- **Licences.**
+  - No AGPL-3.0 code (neolink, reostream). Such projects may only run beside
+    us as separate processes; their documents serve as facts; protocol work
+    comes from our own captures.
+  - MIT code (Stamina, reolink-aio) may be ported with its copyright notice
+    kept, listed in a new `THIRD_PARTY.md` at the root (created with the first port).
+- **Released and checked step by step**, as in Phase 5: each step is a
+  release, with a hardware checklist the owner runs before the next step. The
+  definition of done below applies to every phase.
+- **New views keep Phase 4's standards:**
+  - the performance budget (CI);
+  - WCAG 2.1 AA and keyboard use (axe in CI);
+  - reduced motion;
+  - every message in the troubleshooting guide (its word-for-word test);
+  - the design contract, with screenshots in the preview harness.
+
+---
+
+## Phase 6 — The Doorbell's events (difficulty: Standard / High, 0.5–1 wk)
+
+Goal: a camera that records but cannot be played here lists its events with
+the other cameras: on the home view, in the Events view and in the calendar,
+with thumbnails. When its recording cannot be played, the panel says so in
+plain words. The camera in question today is the Doorbell: Baichuan only,
+recording to its SD card, with no replay support.
+
+**Today:** `events.py` (`async_recent`, `async_days`) reads only
+`devices.async_playback_sources`. A playback source needs `records_locally`,
+and that needs replay support (`bridge.py`, `devices._mark_playback_source`).
+The day search runs reolink-aio's `request_vod_files`, whose HTTP Search a
+Baichuan-only device does not have. `stores_recordings` (v0.12.1) already
+knows that the Doorbell records.
+
+| Step | Status |
+| --- | --- |
+| 1. Probe the Doorbell's searches | **Built** (2026-11-02, v0.41.0, below); the owner's run decides the gate |
+| 2. Event sources beside playback sources | Not started |
+| 3. Opening an event that cannot play | Not started |
+| 4. Fallback: events from HA's detection sensors | Not started; only if step 1 finds no event search |
+
+#### Step 6.1: probe the Doorbell's searches
+
+A read-only section in the hardware probe, opt-in as battery cameras are:
+
+- `search_vod_days` (142) for this month;
+- `search_vod_type` (272–274) for today and yesterday, sub and main;
+- `snapshot_past` (298) at three of the events found.
+
+It records each call's time, the counts and types found, and any error. The
+Doorbell is on wired power, so this costs it no battery.
+
+**Gate:** the event search answers → step 2. Thumbnails answer → they go into
+steps 2–3. Neither → step 4.
+
+**As built (v0.41.0):**
+
+- **The search 6.2 will use:** `bridge.async_search_day_events`, the Baichuan
+  event search alone, with the day search's one retry after a pause. It never
+  asks for the HTTP Search, which a Baichuan-only device does not have, and a
+  failure raises.
+- **The check:** `probe_events.py`, an opt-in section of the probe ("Test the
+  events of cameras that record where Reolink Viewer cannot play it", with
+  "Only this test" on by default). Its report is the host's `events` key.
+  - **Targets:** channels that `stores_recordings` but not `records_locally`;
+    an NVR's channels play, and a camera without storage records nothing.
+  - **Battery:** a battery camera on wired power is checked without "Include
+    battery cameras", since it never sleeps; one on its battery needs the tick.
+    Offline and sleeping cameras are skipped.
+  - **What it asks, each a scheduler job at prefetch priority:**
+    - the device's time;
+    - the day search for this month (`async_recording_days`: 142, with
+      reolink-aio's own fallback);
+    - the event search for today and yesterday, sub and main;
+    - `snapshot_past` 2 s into the three newest of the day's sub events.
+  - **What it records:**
+    - per search: its time, the number of events and recordings, the types
+      counted, and the events' lengths (min, median, max);
+    - per picture: its time and size, and whether it is a JPEG;
+    - per channel: `gate`, whether the event search, the day search and the
+      thumbnails answered (thumbnails `null` when no event was found to sample),
+      and `events_found`, the events of all four searches, since a search that
+      answers but finds nothing proves nothing.
+  - **Never an event's time of day.** Those say when someone came to the door,
+    and the file may be attached to a report.
+
+**Hardware checklist (the owner):**
+
+1. Update to v0.41.0. As an administrator, open **Devices → Hardware probe**.
+   Tick only the new test, "Test the events of cameras that record where
+   Reolink Viewer cannot play it". Its "Only this test" stays ticked. "Include
+   battery cameras" is not needed while the Doorbell is plugged in.
+2. **Run probe**, then **Copy JSON** (or attach the downloaded file).
+3. Before running, note roughly how many events the Reolink app lists for the
+   Doorbell today, and of which kinds (person, doorbell press, motion), to
+   compare with the file's counts.
+
+**Exit criterion (the gate):** the Doorbell's `gate` in the file.
+
+- **`event_search` true, and `events_found` matching the Reolink app** (the
+  same days): step 2 follows.
+- **`events_found` 0 while the app lists events:** the search answers but sees
+  nothing, so it counts as a failure.
+- **`thumbnails` true:** thumbnails go into steps 2–3.
+- **The event search fails:** its error decides step 4.
+
+#### Step 6.2: event sources beside playback sources
+
+- `bridge.py`: an events-only day search for Baichuan-only channels.
+  - `search_vod_type` gives the events, `search_vod_days` the days, and no
+    HTTP is involved.
+  - It is used for any channel that `stores_recordings` but not
+    `records_locally`.
+- `devices.async_event_sources`: every playback source, plus those channels
+  marked not playable.
+  - The timeline service keeps their days like the others' (past days kept
+    for good, today refreshed), as days with events and no recordings bar.
+  - `events/recent`, `events/days` and the Events view's camera filter use
+    them.
+- **Never wake a battery camera:**
+  - a camera on battery, not wired, is searched only when someone opens its
+    day, never in the background refresh;
+  - the wired-power read is v0.12.0's.
+- The Doorbell's host keeps its own scheduler limit; searches run at playback
+  priority when asked for, prefetch priority in the background.
+
+#### Step 6.3: opening an event that cannot play
+
+- A row opens the camera's Playback tab at the event, as for any camera. The
+  day shows its events; there is no recordings bar.
+- **Where the player would be:** a sequence of pictures of the event.
+  - They are `snapshot_past` at its start, then every 2 s through it, at most
+    15, through the thumbnail queue.
+  - They are shown as they come, with previous and next buttons and a play
+    button that steps through them.
+- A plain note under it: "This camera keeps its recordings on its SD card,
+  which Reolink Viewer cannot play yet." The note goes into the troubleshooting
+  guide, and its test.
+- "New" and "seen" work as for every camera.
+
+#### Step 6.4: fallback, events from HA's detection sensors
+
+Only if the event search does not answer. Events then come from HA's
+recorder history of the camera's detection binary sensors:
+
+- bounded by the recorder's retention;
+- merged per camera and kind (a flicker under 3 s folded in);
+- with no recording, and thumbnails only if `snapshot_past` worked.
+
+When Phase 8's journal exists, events come from it instead, without the
+retention limit.
+
+**Exit criteria:**
+
+- Today's Doorbell events appear in the home view's timetable within one
+  refresh (2 min) of the camera finishing the clip, with the types the Reolink
+  app shows.
+- Its days have dots in the calendar.
+- Opening an event shows its first picture in under 2 s.
+- Other cameras' timings are unchanged (timeline 105–287 ms cached).
+- With the Doorbell unplugged, no background search reaches it.
+
+**Risks:** searches over UDP may be slower than over TCP; `snapshot_past` on
+an SD card is untried; the Doorbell may limit its sessions.
+
+---
+
+## Phase 7 — Live video on dashboards (difficulty: Standard, 1–1.5 wk)
+
+Goal: the wall tablet's dashboard shows the Doorbell and a front-yard camera
+as fast and as reliably as the panel does (PLAN.md §6.1).
+
+**The tablet** (decision 3) is a Samsung Galaxy Tab A9+ running Fully Kiosk
+Browser. Fully draws pages with Android System WebView, the same Chromium
+engine Chrome uses, embedded in an app. This shapes the work:
+
+- **What the tile needs, WebView has:** MSE and WebRTC. HD over MSE is chosen
+  by `MediaCapabilities` as everywhere, so H.265 plays only if the tablet's
+  decoder takes it.
+- **What WebView lacks:** the Screen Wake Lock API, as far as is known (step
+  7.2 checks it). On this tablet, keeping the screen on is Fully's own "Keep
+  Screen On" and screensaver settings, not ours.
+- **Fully turns the screen off and on itself** (on a schedule, or on motion in
+  front of the tablet). It may reload the page, and WebView may or may not tell
+  the page it is hidden. Step 7.2 measures what this does to the tile.
+- **HA's Fully Kiosk Browser integration** can turn the tablet's screen on.
+  An automation on the Doorbell's `visitor` sensor can therefore wake the
+  screen while the card enlarges the Doorbell; the user guide shows it.
+- The WebView's version is shown in Fully's device info, and is recorded with
+  each check.
+
+| Step | Status |
+| --- | --- |
+| 1. The camera card | Not started |
+| 2. Wall-tablet behaviour | Not started |
+| 3. Optional: faster camera entities for every card | Not started; gated on the owner wanting stock cards faster |
+
+#### Step 7.1: the camera card
+
+- **What it is:** `custom:reolink-viewer-camera`, one camera per card. It
+  wraps `rv-live-camera` and `rv-live-tile`, with the same picture first, warm
+  MSE, WebRTC fallback, HD in full screen and error states as the panel.
+- **No manual set-up:**
+  - the integration registers the card's module itself
+    (`frontend.add_extra_js_url`), so there is no dashboard resource to add;
+  - the card appears in the card picker (`window.customCards`).
+- **A visual editor:**
+  - the camera, chosen from `live/cameras`;
+  - SD or HD;
+  - what a tap does: full screen, open the panel, or nothing;
+  - whether to show the name and state;
+  - how the picture fits.
+  - It warns when the camera is not kept warm ("starts in 2–10 s; turn on
+    keep warm"), with the switch beside the warning.
+- **Sizing:** `getCardSize` and `getGridOptions`, for masonry and sections
+  views.
+- **Its own module, within a budget:** at most 60 KB gzipped, sharing chunks
+  with the panel, checked in CI by `npm run budget`. It loads only the tile,
+  not the panel.
+- **Permissions:** it works for a non-admin user. The live commands it uses
+  are not admin-only; `live/preload` stays admin-only, and the card does not
+  need it.
+- **Tests:**
+  - unit tests;
+  - the Chromium test (`tests/live_grid_browser.cjs`'s harness) renders the
+    card in a fake dashboard as an admin and as a non-admin.
+
+#### Step 7.2: wall-tablet behaviour
+
+- **The screen waking:** when the page becomes visible again, the tile is
+  playing again within the warm-start figures (it already pauses while
+  hidden).
+- **Under Fully Kiosk, measured first:** the page's visibility events, timers
+  and the tile's state when Fully turns the screen off and on, when its
+  screensaver comes and goes, and when it reloads the page.
+  - If WebView keeps the page "visible" with the screen off, the tile would
+    play to a dark screen and hold its streams. The fix is then to stop the
+    tile when nothing has been painted for a while, or to read the screen's
+    state from HA's Fully Kiosk Browser integration.
+  - A reload costs only the first picture from the image cache (0.02 s) and a
+    warm start.
+- **Keep the screen awake:** a card option through the Screen Wake Lock API,
+  where the browser has it. Under Fully, the user guide points to Fully's own
+  settings instead.
+- **On a doorbell press:** an option to enlarge the card or go full screen for
+  N seconds when the camera's `visitor` sensor turns on (read from `hass`, so
+  at once). The user guide pairs it with an automation that turns the tablet's
+  screen on through HA's Fully Kiosk Browser integration.
+- **Network loss:** recovery without a reload (the tile's own retries).
+  Measured on the tablet with the soak's rule: 8 visible hours, no tile stuck.
+
+#### Step 7.3: optional, faster camera entities for every card
+
+Gate: the owner wants HA's stock cards, Advanced Camera Card or the Companion
+app's camera views faster too.
+
+- **The entities:** `camera` entities "<camera> (Reolink Viewer)", disabled
+  by default.
+- **How they play:** native WebRTC through our go2rtc's warm stream, and their
+  picture from the image cache.
+- **Measured** against HA's own view in the live check. The expected gain is
+  only the cold connection to the camera: WebRTC still waits for the next key
+  frame (PLAN.md §6.1).
+
+**Exit criteria:**
+
+- **On the Galaxy Tab A9+ under Fully Kiosk**, on warm cameras, both cards
+  show a picture in under 0.1 s, and video in a median under 1 s, after:
+  - the dashboard opens;
+  - Fully turns the screen back on;
+  - the screensaver ends;
+  - a reload.
+- With the screen off, the cards hold no stream beyond the cameras'
+  keep-warm.
+- No tile is stuck over 8 visible hours.
+- The same on the iPhone app's dashboard.
+- A non-admin user's dashboard plays.
+- The card's module is within its budget.
+
+**Risks:**
+
+- **An out-of-date WebView without MSE:** the tile falls back to WebRTC
+  (0.39–0.40 s on the Doorbell in Phase 3). Fully's device info shows the
+  version, and Android updates WebView through the Play Store.
+- **Fully's screen-off and reload behaviour** (measured in 7.2).
+
+---
+
+## Phase 8 — Unusual events: learning what is normal (difficulty: High, 2–3 wk, then a week of learning)
+
+Goal: of the hundreds of detections a day, mark the few that are unusual for
+their camera, say why in a sentence, and let automations act on them.
+
+**The design comes from Reolink Stamina** (MIT; PLAN.md §6.5). It ranks by
+rarity, never by danger, and the panel says so.
+
+| Step | Status |
+| --- | --- |
+| 1. The detection journal (opt-in) | Not started; ship early, so history collects |
+| 2. The model | Not started |
+| 3. In the panel | Not started |
+| 4. For automations | Not started |
+
+#### Step 8.1: the detection journal
+
+- **An option, off by default (decision 5):** "Learn what is normal". Its text
+  says what the journal holds (when each camera saw people, vehicles and
+  animals, which tells when the house is empty), that it stays on this
+  machine, and that removing the integration deletes it.
+- **What it records:** every state change of every Reolink detection binary
+  sensor the catalog knows, except `sleep`:
+  - person, vehicle, non-motor vehicle, animal and pet, face, package,
+    visitor, cry, motion;
+  - the crossline, intrusion and linger variants;
+  - forgotten and taken items, tamper.
+  - `unavailable` and `unknown` are recorded too, so an offline camera is not
+    mistaken for a quiet one.
+- **One camera, not one connection:** sensors are mapped to cameras through
+  `devices.py`. A camera on the NVR and added directly (the CX410, the CX810)
+  is one camera; its two sensors firing together are one detection.
+- **Storage:** its own SQLite file in the config folder
+  (`reolink_viewer_journal.db`), written in batches; a backup hook
+  checkpoints the write-ahead log before HA's backup.
+- **A head start:** a one-time import from HA's recorder (10 days by default)
+  when the option is turned on.
+
+#### Step 8.2: the model
+
+Ported from Stamina's `relevance` package with its copyright notice and its
+tests, adapted to our camera ids and types (decision 4).
+
+- **Events derived when read**, never stored:
+  - flickers under 3 s folded, per camera and kind;
+  - linger sensors do not stretch an event;
+  - capped at 5 min.
+- **Per camera, from the journal, weighted by recency (a 90-day half-life):**
+  - time of day (a circular kernel);
+  - minutes from sunset and sunrise;
+  - length (in buckets);
+  - which camera fired just before, and how long before;
+  - optional house-wide signals chosen in the options, such as anyone home or
+    the alarm armed.
+- **The score:**
+  - each signal's surprisal against a uniform baseline, added up (naive
+    Bayes);
+  - the threshold is the camera's own score quantile, with a floor;
+  - three sensitivities (only the strangest, balanced, more);
+  - what a new camera may borrow from: all cameras, its host's, or none.
+- **The minimum:** 7 days and 200 detections per camera before anything is
+  marked, with "learning: N more days / N more detections" said plainly.
+- **Every mark carries its reason:** a sentence, and each signal's
+  contribution.
+
+#### Step 8.3: in the panel
+
+- **An "Unusual" mark on timetable rows.** Camera events are joined to the
+  journal's events by camera and overlapping time. A tap opens the reason: the
+  sentence, and a bar per signal.
+- **An "Unusual" filter chip** in the Events view; it reads "Learning…" while
+  a camera learns.
+- **Per camera, "What it has learned"** (from Overview): when it sees each
+  kind, how long each lasts, and what fires before it. It is the way to spot a
+  camera that learned something wrong.
+- **Events seen only by the journal** also get the mark: a camera whose events
+  cannot be searched (Phase 6.4), or an event the camera's search has not
+  listed yet.
+
+#### Step 8.4: for automations
+
+- **An HA event, `reolink_viewer_unusual`**, carrying the camera's device id,
+  the kind, the score, the sentence and the start. It fires when a live
+  detection scores as unusual.
+- **A binary sensor per camera, "Unusual activity"**, on for the event's
+  length.
+- **Device triggers**, so the automation editor offers both.
+- The user guide gets an example: notify only on unusual events.
+
+**Exit criteria:**
+
+- After 7 days on the owner's cameras, every camera past its minimum marks
+  events.
+- "Balanced" gives 2–8 marks a day across the property (Stamina: 4 across nine
+  cameras), each with its sentence.
+- Scoring an event takes under 10 ms, and a 90-day rebuild under 2 s, on the
+  x86 host.
+- The journal grows less than 10 MB a month.
+- With the option off there is no file; removing the integration deletes it
+  (tested).
+- The HA event fires within 2 s of the sensor.
+
+**Risks:**
+
+- **It learns bad habits:** spiders every night become normal. The "What it
+  has learned" view is the check.
+- **A person passing three cameras is three events**; grouping them into one
+  arrival is not built.
+- **A new car stands out for a fortnight**, as it does in Stamina.
+
+---
+
+## Phase 9 — The Wall: the Live page as a security monitor (difficulty: Standard / High, 2–3 wk)
+
+Goal: **the Wall**, a live screen like the NVR's HDMI output: feeds only,
+large, arranged by the owner (PLAN.md §6.3). The owner named it "Wall" on
+2026-11-02 (decision 1).
+
+| Step | Status |
+| --- | --- |
+| 1. The Wall, its layouts, saved | Not started |
+| 2. Arranging, pages and tours | Not started |
+| 3. HD in large tiles | Not started |
+| 4. The detection strip and instant highlights | Not started |
+| 5. Kiosk touches, and the Wall as a dashboard card | Not started; the card after Phase 7 |
+
+#### Step 9.1: the Wall, its layouts, saved
+
+- **A switch on the Live view between Board and Wall** (decision 1),
+  remembered per device. Board is today's view.
+- **An address per saved layout** (`#wall/<layout>`), so a kiosk's start page
+  (Fully Kiosk on the wall tablet) opens a layout directly.
+- **The Wall shows feeds only, fitted to the screen:**
+  - rows sized from the screen's height as well as its width, with no page
+    scroll;
+  - the band shrinks to a thin bar with the clock, the layout's name and an
+    exit;
+  - browser full screen where the browser allows it.
+- **Layouts:** Auto (the board's packing by shape), 1, 2×2, 3×3, 4×4, 1+5 and
+  1+7. A square or portrait camera in a cell keeps the board's rule: its
+  picture's sides are never cropped.
+- **Saved layouts (decision 2):**
+  - named layouts per HA user, kept on the server (a `wall/layouts` command
+    and store, like `events/seen`);
+  - each device remembers which one it shows;
+  - a layout holds the grid, the camera in each cell, the pages and the tour.
+
+#### Step 9.2: arranging, pages and tours
+
+- **Swapping:** drag a tile onto another to swap the two.
+- **The large slot:** a double-click or double-tap puts a tile in the large
+  slot (in 1+N), or alone on the screen and back.
+- **Keyboard:** arrow keys move the focus, a modifier with an arrow swaps,
+  Enter puts the tile in the large slot. Each move is announced to screen
+  readers.
+- **Pages:** more cameras than cells make pages, with arrows and a page
+  count.
+- **A tour per layout:** the next page every N seconds. While a tour runs,
+  warm cameras keep playing; a cold camera shows its picture until its video
+  starts.
+
+#### Step 9.3: HD in large tiles
+
+- **Which tiles:** a tile larger than its sub stream's own size, or the large
+  slot of 1+N.
+- **How:** HD plays through the full-screen swap: the sub stream plays until
+  HD's first frame.
+- **Within the host's live budget:** one HD per NVR today (7 = 6 warm subs and
+  1 HD).
+  - First, the capacity test runs with 2–3 HD streams open, to see whether the
+    budget can rise.
+  - A tile denied HD stays on SD and says so in its debug view.
+- **The per-device choice (v0.33.0)** applies: SD away from home, unless chosen
+  otherwise on that device.
+
+#### Step 9.4: the detection strip and instant highlights
+
+- **The strip:** along the bottom, one card per camera with its latest
+  detection: the thumbnail, the pictogram and type, the time, "New" in red,
+  and "Unusual" once Phase 8 is built. A tap opens the recording.
+- **`events/latest`:** the newest event per camera, from today, else from its
+  newest cached day.
+- **Instant highlights:**
+  - a tile lights up (an outline and the type) while its camera's detection
+    sensor is on, read from `hass`, so at once;
+  - the strip is asked again when a sensor turns off, not only every 2
+    minutes.
+
+#### Step 9.5: kiosk touches, and the Wall as a dashboard card
+
+- **Kiosk touches:** keep the screen awake (under Fully Kiosk, Fully's own
+  settings, as in Phase 7); hide the cursor after 3 s of no movement; a clock
+  in the bar.
+- **The Wall as a dashboard card:** `custom:reolink-viewer-wall` shows a saved
+  layout. It is built on Phase 7's card.
+
+**Exit criteria (the owner's desktop and the wall tablet):**
+
+- A 3×3 of every camera fits the screen with no scroll.
+- Layouts and swaps survive a reload, and show on another device signed in as
+  the same user.
+- With the large tile in HD, the NVR stays within its budget (the capacity
+  test), and the tiles' first pictures stay at Phase 3's median of 0.02 s.
+- A one-hour tour over warm cameras never shows an empty tile.
+- The strip shows a new detection within 2 s of its sensor.
+- Everything works from the keyboard, and axe passes.
+
+---
+
+## Phase 10 — Scrubbing that shows the picture (difficulty: Very high, 2–4 wk)
+
+Goal: holding the pointer down and dragging along the timeline shows the
+recording at the pointer, continuously, as UniFi Protect and Nest do. Release
+plays from there, which has been fast since Phase 5. The design is in PLAN.md
+§6.2: key frames from the browser's buffer, then HA's disk cache, then a short
+download cut, then the thumbnail.
+
+| Step | Status |
+| --- | --- |
+| 0. Measure first (the gate) | Not started |
+| 1. Key frames from the server | Not started |
+| 2. Painting while dragging | Not started |
+| 3. Press and release | Not started |
+| 4. The checks | Not started |
+| 5. Optional: storyboards | Not started; only if step 0's gate fails |
+
+#### Step 10.0: measure first (the gate)
+
+Added to the probe's Reolink protocol section and to the playback check:
+
+- **Key frames:** their size and interval per camera, sub and main.
+- **Scrub cuts:** time to the first key frame of a 2-second cut at 20 points
+  through uncached hours, sub stream:
+  - one at a time;
+  - back to back, as a drag asks;
+  - beside a playback cut running on the same channel (5c step 5's turns).
+- **Decoding in the browser:** `VideoDecoder` support, and the time to decode
+  one key frame per codec, on Chrome, the iPhone app (WKWebView) and the wall
+  tablet (Fully Kiosk's Android WebView).
+
+**Gate:** a median cut of 300 ms or less back to back, and decoding in 30 ms
+or less → step 1. Otherwise → step 5.
+
+#### Step 10.1: key frames from the server
+
+- **The request:** a scrub session per viewer over a signed websocket, like
+  live MSE's. The browser sends the time under the pointer; the server answers
+  with the key frame at or before it, as one access unit with its parameter
+  sets (or a one-sample fMP4) and its own time.
+- **Where a key frame comes from, in order:**
+  1. **The disk cache:** the original or a cut file, through
+     `FragmentIndex`'s sync fragments. A file read, with no device I/O.
+  2. **A scrub cut:** a 143 cut from one key-frame interval before the time
+     to 1 s after it, ended (144) at its first key frame, and muxed by
+     `BaichuanMuxer`.
+     - It is a scheduler job at playback priority.
+     - It takes its channel's turn like any cut (5c step 5), and never stops a
+       playback cut.
+  3. **`snapshot_past`**, for a device that refuses the protocol.
+- **Keeping it light:**
+  - one request in flight per viewer, the newest wins, and older ones are
+    cancelled;
+  - key frames found are kept in a small disk LRU per camera, stream and
+    second;
+  - scrubbing always uses the sub stream (H.264 on every owned camera), whichever
+    stream plays.
+
+#### Step 10.2: painting while dragging
+
+- **Each move:** the timeline's `rv-scrub` drives a scrub controller.
+  - From the buffer as today (`preview`).
+  - Otherwise it asks for the key frame and decodes it onto a canvas over the
+    video, with WebCodecs.
+  - Without WebCodecs, it decodes through a hidden MSE video fed key-frame-only
+    fragments, where every seek lands at once.
+- **What is shown:**
+  - always the newest frame;
+  - the time label gives the frame's own time;
+  - a frame within one key-frame interval of the pointer counts as on time.
+- **Hover:** hovering without a press keeps today's thumbnail.
+
+#### Step 10.3: press and release
+
+- **On press:** list the visible span's cached key frames from the index, and
+  fetch around the cursor ahead of the drag.
+- **On release:** the deep start runs as now, from the last frame shown, so
+  the video starts on the picture the viewer chose.
+- **Touch and keyboard too:** one finger scrubs; the arrow keys show frames as
+  they step, then play after `KEY_SEEK_MS`, as now.
+
+#### Step 10.4: the checks
+
+- **In CI:** `scrub_check.cjs` drags against a fake key-frame endpoint,
+  counting frames painted per second and long tasks over 50 ms.
+- **On the hardware:** the playback check's S row measures frames shown per
+  second of drag and their lag behind the pointer, cached and uncached, on
+  Chrome and the iPhone.
+
+#### Step 10.5: optional, storyboards
+
+Built only if step 0's gate fails:
+
+- small pictures of every key frame of whole cached hours, made in the
+  background from cached sub recordings (ffmpeg, key frames only);
+- kept like past days' timelines;
+- opt-in per camera, because it copies every sub hour off the NVR (58–260 MB
+  an hour per camera).
+
+**Exit criteria (LAN Chrome, a steady drag on the sub stream):**
+
+- **Uncached hour:** a new picture at least every 300 ms (median), each within
+  one key-frame interval of the pointer.
+- **Cached hour:** a new picture every 100 ms.
+- **The iPhone app:** within twice those figures.
+- **Smoothness:** no long tasks over 50 ms (CI).
+- **No regressions:** a release still starts in 0.4–0.6 s uncached.
+- **The NVR:** at most one more login while scrubbing (its list of online
+  users).
+- **A playback cut** on the same camera plays on without a stall.
+
+**Risks:**
+
+- WebCodecs in the iPhone app's WKWebView (measured in step 0; the MSE
+  fallback covers its absence).
+- The NVR's load from many short cuts: measured in step 0, and bounded by the
+  newest-wins rule.
+- Turns on one channel between the scrub and the playing cut.
+
+---
+
+## Phase 11 — Playback and settings extras (difficulty: Standard, 1–2 wk)
+
+Goal: smaller things found in the review of Stamina and reostream (PLAN.md
+§6.5–6.6). Each step is independent.
+
+| Step | Status |
+| --- | --- |
+| 1. Zoom into the picture | Not started |
+| 2. Save this event | Not started |
+| 3. Filters that start useful | Not started |
+| 4. Copy settings to other cameras | Not started |
+| 5. Research: settings changed from factory | Not started; a note only |
+
+#### Step 11.1: zoom into the picture
+
+- **Gestures and keys:**
+  - on touch: pinch, a two-finger pan and a double-tap;
+  - on desktop: the wheel or a trackpad pinch;
+  - on the keyboard: + − 0.
+- **Where:** on the playing recording and in live full screen.
+- **How it behaves:**
+  - a transform only, so the layout and the decoding are untouched;
+  - the pan is clamped to the picture, not its letterbox;
+  - a pill shows the zoom level, with a reset.
+- **Why it has to be ours:** HA's `user-scalable=no` stops the browser's own
+  pinch.
+
+#### Step 11.2: save this event
+
+- **The button:** "Save event", beside "Download clip". It saves an MP4 from
+  the event's start − 10 s to its end + 10 s (both set in the options).
+- **Where the clip comes from:**
+  - the cached copy, cut at key frames, where it is cached;
+  - otherwise, a download cut (143) of that range, muxed by `BaichuanMuxer`.
+  - Either way, the original samples are kept untouched.
+- **Named** `<camera>-<date>-<time>-<type>.mp4`.
+
+#### Step 11.3: filters that start useful
+
+- Each device remembers its Events filters.
+- On a first visit, motion-only events are hidden on cameras that record
+  continuously, where they outnumber the rest many times over.
+- One chip brings them back.
+
+#### Step 11.4: copy settings to other cameras
+
+- **"Copy to…" on a camera's Settings:**
+  - choose the categories (image, AI detection, motion, recording, …) and the
+    target cameras;
+  - a preview shows each change, and what a target cannot take.
+- **Applied through HA actions**, entity by entity (rule 4), with a result per
+  setting.
+- **Never copied:** what names the camera (its name, its on-screen text).
+
+#### Step 11.5: research, settings changed from factory
+
+- Find out whether factory values can be read:
+  - the HTTP API's initial values (a `Get*` with `action` 1);
+  - reolink-aio's cache;
+  - Baichuan's replies.
+- The outcome is recorded as a note here, with no UI unless the values can be
+  read.
+
+**Exit criteria:**
+
+- **Zoom:** works by touch, trackpad, mouse and keyboard, in Chrome and the
+  iPhone app, and the picture never leaves its box.
+- **A saved event:**
+  - plays in Chrome, Safari and VLC;
+  - its samples are byte-identical to the recording's;
+  - a 1-minute uncached sub event arrives within 2 s on the LAN.
+- **Copying image settings** to a camera of the same model changes exactly the
+  previewed entities, and reports any refused.
+
+---
+
+## Phase 12 — Optional R&D: the Doorbell's recordings and talk (difficulty: Very high, 3–5 wk, gated)
+
+Goal: the Doorbell's SD recordings play in the panel, and the owner can talk
+through the Doorbell from live view.
+
+**Today:** Phase 5's client speaks TCP; the Doorbell speaks Baichuan only over
+UDP (the desktop client could not add it by IP). Phase 5a captured talk on it:
+10 → 201 → 202 (ADPCM, 16 kHz mono, 1024-sample blocks, at real time) → 11
+([baichuan-playback.md §3.6](baichuan-playback.md#36-talk-the-doorbell-over-udp)).
+
+| Step | Status |
+| --- | --- |
+| a. UDP transport and the gate | Not started |
+| b. SD playback | Not started; after a go for playback |
+| c. Talk | Not started; after a go for talk |
+| d. Fallback for playback: clips by FTP | Not started; only if a says no to playback |
+
+#### Step 12a: UDP transport and the gate
+
+- **The transport:** UDP for `baichuan_client.py`, with reolink-aio's UDP
+  protocol (MIT) as the reference, or reused through it.
+- **The read-only probe:**
+  - a login beside HA's own session (does the Doorbell keep both?);
+  - 142 and 272 as sanity checks;
+  - a 143 cut from its SD card (time to the first key frame, rate);
+  - a replay;
+  - its sessions before, during and after.
+- **Only on wired power.**
+- **Go or no-go per target:** playback, talk.
+
+#### Step 12b: SD playback
+
+- The Doorbell becomes a playback source through the cut: Phase 5's deep-start
+  source, with the Doorbell as its host.
+- Its recordings come from Phase 6.2's events, and its files from 14 → 16
+  `FileInfoList`.
+- The MSE player is unchanged, and the cache works as for the NVR.
+- Phase 6.3's picture sequence gives way to the video.
+
+#### Step 12c: talk
+
+- **A Talk button** in live view, to hold or to toggle.
+- **Audio from the browser to the door:**
+  - the browser's microphone (`getUserMedia`, which needs a secure page: Nabu
+    Casa or local HTTPS; the panel says so on plain HTTP);
+  - PCM over the websocket;
+  - ADPCM on the server (the exact variant confirmed in 12a);
+  - 202 messages at real time, with 201 and 11 around them.
+- **Live view keeps playing during talk.**
+- **Who may talk:** admins by default; an option opens it to every user.
+
+#### Step 12d: fallback for playback, clips by FTP
+
+Only if 12a says no to playback:
+
+- **The Doorbell uploads its clips:** its own FTP upload (HA's Reolink
+  integration has an `ftp_upload` switch), pointed at a server the owner runs,
+  such as a NAS or an FTP app.
+- **Reolink Viewer reads that folder:** a path in the options, such as a
+  network storage mount in HA. It indexes the clips by the times in their
+  names, and serves them as the Doorbell's recordings.
+- **Retention** is the server's.
+- First, confirm that the Doorbell offers FTP upload.
+
+**Exit criteria:**
+
+- **12b:** a Doorbell event plays from its SD card, with its first frame in
+  under 2 s on the LAN.
+- **12c:**
+  - speech is heard at the door within 1 s;
+  - 60 s of talk without dropouts, on Chrome and the iPhone app;
+  - live view plays throughout.
+- **12d:** clips appear within 2 minutes of the event.
+
+**Risks:**
+
+- The UDP transport is new code.
+- A second session may be refused, or may push out HA's own.
+- Never on battery.
+- Talk needs a secure page.
+
+---
+
+## Phase 13 — Optional: live picture integrity and outside live sources (difficulty: High, 1–1.5 wk, gated)
+
+Goal: find out whether RTSP corrupts any owned camera's picture, as reostream
+measured on a Duo 3 (PLAN.md §6.6), and if one does, let that stream come from
+a cleaner source.
+
+| Step | Status |
+| --- | --- |
+| 1. Check the Duo 3 | Not started |
+| 2. Outside live source per stream | Not started; only if step 1 finds corruption |
+
+#### Step 13.1: check the Duo 3
+
+- **"Picture integrity", a live-check option:** record N minutes of a stream
+  through go2rtc (RTSP), beside the same minutes of the recording. The NVR
+  records over its own link to the camera, which makes the recording the
+  reference.
+- **Two measures:**
+  - decode both with ffmpeg, counting errors;
+  - save frame strips of both, side by side at the same seconds, for the owner
+    to look at. Error counts can read zero on broken video.
+- **First on the Duo 3's sub and ext**, then on any camera the owner suspects.
+
+**Gate:** visible corruption on any stream → step 2.
+
+#### Step 13.2: outside live source per stream
+
+- **The setting:** in the options, per camera and stream, the RTSP URL of a
+  service the owner runs, such as reostream or neolink.
+- **Kept on the server:** stored in the config entry's options, given only to
+  go2rtc, and checked by a test connection when saved.
+- **In use:**
+  - the stream registry prefers it, and falls back to the camera's own source
+    when it fails;
+  - the debug view says which source plays;
+  - the live check measures it.
+
+**Exit criteria:**
+
+- The Duo 3's report.
+- If step 2 is built, the stream it serves shows no corruption in the strips,
+  and starts within its current figures.
+
+---
+
+## Phase 14 — TBD: copies of detection clips on a NAS or cloud (difficulty: High; not scheduled)
+
+**Status: TBD** (decision 7). The owner may want this built here later.
+Until then, Reolink Stamina does it and can run beside Reolink Viewer. This
+sketch keeps the idea from being lost; it is planned properly, with an
+estimate, if it is picked up.
+
+Goal: footage of what mattered outlives the recorder that wrote it, if the
+NVR is stolen, fails or is wiped.
+
+**The shape, after Stamina's cloud sync (PLAN.md §6.5):**
+
+- **Per NVR, a copy job.** It is a device with a switch, which an alarm
+  automation can turn on and off, and with sensors for the quota used, the
+  queue and the last upload.
+- **What is copied:**
+  - one clip per detection of the kinds chosen (person, vehicle and animal by
+    default), from the event's start − 10 s to its end + 10 s;
+  - optionally, every event Phase 8 marks unusual, whatever its kind.
+  - One event is one clip, however many sensors fired.
+- **How a clip is made:** by Phase 11.2's "save this event" (the download cut,
+  or the cached copy), with the original samples untouched and SD by default.
+- **Where it goes:** through a storage integration HA already holds, reusing
+  its connection (Stamina uses Synology DSM, WebDAV, SFTP Storage, OneDrive and
+  Google Drive), so there is nothing to sign in to again.
+  - A quota, oldest first out.
+  - Names that sort by date.
+- **Device I/O** goes through the scheduler at prefetch priority, behind
+  anything someone is watching.
+
+**Depends on:** Phase 11.2 (making the clip), and Phase 8 for the
+unusual-event rule.
+
+### Not planned
+
+- **Storyboards:** only as Phase 10.5's fallback.
+- **Marks on settings changed from factory:** only if Phase 11.5 finds the
+  values.
+- **reostream's endpoints, metrics, MQTT and Frigate features:** they serve
+  Frigate setups (PLAN.md §6.6).
 
 ---
 

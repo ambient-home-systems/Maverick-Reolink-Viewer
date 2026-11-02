@@ -304,6 +304,9 @@ export interface ProbeOptions {
   baichuan_cameras?: string;
   baichuan_hold?: number;
   baichuan_cut?: number;
+  /** Events of cameras that record but cannot be played (Phase 6, step 1). */
+  events_test?: boolean;
+  events_only?: boolean;
 }
 
 export type ProbeReport = Record<string, unknown>;

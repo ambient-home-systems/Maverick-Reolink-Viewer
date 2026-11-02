@@ -9,6 +9,11 @@ voluptuous to `probatio` in 2026.9) and the owner's answers to the open decision
 section 5 are recorded under "Phase 0 status" in
 [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
 
+Update (2026-11-02): Phases 0–5 are built. Section 6 holds the second round's
+evaluation: what the owner asked for after using the panel, and what two other
+Reolink projects do. It is planned as Phases 6–13 in
+[IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md#phases-613-the-second-round-planned-2026-11-02).
+
 ## 1. Goal
 
 A Home Assistant (HA) sidebar app for Reolink cameras already configured in HA's
@@ -206,7 +211,138 @@ Design:
 | Remote access requirement (e.g. Nabu Casa) | WebRTC needs TURN remotely; affects the live design |
 | Mobile priority (HA Companion app) | Touch-first timeline, picture-in-picture, bandwidth defaults |
 
-## 6. Sources
+## 6. Second round: evaluation (2026-11-02)
+
+After using Phases 0–5 day to day, the owner asked for six things: live
+scrubbing, a monitor-style Live page, the Doorbell on the Events page, faster
+camera feeds on a dashboard, and anything worth taking from two other Reolink
+projects. This section holds the reasoning; Phases 6–13 of
+[IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) build it.
+
+### 6.1 Live video on Home Assistant dashboards
+
+- **Why the panel is fast:** what makes it fast is on the server. Our go2rtc
+  keeps streams open ("keep warm") and caches each stream's latest key frame,
+  so a new viewer starts at once over MSE instead of waiting for the camera's
+  next key frame; each camera's last picture is kept for the first paint.
+- **Why dashboards are slow:** dashboard cards play HA's camera entities, and
+  each card that opens starts a stream from the camera cold and waits for a key
+  frame.
+- **Measured on the owner's hardware** ([hardware-matrix.md](hardware-matrix.md),
+  runs 5–17): HA's own view started in a median 1.76–3.64 s per run, and ours
+  was faster on 19 of 19 streams in each run that compared them; warm sub
+  streams started over MSE in a median 0.09 s on the iPhone; the first picture
+  came in 0.02 s against 0.50 s for HA's snapshot, which failed on both Doorbell
+  streams.
+- **So the panel's tile becomes a dashboard card.** `rv-live-camera` already
+  shows one camera large. The live websocket commands are not admin-only, so a
+  wall tablet signed in as a non-admin user can use it.
+- **Camera entities backed by our go2rtc** would speed up stock cards too, but
+  less: HA's player uses WebRTC, which cannot be sent the cached key frame, so
+  it still waits for the next one (1–4 s on the owner's sub streams). It only
+  skips the cold connection to the camera.
+
+### 6.2 Scrubbing while the pointer is held down
+
+- **Today:** a drag shows frames only from what the browser has buffered of
+  the recording playing (30 s behind, up to 240 s ahead). Anywhere else it shows
+  a thumbnail once the pointer rests for 150 ms (`snapshot_past`, 160–490 ms
+  from the NVR, decoded to JPEG by ffmpeg). Since Phase 5 a release plays fast
+  (an uncached deep start from the download cut in about 0.5 s); the drag
+  itself does not show video.
+- **How Nest and UniFi Protect do it:** they keep the footage where it can be
+  prepared, and hand the client small pictures while the pointer moves; real
+  video plays on release. HA can play that part on the LAN, from what it holds
+  or can get quickly. Fastest first:
+  1. the browser's buffer, as today;
+  2. key frames from HA's disk cache: the fragment index (`fmp4.py`) marks
+     which fragments start with a sync sample, so one is a file read, with no
+     device I/O and no decoding on HA;
+  3. a short download cut (143) at the dragged time: its first key frame
+     comes in 126–232 ms (Phase 5b), raw H.264/H.265, no ffmpeg;
+  4. the thumbnail, as today, for a device that refuses the protocol.
+- **In the browser:** each key frame is decoded (WebCodecs `VideoDecoder`, or
+  a hidden MSE video fed key-frame-only fragments, where every seek lands at
+  once) and painted over the video. The pictures step at the key-frame interval
+  (1–4 s of footage on the owner's sub streams), as Protect's do.
+- **Not planned unless measurements call for it:** storyboards for whole days
+  (sprite sheets, as YouTube's). They need every sub hour copied off the NVR
+  (58–260 MB an hour per camera), where the cut fetches a key frame on demand.
+
+### 6.3 The Live page as a security monitor (the Wall)
+
+The owner named it "the Wall" (2026-11-02): a switch on the Live view between
+the board and it.
+
+- **Today:** the home view is the live board (2–5 columns by width, rows at
+  16:9, so the board can run past the bottom of the screen; a fixed order; sub
+  streams) with today's timetable under it. HD plays only in a tile's full
+  screen.
+- **Asked for:** a screen like the NVR's HDMI output: feeds only, fitted to the
+  screen; layouts (1, 2×2, 3×3, 4×4, 1+5, 1+7); tiles moved around; the latest
+  detection per camera along the bottom.
+- **What shapes it:**
+  - The NVR's live budget is 7 streams (6 warm subs and 1 HD), so one large
+    tile in HD fits today; more need a capacity run.
+  - Cold starts take 2–10 s, so tours stay fast only over warm cameras.
+  - The Reolink detection binary sensors are already in `hass`, so a tile can
+    light up the moment a detection fires, before the event search lists it.
+
+### 6.4 The Doorbell's events
+
+- **Why it is missing:** the Doorbell is added directly, speaks Baichuan only,
+  records to its SD card and reports no replay support. Events
+  (`events/recent`, `events/days`) come only from playback sources
+  (`records_locally` in `bridge.py`, which needs replay support), so the feed
+  leaves it out. Its day search would fail anyway: `request_vod_files` runs an
+  HTTP Search the device does not have.
+- **What the feed needs is Baichuan:** `search_vod_type` (272–274),
+  `search_vod_days` (142) and `snapshot_past` (298), all through HA's own
+  session with the Doorbell (UDP). None has been tried on its SD card yet.
+- **Its video is a separate problem.** Our Baichuan client (Phase 5) speaks
+  TCP; the Doorbell speaks UDP only. There are two routes:
+  - our client over UDP, a transport that playback and talk would share,
+    with reolink-aio's MIT UDP code as the reference;
+  - the camera's own FTP upload of each clip, to a folder we index.
+
+### 6.5 Prior art: Reolink Stamina
+
+[marl1w/reolink-stamina-ha](https://github.com/marl1w/reolink-stamina-ha),
+v1.9.2, MIT: a companion integration for NVR owners. Its code may be ported
+with its copyright notice kept.
+
+| Feature | Verdict |
+| --- | --- |
+| **Learning what is normal** | **Build (Phase 8).** It records every change of the Reolink detection sensors in its own local SQLite file and imports what HA's recorder still holds. Per camera, it learns how often each kind of detection happens: by time of day (a circular kernel), by time from sunset, by length, and by which camera fired just before; it can also count house-wide signals such as "anyone home". It scores an event's surprisal against a uniform baseline (naive Bayes), marks only the outliers with a sentence saying why, and waits for 7 days and 200 detections per camera. It measured 1.6, 4 and 9 marks a day across nine cameras at its three settings. It reads HA's own sensors, so it also works for cameras with no searchable recordings |
+| reolink-aio's DST rules land on the wrong days | Already done (v0.39.1, reported as reolink_aio#239) |
+| Pinch, drag and double-tap zoom on the video | Build (Phase 11): our player has none, and HA's `user-scalable=no` stops the browser's own pinch |
+| An MP4 of one event | Build (Phase 11), from the download cut or the cached copy; ours downloads only the whole recording today |
+| A copy of each detection's clip on a NAS or cloud | TBD: the owner may want it built here later (sketched as Phase 14). Meanwhile Stamina does it by reusing HA's storage integrations, and the two can run side by side |
+| Exact detection times from HA's history | As the Doorbell's fallback only (Phase 6); the camera's event search already gives event times |
+| Motion-only events hidden by default | Phase 11, a small filter default |
+| A cross-camera list; playback fallbacks (FLV, remux, re-encode, HLS for iOS); probing each recorder's route | Skip: equivalents exist. Its RLN36 finding (whole-file download only) matches ours |
+
+### 6.6 Prior art: reostream
+
+[VoltTech21/reostream](https://github.com/VoltTech21/reostream), v0.2.4,
+AGPL-3.0: a service that pulls live video over Baichuan and serves it as RTSP.
+As with neolink, it may only run beside us as a separate process. Its README
+and docs were read; its source was not.
+
+| Feature | Verdict |
+| --- | --- |
+| **RTSP corrupts a Duo 3's picture**: 147 of 178 segments of a 30-minute RTSP capture had bitstream errors, against 0 of 184 over Baichuan (their Duo 3 PoE, 4096×1152 HEVC, other firmware). Error counts can read zero on visibly broken video | Check ours (Phase 13): our board plays the Duo 3's sub over RTSP |
+| Talk through an RTSP back channel that go2rtc can use | The Doorbell's talk, if the owner runs reostream; our own route is Phase 12's UDP client |
+| An FTP receiver keeping each clip the cameras upload | The idea gives the Doorbell playable video without Baichuan playback (Phase 12) |
+| SD-card playback over Baichuan | Evidence that Phase 12 is feasible; ours comes from our own captures |
+| Copy settings to other cameras; mark settings changed from factory, with a reset | Copying: Phase 11, through HA actions. Factory marks: research only, since HA's entities carry no factory values |
+| MPEG-TS and frames endpoints, Prometheus metrics, MQTT and Frigate events, a Frigate config generator, fisheye dewarp, battery-camera discovery | Skip: HA or the panel cover them, or they serve Frigate setups |
+
+Running it costs camera passwords entered again outside HA and one more
+service to keep up. Its docs also warn that an NVR's "automatically add
+devices" setting can change a camera's password without saying so.
+
+## 7. Sources
 
 - HA Reolink integration: <https://github.com/home-assistant/core/tree/dev/homeassistant/components/reolink>
   (`media_source.py`, `views.py`, `camera.py`, `diagnostics.py`, `strings.json`)
@@ -217,3 +353,5 @@ Design:
 - neolink: <https://github.com/QuantumEntangledAndy/neolink>
 - Advanced Camera Card: <https://github.com/dermotduffy/advanced-camera-card>
 - HEVC browser support: <https://caniuse.com/hevc>
+- Reolink Stamina (MIT): <https://github.com/marl1w/reolink-stamina-ha> (`docs/relevance.md`, `relevance/`)
+- reostream (AGPL-3.0): <https://github.com/VoltTech21/reostream> (`README.md`, `docs/measurements.md`, `docs/setup.md`)

@@ -16,6 +16,9 @@ Safety rules:
 - All device traffic goes through the scheduler at prefetch (lowest) priority.
 - The recording playback check (Phase 2 gate, ``probe_playback.py``) is opt-in;
   its simultaneous-stream test is a separate opt-in, capped and exclusive.
+- The events check of cameras that record but cannot be played (Phase 6,
+  ``probe_events.py``) is opt-in; it checks a camera on battery only with
+  ``include_battery``.
 - The report is redacted: passwords, tokens, UIDs, serial numbers and MAC
   addresses are removed and no URL is ever recorded.
 """
@@ -61,6 +64,7 @@ from .media import (
     async_hold_stream,
 )
 from .probe_baichuan import NOT_RECORDER, BaichuanCheck, BaichuanOptions
+from .probe_events import EventsCheck, EventsOptions
 from .probe_playback import PlaybackCheck, PlaybackOptions
 from .scheduler import Priority, Scheduler
 
@@ -97,6 +101,7 @@ class ProbeOptions:
     step_timeout: float = PROBE_STEP_TIMEOUT
     playback: PlaybackOptions = field(default_factory=PlaybackOptions)
     baichuan: BaichuanOptions = field(default_factory=BaichuanOptions)
+    events: EventsOptions = field(default_factory=EventsOptions)
 
     def __post_init__(self) -> None:
         """Clamp to safe values."""
@@ -263,6 +268,8 @@ class Prober:
             result["concurrency"] = _skipped("recording playback check only")
         elif self._only_baichuan:
             result["concurrency"] = _skipped("Baichuan check only")
+        elif self._only_events:
+            result["concurrency"] = _skipped("events check only")
         else:
             result["concurrency"] = await self._concurrency(host, info, channels)
         if playback is not None:
@@ -271,6 +278,8 @@ class Prober:
             )
         if self._options.baichuan.enabled:
             result["baichuan_replay"] = await self._baichuan_replay(host, info)
+        if self._options.events.enabled:
+            result["events"] = await self._events_check(host, info)
         result["duration_ms"] = _ms(start)
         return result
 
@@ -303,6 +312,33 @@ class Prober:
             return await check.async_host(info, list(info.channels), now)
         except Exception as err:
             _LOGGER.debug("Baichuan replay check failed", exc_info=True)
+            return {"ok": False, "error": _err(err)}
+
+    async def _events_check(
+        self, host: ReolinkHostHandle, info: HostInfo
+    ) -> dict[str, Any]:
+        """Run the Phase 6 events check (opt-in, read-only)."""
+
+        def job[T](
+            factory: Callable[[], Awaitable[T]],
+            *,
+            timeout: float | None = None,
+            exclusive: bool = False,
+        ) -> Awaitable[T]:
+            return self._job(host, factory, timeout=timeout, exclusive=exclusive)
+
+        check = EventsCheck(
+            host,
+            job,
+            include_battery=self._options.include_battery,
+            ffmpeg_binary=self._ffmpeg,
+            step_timeout=self._options.step_timeout,
+            progress=self._report_progress,
+        )
+        try:
+            return await check.async_host(info)
+        except Exception as err:
+            _LOGGER.debug("Events check failed", exc_info=True)
             return {"ok": False, "error": _err(err)}
 
     def _playback_check(self, host: ReolinkHostHandle) -> PlaybackCheck | None:
@@ -352,6 +388,11 @@ class Prober:
         """Return True when only the Baichuan section was asked for."""
         return self._options.baichuan.enabled and self._options.baichuan.only
 
+    @property
+    def _only_events(self) -> bool:
+        """Return True when only the events check was asked for."""
+        return self._options.events.enabled and self._options.events.only
+
     def _skip_reason(self, channel: ChannelInfo) -> str | None:
         if not channel.online:
             return "offline"
@@ -386,7 +427,7 @@ class Prober:
         if (reason := self._skip_reason(channel)) is not None:
             result["skipped"] = reason
             return result
-        if self._options.playback.only or self._only_baichuan:
+        if self._options.playback.only or self._only_baichuan or self._only_events:
             return result
 
         # Fresh encodings (GetEnc) in case the cached data is incomplete.
