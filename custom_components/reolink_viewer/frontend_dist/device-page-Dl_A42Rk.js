@@ -1,4 +1,4 @@
-import { Ct as e, F as t, Gt as n, Jt as r, Xt as i, Yt as a, bt as o, i as s, it as c, qt as l, wt as u } from "./home-CJl2WvqG.js";
+import { Ct as e, F as t, Gt as n, Jt as r, Xt as i, Yt as a, bt as o, i as s, it as c, qt as l, wt as u } from "./home-CFx8fy7w.js";
 //#region src/render-filter.ts
 function d(e, t, n) {
 	if (e === t) return !1;
@@ -9,9 +9,9 @@ function d(e, t, n) {
 //#endregion
 //#region src/components/device-page.ts
 var f = {
-	overview: () => import("./overview-B6SbJkjb.js"),
-	playback: () => import("./playback-BWATFZTg.js"),
-	settings: () => import("./settings-DBWr7XKd.js")
+	overview: () => import("./overview-D7DtY_BG.js"),
+	playback: () => import("./playback-xaspPejB.js"),
+	settings: () => import("./settings-DX_wf__I.js")
 }, p = 1e3, m = class extends l {
 	static properties = {
 		hass: { attribute: !1 },

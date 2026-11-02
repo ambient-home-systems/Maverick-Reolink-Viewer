@@ -22,7 +22,7 @@ put on it:
 | 3 | Live view via go2rtc, grid, fullscreen, PTZ | High | 3–4 wk | Done (2026-10-27, v0.15.1). Our own go2rtc and the live check (v0.4.0, runs 5–13); the key-frame cache, the image cache, the Live grid and Live tab, keep warm, full-screen HD, PTZ and the camera's controls, the picture first, battery cameras on wired power, a debug view per tile and the soak report (v0.5.0–v0.15.1). Exit runs: the soak passed (run 15), every tile's first image in a median 0.02 s on the iPhone and the Mac (runs 16–17), and the Phase 2 playback criteria held with live view running (runs 18–19) |
 | 4 | Design, performance, mobile, packaging, first release | Standard | 3–4 wk | Done (2026-10-28, v0.32.3). Step 1, the design (the Timetable), in v0.16.0–v0.22.0; step 2, the performance budget, in v0.23.0; step 3, mobile, in v0.24.0–v0.26.0; step 4, error states, in v0.27.0–v0.29.0; step 5, accessibility, in v0.30.0; step 6, packaging, in v0.31.0, the first release; step 7, docs, in v0.32.0, released the same day; v0.32.1 starts live video sooner where WebRTC cannot connect, from the work PC's check, v0.32.2 keeps the capacity test from blaming the NVR for a stream that plays no video, from the owner's live check, and v0.32.3 fixes full screen and the timeline's pinch on the iPhone, from the owner's iPhone. The rest of the exit checklist was not run: the owner closed the phase on v0.32.0 working in daily use. See "Phase 4 status" |
 | 5 | Optional R&D: Baichuan live/playback | Very high | 4–8 wk, time-boxed with gates | **5a done, go** (2026-10-29, v0.34.1): prior art surveyed, the capture tool and the owner's captures, `docs/baichuan-playback.md`, and the read-only check: a deep start over Baichuan costs the NVR 0.2 s against 4.7 s of HTTP download for the same point of a short recording. 5b–5d estimated at 3.5–5 wk, deep starts only; talk deferred. **5b step 1 built** (2026-10-29, v0.35.0): the probe measures the replay and the download cut (143) 75 % into sub and main recordings, decodes what arrives and counts the sessions; the source (replay, 143 or both) is chosen from the owner's report before step 2, the prototype. **Step 1 done** (2026-10-30, v0.35.5): the download cut (143) is the source. **5b step 2 built** (2026-10-30, v0.36.0): the muxer, one Baichuan connection per host, deep starts served from the cut behind an option (off by default), the fallback to the download. **Hardware check passed** (2026-10-30): an uncached deep start 52 min into an hour shows its first frame in 0.51 s on Chrome and 0.60 s on the iPhone (9.0 s from the download with the option off); v0.36.1 cuts HD in 3-minute spans and searches the day's HD list ahead. **5b done** (2026-10-30, v0.36.2): every exit criterion met on the hardware, the NVR's own list of online users included (one more session while deep starts are in use, gone when idle). **5c done** (2026-10-30 to 2026-11-02, v0.37.0–v0.40.0): a deep start fetches the recording once, in two pieces, on one stream; on by default, a device that refuses the protocol left alone; each camera's counter rate kept; the device's zone built from its own DST rules (reolink-aio's land on the wrong days); two viewers of a camera take turns. **5d reports posted** (2026-11-02): the time zone bug as [starkillerOG/reolink_aio#239](https://github.com/starkillerOG/reolink_aio/issues/239), the download cut (143/144) and the media message class as [#240](https://github.com/starkillerOG/reolink_aio/issues/240); the rest is the maintainer's. **v0.40.1** (2026-11-02): six findings of a review of 5b/5c fixed (chief among them, an HD cut left by a closed tab held the recorder's login until restart); the owner's check of it closes the phase. See "Phase 5 status" |
-| 6 | The Doorbell's events: a camera that records but cannot be played lists its events | Standard / High | 0.5–1 wk | **Started** (2026-11-02). **Step 1 built** (v0.41.0): the probe's events test, the gate for steps 2–4, waiting on the owner's run. See "Phase 6" |
+| 6 | The Doorbell's events: a camera that records but cannot be played lists its events | Standard / High | 0.5–1 wk | **Started** (2026-11-02). **Step 1 built** (v0.41.0): the probe's events test, the gate for steps 2–4. Run 1 stopped at the Doorbell's clock; v0.41.1 reads it over Baichuan, and run 2 decides the gate. See "Phase 6" |
 | 7 | Live video on dashboards: a Reolink Viewer camera card | Standard | 1–1.5 wk | Planned. See "Phase 7" |
 | 8 | Unusual events: learning what is normal | High | 2–3 wk, then a week of learning | Planned. See "Phase 8" |
 | 9 | The Wall: the Live page as a security monitor, with layouts, arranging, HD large tiles and the detection strip | Standard / High | 2–3 wk | Planned. See "Phase 9" |
@@ -5067,7 +5067,7 @@ knows that the Doorbell records.
 
 | Step | Status |
 | --- | --- |
-| 1. Probe the Doorbell's searches | **Built** (2026-11-02, v0.41.0, below); the owner's run decides the gate |
+| 1. Probe the Doorbell's searches | **Built** (2026-11-02, v0.41.0, below). Run 1 stopped at the Doorbell's clock (no HTTP GetTime on a Baichuan-only device); v0.41.1 reads it over Baichuan (104) and records its zone. Run 2 decides the gate |
 | 2. Event sources beside playback sources | Not started |
 | 3. Opening an event that cannot play | Not started |
 | 4. Fallback: events from HA's detection sensors | Not started; only if step 1 finds no event search |
@@ -5136,6 +5136,48 @@ steps 2–3. Neither → step 4.
   nothing, so it counts as a failure.
 - **`thumbnails` true:** thumbnails go into steps 2–3.
 - **The event search fails:** its error decides step 4.
+
+**Run 1 (the owner, 2026-11-02, v0.41.0): stopped before any search.**
+
+- **Targets were found correctly.** Only the Doorbell (host5) was a target. Its
+  storage read "ready", and it was checked without the battery tick because it
+  is on wired power. The NVR's channels and the other direct cameras were "no
+  camera here records where Reolink Viewer cannot play it".
+- **The check failed at the device's time:** "cannot read device time:
+  NotSupportedError: get_time: failed to retrieve current time settings".
+  - A Baichuan-only device answers no HTTP GetTime, and reolink-aio maps no
+    Baichuan command to it, so it holds no time settings for the Doorbell.
+  - The check needed the time to set its search windows, and returned at once,
+    so neither searches nor pictures were tried.
+- **It also means the Doorbell has no time zone here:** `bridge.timezone()` is
+  built from those same settings. Step 2 converts the Doorbell's wall-clock
+  event times to UTC, so it needs a zone from somewhere else.
+
+**v0.41.1: the clock from the device itself.**
+
+- **`bridge.async_baichuan_clock`:** Baichuan's time query (104), sent alone.
+  It returns the device's wall clock, its `timeZone` field (seconds west of UTC,
+  as GetTime counts it) and the names of every field in the answer.
+  - reolink-aio sends 104 only inside `synchronize_time`, which also sets the
+    time (105); here, nothing is set.
+  - It is guarded: a reolink-aio without `send` makes it not applicable, rather
+    than adding to the compatibility check.
+- **The check's clock, in order:**
+  1. the device's time as reolink-aio reads it;
+  2. else 104;
+  3. else Home Assistant's own clock.
+- **The report's `clock`** says:
+  - which source was used, and the error of each source that failed;
+  - whether a zone is known;
+  - Home Assistant's UTC offset;
+  - for 104: its `time_zone`, its field names, and how far its wall clock is
+    ahead of Home Assistant's.
+
+  With these, step 2 can choose the Doorbell's zone:
+  - 104's offset, with DST rules if its fields carry them;
+  - or Home Assistant's zone, when the two clocks agree to within seconds.
+
+**Run 2:** the same checklist on v0.41.1.
 
 #### Step 6.2: event sources beside playback sources
 

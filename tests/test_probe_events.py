@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
-from reolink_aio.exceptions import ReolinkError
+from reolink_aio.exceptions import NotSupportedError, ReolinkError
 from reolink_aio.typings import VOD_trigger
 
 from custom_components.reolink_viewer import bridge
@@ -85,6 +85,7 @@ async def test_events_check_on_the_wired_doorbell(
     assert events["ok"] is True
     assert events["storage"] == "ready"
     (channel,) = events["channels"]
+    assert channel["clock"] == {"timezone_known": False, "source": "device"}
     assert channel["is_battery"] is True
     assert channel["wired_power"] is True
     assert channel["supports_replay"] is False
@@ -269,19 +270,68 @@ async def test_events_check_records_failures(
         TEST_NOW - timedelta(hours=h) + timedelta(seconds=2) for h in (1, 2, 3)
     ]
 
-    # The device's time cannot be read.
+
+# Baichuan's answer to its time query (104), as reolink-aio's synchronize_time
+# reads it: the device's wall clock and its zone, seconds west of UTC.
+CLOCK_ANSWER = """<?xml version="1.0" encoding="UTF-8" ?>
+<body>
+<SystemGeneral version="1.1">
+<timeZone>18000</timeZone>
+<osdFormat>MDY</osdFormat>
+<year>2026</year>
+<month>10</month>
+<day>17</day>
+<hour>7</hour>
+<minute>0</minute>
+<second>0</second>
+<timeFormat>0</timeFormat>
+</SystemGeneral>
+</body>
+"""
+
+
+async def test_events_check_clock_fallbacks(
+    hass: HomeAssistant,
+    reolink_host: MagicMock,
+    loaded_reolink: MockConfigEntry,
+    scheduler: Scheduler,
+) -> None:
+    """A Baichuan-only device answers no HTTP GetTime: its own clock, else HA's."""
+    _doorbell(reolink_host)
+    # What v0.41.0's run on the Doorbell met.
     reolink_host.time.return_value = None
-    reolink_host.async_get_time = AsyncMock(side_effect=ReolinkError("time"))
+    reolink_host.async_get_time = AsyncMock(
+        side_effect=NotSupportedError("get_time: failed")
+    )
+    reolink_host.baichuan.send = AsyncMock(return_value=CLOCK_ANSWER)
     host = await _run(hass, scheduler)
     (channel,) = host["events"]["channels"]
-    assert channel == {
-        **{k: channel[k] for k in ("channel", "name", "model")},
-        "is_battery": True,
-        "wired_power": True,
-        "supports_replay": False,
-        "ok": False,
-        "error": "cannot read device time: ReolinkError: time",
+    clock = channel["clock"]
+    assert clock["source"] == "baichuan"
+    assert clock["device_error"] == "NotSupportedError: get_time: failed"
+    assert clock["timezone_known"] is False
+    assert isinstance(clock["home_assistant_utc_offset_s"], int)
+    baichuan = clock["baichuan"]
+    assert baichuan["ok"] is True
+    assert baichuan["time_zone"] == 18000
+    assert {"SystemGeneral", "timeZone", "year", "second"} <= set(baichuan["fields"])
+    assert isinstance(baichuan["ahead_of_home_assistant_s"], int)
+    reolink_host.baichuan.send.assert_awaited_with(cmd_id=104)
+    # The searches run on the device's own day, from its clock.
+    windows = {
+        (c.kwargs["start"], c.kwargs["end"])
+        for c in reolink_host.baichuan.search_vod_type.await_args_list
     }
+    assert (datetime(2026, 10, 17), datetime(2026, 10, 17, 7)) in windows
+    assert channel["gate"]["event_search"] is True
+
+    # 104 fails too: Home Assistant's clock, and the searches still run.
+    reolink_host.baichuan.send = AsyncMock(side_effect=ReolinkError("104"))
+    host = await _run(hass, scheduler)
+    (channel,) = host["events"]["channels"]
+    assert channel["clock"]["source"] == "home_assistant"
+    assert channel["clock"]["baichuan"] == {"ok": False, "error": "ReolinkError: 104"}
+    assert channel["gate"]["event_search"] is True
 
 
 async def test_events_check_runs_at_prefetch_priority(

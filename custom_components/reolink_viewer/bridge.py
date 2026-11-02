@@ -25,6 +25,7 @@ import logging
 import re
 import time
 from typing import TYPE_CHECKING, Any, cast
+from xml.etree import ElementTree as ET
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
@@ -293,6 +294,18 @@ class VodEvent:
     end: datetime
     types: tuple[str, ...]
     file_id: str  # start_id of the recording it belongs to
+
+
+@dataclass(frozen=True, slots=True)
+class BaichuanClock:
+    """A device's own clock, as Baichuan's time query (104) answers it."""
+
+    # Its wall-clock time now, if the answer carries one.
+    wall: datetime | None
+    # Its ``timeZone`` field, if any (seconds west of UTC, as in GetTime).
+    time_zone: int | None
+    # The names of every field in the answer: where its DST rules may be.
+    fields: tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -891,6 +904,49 @@ class ReolinkHostHandle:
         if isinstance(now, datetime):
             return now
         return await self._api.async_get_time()
+
+    async def async_baichuan_clock(self) -> BaichuanClock:
+        """Read the device's own clock over Baichuan (command 104, read-only).
+
+        A Baichuan-only device (the battery Doorbell) answers no HTTP GetTime,
+        so reolink-aio holds no time settings for it and ``async_get_time``
+        fails. 104 is Baichuan's time query; reolink-aio sends it only inside
+        ``synchronize_time``, which also sets the time (105), so it is sent
+        here on its own. Nothing is set.
+        """
+        send = getattr(self._api.baichuan, "send", None)
+        if send is None:
+            raise NotApplicableError("reolink-aio's Baichuan has no send")
+        root = ET.fromstring(await send(cmd_id=104))  # noqa: S314 - the device's answer
+
+        def number(tag: str) -> int | None:
+            found = root.find(f".//{tag}")
+            try:
+                return int(str(found.text)) if found is not None else None
+            except ValueError:
+                return None
+
+        year, month, day, hour, minute, second = (
+            number(t) for t in ("year", "month", "day", "hour", "minute", "second")
+        )
+        wall: datetime | None = None
+        if (
+            year is not None
+            and month is not None
+            and day is not None
+            and hour is not None
+            and minute is not None
+            and second is not None
+        ):
+            try:
+                wall = datetime(year, month, day, hour, minute, second)
+            except ValueError:
+                wall = None
+        return BaichuanClock(
+            wall=wall,
+            time_zone=number("timeZone"),
+            fields=tuple(sorted({el.tag for el in root.iter()})),
+        )
 
     def live_protocols(self) -> frozenset[LiveProtocol]:
         """Return the protocols live streams can be read with (cached data only).

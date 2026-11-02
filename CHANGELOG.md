@@ -3,6 +3,18 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.41.1
+
+- **The doorbell events test now runs on the Doorbell.** In 0.41.0 it stopped at
+  its first step on a camera that speaks only the Reolink app's protocol, as the
+  battery Doorbell does: it could not read the camera's clock ("cannot read device
+  time"), so it searched nothing. It now asks the camera's own clock over that
+  protocol, and uses Home Assistant's clock if that fails too. The file says which
+  clock it used.
+- **The file also records what the camera says about its time zone.** Listing the
+  Doorbell's events at the right times needs its zone, which Home Assistant's
+  Reolink integration does not have for such a camera.
+
 ## 0.41.0
 
 Phase 6, step 1: finding out whether a doorbell's events can be listed.
