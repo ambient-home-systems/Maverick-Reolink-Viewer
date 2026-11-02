@@ -2,11 +2,14 @@
 
 import asyncio
 from collections.abc import AsyncGenerator, Callable
-from datetime import datetime, tzinfo
+import contextlib
+from datetime import datetime, timedelta, tzinfo
 from itertools import pairwise
 import os
 from pathlib import Path
 import socket
+import struct
+import time
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import patch
@@ -14,6 +17,7 @@ from zoneinfo import ZoneInfo
 
 from aiohttp import ClientSession
 import pytest
+from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
 from custom_components.reolink_viewer import (
     baichuan_mux,
@@ -37,11 +41,12 @@ from custom_components.reolink_viewer.vodcache import (
     VodCacheError,
 )
 from homeassistant.core import HomeAssistant
+from homeassistant.util import dt as dt_util
 
 from .mp4_fixtures import fragmented_av
 from .test_baichuan_client import PASSWORD, USER, FakeNvr
 from .test_baichuan_media import H264_PPS, H264_SPS, annexb, video
-from .test_baichuan_mux import IDR, P
+from .test_baichuan_mux import IDR, P, h264_sps
 from .test_vodcache import EXTRA, FakeHost, Server, media  # noqa: F401
 
 NEW_YORK = ZoneInfo("America/New_York")
@@ -997,3 +1002,319 @@ def test_the_cut_is_measured_against_the_original_where_they_meet() -> None:
     assert vodcache._offset_ms(index, 5500.0) is None  # type: ignore[arg-type]
     empty = SimpleNamespace(fragments=[])
     assert vodcache._offset_ms(empty, 10.0) is None  # type: ignore[arg-type]
+
+
+# ---- The review of 5b/5c (v0.40.1) ----
+
+
+async def test_an_abandoned_hd_cut_ends_and_the_host_logs_out(
+    cached: tuple[VodCache, Rig],
+) -> None:
+    """No release (a tab closed): the paused cut ends unread, its login with it.
+
+    The viewer coming back past what it has is served by a new cut.
+    """
+    cache, rig = cached
+    rig.nvr.media = camera_blocks(ASKED - 3, seconds=6)
+    with (
+        patch.dict(vodcache.CUT_SPAN_MS, {"main": 3000}),
+        patch.object(baichuan_source, "PAUSE_IDLE_S", 0.3),
+    ):
+        entry = await cache.async_open(deep_rec(stream="main"))
+        cache.lease(entry, 600, "token1")
+        window = await _window(cache, entry, at_ms=AT_MS)
+        assert window.source == "cut"
+        assert [c async for c in cache.async_read_window(entry, window)]
+        cut = entry.cut
+        assert cut is not None
+        await _until(lambda: cut.paused)
+        # Nothing more is read or asked for.
+        await _done(cut)
+        await _until(lambda: rig.source.stats()["logged_in"] == 0)
+    assert (cut.error, cut.complete, cut.paused) == (None, False, False)
+    assert cut.timing["ended"] == "unread"
+    assert rig.source._hosts["entry1"].users == 0
+    assert cut.path not in cache._reserved
+    # Back: inside what it has, it serves; past it, a new cut does.
+    inside = await _window(cache, entry, at_ms=AT_MS + 1000)
+    assert (inside.source, inside.first) == ("cut", CUT_FIRST + 4)
+    rig.nvr.media = camera_blocks(ASKED - 3, seconds=12, begin_s=1)
+    after = await _window(cache, entry, first=CUT_FIRST + len(cut.index.fragments))
+    assert after.source == "cut"
+    assert after.first // CUT_FIRST == 2
+    assert after.start_ms == AT_MS + 2000
+    assert not after.last
+
+
+async def test_a_cut_ends_when_its_last_lease_expires(
+    hass: HomeAssistant, cached: tuple[VodCache, Rig]
+) -> None:
+    cache, rig = cached
+    rig.nvr.media = camera_blocks(ASKED - 3, seconds=30)
+    rig.nvr.gate = asyncio.Event()
+    rig.nvr.gate_at = 8
+    entry = await cache.async_open(deep_rec())
+    cache.lease(entry, 600, "token1")
+    assert (await _window(cache, entry, at_ms=AT_MS)).source == "cut"
+    cut = entry.cut
+    assert cut is not None
+    assert cut.running
+    later = time.monotonic() + 600 + vodcache.LEASE_MARGIN_S + 1
+    with patch.object(vodcache, "_clock", return_value=later):
+        async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=700))
+        await _until(lambda: cut.error == "stopped")
+    assert not entry.leases
+    assert not cache._leases
+
+
+async def test_a_failed_download_stops_its_cut_and_the_next_has_its_own_file(
+    cached: tuple[VodCache, Rig],
+    media: Server,  # noqa: F811
+) -> None:
+    cache, rig = cached
+    rig.nvr.media = camera_blocks(ASKED - 3, seconds=30)
+    rig.nvr.gate = asyncio.Event()
+    rig.nvr.gate_at = 8
+    entry = await cache.async_open(deep_rec())
+    cache.lease(entry, 600, "token1")
+    assert (await _window(cache, entry, at_ms=AT_MS)).source == "cut"
+    old = entry.cut
+    assert old is not None
+    assert old.running
+    grow = cache._grow
+
+    async def no_room(filling: Any, needed: int) -> None:
+        if filling is entry:
+            raise VodCacheError("not enough free disk space")
+        await grow(filling, needed)
+
+    with patch.object(cache, "_grow", no_room):
+        media.gate.set()  # the rest of the download comes, and cannot be written
+        await _until(lambda: entry.error is not None)
+        media.gate.clear()
+        await _until(lambda: not old.running and not old.path.exists())
+    assert old.error == "stopped"
+    again = await cache.async_open(deep_rec())
+    assert again is not entry
+    window = await _window(cache, again, at_ms=AT_MS)
+    assert window.source == "cut"
+    assert again.cut is not None
+    assert again.cut.path != old.path
+    assert window.first // CUT_FIRST > old.generation
+
+
+async def test_a_bad_sps_fails_only_its_cut_and_the_connection_serves_on(
+    rig: Rig,
+) -> None:
+    """A crop past the picture: the muxer's error, not a dead read loop."""
+    rig.source._idle_logout = 5.0
+    bad = annexb(h264_sps(crop_left=200), H264_PPS, IDR)
+    rig.nvr.media = b"".join(
+        video("key", bad, micro=s * 1_000_000, unix=int(ASKED - 3 + s))
+        for s in range(3)
+    )
+    with patch.object(baichuan_source, "QUIET_TIMEOUT_S", 1.0):
+        cut = await rig.cut()
+        await _done(cut)
+    assert cut.error is not None
+    assert "picture size" in cut.error
+    host = rig.source._hosts["entry1"]
+    assert host.client is not None
+    assert host.client.connected
+    assert rig.source.stats()["unsupported"] == []
+    rig.nvr.media = camera_blocks(ASKED - 3)
+    good = await rig.cut(name="b")
+    await _done(good)
+    assert good.complete
+    assert good.timing["login"] == "shared"
+
+
+async def test_a_second_cancel_still_releases_and_wakes_the_readers(
+    rig: Rig,
+) -> None:
+    """A cancel while the cut closes its file does not skip the rest of it."""
+    rig.nvr.gate = asyncio.Event()
+    cut = await rig.cut()
+    await _until(lambda: rig.cmds().count(143) == 1)
+    host = rig.source._hosts["entry1"]
+    assert host.users == 1
+    real = rig.hass.async_add_executor_job
+    closing = asyncio.Event()
+
+    def slow(target: Any, *args: Any) -> Any:
+        if target is os.close:
+            closing.set()
+
+            async def later() -> Any:
+                await asyncio.sleep(0.2)
+                return await real(target, *args)
+
+            return asyncio.ensure_future(later())
+        return real(target, *args)
+
+    async def reader() -> None:
+        async with cut.changed:
+            await cut.changed.wait_for(lambda: cut.error is not None)
+
+    waiting = asyncio.ensure_future(reader())
+    task = cut.task
+    assert task is not None
+    with patch.object(rig.hass, "async_add_executor_job", slow):
+        await asyncio.sleep(0.01)
+        task.cancel()
+        await closing.wait()
+        task.cancel()  # a second one, while it closes the file
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+        async with asyncio.timeout(1):
+            await waiting
+    assert cut.error == "stopped"
+    assert host.users == 0
+    assert cut not in rig.source._cuts
+    await _until(lambda: rig.source.stats()["logged_in"] == 0)
+
+
+async def test_a_late_144_reply_leaves_the_next_span_alone(rig: Rig) -> None:
+    rig.nvr.media = camera_blocks(ASKED - 3, seconds=6)
+    rig.nvr.end_delay = 0.4
+    with (
+        patch.object(baichuan_source, "END_TIMEOUT_S", 0.05),
+        patch.object(baichuan_source, "QUIET_TIMEOUT_S", 1.0),
+    ):
+        cut = await rig.cut(stream="main", span_ms=3000, end_ms=START_MS + 605_000)
+        await _until(lambda: cut.paused)
+        # The next span downloads while the first one's 144 is still unanswered.
+        rig.nvr.media = camera_blocks(ASKED - 3, seconds=13, begin_s=1)
+        rig.nvr.delay = 0.05
+        cut.extend()
+        await _done(cut)
+    assert cut.error is None
+    assert cut.complete
+
+
+async def test_an_unanswered_144_is_not_logged_as_an_error(rig: Rig) -> None:
+    rig.nvr.end_delay = None
+    seen: list[dict[str, Any]] = []
+    loop = asyncio.get_running_loop()
+    handler = loop.get_exception_handler()
+    loop.set_exception_handler(lambda _loop, context: seen.append(context))
+    try:
+        with (
+            patch.object(baichuan_source, "END_TIMEOUT_S", 0.05),
+            patch.object(baichuan_source, "CLIENT_TIMEOUT_S", 0.3),
+        ):
+            cut = await rig.cut()
+            await _done(cut)
+            await asyncio.sleep(0.5)  # the client's own timeout ends the 144
+    finally:
+        loop.set_exception_handler(handler)
+    assert cut.complete
+    assert [context["message"] for context in seen] == []
+
+
+async def test_cuts_of_a_channel_take_turns_within_the_viewers_buffers(
+    rig: Rig,
+) -> None:
+    """The cut that gave way gets its turn back before the other's download ends."""
+    rig.nvr.media = camera_blocks(ASKED - 3, seconds=60)
+    rig.nvr.delay = 0.02
+    with patch.object(baichuan_source, "TURN_S", 0.1):
+        first = await rig.cut(name="a")
+        await _until(lambda: bool(first.index.fragments))
+        second = await rig.cut(name="b")
+        await _until(lambda: first.gave_way == 1)
+        had = len(first.index.fragments)
+        await _until(lambda: len(first.index.fragments) > had)
+        assert second.running
+        assert second.gave_way >= 1
+    # (The fake sends its media from the start each time, not from the asked
+    # moment as the device does: the rest at full speed.)
+    rig.nvr.delay = 0.0
+    for cut in (first, second):
+        await _done(cut)
+        assert cut.complete, cut.error
+        starts = [(f.start_ms, f.duration_ms) for f in cut.index.fragments]
+        for (start, length), (following, _length) in pairwise(starts):
+            assert abs(start + length - following) < 1, (start, length, following)
+        assert cut.end_ms == AT_MS + 57_000
+
+
+async def test_a_later_span_without_a_free_slot_stops_the_download_once(
+    cached: tuple[VodCache, Rig],
+) -> None:
+    """Not a yield (and a read from byte 0) per span: the download stops there."""
+    cache, rig = cached
+    rig.scheduler.host("entry1").streams.limit = 1
+    rig.nvr.media = camera_blocks(ASKED - 3, seconds=6)
+    with (
+        patch.dict(vodcache.CUT_SPAN_MS, {"main": 3000}),
+        patch.object(vodcache, "EXTEND_WITHIN_MS", 500),
+    ):
+        entry = await cache.async_open(deep_rec(stream="main"))
+        cache.lease(entry, 600, "token1")
+        await _until(lambda: entry.ticket is not None and entry.ticket.granted)
+        await cache.async_wait(entry, offset=0)
+        _init, _mime, source = await cache.async_init(entry, at_ms=AT_MS)
+        assert source == "cut"
+        cut = entry.cut
+        assert cut is not None
+        await _until(lambda: cut.paused)
+        # The first span took the download's slot; the download went on after.
+        assert entry.timing["yields"] == 1
+        await _until(lambda: entry.ticket is not None and entry.ticket.granted)
+        rig.nvr.media = camera_blocks(ASKED - 3, seconds=13, begin_s=1)
+        cut.extend()
+        await _until(lambda: cut.spans == 2 and cut.paused)
+    assert cut.borrowed == 2
+    assert entry.timing["yields"] == 1
+    assert entry.stopped_ms is not None
+    assert not entry.filling
+
+
+async def test_any_muxer_error_fails_only_its_cut(rig: Rig) -> None:
+    rig.source._idle_logout = 5.0
+    with patch.object(
+        baichuan_mux.BaichuanMuxer, "feed", side_effect=struct.error("bad field")
+    ):
+        cut = await rig.cut()
+        await _done(cut)
+    assert cut.error == "cannot mux the stream (error: bad field)"
+    host = rig.source._hosts["entry1"]
+    assert host.client is not None
+    assert host.client.connected
+
+
+async def test_a_paused_cut_waits_while_a_window_of_it_is_read(tmp_path: Path) -> None:
+    cut = Cut("entry1", 3, "main", tmp_path / "a.cut.mp4", AT_MS)
+    cut.readers = 1
+    cut.last_read -= 10
+    waiting = asyncio.ensure_future(cut.wait_for_more(0.05))
+    await asyncio.sleep(0.12)
+    assert not waiting.done()
+    cut.extend()
+    assert await waiting is True
+    cut.readers = 0
+    assert await cut.wait_for_more(0.05) is False
+
+
+async def test_a_new_cut_never_takes_a_file_a_running_cut_writes(
+    cached: tuple[VodCache, Rig],
+) -> None:
+    cache, _rig = cached
+    entry = await cache.async_open(deep_rec())
+    held = entry.path.with_name(f"{entry.recording.cache_id}.1{vodcache.CUT_SUFFIX}")
+    cache._cut_paths.add(held)
+    assert cache._next_cut_path(entry).name.endswith(".2.cut.mp4")
+    assert entry.cuts == 2
+
+
+async def test_a_download_wanted_whole_keeps_its_slot_from_a_later_span(
+    cached: tuple[VodCache, Rig],
+) -> None:
+    cache, _rig = cached
+    entry = await cache.async_open(deep_rec())
+    await _until(lambda: entry.ticket is not None and entry.ticket.granted)
+    entry.whole = True
+    await cache._lend_slot(entry, stop=True)
+    assert not entry.yielding
+    assert entry.filling

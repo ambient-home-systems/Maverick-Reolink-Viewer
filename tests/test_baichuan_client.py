@@ -4,6 +4,7 @@ import asyncio
 from collections.abc import AsyncGenerator
 import contextlib
 from datetime import datetime
+import errno
 import struct
 
 from Cryptodome.Cipher import AES
@@ -90,6 +91,8 @@ class FakeNvr:
         self.gate: asyncio.Event | None = None
         self.gate_at = 1
         self.silent = False
+        # A 144's reply comes this long after the request (None: never).
+        self.end_delay: float | None = 0.0
         self.requests: list[tuple[int, str]] = []
         self.writers: list[asyncio.StreamWriter] = []
         self.tasks: list[asyncio.Task[None]] = []
@@ -226,10 +229,27 @@ class FakeNvr:
         elif cmd == 144:
             self.ended.append(ident & 0xFF)
             self._downloads[ident & 0xFF] = self._downloads.get(ident & 0xFF, 0) + 1
+            if self.end_delay is None:
+                return
+            if self.end_delay:
+                # Late, while the next requests are answered.
+                self.tasks.append(
+                    asyncio.get_running_loop().create_task(
+                        self._late(writer, self._reply(144, ident, 200))
+                    )
+                )
+                return
             writer.write(self._reply(144, ident, 200))
         elif cmd == 2:
             writer.write(self._reply(2, ident, 200))
         await writer.drain()
+
+    async def _late(self, writer: asyncio.StreamWriter, reply: bytes) -> None:
+        assert self.end_delay is not None
+        await asyncio.sleep(self.end_delay)
+        with contextlib.suppress(ConnectionError):
+            writer.write(reply)
+            await writer.drain()
 
     def _reply(
         self, cmd: int, ident: int, status: int, body: bytes = b"", *, offset: int = 0
@@ -592,5 +612,61 @@ async def test_two_replays_on_one_connection(nvr: FakeNvr) -> None:
     await client.stop(18, stop_name(18, when), "subStream")
     assert client.open_streams == 1
     await client.stop(3, stop_name(3, when), "mainStream")
+    assert client.open_streams == 0
+    await client.logout()
+
+
+async def test_an_os_error_ends_the_read_loop_with_the_connection_lost(
+    nvr: FakeNvr,
+) -> None:
+    """No route to host, a timeout: the connection is lost, its requests fail."""
+    client = BaichuanReplayClient(endpoint(nvr), timeout=5)
+    await client.connect()
+    await client.login()
+    nvr.end_delay = None  # the 144 waits for an answer that never comes
+    ending = asyncio.ensure_future(client.download_end(3))
+    await asyncio.sleep(0.05)
+    assert client._reader is not None
+    client._reader.set_exception(OSError(errno.EHOSTUNREACH, "No route to host"))
+    async with asyncio.timeout(1):
+        await client.lost.wait()
+    assert not client.connected
+    with pytest.raises(BaichuanClientError, match="connection lost"):
+        await ending
+    await client.close()
+
+
+async def test_a_failing_block_callback_ends_the_read_loop_lost(nvr: FakeNvr) -> None:
+    client = BaichuanReplayClient(endpoint(nvr), timeout=5)
+    await client.connect()
+    await client.login()
+
+    def broken(_block: object) -> None:
+        raise RuntimeError("a bug in what takes the blocks")
+
+    start = datetime(2026, 10, 27, 5, 47, 33)
+    await client.download(18, "subStream", start, start, on_block=broken)
+    async with asyncio.timeout(2):
+        await client.lost.wait()
+    assert not client.connected
+    await client.close()
+
+
+async def test_a_late_144_reply_leaves_the_next_downloads_stream(nvr: FakeNvr) -> None:
+    """The 144's answer pops the stream it ended, not the one opened since."""
+    client = BaichuanReplayClient(endpoint(nvr), timeout=5)
+    await client.connect()
+    await client.login()
+    start = datetime(2026, 10, 27, 5, 47, 33)
+    await client.download(18, "subStream", start, start)
+    nvr.end_delay = 0.3
+    ending = asyncio.ensure_future(client.download_end(18))
+    await asyncio.sleep(0.05)
+    _ms, stats, _fields = await client.download(18, "subStream", start, start)
+    await ending
+    assert client.open_streams == 1
+    assert client._streams[(baichuan_client.CMD_DOWNLOAD, 19)].stats is stats
+    nvr.end_delay = 0.0
+    await client.download_end(18)
     assert client.open_streams == 0
     await client.logout()

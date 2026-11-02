@@ -998,7 +998,7 @@ function Bt(e) {
 }
 //#endregion
 //#region src/version.ts
-var I = "0.40.0", Vt = "https://github.com/ambient-home-systems/Maverick-Reolink-Viewer", Ht = {
+var I = "0.40.1", Vt = "https://github.com/ambient-home-systems/Maverick-Reolink-Viewer", Ht = {
 	guide: ["user-guide"],
 	troubleshooting: ["troubleshooting"],
 	cameras: ["cameras"],
@@ -4926,11 +4926,11 @@ function Fi(e) {
 //#endregion
 //#region src/views.ts
 var Ii = {
-	events: () => import("./events-view-CxVJ33NE.js"),
-	list: () => import("./device-list-DULc18E5.js"),
-	device: () => import("./device-page-TZ3yEStO.js"),
-	"live-check": () => import("./live-check-DPaSRRcd.js"),
-	soak: () => import("./live-soak-DIWSSxeO.js")
+	events: () => import("./events-view-W2p32-4N.js"),
+	list: () => import("./device-list-BrtFfP43.js"),
+	device: () => import("./device-page-Dw9zaDgZ.js"),
+	"live-check": () => import("./live-check--APU9fW7.js"),
+	soak: () => import("./live-soak-CVl3fD8I.js")
 }, Li = /* @__PURE__ */ new Map();
 function Ri(e) {
 	let t = Ii[e];
@@ -5379,7 +5379,8 @@ var zi = {
           <span
             >Test replay over the Reolink app's own protocol (Phase 5): start a long recording of
             a recorder 75 % in over Baichuan and over HTTP, and compare; decode what arrives.
-            Read-only, a few seconds of video per camera.</span
+            Read-only, a few seconds of video per camera. It signs in on a connection of its own:
+            one more logged-in user on the recorder while it runs.</span
           >
         </label>
         <label class="option nested">

@@ -8,7 +8,11 @@ import struct
 
 import pytest
 
-from custom_components.reolink_viewer.baichuan_media import Block, blocks_of
+from custom_components.reolink_viewer.baichuan_media import (
+    Block,
+    blocks_of,
+    parse_h264_sps,
+)
 from custom_components.reolink_viewer.baichuan_mux import (
     AAC_FRAME,
     NOMINAL_RATE,
@@ -39,6 +43,7 @@ from .test_baichuan_media import (
     H265_SPS,
     H265_VPS,
     START,
+    BitWriter,
     adts_frame,
     annexb,
 )
@@ -469,3 +474,28 @@ def test_spans_are_joined_by_the_counter() -> None:
     other.feed(_h264_key(3_000_000, ASKED + 3))
     assert other.stats.overlap_skipped == 0
     assert other.stats.key_frames == 3
+
+
+def h264_sps(*, width_mbs: int = 20, crop_left: int = 0) -> bytes:
+    """A Main profile SPS (no VUI): ``width_mbs`` x 15 macroblocks, cropped left."""
+    w = BitWriter().u(8, 77).u(8, 0x40).u(8, 12).ue(0)  # profile, level, id 0
+    w.ue(0).ue(0).ue(0)  # frame_num and POC (type 0) lengths
+    w.ue(1).u(1, 0)  # one reference frame, no gaps
+    w.ue(width_mbs - 1).ue(14).u(1, 1).u(1, 1)  # frames only, direct 8x8
+    w.u(1, 1).ue(crop_left).ue(0).ue(0).ue(0)  # the crop, in units of 2
+    w.u(1, 0)  # no VUI
+    return b"\x67" + w.bytes()
+
+
+def test_a_picture_size_mp4_cannot_hold_is_a_mux_error() -> None:
+    """A crop past the picture, or a size over 16 bits, fails the cut cleanly."""
+    assert parse_h264_sps(h264_sps())["width"] == 320
+    for sps, width in (
+        (h264_sps(crop_left=200), -80),  # 320 - 2 x 200
+        (h264_sps(width_mbs=4096), 65_536),
+    ):
+        assert parse_h264_sps(sps)["width"] == width
+        muxer = BaichuanMuxer(ORIGIN, ASKED)
+        assert muxer.feed(_h264_key(0, ASKED, sps)) == []
+        with pytest.raises(MuxError, match="picture size"):
+            muxer.feed(_h264_key(NOMINAL_RATE, ASKED + 1, sps))

@@ -3,6 +3,37 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.40.1
+
+Fixes from a review of the deep starts over the Reolink protocol (Phases 5b and
+5c).
+
+- **Closing a tab during an HD start no longer keeps Home Assistant signed in to
+  the recorder.** A tab closed, the iPhone app killed or the network gone sent no
+  word, and the recorder's answer waited for it forever between two parts: the
+  extra sign-in stayed on the recorder's list of online users until Home
+  Assistant restarted, and its disk space stayed reserved. Now an answer nobody
+  reads for 25 seconds ends, and the sign-in goes 30 seconds later. Coming back
+  to the video asks the recorder again where it left off.
+- **Two people watching one camera take turns within seconds.** One who had made
+  way for the other could wait for the other's whole answer (about 20 s for an
+  hour of SD) with only a few seconds of video ready; now each has the recorder
+  for about a second at a time while the other waits.
+- **A copy that fails no longer leaves the recorder's answer running**, which the
+  next try could then overwrite.
+- **A picture size the recorder gets wrong, or a lost network route, fails only
+  that start** and falls back to the copy, instead of leaving a dead connection
+  that made the next deep start wait 6 seconds.
+- **The next part of an HD answer no longer makes the copy start over.** On a
+  recorder with no stream free, each part took the copy's stream, and the copy
+  then read the recording from its start again; now the copy stops where it is,
+  and goes on only if you go back to the part it lacks.
+- Smaller: a slow reply to "stop" from the recorder no longer cuts off the next
+  part, and is no longer logged as an error; an interrupted stop always signs out
+  and wakes the waiting player.
+- **The hardware probe's Reolink protocol test** says that it signs in on a
+  connection of its own (one more user on the recorder while it runs).
+
 ## 0.40.0
 
 Phase 5c, step 5: two people watching the same camera's recordings at once.

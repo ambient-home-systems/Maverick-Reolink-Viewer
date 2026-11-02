@@ -620,7 +620,8 @@ export class ReolinkViewerPanel extends LitElement {
           <span
             >Test replay over the Reolink app's own protocol (Phase 5): start a long recording of
             a recorder 75 % in over Baichuan and over HTTP, and compare; decode what arrives.
-            Read-only, a few seconds of video per camera.</span
+            Read-only, a few seconds of video per camera. It signs in on a connection of its own:
+            one more logged-in user on the recorder while it runs.</span
           >
         </label>
         <label class="option nested">

@@ -634,7 +634,9 @@ recordings over the Reolink protocol** (off by default):
   job), shared by every cut on that host (one per channel, by the handle
   byte), logged out 30 s after the last one ends: at most one extra
   logged-in user per host. Each cut holds a slot of the host's stream budget
-  (a free one within 5 s, else no cut).
+  (a free one within 5 s, else no cut). Since v0.40.1 a cut paused between
+  HD spans that no window was read from for 25 s ends (its viewer left
+  without a word, e.g. a closed tab), so the login goes 30 s after.
 - **The muxer** (`baichuan_mux.py`): one fragment per group of pictures, on
   the recording's timeline: the first key frame at its POSIX second minus the
   recording's start (the asked time if the two are more than 30 s apart), the

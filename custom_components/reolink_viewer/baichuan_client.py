@@ -24,6 +24,7 @@ import asyncio
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
+import logging
 import struct
 import time
 from xml.etree import ElementTree as ET
@@ -39,6 +40,8 @@ from reolink_aio.baichuan.util import (
 
 from .baichuan_media import Block, BlockReader, StreamAnalysis
 from .bridge import BaichuanEndpoint
+
+_LOGGER = logging.getLogger(__name__)
 
 MAGIC = bytes.fromhex(HEADER_MAGIC)
 CLASS_REQUEST = bytes.fromhex("1464")
@@ -432,12 +435,19 @@ class BaichuanReplayClient:
         return _ms(stats.started, reply.at), stats, reply.fields()
 
     async def download_end(self, channel: int) -> tuple[float, int]:
-        """144 (an empty body): end the download; returns (latency ms, status)."""
+        """144 (an empty body): end the download; returns (latency ms, status).
+
+        Only the stream it ends is let go: a reply that comes late leaves a
+        download started on the channel since alone.
+        """
+        key = (CMD_DOWNLOAD, channel + 1)
+        ending = self._streams.get(key)
         began = time.monotonic()
         try:
             reply = await self._request(CMD_DOWNLOAD_END, b"", channel=channel)
         finally:
-            self._streams.pop((CMD_DOWNLOAD, channel + 1), None)
+            if ending is not None and self._streams.get(key) is ending:
+                del self._streams[key]
         return _ms(began, reply.at), reply.status
 
     @property
@@ -535,8 +545,15 @@ class BaichuanReplayClient:
         return text if text.lstrip().startswith(XML_TEXT_STARTS) else ""
 
     async def _read_loop(self) -> None:
+        """Read and dispatch messages until the connection ends.
+
+        However it ends (the device hangs up, an OSError such as no route to
+        host, a callback's error, a close), the connection is lost and every
+        request waiting on it fails at once.
+        """
         reader = self._reader
         assert reader is not None
+        reason = "closed"
         try:
             while True:
                 head = await reader.readexactly(20)
@@ -552,15 +569,19 @@ class BaichuanReplayClient:
                     raise BaichuanClientError("implausible message length")
                 body = await reader.readexactly(length) if length else b""
                 self._dispatch(cmd, ident, status, offset, body)
-        except (
-            asyncio.IncompleteReadError,
-            ConnectionError,
-            BaichuanClientError,
-        ) as err:
+        except (asyncio.IncompleteReadError, OSError, BaichuanClientError) as err:
+            # OSError covers ConnectionError, ETIMEDOUT and EHOSTUNREACH.
+            reason = str(err) or type(err).__name__
+        except Exception as err:  # what takes the blocks failed
+            reason = f"{type(err).__name__}: {err}"
+            _LOGGER.debug("Baichuan read loop failed", exc_info=True)
+        finally:
             self.lost.set()
             for future in self._pending.values():
                 if not future.done():
-                    future.set_exception(BaichuanClientError(f"connection lost: {err}"))
+                    future.set_exception(
+                        BaichuanClientError(f"connection lost: {reason}")
+                    )
             self._pending.clear()
 
     def _dispatch(

@@ -21,7 +21,7 @@ put on it:
 | 2 | Event timeline, thumbnails, smooth playback | High (backend) / Very high (player) | 3–5 wk | Done (2026-10-21, v0.3.2). 2A (2026-10-20, v0.2.7): timeline 105–287 ms, first frame 0.6–1.1 s, auto-advance 6–7 ms on hardware. 2B: MSE player; uncached deep starts are the NVR's download up to the target (6.9–13.0 s in hour-long recordings, up to 84 s before), speeds 0.5–8×, HD/SD at the same moment, one-hour sessions within the caps, the iPhone app on Wi-Fi, Tailscale and Nabu Casa |
 | 3 | Live view via go2rtc, grid, fullscreen, PTZ | High | 3–4 wk | Done (2026-10-27, v0.15.1). Our own go2rtc and the live check (v0.4.0, runs 5–13); the key-frame cache, the image cache, the Live grid and Live tab, keep warm, full-screen HD, PTZ and the camera's controls, the picture first, battery cameras on wired power, a debug view per tile and the soak report (v0.5.0–v0.15.1). Exit runs: the soak passed (run 15), every tile's first image in a median 0.02 s on the iPhone and the Mac (runs 16–17), and the Phase 2 playback criteria held with live view running (runs 18–19) |
 | 4 | Design, performance, mobile, packaging, first release | Standard | 3–4 wk | Done (2026-10-28, v0.32.3). Step 1, the design (the Timetable), in v0.16.0–v0.22.0; step 2, the performance budget, in v0.23.0; step 3, mobile, in v0.24.0–v0.26.0; step 4, error states, in v0.27.0–v0.29.0; step 5, accessibility, in v0.30.0; step 6, packaging, in v0.31.0, the first release; step 7, docs, in v0.32.0, released the same day; v0.32.1 starts live video sooner where WebRTC cannot connect, from the work PC's check, v0.32.2 keeps the capacity test from blaming the NVR for a stream that plays no video, from the owner's live check, and v0.32.3 fixes full screen and the timeline's pinch on the iPhone, from the owner's iPhone. The rest of the exit checklist was not run: the owner closed the phase on v0.32.0 working in daily use. See "Phase 4 status" |
-| 5 | Optional R&D: Baichuan live/playback | Very high | 4–8 wk, time-boxed with gates | **5a done, go** (2026-10-29, v0.34.1): prior art surveyed, the capture tool and the owner's captures, `docs/baichuan-playback.md`, and the read-only check: a deep start over Baichuan costs the NVR 0.2 s against 4.7 s of HTTP download for the same point of a short recording. 5b–5d estimated at 3.5–5 wk, deep starts only; talk deferred. **5b step 1 built** (2026-10-29, v0.35.0): the probe measures the replay and the download cut (143) 75 % into sub and main recordings, decodes what arrives and counts the sessions; the source (replay, 143 or both) is chosen from the owner's report before step 2, the prototype. **Step 1 done** (2026-10-30, v0.35.5): the download cut (143) is the source. **5b step 2 built** (2026-10-30, v0.36.0): the muxer, one Baichuan connection per host, deep starts served from the cut behind an option (off by default), the fallback to the download. **Hardware check passed** (2026-10-30): an uncached deep start 52 min into an hour shows its first frame in 0.51 s on Chrome and 0.60 s on the iPhone (9.0 s from the download with the option off); v0.36.1 cuts HD in 3-minute spans and searches the day's HD list ahead. **5b done** (2026-10-30, v0.36.2): every exit criterion met on the hardware, the NVR's own list of online users included (one more session while deep starts are in use, gone when idle). **5c done** (2026-10-30 to 2026-11-02, v0.37.0–v0.40.0): a deep start fetches the recording once, in two pieces, on one stream; on by default, a device that refuses the protocol left alone; each camera's counter rate kept; the device's zone built from its own DST rules (reolink-aio's land on the wrong days); two viewers of a camera take turns. **5d reports posted** (2026-11-02): the time zone bug as [starkillerOG/reolink_aio#239](https://github.com/starkillerOG/reolink_aio/issues/239), the download cut (143/144) and the media message class as [#240](https://github.com/starkillerOG/reolink_aio/issues/240); the rest is the maintainer's. See "Phase 5 status" |
+| 5 | Optional R&D: Baichuan live/playback | Very high | 4–8 wk, time-boxed with gates | **5a done, go** (2026-10-29, v0.34.1): prior art surveyed, the capture tool and the owner's captures, `docs/baichuan-playback.md`, and the read-only check: a deep start over Baichuan costs the NVR 0.2 s against 4.7 s of HTTP download for the same point of a short recording. 5b–5d estimated at 3.5–5 wk, deep starts only; talk deferred. **5b step 1 built** (2026-10-29, v0.35.0): the probe measures the replay and the download cut (143) 75 % into sub and main recordings, decodes what arrives and counts the sessions; the source (replay, 143 or both) is chosen from the owner's report before step 2, the prototype. **Step 1 done** (2026-10-30, v0.35.5): the download cut (143) is the source. **5b step 2 built** (2026-10-30, v0.36.0): the muxer, one Baichuan connection per host, deep starts served from the cut behind an option (off by default), the fallback to the download. **Hardware check passed** (2026-10-30): an uncached deep start 52 min into an hour shows its first frame in 0.51 s on Chrome and 0.60 s on the iPhone (9.0 s from the download with the option off); v0.36.1 cuts HD in 3-minute spans and searches the day's HD list ahead. **5b done** (2026-10-30, v0.36.2): every exit criterion met on the hardware, the NVR's own list of online users included (one more session while deep starts are in use, gone when idle). **5c done** (2026-10-30 to 2026-11-02, v0.37.0–v0.40.0): a deep start fetches the recording once, in two pieces, on one stream; on by default, a device that refuses the protocol left alone; each camera's counter rate kept; the device's zone built from its own DST rules (reolink-aio's land on the wrong days); two viewers of a camera take turns. **5d reports posted** (2026-11-02): the time zone bug as [starkillerOG/reolink_aio#239](https://github.com/starkillerOG/reolink_aio/issues/239), the download cut (143/144) and the media message class as [#240](https://github.com/starkillerOG/reolink_aio/issues/240); the rest is the maintainer's. **v0.40.1** (2026-11-02): six findings of a review of 5b/5c fixed (chief among them, an HD cut left by a closed tab held the recorder's login until restart); the owner's check of it closes the phase. See "Phase 5 status" |
 
 Phases 1 and 2 can overlap once Phase 0 is done. Phase 5 can start any time after
 Phase 0 as a separate track.
@@ -4895,6 +4895,62 @@ if one is offered. If reolink-aio comes to receive the media class and offers
 a cut (or replay) API, `baichuan_client.py` can shrink to a caller of it
 through `bridge.py`, and the parts of `baichuan_source.py` it duplicates can
 go. Nothing else in 5d is ours to do.
+
+### The review of 5b and 5c (v0.40.1)
+
+A review of the 5b/5c code found six faults. v0.40.1, a patch release, fixes
+them; each fix began as a test against the fake NVR (`tests/test_baichuan_*.py`)
+that failed before it.
+
+| # | Finding | Fix |
+|---|---|---|
+| 1 | **High: an abandoned HD cut held the login for good.** Between spans a cut waited for the next one with no limit (`Cut.wait_for_more`), only a release ended it, and an expired lease was forgotten without stopping it. A tab closed, the app killed or the network gone sends no release: the paused cut, its task and its file descriptor stayed, its recording stayed reserved against eviction, and `host.users` stayed above 0, so the host's idle logout never ran again until restart | A paused cut no window was read from for `PAUSE_IDLE_S` (25 s) ends (`timing.ended` "unread"), and the host logs out `IDLE_LOGOUT_S` (30 s) later. A recording's last lease ending, released or expired (a timer per lease), stops its cuts. A viewer that comes back past an ended cut's fragments is served by a new cut from there, or by the download (`_handover_ms`); a start inside them still reads them |
+| 2 | **Medium: a failed HTTP fill orphaned its running cut**, and the next entry, numbering its cuts from 1 again, truncated `<id>.1.cut.mp4` while the old cut still wrote it | A fill that fails stops and deletes its recording's cuts (`_drop_cuts`); the next entry keeps the failed one's cut count (a window of an old cut is never served from another), and no cut takes a file a running cut writes (`_cut_paths`) |
+| 3 | **Medium: device input could kill the read loop without marking the connection lost.** A bad SPS (a crop giving a negative or over-65,535 width) raised `struct.error` in the muxer, which runs in the client's block callback; OSErrors such as ETIMEDOUT and EHOSTUNREACH escaped the loop too. The next deep start reused the dead client and waited 6 s before falling back | The muxer refuses a picture size outside 1–65,535 (`MuxError`); any error of the muxer fails only its cut (`_Feed.block`), which falls back to the download; the read loop marks the connection lost and fails its waiting requests however it ends |
+| 4 | **Medium-low: a second cancel during a cut's clean-up** (while the file was closed in the executor) skipped the release, the bookkeeping and the notify: a pinned login, and a window waiting on the cut with no deadline | The release and the bookkeeping come before any await; closing the file and waking the waiters run shielded (`BaichuanSource._close`) |
+| 5 | **Low: a 144 answered late removed the next span's stream.** The cut waits 3 s for it, but the request ran on for up to 10 s and then dropped whatever stream was registered on the channel; and its failure was logged as "exception in shielded future" | `download_end` lets go of the stream it ended only; the abandoned 144 keeps its failure to itself (`_end_download`) |
+| 6 | **Low: a cut that gave way could wait for the other cut's whole download.** A sub cut is one span to the recording's end and gave way once the holder had a fragment: an hour of sub kept the other viewer waiting about 20 s with 1–4 s buffered | A cut that waits for the channel (one that gave way, or a later span) asks for the turn back once the holder's turn has lasted `TURN_S` (1 s) and brought a fragment; a new viewer still gets it at the holder's next block. Turns alternate in bounded spans, within the viewers' buffers, sub or HD |
+
+**Also checked, finding 6's traced-only case:** an HD span that found no free
+slot borrowed the download's, and the download, queued behind it, read the
+recording from byte 0 again after every span (the device ignores Range). A
+test reproduced it (two yields for two spans). Now only a cut's first span
+makes the download yield and go on after it; a later span's viewer is minutes
+ahead, so the download stops where it is (`Entry.halting`, `stopped_ms`) and
+is resumed only when something needs the part it lacks. A download that is
+wanted whole (a clip, the file player) keeps its slot.
+
+**Minor:** the probe's Reolink protocol check logs in on a connection of its
+own for each measurement (its login is part of what it measures), beside the
+deep starts' connection if one is open. The report says so (`connection`), and
+so does the option's label.
+
+**Hardware checklist (the owner, v0.40.1):**
+
+1. **A tab closed during an HD deep start.** Open the NVR's web interface at
+   its list of online users and note the count at rest (two admin sessions
+   from Home Assistant in 5b). In Chrome, on the Playback tab, switch a camera
+   to HD and start deep in an hour not played today; while it plays (Details:
+   "Reolink protocol cut: first fragment …") the list shows one more session
+   from Home Assistant's address. Close the tab. Within a minute (at most
+   about 55 s: 25 s unread, then the 30 s idle logout) the list should be back
+   at the count at rest. In v0.40.0 the extra session stayed until Home
+   Assistant restarted.
+2. **Two viewers taking turns on one camera.** On two browsers or devices (as
+   for 5c step 5), start deep in one hour in SD on the first; while it plays,
+   start deep in another hour of the same camera on the second. Both should
+   show their first picture in about a second and play on without a stall;
+   then, on the second, jump far into the first one's recording: the first
+   plays on. The check's cut line ("gave way to another viewer N×") may now
+   count several turns.
+
+**Exit criteria:** the online users back at the count at rest within a
+minute of closing the tab; both viewers play through without a stall.
+
+**The owner's check:** not run yet. Once it passes, Phase 5 is done; what is
+left of 5d waits on the maintainer
+([#239](https://github.com/starkillerOG/reolink_aio/issues/239),
+[#240](https://github.com/starkillerOG/reolink_aio/issues/240)).
 
 ---
 
