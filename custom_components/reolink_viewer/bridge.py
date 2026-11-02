@@ -31,6 +31,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr
+from homeassistant.util import dt as dt_util
 
 from .const import REOLINK_DOMAIN
 from .timeconv import device_timezone
@@ -603,12 +604,22 @@ class ReolinkHostHandle:
         reolink-aio's zone lands DST's start and end on the wrong day in most
         years, a week late in November 2026); reolink-aio's when they are not
         there.
+
+        A Baichuan-only device (the battery Doorbell) answers no HTTP GetTime,
+        so neither has a zone for it: it gets Home Assistant's own, as the
+        camera is at home. Phase 6 run 2 measured it on the Doorbell: its own
+        clock (Baichuan 104) read Home Assistant's local time within 11 s, and
+        its zone field (18000 s west) matched Home Assistant's UTC-5.
         """
         settings = getattr(self._api, "_time_settings", None)
         if isinstance(settings, dict) and (tz := device_timezone(settings)) is not None:
             return tz
         tz = _safe(self._api.timezone)
-        return tz if isinstance(tz, tzinfo) else None
+        if isinstance(tz, tzinfo):
+            return tz
+        if _safe(lambda: self._api.baichuan_only) is True:
+            return dt_util.get_default_time_zone()
+        return None
 
     def info(self) -> HostInfo:
         """Return a typed snapshot of the host from cached data (no I/O)."""

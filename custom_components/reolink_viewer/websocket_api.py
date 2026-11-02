@@ -467,14 +467,18 @@ def ws_timeline_warm(
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    """Fetch today's timeline of every recording camera, at prefetch priority."""
+    """Fetch today's timeline of every recording camera, at prefetch priority.
+
+    Every camera the events feed lists (``async_event_sources``): those whose
+    recordings cannot be played here too, for their events.
+    """
     if (entry := _loaded_entry(hass)) is None:
         connection.send_error(msg["id"], ERR_NOT_LOADED, "Reolink Viewer is not loaded")
         return
     if not bridge.async_check_compat(hass).ok:
         connection.send_result(msg["id"], {"cameras": 0})
         return
-    sources = devices.async_playback_sources(hass)
+    sources = devices.async_event_sources(hass)
     entry.async_create_background_task(
         hass, entry.runtime_data.timeline.async_warm(sources), "reolink_viewer warm"
     )

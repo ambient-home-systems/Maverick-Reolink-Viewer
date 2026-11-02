@@ -86,7 +86,13 @@ class NoPlaybackError(Exception):
 
 @dataclass(frozen=True, slots=True)
 class PlaybackSource:
-    """Where a camera's recordings are: a host and channel (the NVR for merged)."""
+    """Where a camera's recordings are: a host and channel (the NVR for merged).
+
+    ``playable`` is False for a camera whose recordings are kept where this
+    integration cannot play them (Phase 6): the battery Doorbell speaks
+    Baichuan only and records to its SD card. Its events are still listed,
+    from the Baichuan event search alone (``async_event_sources``).
+    """
 
     camera_id: str
     name: str
@@ -94,11 +100,19 @@ class PlaybackSource:
     channel: int
     is_doorbell: bool = False
     is_battery: bool = False
+    playable: bool = True
+    # A battery camera running on wired power: it never sleeps.
+    wired_power: bool = False
 
     @property
     def key(self) -> str:
         """Return a stable storage key that reveals no identifier."""
         return bridge.opaque_key(self.entry_id, self.channel)
+
+    @property
+    def on_battery(self) -> bool:
+        """Return True for a battery camera running on its battery (it may sleep)."""
+        return self.is_battery and not self.wired_power
 
 
 @dataclass(frozen=True, slots=True)
@@ -478,21 +492,51 @@ def _host_dict(host: _Host, ent_reg: er.EntityRegistry) -> dict[str, Any]:
 def _playback_source(camera: _Camera) -> PlaybackSource | None:
     for conn in camera.connections:
         if conn.playback_source and conn.channel is not None:
-            status: dict[str, Any] = {}
-            if conn.handle is not None:
-                try:
-                    status = conn.handle.channel_details(conn.channel)
-                except Exception:  # flags are optional
-                    _LOGGER.debug("Cannot read channel details", exc_info=True)
-            return PlaybackSource(
-                camera_id=camera.id,
-                name=_device_name(camera.primary.device) or camera.primary.entry_title,
-                entry_id=conn.entry_id,
-                channel=conn.channel,
-                is_doorbell=bool(status.get("is_doorbell")),
-                is_battery=bool(status.get("is_battery")),
-            )
+            return _source(camera, conn, conn.channel, playable=True)
     return None
+
+
+def _event_source(camera: _Camera) -> PlaybackSource | None:
+    """Return where a camera's events can be searched.
+
+    Its playback source; else, for a camera that records where this integration
+    cannot play it (the battery Doorbell's SD card), that connection, not
+    playable.
+    """
+    if (source := _playback_source(camera)) is not None:
+        return source
+    for conn in camera.connections:
+        if conn.handle is None or conn.channel is None:
+            continue
+        try:
+            stores = conn.handle.stores_recordings(conn.channel)
+        except Exception:  # a host that cannot say keeps none here
+            _LOGGER.debug("Cannot read where a camera records", exc_info=True)
+            continue
+        if stores:
+            return _source(camera, conn, conn.channel, playable=False)
+    return None
+
+
+def _source(
+    camera: _Camera, conn: _Connection, channel: int, *, playable: bool
+) -> PlaybackSource:
+    status: dict[str, Any] = {}
+    if conn.handle is not None:
+        try:
+            status = conn.handle.channel_details(channel)
+        except Exception:  # flags are optional
+            _LOGGER.debug("Cannot read channel details", exc_info=True)
+    return PlaybackSource(
+        camera_id=camera.id,
+        name=_device_name(camera.primary.device) or camera.primary.entry_title,
+        entry_id=conn.entry_id,
+        channel=channel,
+        is_doorbell=bool(status.get("is_doorbell")),
+        is_battery=bool(status.get("is_battery")),
+        playable=playable,
+        wired_power=bool(status.get("wired_power")),
+    )
 
 
 @callback
@@ -741,6 +785,23 @@ def async_playback_sources(hass: HomeAssistant) -> list[PlaybackSource]:
     """Return the playback source of every camera that records."""
     model = _async_build(hass, degraded=False)
     return [s for c in model.cameras if (s := _playback_source(c)) is not None]
+
+
+@callback
+def async_event_sources(hass: HomeAssistant) -> list[PlaybackSource]:
+    """Return where the events of every camera that records can be searched.
+
+    The playback sources, and the cameras that record where their recordings
+    cannot be played here (``playable`` False), but not one of those running on
+    its battery: its searches would wake it, and the events feed asks every
+    two minutes. (A battery camera on an NVR is searched on the NVR.)
+    """
+    model = _async_build(hass, degraded=False)
+    return [
+        s
+        for c in model.cameras
+        if (s := _event_source(c)) is not None and (s.playable or not s.on_battery)
+    ]
 
 
 @callback

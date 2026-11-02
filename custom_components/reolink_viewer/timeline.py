@@ -14,6 +14,11 @@ cached:
 Every device request is a scheduler job (``PLAYBACK`` priority for what the
 user waits on, ``PREFETCH`` for warming), de-duplicated while in flight. All
 times sent to the browser are UTC epoch milliseconds (``timeconv``).
+
+A camera whose recordings cannot be played here (``PlaybackSource.playable``
+False, Phase 6: the battery Doorbell's SD card) has days of events and no
+recordings, from the Baichuan event search alone. Over the Doorbell's UDP a
+whole past day takes 13 to 16 s (Phase 6 run 2), so the caching matters more.
 """
 
 import asyncio
@@ -442,9 +447,22 @@ class TimelineService:
 
         async def job() -> bridge.DaySearch:
             started.append(time.monotonic())
-            return await host.async_search_day(
-                source.channel, window_start, window_end, stream
-            )
+            if source.playable:
+                return await host.async_search_day(
+                    source.channel, window_start, window_end, stream
+                )
+            # Recordings this integration cannot play (Phase 6): the events
+            # alone. A failed search is a failed event search, as on the
+            # playable path: the events found before are kept.
+            try:
+                return await host.async_search_day_events(
+                    source.channel, window_start, window_end, stream
+                )
+            except asyncio.CancelledError:
+                raise
+            except Exception as err:  # noqa: BLE001 - reported as events_error
+                _LOGGER.debug("Event search of %s failed: %s", source.name, err)
+                return bridge.DaySearch([], [], type(err).__name__)
 
         try:
             search = await self._scheduler.run(

@@ -156,6 +156,11 @@ board.
   (person, vehicle, animal, doorbell, package, motion). Tap a button again to show all.
 - Tap a row to play its recording.
 
+A battery doorbell that keeps its recordings on its own SD card lists its events
+too, while it runs on wired power. Its recordings cannot be played in the panel yet,
+so tapping one of its rows opens its **Playback** tab, which says so; play them in
+the Reolink app.
+
 ## Devices
 
 ![The Devices tab: NVRs and their cameras, the checks, this device's settings and the help](images/devices.jpg)

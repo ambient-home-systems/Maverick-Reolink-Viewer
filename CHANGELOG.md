@@ -3,6 +3,25 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.42.0
+
+Phase 6, step 2: the Doorbell on the Events page.
+
+- **A battery doorbell that keeps its recordings on its SD card now lists its
+  events**: on the home view under the board, on the **Events** tab and in its
+  calendar, beside the other cameras. The Doorbell speaks only the Reolink app's
+  protocol and its recordings cannot be played in the panel, so it was left out
+  before; its events now come from its own search.
+- **Only while it runs on wired power.** On its battery it is left out, since
+  asking it for events every few minutes would wake it.
+- **Its first look at a day takes about 15 seconds** (the doorbell searches slowly
+  over Wi-Fi); after that the day comes at once.
+- **Its events are at the right times**: it uses Home Assistant's time zone, which
+  the doorbell's own clock matches.
+- Tapping one of its rows opens its **Playback** tab, which says its recordings are
+  on its SD card; play them in the Reolink app. Pictures of its events come in a
+  later release.
+
 ## 0.41.1
 
 - **The doorbell events test now runs on the Doorbell.** In 0.41.0 it stopped at
