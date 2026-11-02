@@ -89,6 +89,8 @@ _H264_SETS = {7: "sps", 8: "pps"}
 _H265_SETS = {32: "vps", 33: "sps", 34: "pps"}
 _H264_AUD = 9
 _H265_AUD = 35
+# The largest picture side a sample entry holds (16 bits).
+MAX_SIDE = 0xFFFF
 _MATRIX = struct.pack(">9I", 0x10000, 0, 0, 0, 0x10000, 0, 0, 0, 0x40000000)
 
 
@@ -471,6 +473,12 @@ class BaichuanMuxer:
         return out
 
     def _build_init(self) -> bytes | None:
+        """Return the init segment; None while a parameter set is missing.
+
+        Raises MuxError when the SPS gives a picture MP4 cannot describe (a
+        crop past the picture, a side over 65,535 pixels): every later group
+        of pictures would carry it too.
+        """
         hevc = self.codec == "h265"
         needed = _H265_SETS if hevc else _H264_SETS
         if any(kind not in self._sets for kind in needed):
@@ -486,27 +494,24 @@ class BaichuanMuxer:
                 entry_type, config_type = b"avc1", b"avcC"
         except ValueError, IndexError:
             return None
-        self.width, self.height = int(sps["width"]), int(sps["height"])  # type: ignore[call-overload]
-        self._init_sets = frozenset(self._sets.values())
-        video_entry = _box(
-            entry_type,
-            _visual_fields(self.width, self.height) + _box(config_type, config),
-        )
+        width, height = int(sps["width"]), int(sps["height"])  # type: ignore[call-overload]
+        if not (0 < width <= MAX_SIDE and 0 < height <= MAX_SIDE):
+            raise MuxError(
+                f"picture size {width}x{height} from the SPS is out of range"
+            )
         codecs = [str(sps["codec"])]
+        video_entry = _box(
+            entry_type, _visual_fields(width, height) + _box(config_type, config)
+        )
         tracks = [
             _trak(
-                VIDEO_TRACK,
-                VIDEO_TIMESCALE,
-                b"vide",
-                video_entry,
-                size=(self.width, self.height),
+                VIDEO_TRACK, VIDEO_TIMESCALE, b"vide", video_entry, size=(width, height)
             )
         ]
         audio = self._audio_config
         if audio is not None:
             tracks.append(_trak(AUDIO_TRACK, audio.sample_rate, b"soun", _mp4a(audio)))
             codecs.append(f"mp4a.40.{audio.object_type}")
-        self.mime = f'video/mp4; codecs="{",".join(codecs)}"'
         mvex = _box(
             b"mvex",
             b"".join(
@@ -526,6 +531,9 @@ class BaichuanMuxer:
             + struct.pack(">I", len(tracks) + 1),
         )
         ftyp = _box(b"ftyp", b"iso5" + struct.pack(">I", 512) + b"iso5iso6mp41")
+        self.width, self.height = width, height
+        self._init_sets = frozenset(self._sets.values())
+        self.mime = f'video/mp4; codecs="{",".join(codecs)}"'
         return ftyp + _box(b"moov", mvhd + b"".join(tracks) + mvex)
 
     def _fragment(self, gop: list[_Video], end: float, audio: list[_Audio]) -> bytes:

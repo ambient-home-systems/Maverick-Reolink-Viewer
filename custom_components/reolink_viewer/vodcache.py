@@ -37,13 +37,19 @@ served from the cache, with Range, by ``views.py``:
 - a start far from a recording's cut makes a new one; the cut it replaces is
   kept while a viewer still reads it (another viewer of the recording, within
   ``OLD_CUT_KEEP_S``), its windows numbered by its own generation, and let go
-  once none does (Phase 5c);
+  once none does (Phase 5c); the recording's last lease ending, released or
+  expired (a tab closed sends no release), stops its cuts; a window past a
+  cut that ended short (unread between spans, stopped, failed) is served by a
+  new cut or the download; a fill that fails stops its recording's cuts, and
+  no cut ever writes a file another running cut holds;
 - such a recording is fetched once, in two pieces (Phase 5c): the download
   stops where the cut's media begins (the original then holds the part
   before it, and a window past that part reads the cut), and gives its stream
-  slot to the cut when the host has none free, resuming after it. The device
-  ignores Range, so a download that resumes reads the recording from its
-  start again and skips the bytes on disk. Whatever needs the whole original
+  slot to the cut when the host has none free, resuming after it (the cut's
+  first span) or stopping where it is (a later span: its viewer is minutes
+  ahead, and one span after another must not each cost a read from the
+  start). The device ignores Range, so a download that resumes reads the
+  recording from its start again and skips the bytes on disk. Whatever needs the whole original
   (the file player, a clip, a part neither piece holds) resumes it to the
   end;
 - the file player (the fallback) gets a plain MP4 (``remux.py``), rewritten
@@ -69,7 +75,8 @@ from typing import Any, BinaryIO
 
 from aiohttp import ClientError, ClientResponse, ClientSession, ClientTimeout
 
-from homeassistant.core import HomeAssistant
+from homeassistant.core import CALLBACK_TYPE, HassJob, HomeAssistant, callback
+from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.storage import Store
 
 from . import bridge
@@ -257,6 +264,8 @@ class Entry:
     whole: bool = False
     # The cut waits for a stream slot: the download gives its own up.
     yielding: bool = False
+    # ...and stops there, rather than queue to go on (a later span's).
+    halting: bool = False
     # The download's response while it runs (closed to give the slot up).
     response: ClientResponse | None = None
 
@@ -338,8 +347,12 @@ class VodCache:
         self._max_bytes = max_bytes
         self._session = session
         self._entries: dict[str, Entry] = {}
-        # Each leased URL (by token): the recording it reads, and its lease.
+        # Each leased URL (by token): the recording it reads, and its lease;
+        # and the timer that ends it (the last one stops the recording's cut).
         self._leases: dict[str, tuple[str, Lease]] = {}
+        self._lease_timers: dict[str, CALLBACK_TYPE] = {}
+        # The files the running cuts write (no other cut may take the name).
+        self._cut_paths: set[Path] = set()
         self._media: dict[str, dict[str, Any]] = {}
         # Recordings whose offsets could not be shifted: cached without index.
         self._no_index: set[str] = set()
@@ -379,6 +392,9 @@ class VodCache:
     async def async_shutdown(self) -> None:
         """Cancel fills and wait for them."""
         self._closed = True
+        for cancel in self._lease_timers.values():
+            cancel()
+        self._lease_timers.clear()
         tasks = [e.task for e in self._entries.values() if e.task is not None]
         tasks += list(self._flat_tasks)
         for task in tasks:
@@ -470,8 +486,10 @@ class VodCache:
     ) -> Entry:
         entry = Entry(recording, path, priority=priority)
         if failed is not None:
-            # URLs issued for the failed fill still read this recording.
+            # URLs issued for the failed fill still read this recording; its
+            # cuts' numbers stay taken (a window of one is never another's).
             entry.leases = failed.leases
+            entry.cuts = failed.cuts
         self._entries[recording.cache_id] = entry
         if found is None:
             return entry
@@ -515,13 +533,25 @@ class VodCache:
         lasts (plus a margin for a request sent just before it expires), and
         neither file is ever swapped. It ends early when released (the player
         moved on); a fill behind a click may evict it once it has not been
-        used for ``LEASE_IDLE_S`` (see ``touch``).
+        used for ``LEASE_IDLE_S`` (see ``touch``). When the recording's last
+        lease ends, released or expired, its cut is stopped.
         """
         now = _clock()
         self._prune_leases(now)
         lease = Lease(now + seconds + LEASE_MARGIN_S, now)
         entry.leases[token] = lease
         self._leases[token] = (entry.recording.cache_id, lease)
+        if (cancel := self._lease_timers.pop(token, None)) is not None:
+            cancel()
+        # A player that went without a release (a tab closed) leaves its
+        # leases to expire: then too the cut stops.
+        self._lease_timers[token] = async_call_later(
+            self._hass,
+            seconds + LEASE_MARGIN_S + 1,
+            HassJob(
+                self._expire_leases, "reolink_viewer lease", cancel_on_shutdown=True
+            ),
+        )
 
     def touch(self, token: str) -> None:
         """Note that the URL ``token`` was just used (a request read it).
@@ -543,20 +573,36 @@ class VodCache:
         """
         if (item := self._leases.pop(token, None)) is None:
             return
+        if (cancel := self._lease_timers.pop(token, None)) is not None:
+            cancel()
         if (entry := self._entries.get(item[0])) is not None:
             entry.leases.pop(token, None)
-            if not entry.leases and (entry.cut is not None or entry.old_cuts):
-                self._hass.async_create_background_task(
-                    self._end_cut(entry), "reolink_viewer end cut"
-                )
+            self._viewer_left(entry)
+
+    @callback
+    def _expire_leases(self, _now: datetime) -> None:
+        self._prune_leases(_clock())
 
     def _prune_leases(self, now: float) -> None:
-        """Forget the leases that have ended."""
+        """Forget the leases that have ended; stop the cuts nobody leases now."""
+        left: dict[str, Entry] = {}
         for token, (cache_id, lease) in list(self._leases.items()):
             if lease.until <= now:
                 del self._leases[token]
+                if (cancel := self._lease_timers.pop(token, None)) is not None:
+                    cancel()
                 if (entry := self._entries.get(cache_id)) is not None:
                     entry.leases.pop(token, None)
+                    left[cache_id] = entry
+        for entry in left.values():
+            self._viewer_left(entry)
+
+    def _viewer_left(self, entry: Entry) -> None:
+        """Stop the recording's cuts once no live URL can read it."""
+        if not entry.leased(_clock()) and (entry.cut is not None or entry.old_cuts):
+            self._hass.async_create_background_task(
+                self._end_cut(entry), "reolink_viewer end cut"
+            )
 
     async def _fill(self, entry: Entry) -> None:
         rec = entry.recording
@@ -585,7 +631,7 @@ class VodCache:
                 finally:
                     ticket.release()
                     entry.ticket = None
-                    entry.yielding = False
+                    entry.yielding = entry.halting = False
                     self._reserved.pop(entry.part_path, None)
                     async with entry.changed:
                         entry.changed.notify_all()
@@ -601,9 +647,15 @@ class VodCache:
             entry.error = _describe(err)
             _LOGGER.debug("Caching %s failed: %s", rec.cache_id[:8], entry.error)
             await self._discard_part(entry)
+            # The next open makes a new entry: nothing serves these cuts now.
+            await self._drop_cuts(entry)
         else:
             entry.timing["fill_ms"] = _ms(began)
-            if outcome == "complete" and entry.cut is not None and not entry.leases:
+            if (
+                outcome == "complete"
+                and entry.cut is not None
+                and not entry.leased(_clock())
+            ):
                 # Whole now, and no viewer left: the cut is not needed.
                 await self._end_cut(entry)
             await self._evict()
@@ -625,11 +677,15 @@ class VodCache:
             self._fill(entry), f"reolink_viewer fill {entry.path.stem[:8]}"
         )
 
-    async def _lend_slot(self, entry: Entry) -> None:
+    async def _lend_slot(self, entry: Entry, *, stop: bool = False) -> None:
         """Have the recording's download give its stream slot to its cut.
 
-        A download holding a slot stops and queues behind the cut; one still
-        waiting for a slot lets the cut go first.
+        A download holding a slot stops and queues behind the cut (the cut's
+        first span: its viewer waits for the first picture); with ``stop`` (a
+        later span) it stops where it is and is resumed only when something
+        needs the part it lacks, rather than read the recording from its start
+        again (the device ignores Range) after every span. One still waiting
+        for a slot lets the cut go first.
         """
         ticket = entry.ticket
         if ticket is None or ticket.released:
@@ -637,7 +693,11 @@ class VodCache:
         if not ticket.granted:
             ticket.defer()
             return
+        if stop and entry.whole:
+            # Something needs it whole (a clip): the span waits for a slot.
+            return
         entry.yielding = True
+        entry.halting = stop
         if entry.response is not None:
             # Also when it waits on the device: nothing arrives to stop it.
             entry.response.close()
@@ -856,6 +916,7 @@ class VodCache:
             entry.last_access = time.monotonic()
             if window.source == "cut" and cut is not None:
                 cut.readers -= 1
+                cut.last_read = time.monotonic()
 
     # ---- Cuts (Phase 5b) ----
 
@@ -867,7 +928,12 @@ class VodCache:
         failed: the original serves it then (the Phase 2 path).
         """
         source = self._baichuan
-        if source is None or not source.enabled or entry.complete:
+        if (
+            source is None
+            or not source.enabled
+            or entry.complete
+            or entry.error is not None
+        ):
             return None
         # One decision at a time per recording: concurrent starts share a cut.
         async with entry.cut_lock:
@@ -895,8 +961,7 @@ class VodCache:
             remaining = min(remaining, span + 10_000)
         length = max(rec.end_ms - rec.start_ms, 1)
         size = int(expected_size(rec) * min(remaining / length + 0.01, 1.0))
-        entry.cuts += 1
-        path = entry.path.with_name(f"{rec.cache_id}.{entry.cuts}{CUT_SUFFIX}")
+        path = self._next_cut_path(entry)
         try:
             cut = await source.async_start(
                 entry_id=rec.source.entry_id,
@@ -909,7 +974,7 @@ class VodCache:
                 reserve=self._reserve_cut,
                 size=size,
                 span_ms=span,
-                borrow=lambda: self._lend_slot(entry),
+                borrow=lambda first: self._lend_slot(entry, stop=not first),
             )
         except CutError as err:
             entry.timing["cut_error"] = str(err)
@@ -917,12 +982,26 @@ class VodCache:
         cut.generation = entry.cuts
         old, entry.cut = entry.cut, cut
         if cut.task is not None:
-            cut.task.add_done_callback(lambda _t: self._reserved.pop(path, None))
+            self._cut_paths.add(path)
+            cut.task.add_done_callback(lambda _t: self._cut_done(path))
         if old is not None:
             # Another viewer of the recording may still read it.
             entry.old_cuts[old.generation] = old
         await self._prune_cuts(entry)
         return cut
+
+    def _next_cut_path(self, entry: Entry) -> Path:
+        """Return the next cut's file: never one a running cut writes."""
+        while True:
+            entry.cuts += 1
+            name = f"{entry.recording.cache_id}.{entry.cuts}{CUT_SUFFIX}"
+            path = entry.path.with_name(name)
+            if path not in self._cut_paths:
+                return path
+
+    def _cut_done(self, path: Path) -> None:
+        self._reserved.pop(path, None)
+        self._cut_paths.discard(path)
 
     async def _prune_cuts(self, entry: Entry, *, all_of_them: bool = False) -> None:
         """Let go of the replaced cuts no viewer read lately (or all)."""
@@ -1039,6 +1118,10 @@ class VodCache:
         reached = cut.end_ms
         if reached is None:
             return None
+        if not cut.running:
+            # It ended short of the recording's end (unread between spans,
+            # stopped, failed): a new cut or the download serves on.
+            return reached
         indexed = await self._indexed_now(entry)
         if indexed is None or indexed.find(reached) is None:
             return None
@@ -1106,7 +1189,7 @@ class VodCache:
 
         Replaced cuts go at once (nobody reads them now).
         """
-        if entry.leases:
+        if entry.leased(_clock()):
             return
         await self._prune_cuts(entry, all_of_them=True)
         cut = entry.cut
@@ -1116,6 +1199,18 @@ class VodCache:
             await self._baichuan.async_stop(cut)
         if entry.complete and cut.readers == 0 and entry.cut is cut:
             entry.cut = None
+            await self._hass.async_add_executor_job(_unlink, cut.path)
+
+    async def _drop_cuts(self, entry: Entry) -> None:
+        """Stop and delete the cuts of a recording whose fill failed."""
+        cuts = list(entry.old_cuts.values())
+        if entry.cut is not None:
+            cuts.append(entry.cut)
+        entry.cut = None
+        entry.old_cuts = {}
+        for cut in cuts:
+            if self._baichuan is not None:
+                await self._baichuan.async_stop(cut)
             await self._hass.async_add_executor_job(_unlink, cut.path)
 
     async def _await_index(
@@ -1313,6 +1408,13 @@ class VodCache:
                 if entry.yielding:
                     # The cut took the slot (closing the response ends a read).
                     outcome = "yielded"
+                    if entry.halting:
+                        # For good: what is on disk is the part before.
+                        outcome = "stopped"
+                        indexed = await self._indexed_now(entry)
+                        entry.stopped_ms = (
+                            indexed.duration_ms if indexed is not None else 0.0
+                        )
                 if outcome != "complete":
                     return outcome
                 if not planned:
@@ -1669,14 +1771,21 @@ def _stopped(entry: Entry) -> bool:
 
 
 def _covers(cut: Cut, at_ms: float) -> bool:
-    """Return whether a cut serves a start at ``at_ms`` (or soon will)."""
+    """Return whether a cut serves a start at ``at_ms`` (or soon will).
+
+    Inside what it has, running or not; past it, while it runs and will
+    reach it soon.
+    """
     start = cut.start_ms if cut.start_ms is not None else cut.asked_ms
     if at_ms < start:
         return False
-    reached = cut.end_ms if cut.end_ms is not None else cut.asked_ms
+    reached = cut.end_ms
+    if reached is not None and at_ms < reached:
+        return True
     if cut.complete:
-        return at_ms < reached
-    return cut.running and at_ms <= reached + CUT_REACH_MS
+        return False
+    reach = reached if reached is not None else cut.asked_ms
+    return cut.running and at_ms <= reach + CUT_REACH_MS
 
 
 def _open_write_at(path: Path, offset: int) -> tuple[int, int]:

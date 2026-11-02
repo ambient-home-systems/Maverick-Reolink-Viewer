@@ -23,6 +23,11 @@ of a past day and measures, 75 % into it:
 Every stream runs under the host's stream budget at playback priority.
 Nothing is written to the device; the only Baichuan commands sent are login,
 seek, start, stop, the download cut, its end, and logout.
+
+Each measurement logs in on a connection of its own (its login is part of
+what is measured), not on the one deep starts share (``baichuan_source``):
+while the check runs, the device counts one more logged-in user, beside the
+deep starts' own if one is open. The report says so (``connection``).
 """
 
 import asyncio
@@ -71,6 +76,10 @@ FILL_MAX_BYTES = 64 * 1024**2
 # A stream slot of the host's budget is waited for this long at most: live
 # tiles and cameras kept warm hold slots, and the probe must not hang on them.
 SLOT_TIMEOUT = 60.0
+CONNECTION_NOTE = (
+    "its own connection for each measurement: one more logged-in user on the"
+    " device while the check runs, beside the deep starts' own if one is open"
+)
 
 
 @dataclass(slots=True)
@@ -247,6 +256,7 @@ class BaichuanCheck:
             "streams": list(self._options.streams),
             "hold_s": self._options.hold_seconds,
             "cut_s": self._options.cut_seconds,
+            "connection": CONNECTION_NOTE,
             "channels_left_out": [c.channel for c in candidates[MAX_CHANNELS:]],
             "stream_budget": self._streams.stats(),
             "users_before": await self._users(),

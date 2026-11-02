@@ -260,6 +260,8 @@ async def test_check_measures_replay_download_and_http(
     assert result["users_after"] == {"count": 2}
     assert result["online"]["count"] == 2
     assert result["online"]["limits"] == {"range.User.maxNum": 10}
+    # Its own connection, said so: deep starts may hold one of their own.
+    assert "one more logged-in user" in result["connection"]
     assert result["channels_left_out"] == []
     (entry,) = result["channels"]
     assert entry["channel"] == 0

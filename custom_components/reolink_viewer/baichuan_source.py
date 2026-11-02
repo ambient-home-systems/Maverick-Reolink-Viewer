@@ -15,14 +15,19 @@ indexed like it (``fmp4.FragmentIndex``), so the MSE view serves both alike.
 - Cuts of one channel take turns (the device tells streams apart by channel,
   so one downloads at a time; Phase 5c): a new cut never stops another. One
   that must wait asks the channel's current cut to give its turn up, which it
-  does at the next block once it has its first fragment: it ends its span
-  there (144) and joins on later, by the counter, as spans join. A viewer
-  plays well ahead of what it watches, so the pause goes unseen. Only a new
-  cut asks: one resuming, or a later span, waits its turn.
+  does once it has a fragment: it ends its span there (144) and joins on
+  later, by the counter, as spans join. A new cut (its viewer waits for the
+  first picture) gets the turn at the holder's next block; one resuming, or
+  a later span, after the holder's turn has lasted ``TURN_S`` and brought a
+  fragment more. So turns alternate in bounded spans, within what the viewers
+  have buffered, whether the holder cuts to the recording's end (sub) or in
+  spans (HD).
 - An HD cut comes in spans (``span_ms`` of media, a few minutes) rather than
   to the recording's end: the cache asks for the next span as the viewer
   nears the end of one (:meth:`Cut.extend`), and the muxer joins them. The
-  login is held across spans; a stream slot only while a span downloads.
+  login is held across spans; a stream slot only while a span downloads. A
+  paused cut nobody reads for ``PAUSE_IDLE_S`` ends (its viewer left without
+  a word: a tab closed), and with it the login.
 - Each cut holds a slot of the host's stream budget, at playback priority, and
   gives up if none is free within ``SLOT_TIMEOUT_S``. With none free at once
   it first asks for its recording's download's (``borrow``, Phase 5c): a
@@ -81,6 +86,15 @@ CLIENT_TIMEOUT_S = 10.0
 # Nothing from the device for this long: the cut has failed.
 QUIET_TIMEOUT_S = 15.0
 END_TIMEOUT_S = 3.0
+# Between spans, a cut no window was read from for this long ends: its viewer
+# left without a word (a tab closed, the app killed, the network gone), and
+# the host logs out ``IDLE_LOGOUT_S`` later. A viewer still playing reads a
+# window every 20 s or so; one that comes back is served by a new cut.
+PAUSE_IDLE_S = 25.0
+# While another cut of the channel waits, the one downloading gives its turn
+# up after this long (and a fragment more): turns alternate well within what
+# the viewers have buffered (1 to 4 s when one has just given way).
+TURN_S = 1.0
 STREAM_TYPES = {"sub": "subStream", "main": "mainStream"}
 # A device that refused the protocol is asked again after this long.
 UNSUPPORTED_RETRY_S = 6 * 3600.0
@@ -92,7 +106,8 @@ ANY_CHANNEL_BITMAP = 255
 
 type ClientFactory = Callable[..., BaichuanReplayClient]
 type Reserve = Callable[[Path, int], Awaitable[None]]
-type Borrow = Callable[[], Awaitable[None]]
+# Asks the recording's download for its stream slot; True for a cut's first span.
+type Borrow = Callable[[bool], Awaitable[None]]
 
 
 class CutError(Exception):
@@ -132,9 +147,14 @@ class Cut:
     borrowed: int = 0
     # Time the muxer took (s, on the event loop).
     mux_s: float = 0.0
-    # Another cut of the channel waits: end this span at the next block.
-    give_way: bool = False
+    # Another cut of the channel waits: end this span once the turn has
+    # lasted this long (s) and brought a fragment (0: at the next block, once
+    # the cut has any fragment); None while none waits.
+    give_way: float | None = None
     gave_way: int = 0
+    # The current turn: when it began, and the fragments the cut had then.
+    turn_began: float = 0.0
+    turn_fragments: int = 0
     # Wakes the span's pump (to give way at once).
     waker: asyncio.Event | None = None
     _more: asyncio.Event = field(default_factory=asyncio.Event)
@@ -144,10 +164,31 @@ class Cut:
         if not self.complete:
             self._more.set()
 
-    async def wait_for_more(self) -> None:
-        """Wait (between spans) until the next span is asked for."""
-        await self._more.wait()
+    async def wait_for_more(self, idle: float) -> bool:
+        """Wait (between spans) until the next span is asked for.
+
+        Returns False once no window of the cut was read for ``idle`` seconds
+        (its viewer left without releasing it).
+        """
+        while not self._more.is_set():
+            left = self.last_read + idle - time.monotonic()
+            if left <= 0 and not self.readers:
+                return False
+            with contextlib.suppress(TimeoutError):
+                async with asyncio.timeout(left if left > 0 else idle):
+                    await self._more.wait()
         self._more.clear()
+        return True
+
+    def gives_way(self) -> bool:
+        """Return whether a cut waiting for the channel should have it now."""
+        wait = self.give_way
+        if wait is None or not self.index.fragments:
+            return False
+        return wait <= 0 or (
+            len(self.index.fragments) > self.turn_fragments
+            and time.monotonic() - self.turn_began >= wait
+        )
 
     @property
     def running(self) -> bool:
@@ -202,13 +243,16 @@ class _Feed:
     detached: bool = False
 
     def block(self, block: Block) -> None:
-        if self.detached:
+        if self.detached or self.failures:
             return
         began = time.perf_counter()
         try:
             self.pieces.extend(self.muxer.feed(block))
         except MuxError as err:
             self.failures.append(str(err))
+        except Exception as err:  # noqa: BLE001 - the device's input: this cut fails
+            # Kept from the connection's read loop, which other cuts share.
+            self.failures.append(f"cannot mux the stream ({type(err).__name__}: {err})")
         self.cut.mux_s += time.perf_counter() - began
         if self.pieces or self.failures:
             self.arrived.set()
@@ -220,10 +264,12 @@ class _Feed:
 
 @dataclass(slots=True)
 class _Channel:
-    """Whose turn it is to download from a channel."""
+    """Whose turn it is to download from a channel, and who waits for it."""
 
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     holder: Cut | None = None
+    # Each cut waiting for the turn: how long the holder's turn may last (s).
+    waiting: dict[Cut, float] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
@@ -265,6 +311,8 @@ class BaichuanSource:
         self._cuts: set[Cut] = set()
         self._channels: dict[tuple[str, int], _Channel] = {}
         self._closed = False
+        # Clean-ups and 144s that outlive what started them (kept referenced).
+        self._closing: set[asyncio.Future[None]] = set()
         # Each camera's counter rate (entry|channel), as earlier cuts measured.
         self._rates_store: Store[dict[str, int]] = Store(hass, 1, RATES_STORE_KEY)
         self._rates: dict[str, int] | None = None
@@ -347,7 +395,7 @@ class BaichuanSource:
                 final = span_end >= end
                 first = cut.spans == 0
                 async with self._slot(
-                    cut, SLOT_TIMEOUT_S if first else SPAN_SLOT_TIMEOUT_S
+                    cut, SLOT_TIMEOUT_S if first else SPAN_SLOT_TIMEOUT_S, first=first
                 ):
                     if first:
                         cut.timing["slot_ms"] = _ms(cut.began)
@@ -388,7 +436,11 @@ class BaichuanSource:
                 cut.paused = True
                 async with cut.changed:
                     cut.changed.notify_all()
-                await cut.wait_for_more()
+                if not await cut.wait_for_more(PAUSE_IDLE_S):
+                    # Unread: its viewer left without a word. The login goes
+                    # with it; a viewer back past its end gets a new cut.
+                    cut.timing["ended"] = "unread"
+                    return
                 cut.paused = False
                 resume = muxer.resume_unix
                 began = resume if resume is not None else span_end
@@ -409,14 +461,27 @@ class BaichuanSource:
                     cut.error,
                 )
         finally:
+            # All before any await: a second cancel during the clean-up must
+            # not leave the login held or the cut counted.
             cut.paused = False
             self._keep_rate(rate_key, muxer)
-            if fd is not None:
-                await self._hass.async_add_executor_job(os.close, fd)
             if client is not None:
                 self._release(cut.entry_id)
             self._cuts.discard(cut)
             cut.timing["total_ms"] = _ms(cut.began)
+            # The file closed and the waiting windows woken, cancelled or not.
+            closing = asyncio.ensure_future(self._close(cut, fd))
+            self._closing.add(closing)
+            closing.add_done_callback(self._closing.discard)
+            await asyncio.shield(closing)
+
+    async def _close(self, cut: Cut, fd: int | None) -> None:
+        """Close a cut's file and wake whoever waits on it (shielded)."""
+        try:
+            if fd is not None:
+                with contextlib.suppress(OSError):
+                    await self._hass.async_add_executor_job(os.close, fd)
+        finally:
             async with cut.changed:
                 cut.changed.notify_all()
 
@@ -444,37 +509,60 @@ class BaichuanSource:
         rates[key] = stats.rate
         self._rates_store.async_delay_save(lambda: dict(rates), 10)
 
-    def _ask_way(self, cut: Cut) -> _Channel:
+    def _channel(self, cut: Cut) -> _Channel:
+        return self._channels.setdefault((cut.entry_id, cut.channel), _Channel())
+
+    def _ask_way(self, cut: Cut) -> None:
         """Ask the cut downloading from ``cut``'s channel, if another, to give way.
 
-        Only for a cut's first span (a viewer waits for its first picture): a
-        later span, or one resuming after giving way, has its viewer well
-        ahead and waits its turn, so two cuts do not take turns block by block.
+        A cut's first span (a viewer waits for its first picture) asks for the
+        turn at the holder's next block, once it has a fragment. Any other
+        span (one that gave way, a later HD span) asks for it once the
+        holder's turn has lasted ``TURN_S`` and brought a fragment: turns
+        alternate within what the viewers have buffered, neither block by
+        block nor a whole download (an hour of sub, 20 s) at a time.
         """
-        channel = self._channels.setdefault((cut.entry_id, cut.channel), _Channel())
-        holder = channel.holder
-        if cut.spans == 0 and holder is not None and holder is not cut:
-            holder.give_way = True
-            if holder.waker is not None:
-                holder.waker.set()
-        return channel
+        holder = self._channel(cut).holder
+        if holder is None or holder is cut:
+            return
+        wait = _turn_wait(cut)
+        if holder.give_way is None or wait < holder.give_way:
+            holder.give_way = wait
+        if holder.waker is not None:
+            holder.waker.set()
 
     @contextlib.asynccontextmanager
     async def _turn(self, cut: Cut) -> AsyncIterator[None]:
         """Hold the channel's turn to download, asking its holder to give way."""
-        channel = self._ask_way(cut)
-        async with channel.lock:
+        channel = self._channel(cut)
+        channel.waiting[cut] = _turn_wait(cut)
+        self._ask_way(cut)
+        try:
+            await channel.lock.acquire()
+        finally:
+            del channel.waiting[cut]
+        try:
             channel.holder = cut
-            cut.give_way = False
-            try:
-                yield
-            finally:
-                channel.holder = None
-                cut.waker = None
+            # Whoever queued meanwhile is owed the turn back in time.
+            cut.give_way = min(channel.waiting.values(), default=None)
+            cut.turn_began = time.monotonic()
+            cut.turn_fragments = len(cut.index.fragments)
+            yield
+        finally:
+            channel.holder = None
+            cut.waker = None
+            channel.lock.release()
 
     @contextlib.asynccontextmanager
-    async def _slot(self, cut: Cut, wait: float) -> AsyncIterator[None]:
-        """Hold a slot of the host's stream budget, or fail within ``wait``."""
+    async def _slot(self, cut: Cut, wait: float, *, first: bool) -> AsyncIterator[None]:
+        """Hold a slot of the host's stream budget, or fail within ``wait``.
+
+        ``first``: the cut's first span (its viewer waits for the first
+        picture): the recording's download lends its slot and goes on after
+        it. A later span's viewer is minutes ahead: the download stops where
+        it is instead (see ``vodcache``), rather than read the recording from
+        its start again after each span.
+        """
         streams = self._scheduler.host(cut.entry_id).streams
         ticket = streams.request(Priority.PLAYBACK)
         try:
@@ -485,7 +573,7 @@ class BaichuanSource:
                 self._ask_way(cut)
                 if cut.borrow is not None:
                     cut.borrowed += 1
-                    await cut.borrow()
+                    await cut.borrow(first)
             try:
                 async with asyncio.timeout(wait):
                     await ticket.wait()
@@ -551,9 +639,15 @@ class BaichuanSource:
             )
         finally:
             if client.connected:
-                with contextlib.suppress(BaichuanClientError, TimeoutError, OSError):
+                # Waited for a little; the 144 itself runs on to the client's
+                # timeout (it lets go of this span's stream only) and keeps
+                # its failure to itself.
+                ending = asyncio.ensure_future(_end_download(client, cut.channel))
+                self._closing.add(ending)
+                ending.add_done_callback(self._closing.discard)
+                with contextlib.suppress(TimeoutError):
                     async with asyncio.timeout(END_TIMEOUT_S):
-                        await asyncio.shield(client.download_end(cut.channel))
+                        await asyncio.shield(ending)
 
     async def _pump(
         self,
@@ -608,7 +702,7 @@ class BaichuanSource:
                         cut.complete = True
                         cut.timing["mbit_s"] = _rate(cut.written, cut.began)
                     return False
-                if cut.give_way and cut.index.fragments:
+                if cut.gives_way():
                     # Nothing more is muxed; what was, is written; the open
                     # group waits for the next span.
                     feed.detached = True
@@ -737,6 +831,9 @@ class BaichuanSource:
                 except Exception as err:  # noqa: BLE001
                     _LOGGER.debug("Baichuan logout of %s failed: %s", entry_id[:6], err)
                     await client.close()
+        # Clean-ups a second cancel left running, and 144s still answered.
+        if self._closing:
+            await asyncio.gather(*self._closing, return_exceptions=True)
 
     def stats(self) -> dict[str, Any]:
         """Return the connections and cuts for the debug panel (no identifiers)."""
@@ -751,6 +848,17 @@ class BaichuanSource:
                 h.unsupported for h in self._hosts.values() if h.unsupported is not None
             ],
         }
+
+
+def _turn_wait(cut: Cut) -> float:
+    """Return how long the channel's holder may keep its turn for ``cut``."""
+    return 0.0 if cut.spans == 0 else TURN_S
+
+
+async def _end_download(client: BaichuanReplayClient, channel: int) -> None:
+    """Send 144; its failure (a timeout, the connection gone) is nobody's."""
+    with contextlib.suppress(BaichuanClientError, TimeoutError, OSError):
+        await client.download_end(channel)
 
 
 def _local(unix: float, tz: tzinfo | None) -> datetime:
