@@ -24,7 +24,7 @@ Phase 7, step 1: a camera on any dashboard.
   every camera's.
 - The panel's files are split differently, so the card and the panel share them; the
   panel's first download is about the same.
-- See [A camera on a dashboard](docs/user-guide.md#a-camera-on-a-dashboard).
+- See [A camera on a dashboard](https://github.com/ambient-home-systems/Maverick-Reolink-Viewer/blob/v0.44.0/docs/user-guide.md#a-camera-on-a-dashboard).
 
 ## 0.43.0
 
