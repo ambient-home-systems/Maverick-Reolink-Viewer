@@ -1,6 +1,7 @@
 {
   "domain": "reolink_viewer",
   "name": "Reolink Viewer",
+  "after_dependencies": ["recorder"],
   "codeowners": ["@ambient-home-systems"],
   "config_flow": true,
   "dependencies": [
@@ -18,5 +19,5 @@
   "issue_tracker": "https://github.com/ambient-home-systems/Maverick-Reolink-Viewer/issues",
   "requirements": [],
   "single_config_entry": true,
-  "version": "0.45.2"
+  "version": "0.46.0"
 }

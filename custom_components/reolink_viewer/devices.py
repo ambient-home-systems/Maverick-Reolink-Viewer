@@ -76,6 +76,49 @@ LIVE_CONTROLS: dict[tuple[str, str], str] = {
 }
 
 
+# The Reolink integration's detection binary sensors (their entity description
+# keys), which the journal records (Phase 8): what a camera saw. Not sleep, nor
+# a camera's alarm input.
+DETECTION_KINDS: frozenset[str] = frozenset(
+    {
+        "motion",
+        "person",
+        "vehicle",
+        "non-motor_vehicle",
+        "animal",
+        "pet",
+        "face",
+        "package",
+        "visitor",
+        "cry",
+        "tamper",
+        "crossline_person",
+        "crossline_vehicle",
+        "crossline_dog_cat",
+        "intrusion_person",
+        "intrusion_vehicle",
+        "intrusion_dog_cat",
+        "linger_person",
+        "linger_vehicle",
+        "linger_dog_cat",
+        "forgotten_item",
+        "taken_item",
+    }
+)
+# Longest first, so "crossline_person" is not taken for "person".
+_KINDS_BY_LENGTH = sorted(DETECTION_KINDS, key=len, reverse=True)
+
+
+@dataclass(frozen=True, slots=True)
+class DetectionSensor:
+    """A detection binary sensor, and the camera and kind it stands for."""
+
+    entity_id: str
+    camera_id: str
+    camera_name: str
+    kind: str
+
+
 class DeviceNotFoundError(Exception):
     """No Reolink device with that id."""
 
@@ -817,6 +860,44 @@ def _live_controls(
 
 
 @callback
+def detection_kind(entity: er.RegistryEntry) -> str | None:
+    """Return what a Reolink binary sensor detects, if it is a detection sensor.
+
+    Its translation key says so, but motion's has none: its unique id ends in
+    its entity description's key (``<host>_<channel>_motion``) either way.
+    """
+    if entity.domain != "binary_sensor" or entity.platform != REOLINK_DOMAIN:
+        return None
+    if entity.translation_key in DETECTION_KINDS:
+        return entity.translation_key
+    return next(
+        (k for k in _KINDS_BY_LENGTH if entity.unique_id.endswith(f"_{k}")), None
+    )
+
+
+@callback
+def async_detection_sensors(
+    hass: HomeAssistant, *, degraded: bool = False
+) -> dict[str, DetectionSensor]:
+    """Return every enabled detection sensor, by entity id, with its camera.
+
+    One camera, not one connection: a camera on an NVR and added on its own
+    has a sensor on each, both under the camera's id (its NVR connection's).
+    """
+    model = _async_build(hass, degraded=degraded)
+    ent_reg = er.async_get(hass)
+    sensors: dict[str, DetectionSensor] = {}
+    for camera in model.cameras:
+        name = _device_name(camera.primary.device) or camera.primary.entry_title
+        for conn in camera.connections:
+            for entity in _reolink_entities(ent_reg, [conn.device.id]):
+                if entity.disabled_by is None and (kind := detection_kind(entity)):
+                    sensors[entity.entity_id] = DetectionSensor(
+                        entity.entity_id, camera.id, name, kind
+                    )
+    return sensors
+
+
 def async_playback_sources(hass: HomeAssistant) -> list[PlaybackSource]:
     """Return the playback source of every camera that records."""
     model = _async_build(hass, degraded=False)

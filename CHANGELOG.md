@@ -3,6 +3,21 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.46.0
+
+Phase 7 is done. Phase 8, step 1: learning what is normal starts with a journal.
+
+- **Learn what is normal (off unless you turn it on):** in Reolink Viewer's options,
+  it keeps a journal of what each camera detects (people, vehicles, animals, motion,
+  doorbell presses and more) and when, so a later version can mark what is unusual
+  for each camera. It starts with the last 10 days of Home Assistant's own history.
+- **It stays on this Home Assistant:** a small file in the config folder, a few
+  megabytes a month, included in backups and never sent anywhere. Turning the option
+  off deletes it, and so does removing Reolink Viewer.
+- **Devices → Learning what is normal** shows since when it learns, and how many
+  detections it has from each camera.
+- See [Learning what is normal](https://github.com/ambient-home-systems/Maverick-Reolink-Viewer/blob/v0.46.0/docs/user-guide.md#learning-what-is-normal).
+
 ## 0.45.2
 
 - **No more "Detected blocking call" warning at startup.** Reolink Viewer read the

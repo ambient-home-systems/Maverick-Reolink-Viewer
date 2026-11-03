@@ -373,7 +373,9 @@ export class ReolinkViewerPanel extends LitElement {
           ${this._loadError
             ? nothing
             : html`<rv-device-list .devices=${this._devices} .cameras=${this._board}></rv-device-list>`}
-          ${this._renderChecks()} ${this._renderThisDevice()} ${this._renderHelp()}
+          ${this._renderChecks()}
+          ${this._devices && !this._devices.degraded ? html`<rv-learning .hass=${this.hass}></rv-learning>` : nothing}
+          ${this._renderThisDevice()} ${this._renderHelp()}
           ${this._isAdmin ? this._renderProbe() : nothing}`;
     }
   }

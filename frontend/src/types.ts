@@ -463,6 +463,22 @@ export interface LiveStreamInfo {
   warm?: boolean;
 }
 
+/** The detection journal (Phase 8, journal/status): off, or what it holds. */
+export type JournalStatus =
+  | { enabled: false }
+  | {
+      enabled: true;
+      /** When it was started (epoch ms). */
+      created: number;
+      /** Changes imported from Home Assistant's history at the start. */
+      imported: number;
+      changes: number;
+      detections: number;
+      sensors: number;
+      bytes: number;
+      cameras: { id: string; name: string; changes: number; detections: number; first: number; last: number }[];
+    };
+
 /** One thing a dashboard card's page saw (card/tablet.ts, live/card_log). */
 export interface TabletEvent {
   at: number;

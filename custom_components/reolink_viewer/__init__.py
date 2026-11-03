@@ -16,15 +16,17 @@ from homeassistant.helpers.typing import ConfigType
 from homeassistant.util.hass_dict import HassKey
 from homeassistant.util.ssl import SSLCipherList
 
-from . import bridge
+from . import bridge, devices
 from .baichuan_source import BaichuanSource
 from .checks import CheckReports
 from .const import (
     CAMERA_HOST_CONCURRENCY,
     CARD_FILENAME,
     CONF_BAICHUAN_DEEP_START,
+    CONF_LEARN_NORMAL,
     DEFAULT_BAICHUAN_DEEP_START,
     DEFAULT_HOST_CONCURRENCY,
+    DEFAULT_LEARN_NORMAL,
     DEFAULT_STREAM_BUDGET,
     DOMAIN,
     FRONTEND_DIST_DIR,
@@ -46,6 +48,7 @@ from .const import (
     VOD_CACHE_MAX_BYTES,
 )
 from .events import SeenStore
+from .journal import Journal, delete_journal, journal_path
 from .live.service import LiveService
 from .live.views import LiveFrameView, LiveImageView, LiveMseView
 from .live.websocket import async_register_live_commands
@@ -195,11 +198,19 @@ async def async_setup_entry(
         seen=seen,
         live=live,
         compat_ok=compat.ok,
+        journal=Journal(
+            hass, lambda: devices.async_detection_sensors(hass, degraded=not compat.ok)
+        ),
     )
+    await _async_apply_learning(hass, entry)
+    entry.async_on_unload(entry.add_update_listener(_async_options_updated))
 
     async def stop_live(_event: Event) -> None:
         # Not left running past Home Assistant (it would hold its ports).
         await live.async_shutdown()
+        # What the journal has not written yet.
+        if entry.runtime_data.journal is not None:
+            await entry.runtime_data.journal.async_stop()
 
     entry.async_on_unload(
         hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, stop_live)
@@ -242,12 +253,42 @@ async def async_setup_entry(
     return True
 
 
+async def _async_apply_learning(
+    hass: HomeAssistant, entry: ReolinkViewerConfigEntry
+) -> None:
+    """Keep the detection journal while "Learn what is normal" is on; else none."""
+    journal = entry.runtime_data.journal
+    if journal is None:
+        return
+    if entry.options.get(CONF_LEARN_NORMAL, DEFAULT_LEARN_NORMAL):
+        await journal.async_start()
+    else:
+        # Off: no journal on disk, whether it was running or left from before.
+        await journal.async_delete()
+
+
+async def _async_options_updated(
+    hass: HomeAssistant, entry: ReolinkViewerConfigEntry
+) -> None:
+    """Apply the options that need it at once (the journal)."""
+    await _async_apply_learning(hass, entry)
+
+
+async def async_remove_entry(
+    hass: HomeAssistant, entry: ReolinkViewerConfigEntry
+) -> None:
+    """Delete the detection journal: removing Reolink Viewer removes it."""
+    await hass.async_add_executor_job(delete_journal, journal_path(hass))
+
+
 async def async_unload_entry(
     hass: HomeAssistant, entry: ReolinkViewerConfigEntry
 ) -> bool:
     """Unload the entry."""
     if not await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
         return False
+    if entry.runtime_data.journal is not None:
+        await entry.runtime_data.journal.async_stop()
     frontend.async_remove_panel(hass, PANEL_URL_PATH, warn_if_unknown=False)
     if entry.runtime_data.live is not None:
         await entry.runtime_data.live.async_shutdown()

@@ -11,16 +11,26 @@ from homeassistant.helpers.schema_config_entry_flow import (
     SchemaOptionsFlowHandler,
 )
 
-from .const import CONF_BAICHUAN_DEEP_START, DEFAULT_BAICHUAN_DEEP_START, DOMAIN, NAME
+from .const import (
+    CONF_BAICHUAN_DEEP_START,
+    CONF_LEARN_NORMAL,
+    DEFAULT_BAICHUAN_DEEP_START,
+    DEFAULT_LEARN_NORMAL,
+    DOMAIN,
+    NAME,
+)
 
 # Phase 5b/5c: a start deep in an uncached recording asks the device for that
 # moment over the Reolink protocol (on by default; devices that refuse it are
 # found out). Read at each start, so no reload is needed.
+# Phase 8: "Learn what is normal" keeps the detection journal (off by
+# default); turning it off deletes the journal. Applied at once.
 OPTIONS_SCHEMA = probatio.Schema(
     {
         probatio.Required(
             CONF_BAICHUAN_DEEP_START, default=DEFAULT_BAICHUAN_DEEP_START
-        ): bool
+        ): bool,
+        probatio.Required(CONF_LEARN_NORMAL, default=DEFAULT_LEARN_NORMAL): bool,
     }
 )
 OPTIONS_FLOW = {"init": SchemaFlowFormStep(OPTIONS_SCHEMA)}
@@ -45,5 +55,5 @@ class ReolinkViewerConfigFlow(ConfigFlow, domain=DOMAIN):
     @callback
     @override
     def async_get_options_flow(config_entry: ConfigEntry) -> SchemaOptionsFlowHandler:
-        """Return the options flow (one setting)."""
+        """Return the options flow."""
         return SchemaOptionsFlowHandler(config_entry, OPTIONS_FLOW)

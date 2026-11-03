@@ -534,6 +534,7 @@ export function fakeHass(options: {
     "reolink_viewer/catalog": () => catalog,
     "reolink_viewer/live/cameras": () => ({ cameras: CAMS.map(liveCamera) }),
     "reolink_viewer/live/card_log": () => ({ devices: CARD_LOG }),
+    "reolink_viewer/journal/status": () => JOURNAL,
     "reolink_viewer/live/status": () => ({ go2rtc: { state: "running", version: "1.9.14", restarts: 0 }, running: {}, preloaded: [], sessions: 0 }),
     "web_rtc/ice_servers": () => [],
     "reolink_viewer/timeline/days": () => ({ days: [21, 22, 23, 24, 25, 26, 27], timing: { cache: "memory", total_ms: 0 } }),
@@ -596,6 +597,22 @@ export function fakeHass(options: {
 }
 
 export const PREVIEW_NOW = NOW;
+
+/** The detection journal, learning for nine days (Devices → Learning what is normal). */
+const JOURNAL = {
+  enabled: true,
+  created: NOW - 9 * 86_400_000,
+  imported: 1240,
+  changes: 6120,
+  detections: 3050,
+  sensors: 48,
+  bytes: 210_000,
+  cameras: [
+    { id: "cam-door", name: "Doorbell", changes: 1900, detections: 950, first: NOW - 19 * 86_400_000, last: NOW },
+    { id: "cam-fyl", name: "Front Yard Left", changes: 2420, detections: 1200, first: NOW - 19 * 86_400_000, last: NOW },
+    { id: "cam-garage", name: "Garage Camera", changes: 1800, detections: 900, first: NOW - 19 * 86_400_000, last: NOW },
+  ],
+};
 
 /** A wall tablet's evening, as its dashboard cards noted it (the Dashboard cards report). */
 const CARD_LOG = (() => {

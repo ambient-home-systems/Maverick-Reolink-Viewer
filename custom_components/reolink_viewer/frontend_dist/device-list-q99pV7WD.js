@@ -1,8 +1,78 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
-import { A as i, Y as a } from "./live-B4_L2qHv.js";
-import { r as o, z as s } from "./home-D-U83-Mk.js";
+import { A as i, Dt as a, Y as o, at as s, f as c } from "./live-DWqtt9-p.js";
+import { r as l, z as u } from "./home-6Y7aBYC2.js";
+//#region src/components/learning.ts
+var d = class extends r {
+	static properties = {
+		hass: { attribute: !1 },
+		_state: { state: !0 }
+	};
+	_read = !1;
+	constructor() {
+		super(), this._state = "loading";
+	}
+	updated() {
+		!this._read && this.hass && this._load(this.hass);
+	}
+	async _load(e) {
+		this._read = !0;
+		try {
+			this._state = await s(e);
+		} catch (e) {
+			this._state = { error: a(e).message };
+		}
+	}
+	render() {
+		return n`<section class="card">
+      <h2>Learning what is normal</h2>
+      ${this._renderState()}
+    </section>`;
+	}
+	_renderState() {
+		let e = this._state;
+		if (e === "loading") return n`<p class="muted">Reading the journal…</p>`;
+		if ("error" in e) return n`<p class="muted">Could not read the journal: ${e.error}</p>`;
+		if (!e.enabled) return n`<p class="muted">
+        Off. Turn on <strong>Learn what is normal</strong> in Reolink Viewer's options (Settings → Devices &amp;
+        services → Reolink Viewer → Configure), and Reolink Viewer keeps a journal of what each camera detects and when,
+        so it can learn what is normal for each and, later, mark what is unusual. The journal stays on this Home
+        Assistant.
+      </p>`;
+		let r = this.hass?.config?.time_zone, i = e.cameras;
+		return n`<p>
+        On since ${c(e.created, r)}: ${f(e.detections, "detection")} from
+        ${f(i.length, "camera")} so far (${p(e.bytes)}).${e.imported ? ` It started with ${f(e.imported, "change")} from Home Assistant's history.` : ""}
+      </p>
+      ${i.length ? n`<ul>
+            ${i.map((e) => n`<li>
+                <span class="name">${e.name}</span>:
+                <span class="muted">${f(e.detections, "detection")}, since ${c(e.first, r)}</span>
+              </li>`)}
+          </ul>` : t}
+      <p class="muted small">
+        Marking what is unusual comes once each camera has a week of history: until then, it only learns.
+      </p>`;
+	}
+	static styles = [i, e`
+      :host {
+        display: block;
+      }
+      ul {
+        margin: 0 0 8px;
+        padding-left: 20px;
+      }
+      li .name {
+        font-weight: 500;
+      }
+    `];
+}, f = (e, t) => `${e.toLocaleString("en-US")} ${t}${e === 1 ? "" : "s"}`;
+function p(e) {
+	return e < 1e6 ? `${Math.max(1, Math.round(e / 1e3))} KB` : `${(e / 1e6).toFixed(1)} MB`;
+}
+customElements.get("rv-learning") || customElements.define("rv-learning", d);
+//#endregion
 //#region src/components/device-list.ts
-var c = class extends r {
+var m = class extends r {
 	static properties = {
 		devices: { attribute: !1 },
 		cameras: { attribute: !1 },
@@ -36,12 +106,12 @@ var c = class extends r {
     `;
 	}
 	_renderHost(e, t) {
-		let r = o(e.kind);
+		let r = l(e.kind);
 		return n`<section class="card">
       <div class="head">
         <h2>
           <button class="link host" @click=${() => {
-			s(this, {
+			u(this, {
 				view: "device",
 				id: e.id,
 				tab: "overview"
@@ -61,7 +131,7 @@ var c = class extends r {
 	}
 	_renderCameras(e, t) {
 		let r = e.camera_ids.map((e) => t.get(e)).filter((e) => e !== void 0);
-		return r.length ? this._renderTable(r.map((t) => this._renderCamera(t, e))) : n`<p class="muted">No cameras on this ${o(e.kind)}.</p>`;
+		return r.length ? this._renderTable(r.map((t) => this._renderCamera(t, e))) : n`<p class="muted">No cameras on this ${l(e.kind)}.</p>`;
 	}
 	_renderTable(e) {
 		return n`<div class="cols" aria-hidden="true">
@@ -72,24 +142,24 @@ var c = class extends r {
       </ul>`;
 	}
 	_renderCamera(e, r) {
-		let i = r ? e.connections.find((e) => e.host_id === r.id)?.channel : void 0, o = r !== void 0 && e.connections.some((e) => e.via === "direct"), c = this.cameras.find((t) => t.id === e.id)?.number, u = [o ? "Also added directly" : void 0, e.primary_view === "snapshot" ? "Snapshots only" : void 0].filter((e) => e !== void 0);
+		let i = r ? e.connections.find((e) => e.host_id === r.id)?.channel : void 0, a = r !== void 0 && e.connections.some((e) => e.via === "direct"), s = this.cameras.find((t) => t.id === e.id)?.number, c = [a ? "Also added directly" : void 0, e.primary_view === "snapshot" ? "Snapshots only" : void 0].filter((e) => e !== void 0);
 		return n`<li>
       <button
         class="row"
         @click=${() => {
-			s(this, {
+			u(this, {
 				view: "device",
 				id: e.id,
 				tab: "overview"
 			});
 		}}
       >
-        <span class="plat-cell">${c === void 0 ? t : n`<span class="plat" aria-hidden="true">${c}</span>`}</span>
+        <span class="plat-cell">${s === void 0 ? t : n`<span class="plat" aria-hidden="true">${s}</span>`}</span>
         <span class="name">${e.name ?? "Camera"}</span>
         <span class="ch muted">${i == null ? "Direct" : `Ch ${String(i + 1)}`}</span>
         <span class="model muted">${e.model ?? ""}</span>
-        <span class="state">${l(e)}${u.length ? n`<span class="flags muted">${u.join(" · ")}</span>` : t}</span>
-        ${a("chevron")}
+        <span class="state">${h(e)}${c.length ? n`<span class="flags muted">${c.join(" · ")}</span>` : t}</span>
+        ${o("chevron")}
       </button>
     </li>`;
 	}
@@ -230,10 +300,10 @@ var c = class extends r {
       }
     `];
 };
-function l(e) {
+function h(e) {
 	let r = e.status;
 	return r.online === !1 ? n`<span class="offline">Offline</span>` : r.sleeping ? n`<span>Asleep</span>` : r.online ? n`<span>Online</span>` : t;
 }
-customElements.get("rv-device-list") || customElements.define("rv-device-list", c);
+customElements.get("rv-device-list") || customElements.define("rv-device-list", m);
 //#endregion
-export { c as RvDeviceList };
+export { m as RvDeviceList };
