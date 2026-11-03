@@ -261,6 +261,8 @@ export function makeHass(devices: DevicesResponse, isAdmin = true): FakeHass {
       "reolink_viewer/device": makeDevice(),
       "reolink_viewer/catalog": CATALOG,
       "config/entity_registry/update": { reload_delay: 30 },
+      // The Devices page's "Learning what is normal" (Phase 8).
+      "reolink_viewer/journal/status": { enabled: false },
     },
     user: { is_admin: isAdmin },
     emit: (event) => listener?.(event),
