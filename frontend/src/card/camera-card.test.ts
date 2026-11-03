@@ -520,8 +520,15 @@ describe("custom:reolink-viewer-camera", () => {
       const { hass } = fakeHass();
       await mount(hass, { camera: "cam1" });
       expect(note).toHaveBeenCalledWith("starting", "Front Yard", "SD WebRTC");
-      players[0]?.setState({ kind: "playing", transport: "WebRTC", result: {} as never });
-      expect(note).toHaveBeenLastCalledWith("playing", "Front Yard", expect.stringMatching(/^SD WebRTC, \d+\.\d s$/));
+      // WebRTC gave up, MSE starts: noted, with why and how long WebRTC took.
+      players[0]?.setState({ kind: "starting", transport: "MSE", after: "WebRTC: timed out" });
+      expect(note).toHaveBeenLastCalledWith(
+        "starting",
+        "Front Yard",
+        expect.stringMatching(/^SD MSE, after \d+\.\d s: WebRTC: timed out$/),
+      );
+      players[0]?.setState({ kind: "playing", transport: "MSE", result: {} as never });
+      expect(note).toHaveBeenLastCalledWith("playing", "Front Yard", expect.stringMatching(/^SD MSE, \d+\.\d s$/));
       players[0]?.setState({ kind: "waiting", error: "camera unreachable", retryAt: 0 });
       expect(note).toHaveBeenLastCalledWith("retrying", "Front Yard", expect.stringMatching(/^SD: /));
     } finally {

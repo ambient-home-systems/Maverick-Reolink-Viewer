@@ -1,5 +1,5 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
-import { A as i, F as a, I as o, L as s, M as c, O as l, P as u, T as d, k as f, t as p } from "./live-Ck8ZOIpy.js";
+import { A as i, F as a, I as o, L as s, M as c, O as l, P as u, T as d, k as f, t as p } from "./live-B4_L2qHv.js";
 import { s as m } from "./config-D80frQMF.js";
 //#region src/card/tablet.ts
 var h = 6e4, g = 3e5, _ = 300, v = {
@@ -194,9 +194,11 @@ var E = class extends r {
 	_logPlayer(e, t) {
 		let { which: n, state: r } = t, i = Date.now();
 		switch (r.kind) {
-			case "starting":
-				this._startedAt.set(n, i), this._doing = "starting", y.note("starting", e, `${n} ${r.transport}`);
+			case "starting": {
+				let t = r.after ? this._startedAt.get(n) : void 0;
+				t === void 0 && this._startedAt.set(n, i), this._doing = "starting", y.note("starting", e, `${n} ${r.transport}${r.after && t !== void 0 ? `, after ${((i - t) / 1e3).toFixed(1)} s: ${r.after}` : ""}`);
 				break;
+			}
 			case "playing": {
 				let t = this._startedAt.get(n);
 				this._doing = "playing", y.note("playing", e, `${n} ${r.transport}${t === void 0 ? "" : `, ${((i - t) / 1e3).toFixed(1)} s`}`);

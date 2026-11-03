@@ -151,11 +151,22 @@ export class RvCameraCard extends LitElement {
     const { which, state } = detail;
     const now = Date.now();
     switch (state.kind) {
-      case "starting":
-        this._startedAt.set(which, now);
+      case "starting": {
+        // The other transport after the first failed: its time counts from the first.
+        const since = state.after ? this._startedAt.get(which) : undefined;
+        if (since === undefined) this._startedAt.set(which, now);
         this._doing = "starting";
-        tablet.note("starting", name, `${which} ${state.transport}`);
+        tablet.note(
+          "starting",
+          name,
+          `${which} ${state.transport}${
+            state.after && since !== undefined
+              ? `, after ${((now - since) / 1000).toFixed(1)} s: ${state.after}`
+              : ""
+          }`,
+        );
         break;
+      }
       case "playing": {
         const since = this._startedAt.get(which);
         this._doing = "playing";
