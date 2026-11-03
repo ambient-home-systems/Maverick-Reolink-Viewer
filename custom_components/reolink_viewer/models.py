@@ -8,6 +8,7 @@ from homeassistant.config_entries import ConfigEntry
 from .baichuan_source import BaichuanSource
 from .checks import CheckReports
 from .events import SeenStore
+from .journal import Journal
 from .live.service import LiveService
 from .scheduler import Scheduler
 from .thumbnails import ThumbnailService
@@ -33,6 +34,8 @@ class ReolinkViewerData:
     compat_ok: bool = True
     # Phase 5b's deep starts over the Reolink protocol (the option decides).
     baichuan: BaichuanSource | None = None
+    # Phase 8's detection journal; it records while "Learn what is normal" is on.
+    journal: Journal | None = None
 
 
 type ReolinkViewerConfigEntry = ConfigEntry[ReolinkViewerData]

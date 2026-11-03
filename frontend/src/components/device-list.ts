@@ -4,6 +4,7 @@ import { deviceTypeLabel } from "../format";
 import { icon } from "../icons";
 import { sharedStyles } from "../styles";
 import type { CameraNode, DevicesResponse, HostNode } from "../types";
+import "./learning";
 import type { BoardCamera } from "./live-grid";
 import { navigate } from "./navigation";
 

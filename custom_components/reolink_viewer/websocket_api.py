@@ -81,6 +81,7 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_playback_stats)
     websocket_api.async_register_command(hass, ws_check_report)
     websocket_api.async_register_command(hass, ws_check_reports)
+    websocket_api.async_register_command(hass, ws_journal_status)
 
 
 def _loaded_entry(hass: HomeAssistant) -> ReolinkViewerConfigEntry | None:
@@ -1008,3 +1009,24 @@ def ws_check_reports(
     connection.send_result(
         msg["id"], {"reports": entry.runtime_data.check_reports.reports()}
     )
+
+
+@websocket_api.websocket_command(
+    {probatio.Required("type"): f"{DOMAIN}/journal/status"}
+)
+@websocket_api.async_response
+async def ws_journal_status(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Return whether the detection journal records, and what it holds (Phase 8)."""
+    entry = _loaded_entry(hass)
+    if entry is None:
+        connection.send_error(msg["id"], ERR_NOT_LOADED, "Reolink Viewer is not loaded")
+        return
+    journal = entry.runtime_data.journal
+    if journal is None or not journal.running:
+        connection.send_result(msg["id"], {"enabled": False})
+        return
+    connection.send_result(msg["id"], {"enabled": True, **await journal.async_status()})

@@ -77,12 +77,11 @@ Phase 5 (starting deep in recordings over the Reolink app's own protocol) is bui
 through v0.40.1: a start deep in an uncached recording shows its first frame in about
 half a second; see the [plan](docs/IMPLEMENTATION_PLAN.md#phase-5-status). Phases 6 to
 13 are the second round. Phase 6, the Doorbell's events, is done (v0.43.0): they show
-beside the other cameras', presses included, and open as pictures. Under way: the
-dashboard card (Phase 7). The Reolink camera card came in v0.44.0 and was checked on a
-wall tablet and an iPhone; v0.45.0 adds what a wall tablet needs: the card stops under
-Fully Kiosk's screensaver, a doorbell's card goes full screen when it rings, and a report
-of what the cards saw. Planned: unusual
-events, the Wall (a monitor-style Live page), scrubbing that shows the picture, and more; see
+beside the other cameras', presses included, and open as pictures. Phase 7, the dashboard
+card, is done (v0.45.2): the Reolink camera card, checked on a wall tablet and an iPhone,
+which stops under Fully Kiosk's screensaver and takes the screen when the doorbell rings.
+Under way: unusual events (Phase 8), which starts with an opt-in journal of what each
+camera detects (v0.46.0). Planned: the Wall (a monitor-style Live page), scrubbing that shows the picture, and more; see
 [Phases 6–13](docs/IMPLEMENTATION_PLAN.md#phases-613-the-second-round-planned-2026-11-02).
 
 ## For developers

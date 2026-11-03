@@ -3,6 +3,7 @@ import type {
   CardLogDevice,
   CapacityEvent,
   IceServer,
+  JournalStatus,
   LiveCamera,
   LiveImagesEvent,
   LiveSignal,
@@ -298,6 +299,10 @@ export const fetchMediaInfo = (hass: HomeAssistant, deviceId: string): Promise<M
 
 export const fetchLiveStatus = (hass: HomeAssistant): Promise<LiveStatus> =>
   hass.callWS<LiveStatus>({ type: "reolink_viewer/live/status" });
+
+/** The detection journal: whether it records, and what it holds (Phase 8). */
+export const fetchJournalStatus = (hass: HomeAssistant): Promise<JournalStatus> =>
+  hass.callWS<JournalStatus>({ type: "reolink_viewer/journal/status" });
 
 /** What the dashboard cards saw, per device (the one heard from last first). */
 export const fetchCardLog = (hass: HomeAssistant): Promise<{ devices: CardLogDevice[] }> =>

@@ -1,5 +1,5 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
-import { A as i, F as a, I as o, L as s, M as c, O as l, P as u, T as d, k as f, t as p } from "./live-B4_L2qHv.js";
+import { A as i, F as a, I as o, L as s, M as c, O as l, P as u, T as d, k as f, t as p } from "./live-DWqtt9-p.js";
 import { s as m } from "./config-D80frQMF.js";
 //#region src/card/tablet.ts
 var h = 6e4, g = 3e5, _ = 300, v = {

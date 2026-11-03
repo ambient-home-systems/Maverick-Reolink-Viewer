@@ -1,5 +1,5 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
-import { A as i, Et as a, F as o, I as s, L as c, N as l, P as u, R as d, Y as f, _t as ee, c as te, mt as ne, pt as re, u as p, vt as ie } from "./live-B4_L2qHv.js";
+import { A as i, Dt as a, F as o, I as s, L as c, N as l, P as u, R as d, Y as f, c as ee, ht as te, mt as ne, u as p, vt as re, yt as ie } from "./live-DWqtt9-p.js";
 //#region src/integration.ts
 function ae(e) {
 	if (e?.degraded) return e.compat.ok ? !e.hosts.length && !e.cameras.length ? {
@@ -40,7 +40,7 @@ function m(e, t) {
 }
 //#endregion
 //#region src/version.ts
-var h = "0.45.2", se = "https://github.com/ambient-home-systems/Maverick-Reolink-Viewer", ce = {
+var h = "0.46.0", se = "https://github.com/ambient-home-systems/Maverick-Reolink-Viewer", ce = {
 	guide: ["user-guide"],
 	troubleshooting: ["troubleshooting"],
 	cameras: ["cameras"],
@@ -667,7 +667,7 @@ var Oe = 12e4, ke = 3600, Ae = 10, je = "rv-timetable-feed", Me = class extends 
 		}, 6e4 - this._now % 6e4 + 50);
 	}
 	get _isToday() {
-		return this.date === void 0 || this.date === te(this._now, this.hass?.config?.time_zone);
+		return this.date === void 0 || this.date === ee(this._now, this.hass?.config?.time_zone);
 	}
 	willUpdate(e) {
 		e.has("date") && e.get("date") !== void 0 && (this._feed = void 0, this._error = void 0, this._all = !1, this._newestBefore = void 0);
@@ -681,7 +681,7 @@ var Oe = 12e4, ke = 3600, Ae = 10, je = "rv-timetable-feed", Me = class extends 
 		if (!t) return;
 		let n = ++this._seq, r = this.date;
 		try {
-			let i = await re(t, {
+			let i = await ne(t, {
 				...r === void 0 ? {} : { date: r },
 				...e ? { background: e } : { maxAge: ke }
 			});
@@ -709,7 +709,7 @@ var Oe = 12e4, ke = 3600, Ae = 10, je = "rv-timetable-feed", Me = class extends 
 		}
 		await Promise.all([...t].map(async ([t, n]) => {
 			try {
-				let { urls: r } = await ne(e, t, n, Ae), i = new Map(this._thumbs);
+				let { urls: r } = await te(e, t, n, Ae), i = new Map(this._thumbs);
 				r.forEach((e, r) => i.set(`${t}:${String(n[r] ?? e.time)}`, e.url)), this._thumbs = i;
 			} catch {}
 		}));
@@ -744,7 +744,7 @@ var Oe = 12e4, ke = 3600, Ae = 10, je = "rv-timetable-feed", Me = class extends 
 				}))
 			};
 			try {
-				await ee(e);
+				await re(e);
 			} catch (e) {
 				this._error = a(e).message;
 			}
@@ -1181,12 +1181,12 @@ function Be(e) {
 //#endregion
 //#region src/views.ts
 var Ve = {
-	events: () => import("./events-view-D1hzXPFu.js"),
-	list: () => import("./device-list-D7xxzNCP.js"),
-	device: () => import("./device-page-ESNf-5qv.js"),
-	"live-check": () => import("./live-check-CO3DyMjS.js"),
-	soak: () => import("./live-soak-D1xmOBzy.js"),
-	cards: () => import("./card-report-v4BxNBEq.js")
+	events: () => import("./events-view-Cs-dNjC6.js"),
+	list: () => import("./device-list-q99pV7WD.js"),
+	device: () => import("./device-page-CLs5Dzlv.js"),
+	"live-check": () => import("./live-check-DDX6T622.js"),
+	soak: () => import("./live-soak-CzVK7BFj.js"),
+	cards: () => import("./card-report-D5N0zc6N.js")
 }, $ = /* @__PURE__ */ new Map();
 function He(e) {
 	let t = Ve[e];

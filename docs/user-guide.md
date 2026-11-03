@@ -175,8 +175,11 @@ only" marks a camera that keeps no recordings.
 
 Below the list:
 
-- **Checks**: the [live check](#the-live-check) and the
-  [soak report](#the-soak-report).
+- **Checks**: the [live check](#the-live-check), the
+  [soak report](#the-soak-report) and the
+  [dashboard cards report](#the-dashboard-cards-report).
+- **Learning what is normal**: whether Reolink Viewer keeps a journal of what each
+  camera detects, [below](#learning-what-is-normal).
 - **This device**: how full screen plays on the phone or computer you are using,
   [below](#this-device).
 - **Help**: this guide, [Troubleshooting](troubleshooting.md) and
@@ -184,6 +187,30 @@ Below the list:
 - **Hardware probe**, for administrators: see [below](#the-hardware-probe).
 
 **Refresh** reads your devices again, after you add or change one in Home Assistant.
+
+### Learning what is normal
+
+Of the hundreds of detections a day, a few are unusual for their camera: a person at
+the back door at 3 am, a car in the drive in the middle of a weekday. Reolink Viewer
+will learn what is normal for each camera and mark what is not. To learn, it first
+keeps a journal of what each camera detects (people, vehicles, animals, motion,
+doorbell presses and the rest of the Reolink integration's detection sensors) and
+when.
+
+- **Off unless you turn it on:** **Settings → Devices & services → Reolink Viewer →
+  Configure → Learn what is normal.**
+- **It stays on this Home Assistant:** the journal is a file in the config folder,
+  `reolink_viewer_journal.db`, included in Home Assistant's backups and never sent
+  anywhere. It shows when your cameras see people, and so when the house is empty:
+  turning the option off deletes it, and so does removing Reolink Viewer.
+- **A head start:** it begins with the last 10 days of Home Assistant's own history
+  of these sensors.
+- **Small:** a few megabytes a month for a busy property.
+- **On the Devices page,** **Learning what is normal** says since when it learns, and
+  how many detections it has from each camera.
+
+Marking what is unusual comes in a later version, once each camera has at least a
+week of history.
 
 ### This device
 

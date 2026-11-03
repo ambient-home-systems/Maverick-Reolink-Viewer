@@ -1,6 +1,6 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
-import { A as i, Et as a, Ot as o, Y as s, _ as c, at as l, et as u, g as d, h as f, j as p, nt as m, t as h, u as g, v as _, xt as v } from "./live-B4_L2qHv.js";
-import { B as y, G as b, I as x, J as S, K as C, L as w, R as T, U as E, V as D, W as O, o as k, q as A, s as j, t as M } from "./home-D-U83-Mk.js";
+import { A as i, Dt as a, St as o, Y as s, _ as c, et as l, g as u, h as d, j as f, kt as p, nt as m, ot as h, t as g, u as _, v } from "./live-DWqtt9-p.js";
+import { B as y, G as b, I as x, J as S, K as C, L as w, R as T, U as E, V as D, W as O, o as k, q as A, s as j, t as M } from "./home-6Y7aBYC2.js";
 //#region src/reolink-viewer-panel.ts
 var N = {
 	live: "Live",
@@ -59,7 +59,7 @@ var N = {
 		});
 	}
 	connectedCallback() {
-		super.connectedCallback(), h(import.meta.url), this._route = y(window.location.hash), window.addEventListener("hashchange", this._onHashChange), this._tick();
+		super.connectedCallback(), g(import.meta.url), this._route = y(window.location.hash), window.addEventListener("hashchange", this._onHashChange), this._tick();
 	}
 	disconnectedCallback() {
 		super.disconnectedCallback(), window.removeEventListener("hashchange", this._onHashChange), clearTimeout(this._toastTimer), clearTimeout(this._clockTimer), this._run?.cancel(), this._run = void 0;
@@ -78,7 +78,7 @@ var N = {
 		}
 	}
 	updated(e) {
-		if (e.has("hass") && this.hass && !this._devices && !this._loading && (this._load(), u(this.hass).catch(() => void 0)), e.get("_route") !== void 0 && !this.shadowRoot?.activeElement) {
+		if (e.has("hass") && this.hass && !this._devices && !this._loading && (this._load(), l(this.hass).catch(() => void 0)), e.get("_route") !== void 0 && !this.shadowRoot?.activeElement) {
 			let e = document.activeElement;
 			(!e || e === document.body) && this.shadowRoot?.querySelector("main")?.focus({ preventScroll: !0 });
 		}
@@ -100,9 +100,9 @@ var N = {
 		if (this.hass) {
 			this._loading = !0;
 			try {
-				this._devices = await m(this.hass), this._loadError = void 0, !this._board.length && !this._devices.degraded && l(this.hass).then(({ cameras: e }) => {
+				this._devices = await m(this.hass), this._loadError = void 0, !this._board.length && !this._devices.degraded && h(this.hass).then(({ cameras: e }) => {
 					this._board.length || (this._board = x(e));
-				}).catch(() => void 0), !this._warmed && !this._devices.degraded && (this._warmed = !0, o(this.hass).catch(() => void 0));
+				}).catch(() => void 0), !this._warmed && !this._devices.degraded && (this._warmed = !0, p(this.hass).catch(() => void 0));
 			} catch (e) {
 				this._loadError = a(e).message;
 			} finally {
@@ -125,7 +125,7 @@ var N = {
           ${this._renderTab("Devices", { view: "list" }, e.view !== "live" && e.view !== "events")}
         </nav>
         <time class="clock" aria-label="Time">
-          ${g(this._now, this.hass?.config?.time_zone)}
+          ${_(this._now, this.hass?.config?.time_zone)}
         </time>
       </header>
       <main
@@ -204,7 +204,9 @@ var N = {
           </div>
           ${this._renderBanner()}
           ${this._loadError ? t : n`<rv-device-list .devices=${this._devices} .cameras=${this._board}></rv-device-list>`}
-          ${this._renderChecks()} ${this._renderThisDevice()} ${this._renderHelp()}
+          ${this._renderChecks()}
+          ${this._devices && !this._devices.degraded ? n`<rv-learning .hass=${this.hass}></rv-learning>` : t}
+          ${this._renderThisDevice()} ${this._renderHelp()}
           ${this._isAdmin ? this._renderProbe() : t}`;
 		}
 	}
@@ -270,7 +272,7 @@ var N = {
 	}
 	_renderThisDevice() {
 		let e = (e, t, r) => {
-			let i = f({
+			let i = d({
 				where: e,
 				why: ""
 			}).hd;
@@ -298,9 +300,9 @@ var N = {
         <label class="option">
           <input
             type="checkbox"
-            .checked=${d()}
+            .checked=${u()}
             @change=${(e) => {
-			_(e.target.checked), this.requestUpdate();
+			v(e.target.checked), this.requestUpdate();
 		}}
           />
           <span
@@ -622,7 +624,7 @@ var N = {
 			started: Date.now(),
 			log: e
 		};
-		let t = v(this.hass, {
+		let t = o(this.hass, {
 			include_battery: this._includeBattery,
 			concurrency_test: this._concurrency,
 			max_streams: this._maxStreams,
@@ -674,7 +676,7 @@ var N = {
 		}
 	}
 	static styles = [
-		p,
+		f,
 		i,
 		e`
       :host {

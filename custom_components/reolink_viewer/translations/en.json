@@ -27,12 +27,14 @@
     "step": {
       "init": {
         "title": "Reolink Viewer options",
-        "description": "On by default since 0.38.0. A recorder that does not take the Reolink protocol is found out at its first deep start and left alone.",
+        "description": "Deep starts are on by default since 0.38.0: a recorder that does not take the Reolink protocol is found out at its first deep start and left alone.",
         "data": {
-          "baichuan_deep_start": "Start deep in recordings over the Reolink protocol"
+          "baichuan_deep_start": "Start deep in recordings over the Reolink protocol",
+          "learn_normal": "Learn what is normal"
         },
         "data_description": {
-          "baichuan_deep_start": "When a start or a seek lands well past what is cached of a recording, ask the device for that moment directly (its own protocol, port 9000) instead of downloading everything before it. The first picture shows in about a second, and the recording is copied in two pieces, nothing twice. Adds one logged-in user on the device while in use. Falls back to the download on any failure; a device that refuses the protocol is not asked again for 6 hours."
+          "baichuan_deep_start": "When a start or a seek lands well past what is cached of a recording, ask the device for that moment directly (its own protocol, port 9000) instead of downloading everything before it. The first picture shows in about a second, and the recording is copied in two pieces, nothing twice. Adds one logged-in user on the device while in use. Falls back to the download on any failure; a device that refuses the protocol is not asked again for 6 hours.",
+          "learn_normal": "Keep a journal of what each camera detects (people, vehicles, animals, motion, doorbell presses) and when, so Reolink Viewer can learn what is normal for each camera and, later, mark what is unusual. The journal shows when your cameras see people, and so when the house is empty: it stays in a file on this Home Assistant (reolink_viewer_journal.db, in the config folder), included in its backups, and is never sent anywhere. Turning this off deletes it, and so does removing Reolink Viewer. It starts with the last 10 days of Home Assistant's own history of these sensors."
         }
       }
     }
