@@ -3,6 +3,30 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.47.0
+
+Phase 8, step 2: Reolink Viewer learns what is normal for each camera, and marks what
+is not.
+
+- **Unusual events:** with **Learn what is normal** on, each camera learns from its
+  journal how often it sees each kind of thing at each time of day, how long after
+  sunset, for how long, on which days, and after which other camera. An event that is
+  rare for its camera is marked, with a sentence saying why: "Person at 03:12 on
+  Doorbell — 2nd time in 3 weeks, and nothing fired first."
+- **Devices → Learning what is normal** shows whether each camera marks yet (a week of
+  history and 200 detections), the last 7 days' marks with their sentences, and the
+  numbers behind them.
+- **Two new options:** how much to mark (only the strangest, balanced, or more: at
+  most about 2, 4 or 9 a day across the property) and what each camera is compared
+  with (all cameras together, each NVR or Hub, or each camera on its own).
+- **It learns again each night,** at 03:17.
+- Unusual means rare for that camera, never dangerous. Marks on the timetable and an
+  event for automations come next.
+- The model is ported from [Reolink Stamina](https://github.com/marl1w/reolink-stamina-ha)
+  (MIT, by marl1w), with its tests; see
+  [THIRD_PARTY.md](https://github.com/ambient-home-systems/Maverick-Reolink-Viewer/blob/v0.47.0/THIRD_PARTY.md).
+- See [What is unusual](https://github.com/ambient-home-systems/Maverick-Reolink-Viewer/blob/v0.47.0/docs/user-guide.md#what-is-unusual).
+
 ## 0.46.1
 
 Learning what is normal keeps the journal smaller.

@@ -80,8 +80,10 @@ half a second; see the [plan](docs/IMPLEMENTATION_PLAN.md#phase-5-status). Phase
 beside the other cameras', presses included, and open as pictures. Phase 7, the dashboard
 card, is done (v0.45.2): the Reolink camera card, checked on a wall tablet and an iPhone,
 which stops under Fully Kiosk's screensaver and takes the screen when the doorbell rings.
-Under way: unusual events (Phase 8), which starts with an opt-in journal of what each
-camera detects (v0.46.0). Planned: the Wall (a monitor-style Live page), scrubbing that shows the picture, and more; see
+Under way: unusual events (Phase 8): an opt-in journal of what each camera detects
+(v0.46.0), and a model of what is normal for each, ported from
+[Reolink Stamina](https://github.com/marl1w/reolink-stamina-ha) (v0.47.0; see
+[THIRD_PARTY.md](THIRD_PARTY.md)). Planned: the Wall (a monitor-style Live page), scrubbing that shows the picture, and more; see
 [Phases 6–13](docs/IMPLEMENTATION_PLAN.md#phases-613-the-second-round-planned-2026-11-02).
 
 ## For developers

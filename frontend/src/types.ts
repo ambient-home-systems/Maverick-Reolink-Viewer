@@ -477,7 +477,71 @@ export type JournalStatus =
       sensors: number;
       bytes: number;
       cameras: { id: string; name: string; changes: number; detections: number; first: number; last: number }[];
+      /** Phase 8 step 2: what the model makes of it (absent on an older server). */
+      unusual?: UnusualStatus;
     };
+
+/** One signal's part in how unusual an event is (unusual/score.py's Term). */
+export interface UnusualTerm {
+  /** kind, clock, solar, duration, predecessor, weekend or signal. */
+  name: string;
+  label: string;
+  subject: string;
+  /** In nats: positive is rarer than chance, negative more common. */
+  contribution: number;
+  /** How many times it was seen before. */
+  seen: number;
+}
+
+/** A journal event and its score (unusual/model.py's mark_payload). */
+export interface UnusualEvent {
+  camera: string;
+  kind: string;
+  start: number;
+  end: number | null;
+  score: number;
+  /** The line it was measured against; null while its camera learns. */
+  line: number | null;
+  unusual: boolean;
+  reason: string;
+  terms: UnusualTerm[];
+}
+
+export interface UnusualCamera {
+  marking: boolean;
+  days: number;
+  events: number;
+  needs_days: number;
+  needs_events: number;
+  line: number | null;
+}
+
+export type UnusualSensitivity = "few" | "balanced" | "many";
+export type UnusualScope = "together" | "host" | "camera";
+
+/** The model's state and its marks of the last days (journal/status's `unusual`). */
+export interface UnusualStatus {
+  /** When it was last built (epoch ms); null before its first build. */
+  built: number | null;
+  built_in_s: number;
+  sensitivity: UnusualSensitivity;
+  scope: UnusualScope;
+  floor: number;
+  /** The daily cap's line; null when the property is under its daily marks. */
+  cap: number | null;
+  cameras: Record<string, UnusualCamera>;
+  days: number;
+  events: number;
+  marks: number;
+  /** What the camera's own line and the floor alone would have marked. */
+  uncapped: number;
+  per_day: Record<string, number>;
+  by_kind: Record<string, number>;
+  /** What stood out most in each mark, by signal name. */
+  by_reason: Record<string, number>;
+  /** The latest marks, newest first. */
+  latest: UnusualEvent[];
+}
 
 /** One thing a dashboard card's page saw (card/tablet.ts, live/card_log). */
 export interface TabletEvent {

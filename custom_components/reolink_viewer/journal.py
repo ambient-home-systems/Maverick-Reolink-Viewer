@@ -388,6 +388,12 @@ class Journal:
         async with self._lock:
             await self._hass.async_add_executor_job(self._store.close)
 
+    async def async_imported(self) -> None:
+        """Wait for the recorder's head start, if it is being imported."""
+        task = self._import_task
+        if task is not None and not task.done():
+            await asyncio.gather(asyncio.shield(task), return_exceptions=True)
+
     async def async_delete(self) -> None:
         """Stop, and delete the file (the option turned off)."""
         await self.async_stop()

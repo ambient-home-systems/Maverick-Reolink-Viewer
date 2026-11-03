@@ -898,6 +898,19 @@ def async_detection_sensors(
     return sensors
 
 
+@callback
+def async_camera_hosts(
+    hass: HomeAssistant, *, degraded: bool = False
+) -> dict[str, str]:
+    """Return each camera's host (its primary connection's Reolink entry), by camera id.
+
+    An NVR's or Hub's cameras share its host; a camera added on its own is a
+    host of its own. Phase 8's model pools cameras by it ("each host").
+    """
+    model = _async_build(hass, degraded=degraded)
+    return {camera.id: camera.primary.entry_id for camera in model.cameras}
+
+
 def async_playback_sources(hass: HomeAssistant) -> list[PlaybackSource]:
     """Return the playback source of every camera that records."""
     model = _async_build(hass, degraded=False)
