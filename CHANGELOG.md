@@ -3,6 +3,15 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.45.2
+
+- **No more "Detected blocking call" warning at startup.** Reolink Viewer read the
+  Reolink library's version from disk while Home Assistant was starting; it now reads
+  it once, in the background.
+- **The Dashboard cards report shows a camera's video switching over.** When a card
+  could not start over WebRTC and fell back to MSE (after a Home Assistant restart,
+  say), the report now says so, with how long WebRTC took and why it gave up.
+
 ## 0.45.1
 
 From the wall tablet's test.

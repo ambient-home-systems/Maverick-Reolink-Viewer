@@ -18,6 +18,7 @@ from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import asdict, dataclass, field, fields, is_dataclass
 from datetime import date, datetime, timedelta, tzinfo
 from enum import StrEnum
+import functools
 import hashlib
 import importlib
 from importlib.metadata import PackageNotFoundError, version
@@ -325,7 +326,13 @@ def _reolink_time_id(value: datetime) -> str:
     return value.strftime("%Y%m%d%H%M%S")
 
 
-def _library_version() -> str | None:
+@functools.cache
+def library_version() -> str | None:
+    """Return reolink-aio's version, read once.
+
+    Reading it opens the package's metadata on disk: call it first in the
+    executor (setup does), and the event loop's later calls find it kept.
+    """
     try:
         return version("reolink-aio")
     except PackageNotFoundError:
@@ -443,7 +450,7 @@ def async_check_compat(hass: HomeAssistant) -> CompatReport:
             except IncompatibleError as err:
                 errors.append(str(err))
     return CompatReport(
-        ok=not errors, errors=tuple(errors), reolink_aio_version=_library_version()
+        ok=not errors, errors=tuple(errors), reolink_aio_version=library_version()
     )
 
 

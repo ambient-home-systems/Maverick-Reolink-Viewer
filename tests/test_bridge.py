@@ -1,5 +1,6 @@
 """Tests for the bridge over HA's Reolink integration."""
 
+import asyncio
 from datetime import UTC, datetime, timedelta, timezone
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -61,6 +62,40 @@ async def test_compat_ok(hass: HomeAssistant, loaded_reolink: MockConfigEntry) -
     assert report.ok, report.errors
     assert report.reolink_aio_version == "0.21.18"
     assert report.as_dict()["ok"] is True
+
+
+def test_library_version_is_read_once() -> None:
+    """reolink-aio's version is read from disk once, then kept (setup reads it in
+    the executor, so the event loop's checks never touch the disk)."""
+    bridge.library_version.cache_clear()
+    try:
+        with patch.object(bridge, "version", return_value="9.9.9") as read:
+            assert bridge.library_version() == "9.9.9"
+            assert bridge.library_version() == "9.9.9"
+        read.assert_called_once_with("reolink-aio")
+    finally:
+        bridge.library_version.cache_clear()
+
+
+async def test_setup_reads_the_version_off_the_event_loop(
+    hass: HomeAssistant, loaded_viewer: MockConfigEntry
+) -> None:
+    """Setup reads the version in the executor, so later checks find it kept."""
+
+    def off_the_loop(_name: str) -> str:
+        with pytest.raises(RuntimeError):
+            asyncio.get_running_loop()
+        return "9.9.9"
+
+    bridge.library_version.cache_clear()
+    try:
+        with patch.object(bridge, "version", side_effect=off_the_loop) as read:
+            assert await hass.config_entries.async_reload(loaded_viewer.entry_id)
+            await hass.async_block_till_done()
+            assert bridge.async_check_compat(hass).reolink_aio_version == "9.9.9"
+        read.assert_called_once_with("reolink-aio")
+    finally:
+        bridge.library_version.cache_clear()
 
 
 async def test_compat_static_failure(hass: HomeAssistant) -> None:

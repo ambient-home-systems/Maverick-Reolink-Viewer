@@ -107,6 +107,8 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: ReolinkViewerConfigEntry
 ) -> bool:
     """Set up Reolink Viewer from a config entry."""
+    # Read from disk, so not in the event loop: kept for the checks after.
+    await hass.async_add_executor_job(bridge.library_version)
     compat = bridge.async_check_compat(hass)
     if compat.ok:
         ir.async_delete_issue(hass, DOMAIN, ISSUE_INCOMPATIBLE)

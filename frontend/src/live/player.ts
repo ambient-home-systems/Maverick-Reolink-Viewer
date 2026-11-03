@@ -29,7 +29,8 @@ export type Transport = "WebRTC" | "MSE";
 
 export type PlayerState =
   | { kind: "idle" }
-  | { kind: "starting"; transport: Transport }
+  /** `after`: why the transport before it in this start failed (WebRTC timed out, say). */
+  | { kind: "starting"; transport: Transport; after?: string }
   | { kind: "playing"; transport: Transport; result: SessionResult }
   /** A start failed; the next one is at `retryAt` (epoch ms). */
   | { kind: "waiting"; error: string; retryAt: number };
@@ -250,9 +251,10 @@ export class LivePlayer {
      * send a frame had connected.)
      */
     let webRtcUnreachable = false;
+    let after: string | undefined;
     for (const transport of order) {
       this._note(`${transport}: starting`);
-      this._set({ kind: "starting", transport });
+      this._set({ kind: "starting", transport, ...(after ? { after } : {}) });
       const session = this._factory(
         transport,
         this._hass,
@@ -283,6 +285,7 @@ export class LivePlayer {
       session.close();
       this._session = undefined;
       error = `${transport}: ${result.error ?? "failed"}`;
+      after = error;
       this._note(error);
       this.onCount("failures");
       if (transport === "WebRTC" && "answer" in result.steps && !("connected" in result.steps)) {

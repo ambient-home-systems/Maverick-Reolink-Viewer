@@ -130,10 +130,13 @@ describe("LivePlayer", () => {
   it("falls back to the other transport, then waits longer after each failure", async () => {
     const { player, sessions, last } = setup(false);
     player.start();
+    expect(player.state).toEqual({ kind: "starting", transport: "WebRTC" });
     last().failStart("ICE failed");
     await flush();
     expect(sessions[0]?.closed).toBe(true);
     expect(last().transport).toBe("MSE");
+    // Starting over MSE says why WebRTC gave up.
+    expect(player.state).toEqual({ kind: "starting", transport: "MSE", after: "WebRTC: ICE failed" });
     last().failStart("the server closed the stream");
     await flush();
     expect(player.state).toMatchObject({

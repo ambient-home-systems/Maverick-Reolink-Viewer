@@ -478,7 +478,7 @@ export class RvLiveTile extends LitElement {
             new CustomEvent(TILE_STATE_EVENT, { detail: { cameraId: this.camera?.id ?? "", live }, bubbles: true }),
           );
         }
-        if (state.kind !== this._state.kind) this._playerChanged(this.playsHd ? "HD" : "SD", this.stream, state);
+        if (changedState(this._state, state)) this._playerChanged(this.playsHd ? "HD" : "SD", this.stream, state);
         this._state = state;
       },
     );
@@ -502,7 +502,7 @@ export class RvLiveTile extends LitElement {
       { connectionId: connection.connection_id, stream },
       { warm: connection.streams[stream]?.warm === true, iceServers: [] },
       (state) => {
-        if (state.kind !== this._hdState.kind) this._playerChanged("HD", stream, state);
+        if (changedState(this._hdState, state)) this._playerChanged("HD", stream, state);
         this._hdState = state;
       },
     );
@@ -1146,6 +1146,14 @@ export class RvLiveTile extends LitElement {
       }
     `,
   ];
+}
+
+/** A player's state changed in kind, or started over on the other transport. */
+function changedState(before: PlayerState, now: PlayerState): boolean {
+  return (
+    before.kind !== now.kind ||
+    (before.kind === "starting" && now.kind === "starting" && before.transport !== now.transport)
+  );
 }
 
 function stateChip(label: string, mark?: TemplateResult): TemplateResult {
