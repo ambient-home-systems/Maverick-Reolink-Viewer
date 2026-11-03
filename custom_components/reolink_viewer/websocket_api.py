@@ -29,6 +29,7 @@ from .scheduler import Priority
 from .thumbnails import BUCKETS_S
 from .timeconv import epoch_ms
 from .timeline import TimelineError
+from .unusual.model import mark_payload
 from .views import (
     CLIP_PATH,
     MSE_PATH,
@@ -51,6 +52,7 @@ ERR_PROBE_RUNNING = "probe_running"
 ERR_NO_PLAYBACK = "no_playback"
 ERR_SEARCH_FAILED = "search_failed"
 ERR_CACHE_FAILED = "cache_failed"
+ERR_NOT_LEARNING = "not_learning"
 MAX_THUMB_TIMES = 200
 MAX_RELEASE = 20
 STREAM = probatio.In(["sub", "main"])
@@ -82,6 +84,7 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_check_report)
     websocket_api.async_register_command(hass, ws_check_reports)
     websocket_api.async_register_command(hass, ws_journal_status)
+    websocket_api.async_register_command(hass, ws_unusual_events)
 
 
 def _loaded_entry(hass: HomeAssistant) -> ReolinkViewerConfigEntry | None:
@@ -1029,4 +1032,69 @@ async def ws_journal_status(
     if journal is None or not journal.running:
         connection.send_result(msg["id"], {"enabled": False})
         return
-    connection.send_result(msg["id"], {"enabled": True, **await journal.async_status()})
+    status: dict[str, Any] = {"enabled": True, **await journal.async_status()}
+    # Phase 8 step 2: what the model makes of each camera, and its marks.
+    if (unusual := entry.runtime_data.unusual) is not None:
+        status["unusual"] = await unusual.async_status(
+            [camera["id"] for camera in status["cameras"]]
+        )
+    connection.send_result(msg["id"], status)
+
+
+# The longest window scored at once (a week of a busy property: about a second).
+UNUSUAL_MAX_SPAN_MS = 7 * 86_400_000
+
+
+@websocket_api.websocket_command(
+    {
+        probatio.Required("type"): f"{DOMAIN}/unusual/events",
+        probatio.Required("since"): int,
+        probatio.Required("until"): int,
+        probatio.Optional("camera"): str,
+        probatio.Optional("unusual_only", default=False): bool,
+    }
+)
+@websocket_api.async_response
+async def ws_unusual_events(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Return the journal's events in [since, until) (epoch ms), each scored (Phase 8).
+
+    Each with its sentence and every signal's contribution; while a camera is
+    still learning, its events are scored and none is unusual.
+    """
+    entry = _loaded_entry(hass)
+    if entry is None:
+        connection.send_error(msg["id"], ERR_NOT_LOADED, "Reolink Viewer is not loaded")
+        return
+    journal, unusual = entry.runtime_data.journal, entry.runtime_data.unusual
+    if journal is None or not journal.running or unusual is None:
+        connection.send_error(
+            msg["id"], ERR_NOT_LEARNING, "Learn what is normal is off"
+        )
+        return
+    since, until = msg["since"], msg["until"]
+    if not 0 < until - since <= UNUSUAL_MAX_SPAN_MS:
+        connection.send_error(
+            msg["id"],
+            websocket_api.ERR_INVALID_FORMAT,
+            "until must be after since, by at most 7 days",
+        )
+        return
+    # What is pending in the journal, so the last minute is scored too.
+    await journal.async_flush()
+    scored = await unusual.async_window(
+        since=since / 1000, until=until / 1000, camera=msg.get("camera")
+    )
+    connection.send_result(
+        msg["id"],
+        {
+            "events": [
+                mark_payload(event, result)
+                for event, result in scored
+                if result.unusual or not msg["unusual_only"]
+            ]
+        },
+    )

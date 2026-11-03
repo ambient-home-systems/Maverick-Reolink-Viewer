@@ -612,6 +612,51 @@ const JOURNAL = {
     { id: "cam-fyl", name: "Front Yard Left", changes: 2420, detections: 1200, first: NOW - 19 * 86_400_000, last: NOW },
     { id: "cam-garage", name: "Garage Camera", changes: 1800, detections: 900, first: NOW - 19 * 86_400_000, last: NOW },
   ],
+  // Phase 8 step 2: two cameras mark, one still learns.
+  unusual: {
+    built: NOW - 7 * 3_600_000,
+    built_in_s: 2.4,
+    sensitivity: "balanced",
+    scope: "together",
+    floor: 1.4,
+    cap: 3.912,
+    cameras: {
+      "cam-door": { marking: true, days: 19, events: 1400, needs_days: 0, needs_events: 0, line: 3.912 },
+      "cam-fyl": { marking: true, days: 19, events: 1900, needs_days: 0, needs_events: 0, line: 3.912 },
+      "cam-garage": { marking: false, days: 19, events: 150, needs_days: 0, needs_events: 50, line: null },
+    },
+    days: 7,
+    events: 2200,
+    marks: 26,
+    uncapped: 140,
+    per_day: {},
+    by_kind: { person: 14, animal: 8, vehicle: 4 },
+    by_reason: { clock: 10, predecessor: 8, duration: 5, kind: 3 },
+    latest: [
+      {
+        camera: "cam-door",
+        kind: "person",
+        start: NOW - 5 * 3_600_000,
+        end: NOW - 5 * 3_600_000 + 12_000,
+        score: 4.6,
+        line: 3.912,
+        unusual: true,
+        reason: "Person at 03:12 on Doorbell — 2nd time in 3 weeks, and nothing fired first.",
+        terms: [],
+      },
+      {
+        camera: "cam-fyl",
+        kind: "vehicle",
+        start: NOW - 30 * 3_600_000,
+        end: NOW - 30 * 3_600_000 + 40_000,
+        score: 4.1,
+        line: 3.912,
+        unusual: true,
+        reason: "Vehicle lasting about 4 min on Front Yard Left — 3rd time in 3 weeks.",
+        terms: [],
+      },
+    ],
+  },
 };
 
 /** A wall tablet's evening, as its dashboard cards noted it (the Dashboard cards report). */

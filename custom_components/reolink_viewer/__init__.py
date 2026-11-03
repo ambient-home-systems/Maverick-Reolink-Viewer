@@ -24,6 +24,8 @@ from .const import (
     CARD_FILENAME,
     CONF_BAICHUAN_DEEP_START,
     CONF_LEARN_NORMAL,
+    CONF_UNUSUAL_SCOPE,
+    CONF_UNUSUAL_SENSITIVITY,
     DEFAULT_BAICHUAN_DEEP_START,
     DEFAULT_HOST_CONCURRENCY,
     DEFAULT_LEARN_NORMAL,
@@ -56,6 +58,8 @@ from .models import ReolinkViewerConfigEntry, ReolinkViewerData
 from .scheduler import HostLimits, Scheduler
 from .thumbnails import ThumbnailService
 from .timeline import TimelineService
+from .unusual.const import DEFAULT_SCOPE, DEFAULT_SENSITIVITY
+from .unusual.model import Unusual
 from .views import ClipView, MseView, ThumbView, VodView
 from .vodcache import VodCache
 from .websocket_api import async_register_commands
@@ -201,6 +205,11 @@ async def async_setup_entry(
         journal=Journal(
             hass, lambda: devices.async_detection_sensors(hass, degraded=not compat.ok)
         ),
+        unusual=Unusual(
+            hass,
+            journal_path(hass),
+            hosts=lambda: devices.async_camera_hosts(hass, degraded=not compat.ok),
+        ),
     )
     await _async_apply_learning(hass, entry)
     entry.async_on_unload(entry.add_update_listener(_async_options_updated))
@@ -256,15 +265,42 @@ async def async_setup_entry(
 async def _async_apply_learning(
     hass: HomeAssistant, entry: ReolinkViewerConfigEntry
 ) -> None:
-    """Keep the detection journal while "Learn what is normal" is on; else none."""
-    journal = entry.runtime_data.journal
-    if journal is None:
+    """Keep the detection journal while "Learn what is normal" is on; else none.
+
+    While it is on, the model (Phase 8 step 2) is built from it once Home
+    Assistant has started and the head start is imported, again each night,
+    and again when its options change.
+    """
+    journal, unusual = entry.runtime_data.journal, entry.runtime_data.unusual
+    if journal is None or unusual is None:
         return
-    if entry.options.get(CONF_LEARN_NORMAL, DEFAULT_LEARN_NORMAL):
-        await journal.async_start()
-    else:
+    changed = unusual.configure(
+        sensitivity=entry.options.get(CONF_UNUSUAL_SENSITIVITY, DEFAULT_SENSITIVITY),
+        scope=entry.options.get(CONF_UNUSUAL_SCOPE, DEFAULT_SCOPE),
+    )
+    if not entry.options.get(CONF_LEARN_NORMAL, DEFAULT_LEARN_NORMAL):
         # Off: no journal on disk, whether it was running or left from before.
+        unusual.async_cancel()
+        unusual.forget()
         await journal.async_delete()
+        return
+    starting = not journal.running
+    await journal.async_start()
+    if not (starting or changed):
+        return
+    unusual.async_schedule()
+
+    async def build() -> None:
+        await journal.async_imported()
+        await unusual.async_rebuild()
+
+    @callback
+    def started(_hass: HomeAssistant) -> None:
+        entry.async_create_background_task(
+            hass, build(), "reolink_viewer unusual first build"
+        )
+
+    entry.async_on_unload(async_at_started(hass, started))
 
 
 async def _async_options_updated(
@@ -287,6 +323,8 @@ async def async_unload_entry(
     """Unload the entry."""
     if not await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
         return False
+    if entry.runtime_data.unusual is not None:
+        entry.runtime_data.unusual.async_cancel()
     if entry.runtime_data.journal is not None:
         await entry.runtime_data.journal.async_stop()
     frontend.async_remove_panel(hass, PANEL_URL_PATH, warn_if_unknown=False)

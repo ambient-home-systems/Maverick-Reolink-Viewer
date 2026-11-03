@@ -5,6 +5,8 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.reolink_viewer.const import (
     CONF_BAICHUAN_DEEP_START,
     CONF_LEARN_NORMAL,
+    CONF_UNUSUAL_SCOPE,
+    CONF_UNUSUAL_SENSITIVITY,
     DOMAIN,
 )
 from homeassistant.config_entries import SOURCE_USER
@@ -36,7 +38,7 @@ async def test_single_instance(hass: HomeAssistant) -> None:
 
 
 async def test_options_flow(hass: HomeAssistant) -> None:
-    """Deep starts over the Reolink protocol, on by default; learning, off."""
+    """Deep starts on by default; learning off; balanced marks, all cameras together."""
     entry = MockConfigEntry(domain=DOMAIN, data={})
     entry.add_to_hass(hass)
     result = await hass.config_entries.options.async_init(entry.entry_id)
@@ -44,9 +46,20 @@ async def test_options_flow(hass: HomeAssistant) -> None:
     assert result["step_id"] == "init"
     schema = result["data_schema"]
     assert schema is not None
-    assert schema({}) == {CONF_BAICHUAN_DEEP_START: True, CONF_LEARN_NORMAL: False}
+    assert schema({}) == {
+        CONF_BAICHUAN_DEEP_START: True,
+        CONF_LEARN_NORMAL: False,
+        CONF_UNUSUAL_SENSITIVITY: "balanced",
+        CONF_UNUSUAL_SCOPE: "together",
+    }
+    chosen = {
+        CONF_BAICHUAN_DEEP_START: False,
+        CONF_LEARN_NORMAL: True,
+        CONF_UNUSUAL_SENSITIVITY: "few",
+        CONF_UNUSUAL_SCOPE: "host",
+    }
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {CONF_BAICHUAN_DEEP_START: False, CONF_LEARN_NORMAL: True}
+        result["flow_id"], chosen
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert entry.options == {CONF_BAICHUAN_DEEP_START: False, CONF_LEARN_NORMAL: True}
+    assert entry.options == chosen

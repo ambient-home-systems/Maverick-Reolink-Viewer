@@ -1,6 +1,6 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
 import { A as i, Dt as a, Y as o, at as s, f as c } from "./live-DWqtt9-p.js";
-import { r as l, z as u } from "./home-B04CrDkf.js";
+import { r as l, z as u } from "./home-CeLYTxIJ.js";
 //#region src/components/learning.ts
 var d = class extends r {
 	static properties = {
@@ -38,19 +38,63 @@ var d = class extends r {
         so it can learn what is normal for each and, later, mark what is unusual. The journal stays on this Home
         Assistant.
       </p>`;
-		let r = this.hass?.config?.time_zone, i = e.cameras;
+		let r = this.hass?.config?.time_zone, i = e.cameras, a = e.unusual;
 		return n`<p>
         On since ${c(e.created, r)}: ${f(e.detections, "detection")} from
-        ${f(i.length, "camera")} so far (${p(e.bytes)}).${e.imported ? ` It started with ${f(e.imported, "change")} from Home Assistant's history.` : ""}
+        ${f(i.length, "camera")} so far (${v(e.bytes)}).${e.imported ? ` It started with ${f(e.imported, "change")} from Home Assistant's history.` : ""}
       </p>
       ${i.length ? n`<ul>
             ${i.map((e) => n`<li>
                 <span class="name">${e.name}</span>:
-                <span class="muted">${f(e.detections, "detection")}, since ${c(e.first, r)}</span>
+                <span class="muted">${f(e.detections, "detection")}, since ${c(e.first, r)}</span
+                >${a?.built ? n`. ${g(a.cameras[e.id])}` : t}
               </li>`)}
           </ul>` : t}
+      ${a ? this._renderUnusual(a, r, new Map(i.map((e) => [e.id, e.name]))) : t}`;
+	}
+	_renderUnusual(e, r, i) {
+		if (!e.built) return n`<p class="muted small">
+        It is learning from the journal; what it makes of each camera shows here once it has (a minute or so after
+        Home Assistant starts).
+      </p>`;
+		let a = Object.values(e.cameras).some((e) => e.marking), o = e.marks / e.days;
+		return n`<h3>Unusual in the last ${e.days} days</h3>
+      ${a ? n`<p>
+            ${f(e.marks, "mark")}, about ${o < 10 ? o.toFixed(1) : Math.round(o)} a day, of
+            ${f(e.events, "event")}, at <strong>${p[e.sensitivity]}</strong>.
+          </p>` : n`<p class="muted">None yet: no camera has a week of history and 200 detections.</p>`}
+      ${e.latest.length ? n`<ol class="marks">
+            ${e.latest.map((e) => n`<li>
+                <span class="when">${c(e.start, r)}</span>
+                <span>${e.reason}</span>
+              </li>`)}
+          </ol>` : t}
+      <details>
+        <summary>The numbers behind it</summary>
+        <dl>
+          <dt>Without the daily cap</dt>
+          <dd>${f(e.uncapped, "mark")} (the cap keeps a busy property to about its sensitivity's number a day)</dd>
+          <dt>The line a score must pass</dt>
+          <dd>
+            ${e.cap === null ? `the floor, ${e.floor}` : `${e.cap} (the daily cap; the floor is ${e.floor})`}
+          </dd>
+          <dt>Marks by kind</dt>
+          <dd>${_(e.by_kind, (e) => e.replace(/_/g, " "))}</dd>
+          <dt>What stood out most</dt>
+          <dd>${_(e.by_reason, (e) => h[e] ?? e)}</dd>
+          <dt>Each camera's own line</dt>
+          <dd>
+            ${Object.entries(e.cameras).filter(([, e]) => e.line !== null).map(([e, t]) => `${i.get(e) ?? e} ${t.line}`).join(", ") || "none yet"}
+          </dd>
+          <dt>Compared with</dt>
+          <dd>${m[e.scope]}</dd>
+          <dt>Learned</dt>
+          <dd>${c(e.built, r)}, in ${e.built_in_s} s</dd>
+        </dl>
+      </details>
       <p class="muted small">
-        Marking what is unusual comes once each camera has a week of history: until then, it only learns.
+        Unusual means rare for that camera, never dangerous. It learns again each night at 03:17, and from what it has
+        seen since in between.
       </p>`;
 	}
 	static styles = [i, e`
@@ -64,15 +108,81 @@ var d = class extends r {
       li .name {
         font-weight: 500;
       }
+      h3 {
+        margin: 16px 0 8px;
+        font-size: 1em;
+        font-weight: 500;
+      }
+      ol.marks {
+        margin: 0 0 8px;
+        padding-left: 20px;
+      }
+      ol.marks li {
+        margin-bottom: 4px;
+      }
+      ol.marks .when {
+        color: var(--secondary-text-color);
+        margin-right: 4px;
+      }
+      details {
+        margin: 8px 0;
+      }
+      summary {
+        cursor: pointer;
+        min-height: 24px;
+      }
+      dl {
+        display: grid;
+        grid-template-columns: max-content 1fr;
+        gap: 4px 12px;
+        margin: 8px 0 0;
+      }
+      dt {
+        color: var(--secondary-text-color);
+      }
+      dd {
+        margin: 0;
+      }
+      @media (max-width: 600px) {
+        dl {
+          grid-template-columns: 1fr;
+        }
+        dd {
+          margin-bottom: 6px;
+        }
+      }
     `];
-}, f = (e, t) => `${e.toLocaleString("en-US")} ${t}${e === 1 ? "" : "s"}`;
-function p(e) {
+}, f = (e, t) => `${e.toLocaleString("en-US")} ${t}${e === 1 ? "" : "s"}`, p = {
+	few: "Only the strangest",
+	balanced: "Balanced",
+	many: "More, including borderline ones"
+}, m = {
+	together: "All cameras together",
+	host: "Each NVR, Home Hub or camera on its own connection",
+	camera: "Each camera on its own"
+}, h = {
+	kind: "what it was",
+	clock: "the time of day",
+	solar: "the light (time from sunset)",
+	duration: "how long it lasted",
+	predecessor: "what fired before it",
+	weekend: "the day of the week",
+	signal: "a house-wide signal"
+};
+function g(e) {
+	return e ? e.marking ? "Marks what is unusual" : `Learning: ${[e.needs_days ? f(e.needs_days, "more day") : "", e.needs_events ? f(e.needs_events, "more detection") : ""].filter(Boolean).join(" and ") || "almost there"}` : "Learning";
+}
+function _(e, t) {
+	let n = Object.entries(e).sort((e, t) => t[1] - e[1]);
+	return n.length ? n.map(([e, n]) => `${t(e)} ${n}`).join(", ") : "none";
+}
+function v(e) {
 	return e < 1e6 ? `${Math.max(1, Math.round(e / 1e3))} KB` : `${(e / 1e6).toFixed(1)} MB`;
 }
 customElements.get("rv-learning") || customElements.define("rv-learning", d);
 //#endregion
 //#region src/components/device-list.ts
-var m = class extends r {
+var y = class extends r {
 	static properties = {
 		devices: { attribute: !1 },
 		cameras: { attribute: !1 },
@@ -158,7 +268,7 @@ var m = class extends r {
         <span class="name">${e.name ?? "Camera"}</span>
         <span class="ch muted">${i == null ? "Direct" : `Ch ${String(i + 1)}`}</span>
         <span class="model muted">${e.model ?? ""}</span>
-        <span class="state">${h(e)}${c.length ? n`<span class="flags muted">${c.join(" · ")}</span>` : t}</span>
+        <span class="state">${b(e)}${c.length ? n`<span class="flags muted">${c.join(" · ")}</span>` : t}</span>
         ${o("chevron")}
       </button>
     </li>`;
@@ -300,10 +410,10 @@ var m = class extends r {
       }
     `];
 };
-function h(e) {
+function b(e) {
 	let r = e.status;
 	return r.online === !1 ? n`<span class="offline">Offline</span>` : r.sleeping ? n`<span>Asleep</span>` : r.online ? n`<span>Online</span>` : t;
 }
-customElements.get("rv-device-list") || customElements.define("rv-device-list", m);
+customElements.get("rv-device-list") || customElements.define("rv-device-list", y);
 //#endregion
-export { m as RvDeviceList };
+export { y as RvDeviceList };

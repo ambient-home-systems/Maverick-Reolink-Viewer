@@ -51,6 +51,10 @@ DEFAULT_BAICHUAN_DEEP_START: Final = True
 # Phase 8: the detection journal, "Learn what is normal" (off by default).
 CONF_LEARN_NORMAL: Final = "learn_normal"
 DEFAULT_LEARN_NORMAL: Final = False
+# Phase 8 step 2: how much is marked unusual (unusual/const.py's
+# sensitivities) and what a camera is compared with (its scopes).
+CONF_UNUSUAL_SENSITIVITY: Final = "unusual_sensitivity"
+CONF_UNUSUAL_SCOPE: Final = "unusual_scope"
 
 # Playback caches (under HA's cache directory) and their size caps.
 VOD_CACHE_DIR: Final = "vod"

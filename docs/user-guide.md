@@ -179,7 +179,7 @@ Below the list:
   [soak report](#the-soak-report) and the
   [dashboard cards report](#the-dashboard-cards-report).
 - **Learning what is normal**: whether Reolink Viewer keeps a journal of what each
-  camera detects, [below](#learning-what-is-normal).
+  camera detects, and what it marks as unusual, [below](#learning-what-is-normal).
 - **This device**: how full screen plays on the phone or computer you are using,
   [below](#this-device).
 - **Help**: this guide, [Troubleshooting](troubleshooting.md) and
@@ -192,10 +192,9 @@ Below the list:
 
 Of the hundreds of detections a day, a few are unusual for their camera: a person at
 the back door at 3 am, a car in the drive in the middle of a weekday. Reolink Viewer
-will learn what is normal for each camera and mark what is not. To learn, it first
-keeps a journal of what each camera detects (people, vehicles, animals, motion,
-doorbell presses and the rest of the Reolink integration's detection sensors) and
-when.
+learns what is normal for each camera and marks what is not. To learn, it keeps a
+journal of what each camera detects (people, vehicles, animals, motion, doorbell
+presses and the rest of the Reolink integration's detection sensors) and when.
 
 - **Off unless you turn it on:** **Settings → Devices & services → Reolink Viewer →
   Configure → Learn what is normal.**
@@ -211,11 +210,52 @@ when.
   detections are kept as they come.
 - **A year:** what is older than 12 months is deleted, each day.
 - **Small:** a few megabytes a month for a busy property.
-- **On the Devices page,** **Learning what is normal** says since when it learns, and
-  how many detections it has from each camera.
+- **On the Devices page,** **Learning what is normal** says since when it learns, how
+  many detections it has from each camera, and whether each camera marks what is
+  unusual yet.
 
-Marking what is unusual comes in a later version, once each camera has at least a
-week of history.
+#### What is unusual
+
+It counts rather than recognises. Per camera, and per kind of thing seen (a person, a
+vehicle, an animal, motion, a doorbell press...), it learns how often it happens at
+each time of day, how long after sunset, for how long, on which days of the week, and
+which camera saw something just before. An event whose combination is rare for its
+camera is unusual: the cat that crosses the drive every night at 1 am is normal there;
+a person doing the same is not. Recent weeks count most (a 90-day half-life), so it
+follows a household that changes.
+
+- **A camera marks once it has a week of history and 200 detections.** Until then the
+  Devices page says what it is short of ("Learning: 3 more days").
+- **Unusual in the last 7 days**, on the Devices page: how many were marked, about how
+  many a day, and the latest, each with a sentence saying why: "Person at 03:12 on
+  Doorbell — 2nd time in 3 weeks, and nothing fired first." **The numbers behind it**
+  show how the line was drawn, and what stood out most in the marks.
+- **How much to mark unusual** (in the options): **Only the strangest**,
+  **Balanced** (the default) or **More, including borderline ones**: at most about 2,
+  4 or 9 a day across the property.
+- **What each camera is compared with** (in the options): every camera is judged
+  against its own past first; this decides what a camera with little history may
+  borrow from, and which cameras count as having seen something just before another.
+  **All cameras together** suits most homes; **each NVR, Home Hub or camera on its own
+  connection** suits cameras at different properties; **each camera on its own**
+  shares nothing (and takes longest to start).
+- **It learns again each night** at 03:17, and scores what happened since against
+  that.
+
+What it will not do:
+
+- **Unusual is not dangerous.** It ranks by rarity: a burglar in a busy driveway at
+  3 pm is not unusual.
+- **It learns whatever it sees, the bad included.** A camera that has seen spiders
+  every night for months has made spiders normal.
+- **Something new stands out for a while:** a new car is marked daily for a fortnight,
+  then stops.
+- **A kind of thing a camera rarely sees stands out each time it appears.**
+- **A person walking past three cameras is three events.**
+
+Marks on the timetable, an "Unusual" filter, and an event for automations come in
+later versions. The model is ported from
+[Reolink Stamina](https://github.com/marl1w/reolink-stamina-ha) (MIT).
 
 ### This device
 
