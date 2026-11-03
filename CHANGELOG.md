@@ -3,6 +3,19 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.46.1
+
+Learning what is normal keeps the journal smaller.
+
+- **Motion is kept as bursts:** a motion sensor that goes off and back on within
+  30 seconds (a tree in the wind, passing headlights) is now one burst, from its
+  first start to its last stop. Motion was 85% of the journal. People, vehicles,
+  animals, doorbell presses and the other detections are kept as they come.
+- **The journal you have is compacted once,** at the first start after the update,
+  the same way: its motion counts, and its size, go down.
+- **A year of history:** what is older than 12 months is deleted, each day.
+- See [Learning what is normal](https://github.com/ambient-home-systems/Maverick-Reolink-Viewer/blob/v0.46.1/docs/user-guide.md#learning-what-is-normal).
+
 ## 0.46.0
 
 Phase 7 is done. Phase 8, step 1: learning what is normal starts with a journal.

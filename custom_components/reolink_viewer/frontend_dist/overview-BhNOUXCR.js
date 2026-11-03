@@ -1,7 +1,7 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
 import { A as i, Y as a } from "./live-DWqtt9-p.js";
-import { a as o, i as s, n as c, r as l } from "./home-6Y7aBYC2.js";
-import "./device-list-q99pV7WD.js";
+import { a as o, i as s, n as c, r as l } from "./home-B04CrDkf.js";
+import "./device-list-DSAn6JpL.js";
 //#region src/components/overview.ts
 var u = 3e4, d = {
 	people: "person",

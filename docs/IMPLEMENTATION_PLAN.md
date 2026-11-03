@@ -24,7 +24,7 @@ put on it:
 | 5 | Optional R&D: Baichuan live/playback | Very high | 4–8 wk, time-boxed with gates | **5a done, go** (2026-10-29, v0.34.1): prior art surveyed, the capture tool and the owner's captures, `docs/baichuan-playback.md`, and the read-only check: a deep start over Baichuan costs the NVR 0.2 s against 4.7 s of HTTP download for the same point of a short recording. 5b–5d estimated at 3.5–5 wk, deep starts only; talk deferred. **5b step 1 built** (2026-10-29, v0.35.0): the probe measures the replay and the download cut (143) 75 % into sub and main recordings, decodes what arrives and counts the sessions; the source (replay, 143 or both) is chosen from the owner's report before step 2, the prototype. **Step 1 done** (2026-10-30, v0.35.5): the download cut (143) is the source. **5b step 2 built** (2026-10-30, v0.36.0): the muxer, one Baichuan connection per host, deep starts served from the cut behind an option (off by default), the fallback to the download. **Hardware check passed** (2026-10-30): an uncached deep start 52 min into an hour shows its first frame in 0.51 s on Chrome and 0.60 s on the iPhone (9.0 s from the download with the option off); v0.36.1 cuts HD in 3-minute spans and searches the day's HD list ahead. **5b done** (2026-10-30, v0.36.2): every exit criterion met on the hardware, the NVR's own list of online users included (one more session while deep starts are in use, gone when idle). **5c done** (2026-10-30 to 2026-11-02, v0.37.0–v0.40.0): a deep start fetches the recording once, in two pieces, on one stream; on by default, a device that refuses the protocol left alone; each camera's counter rate kept; the device's zone built from its own DST rules (reolink-aio's land on the wrong days); two viewers of a camera take turns. **5d reports posted** (2026-11-02): the time zone bug as [starkillerOG/reolink_aio#239](https://github.com/starkillerOG/reolink_aio/issues/239), the download cut (143/144) and the media message class as [#240](https://github.com/starkillerOG/reolink_aio/issues/240); the rest is the maintainer's. **v0.40.1** (2026-11-02): six findings of a review of 5b/5c fixed (chief among them, an HD cut left by a closed tab held the recorder's login until restart); the owner's check of it closes the phase. See "Phase 5 status" |
 | 6 | The Doorbell's events: a camera that records but cannot be played lists its events | Standard / High | 0.5–1 wk | **Done** (2026-11-02, v0.43.0). **Step 1 done** (v0.41.0–v0.41.1): run 2 found the Doorbell's event and day searches working, its zone Home Assistant's, and its pictures refused by reolink-aio (a `1002` header). **Step 2 built** (v0.42.0): the Doorbell's events in the feed, the Events view and the calendar, on wired power. **Step 3 built** (v0.43.0): its pictures read here, and its Playback tab shows each event as pictures. **The owner's check** (2026-11-02): the Doorbell's events show and open as pictures, and a press of the doorbell is listed as a "Doorbell" event at the right time, so step 4 (the fallback) was not needed. Phase 7 started meanwhile, at the owner's request. See "Phase 6" |
 | 7 | Live video on dashboards: a Reolink Viewer camera card | Standard | 1–1.5 wk | **Done** (2026-11-03, v0.45.2), closed on daily use by the owner. **Step 1 done** (v0.44.0): the Reolink camera card, `custom:reolink-viewer-camera`, with its editor, on any dashboard and for any user. The owner's check (2026-11-02): on the wall tablet (Galaxy Tab A9+, Fully Kiosk, a sections view) and the iPhone app's dashboard, the Doorbell's and the front-yard camera's cards show their picture at once and their video quickly, kept warm or not, and go full screen in HD and back. **Step 2 built** (v0.45.0): what the cards see is logged per device (Devices → Dashboard cards), they sleep while Fully Kiosk's screen is off or its screensaver on, and a doorbell's card can wake the screen and go full screen when it rings. **Step 2 done** (2026-11-03, v0.45.2): on the owner's tablet the cards sleep under Fully's screensaver (no frames decoded) and a ring wakes the screen and shows the Doorbell full screen, playing in 0.6 s (v0.45.1 fills the window from the top layer). Step 3 stays gated. Not measured: a warm camera's wake time and 8 visible hours; the wall page's cards are the owner's choice. See "Phase 7" |
-| 8 | Unusual events: learning what is normal | High | 2–3 wk, then a week of learning | **Started** (2026-11-03). **Step 1 built** (v0.46.0): the detection journal, opt-in ("Learn what is normal"), with a 10-day head start from Home Assistant's recorder; the owner turns it on, and history collects for step 2. See "Phase 8" |
+| 8 | Unusual events: learning what is normal | High | 2–3 wk, then a week of learning | **Started** (2026-11-03). **Step 1 built** (v0.46.0): the detection journal, opt-in ("Learn what is normal"), with a 10-day head start from Home Assistant's recorder; on at the owner's since 2026-11-02, all 7 cameras. v0.46.1 keeps motion as bursts and a year of history (the owner's choices, from the first 10 days' sizes); history collects for step 2. See "Phase 8" |
 | 9 | The Wall: the Live page as a security monitor, with layouts, arranging, HD large tiles and the detection strip | Standard / High | 2–3 wk | Planned. See "Phase 9" |
 | 10 | Scrubbing that shows the picture while dragging | Very high | 2–4 wk | Planned. See "Phase 10" |
 | 11 | Playback and settings extras: zoom, event clips, filters, copying settings | Standard | 1–2 wk | Planned. See "Phase 11" |
@@ -5768,7 +5768,7 @@ rarity, never by danger, and the panel says so.
 
 | Step | Status |
 | --- | --- |
-| 1. The detection journal (opt-in) | **Built** (2026-11-03, v0.46.0, below); the owner turns it on, and history collects |
+| 1. The detection journal (opt-in) | **Built** (2026-11-03, v0.46.0, below), on at the owner's (all 7 cameras). v0.46.1: motion as bursts, a year kept. History collects |
 | 2. The model | Not started |
 | 3. In the panel | Not started |
 | 4. For automations | Not started |
@@ -5850,6 +5850,61 @@ rarity, never by danger, and the panel says so.
 4. A day later, the same: the counts have grown, and the file is small (its
    size is shown).
 
+**The owner's check (2026-11-03, v0.46.0).** On since 2026-11-02 21:39, all 7
+cameras listed: 184,063 changes imported from the recorder (from 2026-10-23),
+92,107 detections, **3.6 MB**. Per camera: Front Yard Right 45,970
+detections, Doorbell 12,468, Back Yard 11,670, Front Yard Left 17,488, Garage
+Camera 2,761, Dogs 1,572, Laundry Room 178.
+
+- **Size:** 3.6 MB for 10 days is about 20 bytes a change on disk (not the 14
+  measured on a small test file), 18,400 changes a day: **11 MB a month**, over
+  the 10 MB the exit criteria allow, and 130 MB a year.
+- **Motion is most of it:** 157,406 of the 184,063 changes (85%) and 78,676 of
+  93,356 detections. Front Yard Right alone has 43,816 motion detections in
+  10 days (trees, shadows, headlights). Next are person (13,117 changes),
+  vehicle (7,971), animal (4,082), intrusion person (2,636) and dog/cat
+  (1,384); the rest are under 300 each.
+- **Flicker** (back on under 3 s after going off): 22.1% of detections. Motion
+  23%, person 22%, intrusion person 17%, intrusion dog/cat 13%, animal 12%,
+  vehicle 7%; crossline vehicle, visitor and package none. Step 8.2 folds
+  flickers when it reads, so the AI kinds are kept as they come.
+
+**The owner's decisions (2026-11-03):**
+
+- **Motion as bursts** (rather than kept change by change, or left out): its
+  timing is what the model needs (a burst at 3 am on a quiet camera), not
+  each flicker of it.
+- **A year kept** (rather than unlimited, or 90 days): enough for seasons;
+  the model weighs it with a 90-day half-life, and older changes go.
+
+**As built (v0.46.1).**
+
+- **Motion as bursts** (`journal.py`, `BURST_KINDS`, `QUIET_S` 30 s): a
+  motion sensor's `off` is held. An `on` within 30 s drops both (the burst
+  goes on); anything else, or 30 s of quiet (checked every 30 s with the
+  batches), writes it at its own time. Offline ends a burst at once. Stopping
+  writes the bursts still held. The recorder's head start goes through the
+  same merge (`merge_bursts`). The AI kinds stay change by change.
+- **The journal of v0.46.0 is compacted once:** schema 2. At its first start
+  on v0.46.1, one SQL pass (window `LEAD` per motion source) deletes each
+  motion `off` followed by an `on` within 30 s, with that `on`; then
+  `VACUUM`. The count of changes imported is kept as it was.
+- **A year:** changes older than 365 days are deleted at start and daily
+  (`KEEP_DAYS`); a prune due as the journal stops does nothing.
+- **Checks:** bursts (two dips within 30 s are one burst; the end written
+  after the quiet, at its own time; a new burst after; offline ends one; a
+  flickering person sensor kept change by change); a v0.46.0 journal merged
+  once, the person sensor untouched, schema 2; the head start merged; the
+  year (at start, and a year on); a new journal's start time set.
+
+**Hardware checklist (the owner, v0.46.1):**
+
+1. Update to v0.46.1 and restart Home Assistant.
+2. **Devices → Learning what is normal**: the same 7 cameras; the detection
+   counts are lower than before (motion's dips within 30 s are now one burst),
+   and the file smaller. Note the size, and again a week later: the journal
+   should grow well under 10 MB a month.
+
 #### Step 8.2: the model
 
 Ported from Stamina's `relevance` package with its copyright notice and its
@@ -5909,7 +5964,8 @@ tests, adapted to our camera ids and types (decision 4).
   cameras), each with its sentence.
 - Scoring an event takes under 10 ms, and a 90-day rebuild under 2 s, on the
   x86 host.
-- The journal grows less than 10 MB a month.
+- The journal grows less than 10 MB a month (v0.46.0: 11 MB on the owner's
+  7 cameras; v0.46.1's bursts are to bring it under).
 - With the option off there is no file; removing the integration deletes it
   (tested).
 - The HA event fires within 2 s of the sensor.
