@@ -205,6 +205,11 @@ when.
   turning the option off deletes it, and so does removing Reolink Viewer.
 - **A head start:** it begins with the last 10 days of Home Assistant's own history
   of these sensors.
+- **Motion as bursts:** a motion sensor that goes off and back on within 30 seconds
+  (a tree in the wind, passing headlights) is one burst of motion, from its first
+  start to its last stop. People, vehicles, animals, doorbell presses and the other
+  detections are kept as they come.
+- **A year:** what is older than 12 months is deleted, each day.
 - **Small:** a few megabytes a month for a busy property.
 - **On the Devices page,** **Learning what is normal** says since when it learns, and
   how many detections it has from each camera.

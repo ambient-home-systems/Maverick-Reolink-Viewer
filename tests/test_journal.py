@@ -131,20 +131,174 @@ async def test_records_each_detection_change_of_each_camera(
     # An attribute alone changing is no change; sleep and others are not journaled.
     hass.states.async_set(PERSON, "off", {"friendly_name": "renamed"})
     hass.states.async_set(SLEEP, "on")
-    hass.states.async_set(MOTION, "off")
-    freezer.tick(timedelta(seconds=1))
-    hass.states.async_set(MOTION, "on")
     await hass.async_block_till_done()
     await log.async_flush()
     rows = _rows(path)
-    # Offline is not quiet: unavailable is a change too, and so is motion.
+    # Offline is not quiet: unavailable is a change too.
     assert (PERSON, "test_reolink_cam", "person", -1) in rows
-    assert (MOTION, "test_reolink_cam", "motion", 1) in rows
     assert not any(e == SLEEP for e, *_ in rows)
     # Only real changes: on twice in a row is one.
     person = [s for e, _n, _k, s in rows if e == PERSON]
     assert person == [0, 1, 0, -1, 0]
     assert all(a != b for a, b in pairwise(person))
+
+
+async def test_keeps_motion_as_bursts(
+    hass: HomeAssistant,
+    freezer: FrozenDateTimeFactory,
+    config_dir: Path,
+    reolink_host: MagicMock,
+    learning: MockConfigEntry,
+) -> None:
+    """Motion's off and on within QUIET_S are one burst; the AI kinds stay exact."""
+    # The test Reolink integration polls as the clock moves: no motion of its own.
+    reolink_host.motion_detected.return_value = False
+    reolink_host.ai_detected.return_value = False
+    log = _journal(learning)
+    path = config_dir / JOURNAL_FILE
+
+    def step(seconds: float, entity: str, state: str) -> None:
+        freezer.tick(timedelta(seconds=seconds))
+        hass.states.async_set(entity, state)
+
+    def quiet() -> None:
+        # The interval that writes the bursts which ended (called here: firing
+        # the clock would also make the test Reolink integration poll).
+        freezer.tick(timedelta(seconds=journal.FLUSH_S))
+        log._on_interval(dt_util.utcnow())
+
+    # Motion is on to begin with. Off and back on twice within 30 s: one burst.
+    step(1, MOTION, "off")
+    step(10, MOTION, "on")
+    step(5, MOTION, "off")
+    step(20, MOTION, "on")
+    step(3, MOTION, "off")
+    burst_end = dt_util.utcnow()
+    await hass.async_block_till_done()
+    await log.async_flush()
+    assert not [r for r in _rows(path) if r[0] == MOTION]  # its end is held
+    quiet()
+    quiet()
+    await hass.async_block_till_done(wait_background_tasks=True)
+    await log.async_flush()
+    motion = [r for r in _rows(path) if r[0] == MOTION]
+    assert [s for *_rest, s in motion] == [0]
+    # A new burst, after the quiet.
+    step(1, MOTION, "on")
+    # Offline ends a burst at once: its off, then unavailable.
+    step(2, MOTION, "off")
+    step(1, MOTION, "unavailable")
+    await hass.async_block_till_done()
+    await log.async_flush()
+    motion_states = [r[3] for r in _rows(path) if r[0] == MOTION]
+    assert motion_states == [0, 1, 0, -1]
+    # The person sensor, flickering, is kept change by change.
+    step(1, PERSON, "off")
+    step(1, PERSON, "on")
+    await hass.async_block_till_done()
+    await log.async_flush()
+    assert [r[3] for r in _rows(path) if r[0] == PERSON][-2:] == [0, 1]
+    # The first burst's end, at its own time.
+    db = sqlite3.connect(path)
+    try:
+        (first_off,) = db.execute(
+            "SELECT MIN(c.at) FROM changes c JOIN sources s ON s.id = c.source"
+            " WHERE s.entity_id = ? AND c.state = 0",
+            (MOTION,),
+        ).fetchone()
+    finally:
+        db.close()
+    assert first_off == int(burst_end.timestamp() * 1000)
+
+
+async def test_a_journal_from_before_is_merged_once(
+    hass: HomeAssistant, config_dir: Path, loaded_with_entities: MockConfigEntry
+) -> None:
+    """A journal of v0.46.0 (motion change by change) is compacted at its next start."""
+    path = config_dir / JOURNAL_FILE
+    # Ten days ago, inside the year kept.
+    t = int(dt_util.utcnow().timestamp() * 1000) - 10 * 86_400_000
+    db = sqlite3.connect(path)
+    db.executescript(journal._SCHEMA)
+    with db:
+        db.execute("INSERT INTO meta VALUES ('schema', '1'), ('imported', '9')")
+        db.execute(
+            "INSERT INTO sources VALUES (1, ?, 'cam', 'Cam', 'motion')", (MOTION,)
+        )
+        db.execute(
+            "INSERT INTO sources VALUES (2, ?, 'cam', 'Cam', 'person')", (PERSON,)
+        )
+        db.executemany(
+            "INSERT INTO changes VALUES (?, ?, ?)",
+            [
+                # Motion: on, off and on within 30 s, off; then off and on 40 s apart.
+                (1, t + 1_000, 1),
+                (1, t + 5_000, 0),
+                (1, t + 20_000, 1),
+                (1, t + 30_000, 0),
+                (1, t + 70_000, 1),
+                (1, t + 80_000, 0),
+                # Person: a flicker, kept.
+                (2, t + 1_000, 1),
+                (2, t + 2_000, 0),
+                (2, t + 3_000, 1),
+            ],
+        )
+    db.close()
+    log = Journal(hass, dict, path)
+    await log.async_start()
+    await log.async_stop()
+    db = sqlite3.connect(path)
+    try:
+        rows = list(
+            db.execute("SELECT source, at, state FROM changes ORDER BY source, at")
+        )
+        schema = db.execute("SELECT value FROM meta WHERE key = 'schema'").fetchone()
+    finally:
+        db.close()
+    assert rows == [
+        (1, t + 1_000, 1),
+        (1, t + 30_000, 0),
+        (1, t + 70_000, 1),
+        (1, t + 80_000, 0),
+        (2, t + 1_000, 1),
+        (2, t + 2_000, 0),
+        (2, t + 3_000, 1),
+    ]
+    assert schema == ("2",)
+
+
+async def test_keeps_a_year(
+    hass: HomeAssistant,
+    freezer: FrozenDateTimeFactory,
+    config_dir: Path,
+    learning: MockConfigEntry,
+) -> None:
+    """What is older than KEEP_DAYS goes, at start and each day."""
+    log = _journal(learning)
+    path = config_dir / JOURNAL_FILE
+    now = int(dt_util.utcnow().timestamp() * 1000)
+    day = 86_400_000
+    db = sqlite3.connect(path)
+    with db:
+        db.execute(
+            "INSERT OR IGNORE INTO sources VALUES (99, 'x.old', 'c', 'C', 'person')"
+        )
+        db.executemany(
+            "INSERT INTO changes VALUES (99, ?, 1)",
+            [(now - (journal.KEEP_DAYS + 1) * day,), (now - 10 * day,)],
+        )
+    db.close()
+    await log.async_prune()
+    assert [r for r in _rows(path) if r[0] == "x.old"] == [("x.old", "C", "person", 1)]
+    # A year on, the daily prune takes the other.
+    freezer.tick(timedelta(days=journal.KEEP_DAYS - 9))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert [r for r in _rows(path) if r[0] == "x.old"] == []
+    # A daily prune due just as it stops does nothing.
+    await log.async_stop()
+    await log.async_prune()
 
 
 async def test_picks_up_a_new_sensor_once_the_registry_settles(
@@ -190,14 +344,14 @@ async def test_writes_in_batches(
     path = config_dir / JOURNAL_FILE
     before = len(_rows(path))
     with patch.object(journal, "FLUSH_ROWS", 4):
-        # Motion is on to begin with: off, on, off are three changes.
+        # The person sensor is on to begin with: off, on, off are three changes.
         for state in ("off", "on", "off"):
             freezer.tick(timedelta(seconds=1))
-            hass.states.async_set(MOTION, state)
+            hass.states.async_set(PERSON, state)
         await hass.async_block_till_done()
         assert len(_rows(path)) == before
         freezer.tick(timedelta(seconds=1))
-        hass.states.async_set(MOTION, "on")
+        hass.states.async_set(PERSON, "on")
         await hass.async_block_till_done(wait_background_tasks=True)
         assert len(_rows(path)) == before + 4
 
@@ -304,6 +458,13 @@ async def test_a_head_start_from_the_recorder_once(
                 State(PERSON, "on", last_changed=at + timedelta(seconds=6)),
                 State(PERSON, "off", last_changed=at + timedelta(seconds=20)),
             ],
+            # Motion, as bursts: the off and on 10 s apart go.
+            MOTION: [
+                State(MOTION, "on", last_changed=at),
+                State(MOTION, "off", last_changed=at + timedelta(seconds=5)),
+                State(MOTION, "on", last_changed=at + timedelta(seconds=15)),
+                State(MOTION, "off", last_changed=at + timedelta(seconds=25)),
+            ],
             # Not a detection sensor here.
             "binary_sensor.elsewhere": [State("binary_sensor.elsewhere", "on")],
         }
@@ -330,12 +491,14 @@ async def test_a_head_start_from_the_recorder_once(
         assert asked["end"] - asked["start"] == timedelta(days=journal.IMPORT_DAYS)
         assert asked["significant_changes_only"] is False
         assert PERSON in asked["entity_ids"]
-        assert status["imported"] == 3
-        imported = [r for r in _rows(config_dir / JOURNAL_FILE) if r[0] == PERSON][:3]
+        assert status["imported"] == 5
+        rows = _rows(config_dir / JOURNAL_FILE)
+        imported = [r for r in rows if r[0] == PERSON][:3]
         assert [s for *_rest, s in imported] == [0, 1, 0]
+        assert [r[3] for r in rows if r[0] == MOTION][:2] == [1, 0]
         # Not again: the next start finds it done.
         await hass.config_entries.async_reload(viewer_entry.entry_id)
         await hass.async_block_till_done(wait_background_tasks=True)
-        assert (await _journal(viewer_entry).async_status())["imported"] == 3
+        assert (await _journal(viewer_entry).async_status())["imported"] == 5
     hass.config.components.remove("recorder")
     await hass.config_entries.async_unload(viewer_entry.entry_id)
