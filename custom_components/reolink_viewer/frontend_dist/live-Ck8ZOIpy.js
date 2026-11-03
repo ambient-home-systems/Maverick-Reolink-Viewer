@@ -2515,6 +2515,7 @@ var en = 3e3, tn = "rv-live-open", nn = "rv-live-full", rn = "rv-live-count", an
 	_hdPlayer;
 	_hdChoosing;
 	_native = !1;
+	_topLayer = !1;
 	_observer;
 	_offscreenTimer;
 	constructor() {
@@ -2588,12 +2589,30 @@ var en = 3e3, tn = "rv-live-open", nn = "rv-live-full", rn = "rv-live-count", an
 		this._link = {
 			...e,
 			chosen: t.chosen
-		}, this._hdWanted = t.hd, this._full = !0, this._wanted = !0, document.fullscreenEnabled && typeof this.requestFullscreen == "function" && this.requestFullscreen().then(() => {
+		}, this._hdWanted = t.hd, this._full = !0, this._wanted = !0, document.fullscreenEnabled && typeof this.requestFullscreen == "function" ? this.requestFullscreen().then(() => {
 			this._native = !0, this._full || document.exitFullscreen().catch(() => void 0);
-		}).catch(() => void 0), this._fullChanged();
+		}).catch(() => {
+			this._fillWindow();
+		}) : this._fillWindow(), this._fullChanged();
+	}
+	_fillWindow() {
+		if (this._full && !this._topLayer && typeof this.showPopover == "function") try {
+			this.popover = "manual", this.showPopover(), this._topLayer = !0;
+		} catch {
+			this.removeAttribute("popover");
+		}
+	}
+	_leaveTopLayer() {
+		if (this._topLayer) {
+			this._topLayer = !1;
+			try {
+				this.hidePopover();
+			} catch {}
+			this.removeAttribute("popover");
+		}
 	}
 	exitFull() {
-		this._full && (this._full = !1, this._native && document.fullscreenElement && document.exitFullscreen().catch(() => void 0), this._native = !1, this._fullChanged());
+		this._full && (this._full = !1, this._native && document.fullscreenElement && document.exitFullscreen().catch(() => void 0), this._native = !1, this._leaveTopLayer(), this._fullChanged());
 	}
 	_fullChanged() {
 		this.dispatchEvent(new CustomEvent(nn, {
@@ -2796,7 +2815,7 @@ var en = 3e3, tn = "rv-live-open", nn = "rv-live-full", rn = "rv-live-count", an
 		let e = this._hd;
 		if (!e?.stream) return r`<div class="hd-status" title=${e?.reason ?? n}>
         <span class="badge">SD</span>
-        <span class="small">${e ? e.reason : "Choosing the HD stream…"}</span>
+        ${this.compact ? n : r`<span class="small">${e ? e.reason : "Choosing the HD stream…"}</span>`}
       </div>`;
 		let t = this._hdState, i;
 		return i = this._hdWanted ? this.hdShown ? void 0 : t.kind === "waiting" ? `HD cannot play: ${y(t.error).text}` : "HD starting…" : this._link.chosen ? "SD, as chosen on this device. Tap HD for full quality." : `Lighter SD ${this._link.why}. Tap HD for full quality.`, r`<div class="hd-status" title=${e.reason}>
@@ -2880,6 +2899,15 @@ var en = 3e3, tn = "rv-live-open", nn = "rv-live-full", rn = "rv-live-count", an
       :host([full]) {
         position: fixed;
         inset: 0;
+        /* Over a popover's own look, in the top layer. */
+        width: auto;
+        height: auto;
+        max-width: none;
+        max-height: none;
+        margin: 0;
+        border: 0;
+        overflow: hidden;
+        color: inherit;
         z-index: 10000;
         box-sizing: border-box;
         padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px)

@@ -71,9 +71,11 @@ async function run({ origin, token, admin }) {
   const stub = await Card.getStubConfig(hass);
   result.stub = stub;
 
-  // A dashboard column, as a masonry view has it.
+  // A dashboard column, as a masonry view has it, contained as Home Assistant's
+  // grids are (container queries): a fixed position inside stays in it.
   const column = document.createElement("div");
   column.style.width = "480px";
+  column.style.containerType = "inline-size";
   document.body.appendChild(column);
   const began = performance.now();
   const card = document.createElement("reolink-viewer-camera");
@@ -125,12 +127,22 @@ async function run({ origin, token, admin }) {
   }
   editor.remove();
 
-  // A tap: full screen.
+  // A tap: full screen. Here the browser refuses its own full screen, as it
+  // does on the tablet for a doorbell's ring (no person's tap): the card fills
+  // the window from the top layer, out of the column's layout.
+  const refusing = tileOf();
+  if (refusing) refusing.requestFullscreen = () => Promise.reject(new TypeError("Permissions check failed"));
   tileOf()?.shadowRoot?.querySelector("button.open")?.click();
   await sleep(300);
   result.full = tileOf()?.full ?? null;
+  result.topLayer = tileOf()?.matches(":popover-open") ?? null;
+  const filled = tileOf()?.getBoundingClientRect();
+  result.filled = filled
+    ? { width: Math.round(filled.width), height: Math.round(filled.height), window: [innerWidth, innerHeight] }
+    : null;
   tileOf()?.exitFull();
   await sleep(300);
+  result.afterFull = { topLayer: tileOf()?.matches(":popover-open") ?? null, popover: tileOf()?.getAttribute("popover") ?? null };
 
   card.remove();
   await sleep(1000);
