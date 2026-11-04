@@ -2,16 +2,20 @@
 
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.reolink_viewer.config_flow import unhelpful_signals
 from custom_components.reolink_viewer.const import (
     CONF_BAICHUAN_DEEP_START,
     CONF_LEARN_NORMAL,
     CONF_UNUSUAL_SCOPE,
     CONF_UNUSUAL_SENSITIVITY,
+    CONF_UNUSUAL_SIGNALS,
     DOMAIN,
 )
 from homeassistant.config_entries import SOURCE_USER
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.helpers import entity_registry as er
 
 
 async def test_user_flow(hass: HomeAssistant) -> None:
@@ -51,15 +55,39 @@ async def test_options_flow(hass: HomeAssistant) -> None:
         CONF_LEARN_NORMAL: False,
         CONF_UNUSUAL_SENSITIVITY: "balanced",
         CONF_UNUSUAL_SCOPE: "together",
+        CONF_UNUSUAL_SIGNALS: [],
     }
     chosen = {
         CONF_BAICHUAN_DEEP_START: False,
         CONF_LEARN_NORMAL: True,
         CONF_UNUSUAL_SENSITIVITY: "few",
         CONF_UNUSUAL_SCOPE: "host",
+        CONF_UNUSUAL_SIGNALS: ["alarm_control_panel.house", "person.josh"],
     }
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], chosen
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert entry.options == chosen
+
+
+async def test_the_signal_picker_leaves_out_equipment_talking_about_itself(
+    hass: HomeAssistant,
+) -> None:
+    """Diagnostics, settings and a device's own health are not house-wide signals."""
+    registry = er.async_get(hass)
+    alarm = registry.async_get_or_create("alarm_control_panel", "demo", "alarm")
+    door = registry.async_get_or_create(
+        "binary_sensor", "demo", "door", original_device_class="door"
+    )
+    battery = registry.async_get_or_create(
+        "binary_sensor", "demo", "battery", original_device_class="battery"
+    )
+    firmware = registry.async_get_or_create(
+        "binary_sensor", "demo", "firmware", entity_category=EntityCategory.DIAGNOSTIC
+    )
+    left_out = unhelpful_signals(hass)
+    assert battery.entity_id in left_out
+    assert firmware.entity_id in left_out
+    assert alarm.entity_id not in left_out
+    assert door.entity_id not in left_out

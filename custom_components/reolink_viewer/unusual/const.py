@@ -129,8 +129,66 @@ CALIBRATE_EVENTS: Final = 20_000
 # same kind seen on several cameras, each starting within this of the last one
 # ending, is one incident: one mark (one animal at 02:25 made three).
 UNMARKED_KINDS: Final = frozenset({"motion"})
+
 TIME_WEIGHT: Final = 0.5
 INCIDENT_SECONDS: Final = 60.0
+
+# Ours: a house-wide signal reading one of these is not reading at all (Home
+# Assistant starting, an entity offline, or a signal chosen after the history
+# began): neither counted nor scored. Counted, two months before a signal was
+# chosen made every value it has read since look rare.
+UNREAD_STATES: Final = frozenset({"unknown", "unavailable", ""})
+
+# House-wide signals: what the options' picker offers (Stamina's
+# RELEVANCE_SIGNAL_DOMAINS, RELEVANCE_SIGNAL_ENUM_DOMAINS and
+# RELEVANCE_SIGNAL_WORLD_CLASSES). Each has a state a person could read out
+# loud, which is what makes it countable; a sensor only where it holds a fixed
+# set of values (enum), or measures the world rather than the wiring.
+SIGNAL_DOMAINS: Final = (
+    "person",
+    "device_tracker",
+    "binary_sensor",
+    "alarm_control_panel",
+    "input_boolean",
+    "input_select",
+    "sun",
+    "calendar",
+    "light",
+    "lock",
+    "siren",
+)
+SIGNAL_ENUM_DOMAINS: Final = ("sensor",)
+SIGNAL_WORLD_CLASSES: Final = (
+    "aqi",
+    "atmospheric_pressure",
+    "distance",
+    "humidity",
+    "illuminance",
+    "irradiance",
+    "moisture",
+    "pm25",
+    "precipitation",
+    "precipitation_intensity",
+    "pressure",
+    "sound_pressure",
+    "speed",
+    "temperature",
+    "uv_index",
+    "wind_speed",
+)
+# Stamina's signal_picker: device classes that describe a device's own health
+# rather than anything happening in the house (not offered).
+SIGNAL_SELF_REPORTING: Final = frozenset(
+    {
+        "battery",
+        "battery_charging",
+        "connectivity",
+        "problem",
+        "running",
+        "tamper",
+        "update",
+    }
+)
 
 # Ours, from the owner's second week (2026-11-04, v0.47.1: 36 marks in 7 days):
 # a kind seen this many times on a camera is known there, and no longer raises a

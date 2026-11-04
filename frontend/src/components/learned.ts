@@ -111,6 +111,7 @@ export class RvLearned extends LitElement {
       <div class="lists">
         ${this._renderList("How long", kind.duration, knownAfter)}
         ${this._renderList("What fired first", kind.predecessor, knownAfter)}
+        ${(kind.signals ?? []).map((signal) => this._renderList(signal.label, signal.values, knownAfter))}
       </div>
       ${kind.kind === "motion"
         ? html`<p class="muted small">Motion is learned from, never marked.</p>`

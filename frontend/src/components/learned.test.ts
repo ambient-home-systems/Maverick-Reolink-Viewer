@@ -33,12 +33,23 @@ function kind(name: string, hours: Record<number, number>): LearnedKind {
   };
 }
 
+const PERSON: LearnedKind = {
+  ...kind("person", { 8: 20, 18: 40, 19: 3 }),
+  signals: [
+    {
+      entity_id: "alarm_control_panel.house",
+      label: "House alarm",
+      values: values([["Disarmed", 58], ["Armed away", 5]]),
+    },
+  ],
+};
+
 const PROFILE: LearnedProfile = {
   enabled: true,
   built: true,
   state: { marking: true, days: 12, events: 2400, needs_days: 0, needs_events: 0, line: 0 },
   known_after: 10,
-  kinds: [kind("person", { 8: 20, 18: 40, 19: 3 }), kind("package", { 11: 4, 12: 2 })],
+  kinds: [PERSON, kind("package", { 11: 4, 12: 2 })],
 };
 
 function learnedHass(answer: LearnedProfile | Error): FakeHass {
@@ -98,6 +109,9 @@ describe("rv-learned", () => {
     expect(rows(lists[0])).toEqual(["About 8 s 63%", "About 16 s 32%", "About 4 min Can stand out 5%"]);
     expect(rows(lists[1])).toHaveLength(LIST_ROWS);
     expect(lists[1]?.textContent.replace(/\s+/g, " ")).toContain("And 1 more, 2% between them.");
+    // Each house-wide signal learned with, as it stood when this was seen.
+    expect(lists[2]?.querySelector("h3")?.textContent).toBe("House alarm");
+    expect(rows(lists[2])).toEqual(["Disarmed 92%", "Armed away Can stand out 8%"]);
   });
 
   it("says when it is still learning, and is not there when learning is off or cannot be read", async () => {

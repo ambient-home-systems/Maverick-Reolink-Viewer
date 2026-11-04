@@ -479,6 +479,8 @@ export type JournalStatus =
       sensors: number;
       bytes: number;
       cameras: { id: string; name: string; changes: number; detections: number; first: number; last: number }[];
+      /** The house-wide signals learned with (chosen in the options), as Home Assistant names them. */
+      signals?: { entity_id: string; name: string; changes: number; first: number; last: number }[];
       /** Phase 8 step 2: what the model makes of it (absent on an older server). */
       unusual?: UnusualStatus;
     };
@@ -551,6 +553,8 @@ export interface LearnedKind {
   predecessor: LearnedValue[];
   /** Monday to Sunday. */
   day_of_week: LearnedValue[];
+  /** Each house-wide signal: what it stood at when this was seen (unread states left out). */
+  signals?: { entity_id: string; label: string; values: LearnedValue[] }[];
 }
 
 /** What one camera has learned (unusual/profile, Phase 8.3). */

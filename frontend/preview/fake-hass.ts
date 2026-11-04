@@ -701,6 +701,18 @@ function learned(camera: string): LearnedProfile {
     duration: values(duration),
     predecessor: values(predecessor),
     day_of_week: week(days),
+    // A house-wide signal learned with (Phase 8): what it stood at.
+    signals: [
+      {
+        entity_id: "alarm_control_panel.house",
+        label: "House alarm",
+        values: values([
+          ["disarmed", "Disarmed", Math.round(hours.reduce((a, b) => a + b, 0) * 0.9)],
+          ["armed_home", "Armed home", Math.round(hours.reduce((a, b) => a + b, 0) * 0.08)],
+          ["armed_away", "Armed away", 3],
+        ]),
+      },
+    ],
   });
   const kinds =
     camera === "cam-door"
@@ -804,7 +816,7 @@ function marks(since: number): UnusualMarks {
         "person",
         at(2, 14) - offset,
         40_000,
-        "Person after dark on Garage Camera — seen twice in 3 weeks.",
+        "Person after dark on Garage Camera — seen twice in 3 weeks, and with House alarm armed away.",
         [
           {
             name: "kind",
@@ -847,6 +859,13 @@ function marks(since: number): UnusualMarks {
             subject: "",
             contribution: 0,
             seen: 5,
+          },
+          {
+            name: "signal",
+            label: "armed_away",
+            subject: "House alarm",
+            contribution: 1.2,
+            seen: 3,
           },
         ],
       ),
@@ -1227,6 +1246,23 @@ const JOURNAL = {
       detections: 900,
       first: NOW - 19 * 86_400_000,
       last: NOW,
+    },
+  ],
+  // Phase 8: the house-wide signals learned with.
+  signals: [
+    {
+      entity_id: "alarm_control_panel.house",
+      name: "House alarm",
+      changes: 64,
+      first: NOW - 19 * 86_400_000,
+      last: NOW - 3 * 3_600_000,
+    },
+    {
+      entity_id: "person.josh",
+      name: "Josh",
+      changes: 112,
+      first: NOW - 19 * 86_400_000,
+      last: NOW - 40 * 60_000,
     },
   ],
   // Phase 8 step 2: two cameras mark, one still learns.

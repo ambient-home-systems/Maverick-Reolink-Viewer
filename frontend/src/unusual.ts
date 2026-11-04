@@ -106,8 +106,15 @@ export function termName(term: UnusualTerm): string {
     : (TERM_NAMES[term.name] ?? term.name);
 }
 
-/** A term's value as read: a length's bucket ("~32s") spelled out. */
+/** A raw state as read: "armed_away" is "Armed away". */
+export function spellState(state: string): string {
+  const words = state.replace(/_/g, " ").trim();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+/** A term's value as read: a length's bucket ("~32s") spelled out, a signal's state too. */
 export function termValue(term: UnusualTerm): string {
+  if (term.name === "signal") return spellState(term.label);
   if (term.name !== "duration") return term.label;
   if (term.label === "open") return "Still going";
   if (term.label === "instant") return "An instant";

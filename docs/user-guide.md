@@ -264,6 +264,16 @@ follows a household that changes.
   day), **Balanced** (the default: a few a day at most, fewer on a quiet property) or
   **More, including borderline ones** (about 6 a day at most, counting as new what a
   camera has seen fewer than 20 times rather than 10).
+- **House-wide signals to learn with** (in the options, optional): states from
+  around the house that say something a camera cannot, such as anyone home, the
+  alarm, a gate or door lock, the camera's day/night state or the light outside.
+  Each detection is learned with what they stood at, so a person on the drive with
+  everyone away can stand out where the same person with someone home does not, and
+  a mark says so: "…, and with House alarm armed away". Their last days come from
+  Home Assistant's history; a signal that is offline or starting up says nothing.
+  The cameras' own detection sensors, and equipment reporting on itself (batteries,
+  connectivity, diagnostics), are not offered. They are kept in the same journal
+  file, on this Home Assistant.
 - **What each camera is compared with** (in the options): every camera is judged
   against its own past first; this decides what a camera with little history may
   borrow from, and which cameras count as having seen something just before another.

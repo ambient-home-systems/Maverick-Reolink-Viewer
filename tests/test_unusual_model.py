@@ -799,3 +799,76 @@ async def test_the_panel_shows_what_a_camera_has_learned(
         {"type": "reolink_viewer/unusual/profile", "camera_id": "cam-drive"}
     )
     assert (await client.receive_json())["result"] == {"enabled": False}
+
+
+# ------------------------------------------------- house-wide signals (ours)
+
+_ALARM = "alarm_control_panel.house"
+
+
+def _write_signal(path: Path, entity: str, changes: list[tuple[float, str]]) -> None:
+    """Write a house-wide signal's (at in seconds, state) into the journal file."""
+    db = sqlite3.connect(path)
+    try:
+        with db:
+            db.execute(
+                "INSERT OR IGNORE INTO signals (id, entity_id) VALUES (1, ?)", (entity,)
+            )
+            db.executemany(
+                "INSERT INTO signal_changes VALUES (1, ?, ?)",
+                [(int(at * 1000), state) for at, state in changes],
+            )
+    finally:
+        db.close()
+
+
+async def test_house_wide_signals_are_learned_and_say_why(
+    hass: HomeAssistant, path: Path
+) -> None:
+    """The alarm is off whenever someone is on the drive: a person with it armed stands out.
+
+    And a signal not reading (Home Assistant starting) says nothing either way.
+    """
+    rows = _busy(days=60)
+    armed = _NOW - _DAY + 18 * 3600 + 600  # 18:10 yesterday: an ordinary hour here
+    offline = armed + 3600
+    rows.extend([*_pair(armed), *_pair(offline)])
+    _write(path, rows)
+    _write_signal(
+        path,
+        _ALARM,
+        [
+            (_NOW - 61 * _DAY, "disarmed"),
+            (armed - 60, "armed_away"),
+            (armed + 600, "disarmed"),
+            (offline - 60, "unavailable"),
+            (offline + 600, "disarmed"),
+        ],
+    )
+    hass.states.async_set(_ALARM, "disarmed", {"friendly_name": "House alarm"})
+    unusual = _unusual(hass, path, sensitivity="many")
+    assert unusual.configure(sensitivity="many", scope="together", signals=[_ALARM])
+    model = await unusual.async_rebuild()
+
+    learned = model.profiles[(_CAMERA, "person")].signals[_ALARM]
+    assert learned.counts == {"disarmed": 240, "armed_away": 1}, (
+        "unavailable is not a reading"
+    )
+
+    window = await unusual.async_window(since=armed - 60, until=offline + 60)
+    found = {event.started_at: (event, result) for event, result in window}
+    event, result = found[armed]
+    assert dict(event.context) == {_ALARM: "armed_away"}
+    (term,) = [t for t in result.terms if t.name == "signal"]
+    assert term.subject == "House alarm"
+    assert term.contribution > 0
+    assert "with House alarm armed away" in result.reason
+    event, result = found[offline]
+    assert dict(event.context) == {_ALARM: "unavailable"}
+    assert not [t for t in result.terms if t.name == "signal"]
+
+    # A model learned with other signals is not taken after a restart.
+    again = _unusual(hass, path, sensitivity="many")
+    assert not await again.async_load()
+    again.configure(sensitivity="many", scope="together", signals=[_ALARM])
+    assert await again.async_load()

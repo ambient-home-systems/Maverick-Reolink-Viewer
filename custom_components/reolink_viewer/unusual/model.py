@@ -21,12 +21,13 @@ from __future__ import annotations
 
 from collections import Counter
 from collections.abc import Callable, Iterable, Iterator
+from dataclasses import replace
 import datetime as dt
 import heapq
 import json
 import logging
 import math
-from operator import attrgetter
+from operator import attrgetter, itemgetter
 from pathlib import Path
 import sqlite3
 import time
@@ -50,7 +51,7 @@ from .const import (
     UNMARKED_KINDS,
 )
 from .events import SUBJECTS, Event, SolarClock, Transition, derive_streams
-from .rates import Model, build, model_dict, model_of, preceded
+from .rates import Model, bands, build, model_dict, model_of, numeric, preceded
 from .score import Score, calibrate, daily_cap, incidents, ready, reason, score
 
 _LOGGER = logging.getLogger(__name__)
@@ -132,6 +133,86 @@ def _groups(
     ]
 
 
+# A house-wide signal's changes in a window, and its state before it (the journal's
+# signal_changes; Phase 8, house-wide signals).
+_SIGNAL_ROWS = (
+    "SELECT c.at, c.state FROM signal_changes c JOIN signals s ON s.id = c.signal"
+    " WHERE s.entity_id = ? AND c.at >= ? AND c.at < ? ORDER BY c.at"
+)
+_SIGNAL_BEFORE = (
+    "SELECT c.state FROM signal_changes c JOIN signals s ON s.id = c.signal"
+    " WHERE s.entity_id = ? AND c.at < ? ORDER BY c.at DESC LIMIT 1"
+)
+
+
+def _signal_timeline(
+    db: sqlite3.Connection, signals: Iterable[str], *, since: float, until: float
+) -> list[tuple[float, str, str]]:
+    """Each chosen signal's states in [since, until), oldest first: (when, which, what).
+
+    Each starts with what it stood at when the window opened, if it was known.
+    """
+    rows: list[tuple[float, str, str]] = []
+    try:
+        for entity_id in signals:
+            before = db.execute(
+                _SIGNAL_BEFORE, (entity_id, int(since * 1000))
+            ).fetchone()
+            if before is not None:
+                rows.append((since, entity_id, str(before[0])))
+            rows.extend(
+                (at / 1000, entity_id, str(state))
+                for at, state in db.execute(
+                    _SIGNAL_ROWS, (entity_id, int(since * 1000), int(until * 1000))
+                )
+            )
+    except sqlite3.OperationalError:  # a journal written before signals were kept
+        return []
+    rows.sort(key=itemgetter(0))
+    return rows
+
+
+def _signal_bands(
+    timeline: Iterable[tuple[float, str, str]],
+) -> dict[str, tuple[float, ...]]:
+    """Each numeric signal's bands, from its readings (equal shares of them)."""
+    readings: dict[str, list[float]] = {}
+    for _, entity_id, state in timeline:
+        value = numeric(state)
+        if value is not None:
+            readings.setdefault(entity_id, []).append(value)
+    return {
+        entity_id: cuts
+        for entity_id, values in readings.items()
+        if (cuts := bands(values))
+    }
+
+
+def _with_signals(
+    events: Iterable[Event],
+    timeline: list[tuple[float, str, str]],
+    signals: Iterable[str],
+) -> Iterator[Event]:
+    """Give each event, oldest first, what each signal stood at when it began.
+
+    "unknown" before a signal's first known state: a signal chosen after the
+    history began was genuinely unknown then (and is not scored where it is).
+    """
+    current = dict.fromkeys(signals, "unknown")
+    context = tuple(sorted(current.items()))
+    index, count = 0, len(timeline)
+    for event in events:
+        moved = False
+        while index < count and timeline[index][0] <= event.started_at:
+            _, entity_id, state = timeline[index]
+            current[entity_id] = state
+            index += 1
+            moved = True
+        if moved:
+            context = tuple(sorted(current.items()))
+        yield replace(event, context=context)
+
+
 def model_path(journal: Path) -> Path:
     """Return where the model learned from a journal is saved (beside it)."""
     return journal.with_name(f"{journal.stem}.model.json")
@@ -182,6 +263,9 @@ class Unusual:
         self._sensitivity = sensitivity
         self._model = Model(scope=scope)
         self._names: dict[str, str] = {}
+        # The house-wide signals chosen in the options, and what each is called.
+        self._signals: tuple[str, ...] = ()
+        self._labels: dict[str, str] = {}
         self._cancel: CALLBACK_TYPE | None = None
         self._built_in = 0.0
         self._computed = 0.0
@@ -207,15 +291,43 @@ class Unusual:
         self._model, self._names = Model(scope=self._scope), {}
         self._generation += 1
 
-    def configure(self, *, sensitivity: str, scope: str) -> bool:
+    @property
+    def signals(self) -> tuple[str, ...]:
+        """Return the house-wide signals it learns with (the options' choice)."""
+        return self._signals
+
+    @property
+    def labels(self) -> dict[str, str]:
+        """Return what each house-wide signal is called."""
+        return self._labels
+
+    def configure(
+        self, *, sensitivity: str, scope: str, signals: Iterable[str] = ()
+    ) -> bool:
         """Take the options; True if they changed (a rebuild applies them)."""
         if sensitivity not in SENSITIVITY_FLOORS:
             sensitivity = DEFAULT_SENSITIVITY
         if scope not in SCOPES:
             scope = DEFAULT_SCOPE
-        changed = (sensitivity, scope) != (self._sensitivity, self._scope)
-        self._sensitivity, self._scope = sensitivity, scope
+        chosen = tuple(sorted(set(signals)))
+        changed = (sensitivity, scope, chosen) != (
+            self._sensitivity,
+            self._scope,
+            self._signals,
+        )
+        self._sensitivity, self._scope, self._signals = sensitivity, scope, chosen
         return changed
+
+    @callback
+    def _read_labels(self) -> dict[str, str]:
+        """Return what Home Assistant calls each signal now (its friendly name)."""
+        labels = {}
+        for entity_id in self._signals:
+            state = self._hass.states.get(entity_id)
+            name = state.attributes.get("friendly_name") if state else None
+            labels[entity_id] = str(name) if name else entity_id
+        self._labels = labels
+        return labels
 
     def async_schedule(self) -> None:
         """Rebuild nightly, at 03:17 local time."""
@@ -246,9 +358,15 @@ class Unusual:
         """Read the whole journal and learn from it again."""
         hosts = self._hosts()
         generation = self._generation
+        self._read_labels()
         try:
             model, names, took, created = await self._hass.async_add_executor_job(
-                self._learn, time.time(), self._scope, self._sensitivity, hosts
+                self._learn,
+                time.time(),
+                self._scope,
+                self._sensitivity,
+                hosts,
+                self._signals,
             )
         except sqlite3.Error:
             _LOGGER.warning("Cannot read the detection journal", exc_info=True)
@@ -276,6 +394,7 @@ class Unusual:
             "version": self._version,
             "sensitivity": self._sensitivity,
             "scope": self._scope,
+            "signals": list(self._signals),
             "journal_created": created,
             "built_in": self._built_in,
             "computed": self._computed,
@@ -307,6 +426,7 @@ class Unusual:
                     kept.get("version") != self._version
                     or kept.get("sensitivity") != self._sensitivity
                     or kept.get("scope") != self._scope
+                    or kept.get("signals", []) != list(self._signals)
                     or kept.get("journal_created") != created
                 ):
                     return None
@@ -325,13 +445,19 @@ class Unusual:
             return False
         model, kept = found
         self._model = model
+        self._read_labels()
         self._names = {str(k): str(v) for k, v in kept.get("names", {}).items()}
         self._built_in = float(kept.get("built_in", 0.0))
         self._computed = float(kept.get("computed", 0.0))
         return True
 
     def _learn(
-        self, now: float, scope: str, sensitivity: str, hosts: dict[str, str]
+        self,
+        now: float,
+        scope: str,
+        sensitivity: str,
+        hosts: dict[str, str],
+        signals: tuple[str, ...] = (),
     ) -> tuple[Model, dict[str, str], tuple[float, float], str | None]:
         """Fold the history into events and learn from them (in the executor).
 
@@ -358,10 +484,18 @@ class Unusual:
                     yield event
 
             clock = SolarClock(self._hass)
+            # The house-wide signals chosen: each event read with their states
+            # when it began, a number in bands of its own readings.
+            timeline = _signal_timeline(db, signals, since=0.0, until=now)
             history = derive_streams(self._hass, _groups(db, 0.0, now), clock=clock)
-            # No house-wide signals are recorded yet: no bands to learn.
+            if signals:
+                history = _with_signals(history, timeline, signals)
             model = build(
-                counted(history), now=now, scope=scope, hosts=hosts, signal_bands={}
+                counted(history),
+                now=now,
+                scope=scope,
+                hosts=hosts,
+                signal_bands=_signal_bands(timeline),
             )
 
             # The thresholds, from the last four weeks of what can be marked: every
@@ -380,11 +514,14 @@ class Unusual:
                 return spread % stride.get(event.camera, 1) == 0
 
             model.known_after = KNOWN_AFTERS[sensitivity]
+            latest: Iterable[Event] = derive_streams(
+                self._hass, _groups(db, since - _LEAD_IN, now), clock=clock
+            )
+            if signals:
+                latest = _with_signals(latest, timeline, signals)
             pairs = calibrate(
                 model,
-                derive_streams(
-                    self._hass, _groups(db, since - _LEAD_IN, now), clock=clock
-                ),
+                latest,
                 floor=SENSITIVITY_FLOORS[sensitivity],
                 scored=scored,
             )
@@ -446,6 +583,8 @@ class Unusual:
         `unusual` is false for all of them.
         """
         model = self._model
+        signals = self._signals
+        labels = self._read_labels()
 
         def read() -> list[tuple[Event, Score]]:
             if not self._path.exists():
@@ -454,11 +593,21 @@ class Unusual:
             try:
                 # As named now (a camera may be new since the rebuild).
                 names = _names(db)
-                events = derive_streams(
+                events: Iterable[Event] = derive_streams(
                     self._hass, _groups(db, since - _LEAD_IN, until)
                 )
+                if signals:
+                    timeline = _signal_timeline(
+                        db, signals, since=since - _LEAD_IN, until=until
+                    )
+                    events = _with_signals(events, timeline, signals)
                 return [
-                    (event, score(event, model, previous=previous, names=names))
+                    (
+                        event,
+                        score(
+                            event, model, previous=previous, names=names, labels=labels
+                        ),
+                    )
                     for event, previous in preceded(
                         events, scope=model.scope, hosts=model.hosts
                     )

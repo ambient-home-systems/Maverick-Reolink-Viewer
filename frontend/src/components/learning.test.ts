@@ -75,6 +75,10 @@ describe("rv-learning", () => {
           { id: "a", name: "Doorbell", changes: 900, detections: 450, first: DAY - 10 * 86_400_000, last: DAY },
           { id: "b", name: "Laundry Room", changes: 40, detections: 20, first: DAY - 9 * 86_400_000, last: DAY },
         ],
+        signals: [
+          { entity_id: "alarm_control_panel.house", name: "House alarm", changes: 12, first: DAY - 10 * 86_400_000, last: DAY },
+          { entity_id: "person.josh", name: "Josh", changes: 30, first: DAY - 10 * 86_400_000, last: DAY },
+        ],
         unusual: {
           built: DAY,
           built_in_s: 2.4,
@@ -112,6 +116,9 @@ describe("rv-learning", () => {
     );
     expect(text()).toContain("Doorbell: 450 detections, since Oct 24, 2026, 10:00. Marks what is unusual");
     expect(text()).toContain("Laundry Room: 20 detections, since Oct 25, 2026, 10:00. Learning: 180 more detections");
+    expect(text()).toContain(
+      "Learned with House alarm (12 changes since Oct 24, 2026, 10:00) and Josh (30 changes since Oct 24, 2026, 10:00).",
+    );
     expect(text()).toContain("Unusual in the last 7 days");
     expect(text()).toContain("25 marks, about 3.6 a day, of 5,000 events, at Balanced.");
     expect(text()).toContain("Nov 3, 2026, 08:00 Person at 03:12 on Doorbell — 2nd time in 10 days.");
