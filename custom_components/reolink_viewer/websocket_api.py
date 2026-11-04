@@ -30,6 +30,7 @@ from .thumbnails import BUCKETS_S
 from .timeconv import epoch_ms
 from .timeline import TimelineError
 from .unusual.model import mark_payload
+from .unusual.score import incidents
 from .views import (
     CLIP_PATH,
     MSE_PATH,
@@ -1088,13 +1089,14 @@ async def ws_unusual_events(
     scored = await unusual.async_window(
         since=since / 1000, until=until / 1000, camera=msg.get("camera")
     )
-    connection.send_result(
-        msg["id"],
-        {
-            "events": [
-                mark_payload(event, result)
-                for event, result in scored
-                if result.unusual or not msg["unusual_only"]
-            ]
-        },
-    )
+    # Each event with its incident's number (the same kind on several cameras
+    # within a minute is one incident).
+    events: list[dict[str, Any]] = []
+    for number, group in enumerate(incidents(scored)):
+        events.extend(
+            {**mark_payload(event, result), "incident": number}
+            for event, result in group
+            if result.unusual or not msg["unusual_only"]
+        )
+    events.sort(key=lambda payload: payload["start"])
+    connection.send_result(msg["id"], {"events": events})

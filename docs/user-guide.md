@@ -226,6 +226,12 @@ follows a household that changes.
 
 - **A camera marks once it has a week of history and 200 detections.** Until then the
   Devices page says what it is short of ("Learning: 3 more days").
+- **Motion is learned from, never marked.** It still tells the model what fired
+  first and what a camera usually sees; the marks go to people, vehicles, animals,
+  doorbell presses and the like.
+- **One thing on several cameras is one mark:** the same kind of thing seen on
+  several cameras within a minute, such as an animal crossing the front of the house,
+  is marked once, naming every camera that saw it.
 - **Unusual in the last 7 days**, on the Devices page: how many were marked, about how
   many a day, and the latest, each with a sentence saying why: "Person at 03:12 on
   Doorbell — 2nd time in 3 weeks, and nothing fired first." **The numbers behind it**

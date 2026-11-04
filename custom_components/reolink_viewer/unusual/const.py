@@ -111,7 +111,17 @@ DEFAULT_SCOPE: Final = SCOPE_TOGETHER
 # ------------------------------------------------- our adaptations (not Stamina's)
 
 # The thresholds are calibrated on the last four weeks, at most this many events
-# per camera (evenly spaced): our journal keeps a year of a busy property,
-# Stamina's a fortnight of a quieter one.
+# per camera (evenly spaced; motion is not among them): our journal keeps a year
+# of a busy property, Stamina's a fortnight of a quieter one.
 CALIBRATE_DAYS: Final = 28
-CALIBRATE_EVENTS: Final = 4000
+CALIBRATE_EVENTS: Final = 20_000
+
+# Ours, from the owner's first marks (2026-11-04, v0.47.0: 25 in 7 days):
+# motion is learned from but never marked (10 of the 25 were motion); the time
+# of day and the time from sunset each count half where both are known (they
+# agreed 95% of the time, and together made 71% of a mark's score); and the
+# same kind seen on several cameras, each starting within this of the last one
+# ending, is one incident: one mark (one animal at 02:25 made three).
+UNMARKED_KINDS: Final = frozenset({"motion"})
+TIME_WEIGHT: Final = 0.5
+INCIDENT_SECONDS: Final = 60.0

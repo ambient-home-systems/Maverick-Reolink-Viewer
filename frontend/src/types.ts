@@ -505,6 +505,10 @@ export interface UnusualEvent {
   unusual: boolean;
   reason: string;
   terms: UnusualTerm[];
+  /** unusual/events: its incident (the same kind on several cameras within a minute). */
+  incident?: number;
+  /** A mark in the status: every camera that saw its incident. */
+  cameras?: string[];
 }
 
 export interface UnusualCamera {

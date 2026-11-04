@@ -502,3 +502,31 @@ async def test_a_head_start_from_the_recorder_once(
         assert (await _journal(viewer_entry).async_status())["imported"] == 5
     hass.config.components.remove("recorder")
     await hass.config_entries.async_unload(viewer_entry.entry_id)
+
+
+async def test_the_write_ahead_file_is_cut_back_at_open(
+    hass: HomeAssistant, config_dir: Path
+) -> None:
+    """A large write-ahead file left by an earlier write (v0.47.0's compaction) is emptied."""
+    path = config_dir / JOURNAL_FILE
+    writer = sqlite3.connect(path)
+    writer.execute("PRAGMA journal_mode=WAL")
+    writer.execute("PRAGMA wal_autocheckpoint=0")
+    writer.executescript(journal._SCHEMA)
+    with writer:
+        writer.execute("INSERT INTO meta VALUES ('schema', '2')")
+        writer.execute(
+            "INSERT INTO sources VALUES (1, ?, 'cam', 'Cam', 'person')", (PERSON,)
+        )
+        writer.executemany(
+            "INSERT INTO changes VALUES (1, ?, ?)", [(n, n % 2) for n in range(200_000)]
+        )
+    wal = path.with_name(f"{path.name}-wal")
+    assert wal.stat().st_size > 2 * journal.WAL_LIMIT
+    store = journal._Store(path)
+    try:
+        await hass.async_add_executor_job(store.open)
+        assert wal.stat().st_size == 0
+    finally:
+        await hass.async_add_executor_job(store.close)
+        writer.close()

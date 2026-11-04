@@ -1,6 +1,6 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
 import { A as i, Dt as a, Y as o, at as s, f as c } from "./live-DWqtt9-p.js";
-import { r as l, z as u } from "./home-CeLYTxIJ.js";
+import { r as l, z as u } from "./home-CoJc5Y6Q.js";
 //#region src/components/learning.ts
 var d = class extends r {
 	static properties = {
@@ -93,8 +93,9 @@ var d = class extends r {
         </dl>
       </details>
       <p class="muted small">
-        Unusual means rare for that camera, never dangerous. It learns again each night at 03:17, and from what it has
-        seen since in between.
+        Unusual means rare for that camera, never dangerous. Motion is learned from, never marked, and the same thing
+        seen on several cameras within a minute is one mark. It learns again each night at 03:17, and scores what it
+        has seen since against that.
       </p>`;
 	}
 	static styles = [i, e`

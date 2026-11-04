@@ -24,7 +24,7 @@ put on it:
 | 5 | Optional R&D: Baichuan live/playback | Very high | 4–8 wk, time-boxed with gates | **5a done, go** (2026-10-29, v0.34.1): prior art surveyed, the capture tool and the owner's captures, `docs/baichuan-playback.md`, and the read-only check: a deep start over Baichuan costs the NVR 0.2 s against 4.7 s of HTTP download for the same point of a short recording. 5b–5d estimated at 3.5–5 wk, deep starts only; talk deferred. **5b step 1 built** (2026-10-29, v0.35.0): the probe measures the replay and the download cut (143) 75 % into sub and main recordings, decodes what arrives and counts the sessions; the source (replay, 143 or both) is chosen from the owner's report before step 2, the prototype. **Step 1 done** (2026-10-30, v0.35.5): the download cut (143) is the source. **5b step 2 built** (2026-10-30, v0.36.0): the muxer, one Baichuan connection per host, deep starts served from the cut behind an option (off by default), the fallback to the download. **Hardware check passed** (2026-10-30): an uncached deep start 52 min into an hour shows its first frame in 0.51 s on Chrome and 0.60 s on the iPhone (9.0 s from the download with the option off); v0.36.1 cuts HD in 3-minute spans and searches the day's HD list ahead. **5b done** (2026-10-30, v0.36.2): every exit criterion met on the hardware, the NVR's own list of online users included (one more session while deep starts are in use, gone when idle). **5c done** (2026-10-30 to 2026-11-02, v0.37.0–v0.40.0): a deep start fetches the recording once, in two pieces, on one stream; on by default, a device that refuses the protocol left alone; each camera's counter rate kept; the device's zone built from its own DST rules (reolink-aio's land on the wrong days); two viewers of a camera take turns. **5d reports posted** (2026-11-02): the time zone bug as [starkillerOG/reolink_aio#239](https://github.com/starkillerOG/reolink_aio/issues/239), the download cut (143/144) and the media message class as [#240](https://github.com/starkillerOG/reolink_aio/issues/240); the rest is the maintainer's. **v0.40.1** (2026-11-02): six findings of a review of 5b/5c fixed (chief among them, an HD cut left by a closed tab held the recorder's login until restart); the owner's check of it closes the phase. See "Phase 5 status" |
 | 6 | The Doorbell's events: a camera that records but cannot be played lists its events | Standard / High | 0.5–1 wk | **Done** (2026-11-02, v0.43.0). **Step 1 done** (v0.41.0–v0.41.1): run 2 found the Doorbell's event and day searches working, its zone Home Assistant's, and its pictures refused by reolink-aio (a `1002` header). **Step 2 built** (v0.42.0): the Doorbell's events in the feed, the Events view and the calendar, on wired power. **Step 3 built** (v0.43.0): its pictures read here, and its Playback tab shows each event as pictures. **The owner's check** (2026-11-02): the Doorbell's events show and open as pictures, and a press of the doorbell is listed as a "Doorbell" event at the right time, so step 4 (the fallback) was not needed. Phase 7 started meanwhile, at the owner's request. See "Phase 6" |
 | 7 | Live video on dashboards: a Reolink Viewer camera card | Standard | 1–1.5 wk | **Done** (2026-11-03, v0.45.2), closed on daily use by the owner. **Step 1 done** (v0.44.0): the Reolink camera card, `custom:reolink-viewer-camera`, with its editor, on any dashboard and for any user. The owner's check (2026-11-02): on the wall tablet (Galaxy Tab A9+, Fully Kiosk, a sections view) and the iPhone app's dashboard, the Doorbell's and the front-yard camera's cards show their picture at once and their video quickly, kept warm or not, and go full screen in HD and back. **Step 2 built** (v0.45.0): what the cards see is logged per device (Devices → Dashboard cards), they sleep while Fully Kiosk's screen is off or its screensaver on, and a doorbell's card can wake the screen and go full screen when it rings. **Step 2 done** (2026-11-03, v0.45.2): on the owner's tablet the cards sleep under Fully's screensaver (no frames decoded) and a ring wakes the screen and shows the Doorbell full screen, playing in 0.6 s (v0.45.1 fills the window from the top layer). Step 3 stays gated. Not measured: a warm camera's wake time and 8 visible hours; the wall page's cards are the owner's choice. See "Phase 7" |
-| 8 | Unusual events: learning what is normal | High | 2–3 wk, then a week of learning | **Started** (2026-11-03). **Step 1 built** (v0.46.0): the detection journal, opt-in ("Learn what is normal"), with a 10-day head start from Home Assistant's recorder; on at the owner's since 2026-11-02, all 7 cameras. v0.46.1 keeps motion as bursts and a year of history (the owner's choices, from the first 10 days' sizes). **Step 2 built** (v0.47.0): Stamina's model, ported with its tests (MIT, in `THIRD_PARTY.md`), with a daily cap for a busy property; the Devices page shows each camera's state and the week's marks with their sentences. House-wide signals follow. See "Phase 8" |
+| 8 | Unusual events: learning what is normal | High | 2–3 wk, then a week of learning | **Started** (2026-11-03). **Step 1 built** (v0.46.0): the detection journal, opt-in ("Learn what is normal"), with a 10-day head start from Home Assistant's recorder; on at the owner's since 2026-11-02, all 7 cameras. v0.46.1 keeps motion as bursts and a year of history (the owner's choices, from the first 10 days' sizes). **Step 2 built** (v0.47.0): Stamina's model, ported with its tests (MIT, in `THIRD_PARTY.md`), with a daily cap for a busy property; the Devices page shows each camera's state and the week's marks with their sentences. The owner's check: 3.6 marks a day at Balanced (243 a week without the cap). v0.47.1, the owner's choices: motion never marked, time counted once, one mark per incident across cameras. House-wide signals follow. See "Phase 8" |
 | 9 | The Wall: the Live page as a security monitor, with layouts, arranging, HD large tiles and the detection strip | Standard / High | 2–3 wk | Planned. See "Phase 9" |
 | 10 | Scrubbing that shows the picture while dragging | Very high | 2–4 wk | Planned. See "Phase 10" |
 | 11 | Playback and settings extras: zoom, event clips, filters, copying settings | Standard | 1–2 wk | Planned. See "Phase 11" |
@@ -5769,7 +5769,7 @@ rarity, never by danger, and the panel says so.
 | Step | Status |
 | --- | --- |
 | 1. The detection journal (opt-in) | **Built** (2026-11-03, v0.46.0, below), on at the owner's (all 7 cameras). v0.46.1: motion as bursts, a year kept. History collects |
-| 2. The model | **Built** (2026-11-03, v0.47.0, below), but for the house-wide signals (next); the owner checks the marks a day |
+| 2. The model | **Built** (2026-11-03, v0.47.0; tuned in v0.47.1 on the owner's marks, below), but for the house-wide signals (next) |
 | 3. In the panel | Not started |
 | 4. For automations | Not started |
 
@@ -6028,6 +6028,82 @@ file says what changed.
    the line, marks by kind, what stood out most, and how long it learned.
 5. Optional: try **Only the strangest** and **More** in Reolink Viewer's
    options; the numbers change at once.
+
+**The owner's check (2026-11-04, v0.47.0).** The journal after its
+compaction: 34,913 detections from 7 cameras (it was 92,107 before motion's
+bursts). Six cameras mark; the Laundry Room learns (56 detections, 145 more
+to go: about a month at its rate).
+
+- **3.6 marks a day at Balanced** (25 in 7 days, of 14,582 events, about
+  2,100 a day): in the 2–8 the exit criteria want. **Without the daily cap,
+  243** (35 a day): the line was the cap's, 3.95, against the floor's 1.4.
+  The cap stays.
+- **The marks:** motion 10, vehicle 6, animal 6, person 2, doorbell 1. What
+  stood out most: the light (time from sunset) 12, how long 4, the time of
+  day 4, what fired before 3, what it was 2.
+- **What they showed:**
+  - motion was 10 of 25 marks, two of them 2 minutes apart ("Motion in
+    daylight on Back Yard");
+  - the time of day and the time from sunset are one clock read twice: on an
+    owner-shaped copy of 12 days they agreed at 0.95 and made 71% of a mark's
+    score, and sentences said things like "Vehicle after dark on Doorbell —
+    24th time in 11 days";
+  - one animal at 02:25 made three marks (Front Yard Right, Front Yard Left,
+    the Doorbell).
+- **The journal read 6.9 MB:** the one-time compaction left about 4 MB of
+  write-ahead file, which SQLite does not shrink (reproduced: 2.9 MB of
+  journal, 4.1 MB of write-ahead file; 2.5 MB after a truncating checkpoint).
+- **Learned in 11.67 s,** at Home Assistant's start: that timer began before
+  an executor thread was free. On the owner-shaped copy of the same age the
+  learning itself takes 1.2 s here.
+
+**The owner's decisions (2026-11-04):** don't mark motion (still learned
+from); count time once; one mark per incident across cameras.
+
+**As built (v0.47.1).**
+
+- **Motion is never marked** (`UNMARKED_KINDS`): still counted in every
+  profile (what fired first, each camera's mix), scored, and shown with its
+  line; never unusual. The thresholds and the cap are drawn from what can be
+  marked only.
+- **Time counted once** (`TIME_WEIGHT` 0.5): where sunset is known, the clock
+  and the light each count half, so their sum is their mean; without a
+  location the clock counts whole. A sentence says the time once ("at 01:57"
+  or "after dark", not both).
+- **One mark per incident** (`incidents`, `INCIDENT_SECONDS` 60): the same
+  kind on any camera, each starting within a minute of the incident's last
+  end, is one incident. It is marked when any of its events is, shown as the
+  highest-scoring one, its sentence naming every camera that saw it
+  ("Animal at 02:25 on Front Yard Right, Front Yard Left and Doorbell"), and
+  without a "what fired first" that was the same incident. The daily cap
+  counts incidents (each scored as its highest event); the status counts
+  marks, by day, kind and reason, per incident; `unusual/events` gives each
+  event its incident's number. The calibration now scores up to 20,000 events
+  a camera (all of the owner's), so the incidents it counts are whole.
+- **The write-ahead file** is emptied when the journal opens
+  (`wal_checkpoint(TRUNCATE)`, so a v0.47.0 compaction's 4 MB goes at the
+  next start) and kept under 1 MB after each checkpoint
+  (`journal_size_limit`).
+- **"Learned … in N s"** is the time the learning took in its thread, not
+  the wait for one.
+- **On the owner-shaped copy:** 3.0–4.4 marks a day, none motion; the reasons
+  spread over what fired first, how long and what it was.
+- **Checks:** motion scored over its line and not marked (and its own test
+  among Stamina's); time halved with sunset, whole without, said once; the
+  incident grouping (chained from each end; other kinds and longer quiets
+  apart); a person on two cameras one mark naming both, without "after" the
+  other; the cap on incidents; incident numbers in `unusual/events`; the
+  write-ahead file emptied at open (failing without the fix).
+
+**Hardware checklist (the owner, v0.47.1):**
+
+1. Update to v0.47.1 and restart. The journal's size should drop (the
+   write-ahead file emptied).
+2. **Devices → Learning what is normal:** no motion marks; marks of one thing
+   on several cameras name them together; the marks a day still in 2–8.
+3. Tomorrow after 03:17: **Learned … in N s** is the night's learning time on
+   the mini PC.
+4. Copy **The numbers behind it** here again, with a few of the sentences.
 
 #### Step 8.3: in the panel
 

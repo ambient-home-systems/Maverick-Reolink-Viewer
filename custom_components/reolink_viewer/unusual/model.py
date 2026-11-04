@@ -45,10 +45,11 @@ from .const import (
     SCORE_MIN_DAYS,
     SCORE_MIN_EVENTS,
     SENSITIVITY_FLOORS,
+    UNMARKED_KINDS,
 )
 from .events import SUBJECTS, Event, SolarClock, Transition, derive_streams
 from .rates import Model, build, preceded
-from .score import Score, calibrate, daily_cap, ready, score
+from .score import Score, calibrate, daily_cap, incidents, ready, reason, score
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -213,9 +214,8 @@ class Unusual:
         """Read the whole journal and learn from it again."""
         hosts = self._hosts()
         generation = self._generation
-        began = time.monotonic()
         try:
-            model, names = await self._hass.async_add_executor_job(
+            model, names, took = await self._hass.async_add_executor_job(
                 self._learn, time.time(), self._scope, self._sensitivity, hosts
             )
         except sqlite3.Error:
@@ -223,7 +223,7 @@ class Unusual:
             return self._model
         if generation != self._generation:
             return self._model  # dropped meanwhile: learning was turned off
-        self._built_in = time.monotonic() - began
+        self._built_in = took
         self._model, self._names = model, names
         _LOGGER.debug(
             "Unusual events: model rebuilt in %.1f s, %s cameras, scope %s",
@@ -235,19 +235,25 @@ class Unusual:
 
     def _learn(
         self, now: float, scope: str, sensitivity: str, hosts: dict[str, str]
-    ) -> tuple[Model, dict[str, str]]:
-        """Fold the history into events and learn from them (in the executor)."""
+    ) -> tuple[Model, dict[str, str], float]:
+        """Fold the history into events and learn from them (in the executor).
+
+        Returns the model, the cameras' names, and how long it took here (not
+        counting the wait for an executor thread).
+        """
+        began = time.monotonic()
         if not self._path.exists():
-            return Model(scope=scope, built_at=now), {}
+            return Model(scope=scope, built_at=now), {}, 0.0
         db = _connect(self._path)
         try:
             since = now - CALIBRATE_DAYS * _DAY
+            # What can be marked, per camera, in the last four weeks.
             recent: Counter[str] = Counter()
             first = [now]
 
             def counted(events: Iterable[Event]) -> Iterator[Event]:
                 for event in events:
-                    if event.started_at >= since:
+                    if event.started_at >= since and event.kind not in UNMARKED_KINDS:
                         recent[event.camera] += 1
                         first[0] = min(first[0], event.started_at)
                     yield event
@@ -259,21 +265,22 @@ class Unusual:
                 counted(history), now=now, scope=scope, hosts=hosts, signal_bands={}
             )
 
-            # The thresholds, from the last four weeks: every event walked (each has
-            # its predecessor), about CALIBRATE_EVENTS a camera scored. Picked by a
-            # hash of their own time, so the same events are picked each night.
+            # The thresholds, from the last four weeks of what can be marked: every
+            # event walked (each has its predecessor), up to CALIBRATE_EVENTS a
+            # camera scored. Picked by a hash of their own time, so the same
+            # events are picked each night.
             stride = {
                 camera: max(1, math.ceil(count / CALIBRATE_EVENTS))
                 for camera, count in recent.items()
             }
 
             def scored(event: Event) -> bool:
-                if event.started_at < since:
+                if event.started_at < since or event.kind in UNMARKED_KINDS:
                     return False
                 spread = (int(event.started_at * 1000) * 2654435761) % 2**32
                 return spread % stride.get(event.camera, 1) == 0
 
-            scores = calibrate(
+            pairs = calibrate(
                 model,
                 derive_streams(
                     self._hass, _groups(db, since - _LEAD_IN, now), clock=clock
@@ -281,16 +288,22 @@ class Unusual:
                 floor=SENSITIVITY_FLOORS[sensitivity],
                 scored=scored,
             )
-            # And the property's daily cap: each score stands for as many events as
-            # its camera had for each one scored.
-            marking = {c: v for c, v in scores.items() if c in model.thresholds and v}
+            # And the property's daily cap, on incidents: each scored as its highest
+            # event on a camera that marks, standing for as many as its camera
+            # had for each one scored.
+            marking = [(e, v) for e, v in pairs if e.camera in model.thresholds]
             model.cap = daily_cap(
-                marking,
-                weight={c: recent[c] / len(v) for c, v in marking.items()},
+                (
+                    (
+                        max(v for _, v in group),
+                        max(stride.get(e.camera, 1) for e, _ in group),
+                    )
+                    for group in incidents(marking)
+                ),
                 days=(now - first[0]) / _DAY,
                 per_day=DAILY_MARKS[sensitivity],
             )
-            return model, _names(db)
+            return model, _names(db), time.monotonic() - began
         finally:
             db.close()
 
@@ -366,18 +379,29 @@ class Unusual:
         except sqlite3.Error:
             _LOGGER.warning("Cannot read the detection journal", exc_info=True)
             window = []
-        model = self._model
-        marks = [(event, result) for event, result in window if result.unusual]
+        model, names = self._model, self._names
+        groups = incidents(window)
+        # An incident is marked when any of its events is; it is shown as its
+        # highest-scoring marked event, on every camera that saw it.
+        marks = [
+            (group, max((m for m in group if m[1].unusual), key=lambda m: m[1].total))
+            for group in groups
+            if any(result.unusual for _, result in group)
+        ]
         uncapped = sum(
             1
-            for event, result in window
-            if (line := model.thresholds.get(event.camera)) is not None
-            and result.total > max(line, model.floor)
+            for group in groups
+            if any(
+                event.kind not in UNMARKED_KINDS
+                and (line := model.thresholds.get(event.camera)) is not None
+                and result.total > max(line, model.floor)
+                for event, result in group
+            )
         )
         zone = dt_util.get_default_time_zone()
         per_day = Counter(
-            dt.datetime.fromtimestamp(event.started_at, zone).date().isoformat()
-            for event, _ in marks
+            dt.datetime.fromtimestamp(top[0].started_at, zone).date().isoformat()
+            for _, top in marks
         )
         return {
             "built": int(model.built_at * 1000) if model.built_at else None,
@@ -392,18 +416,55 @@ class Unusual:
             "marks": len(marks),
             "uncapped": uncapped,
             "per_day": dict(sorted(per_day.items())),
-            "by_kind": dict(Counter(event.kind for event, _ in marks).most_common()),
+            "by_kind": dict(Counter(top[0].kind for _, top in marks).most_common()),
             "by_reason": dict(
                 Counter(
-                    max(result.terms, key=attrgetter("contribution")).name
-                    for _, result in marks
-                    if result.terms
+                    max(top[1].terms, key=attrgetter("contribution")).name
+                    for _, top in marks
+                    if top[1].terms
                 ).most_common()
             ),
             "latest": [
-                mark_payload(event, result) for event, result in marks[-10:][::-1]
+                incident_payload(group, top, model, names)
+                for group, top in marks[-10:][::-1]
             ],
         }
+
+
+def _joined(names: list[str]) -> str:
+    """Return "A", "A and B", or "A, B and C"."""
+    return names[0] if len(names) == 1 else f"{', '.join(names[:-1])} and {names[-1]}"
+
+
+def incident_payload(
+    group: list[tuple[Event, Score]],
+    top: tuple[Event, Score],
+    model: Model,
+    names: dict[str, str],
+) -> dict[str, Any]:
+    """Return an incident as its highest marked event, naming every camera that saw it."""
+    event, result = top
+    seen: list[str] = []
+    for member, _ in group:
+        if member.camera not in seen:
+            seen.append(member.camera)
+    called = [names.get(camera, "another camera") for camera in seen]
+    payload = mark_payload(event, result)
+    payload["cameras"] = called
+    if len(called) > 1:
+        # Named once, for all of them; "50s after Back Yard" says nothing when
+        # Back Yard saw the same thing.
+        payload["reason"] = reason(
+            event,
+            result,
+            model,
+            {**names, event.camera: _joined(called)},
+            unsaid=lambda term: (
+                term.name == "predecessor"
+                and any(name in term.label for name in called)
+            ),
+        )
+    return payload
 
 
 def mark_payload(event: Event, result: Score) -> dict[str, Any]:
