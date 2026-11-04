@@ -27,6 +27,7 @@ from .const import (
     CONF_LEARN_NORMAL,
     CONF_UNUSUAL_SCOPE,
     CONF_UNUSUAL_SENSITIVITY,
+    CONF_UNUSUAL_SIGNALS,
     DEFAULT_BAICHUAN_DEEP_START,
     DEFAULT_HOST_CONCURRENCY,
     DEFAULT_LEARN_NORMAL,
@@ -276,9 +277,11 @@ async def _async_apply_learning(
     journal, unusual = entry.runtime_data.journal, entry.runtime_data.unusual
     if journal is None or unusual is None:
         return
+    signals = [str(e) for e in entry.options.get(CONF_UNUSUAL_SIGNALS) or []]
     changed = unusual.configure(
         sensitivity=entry.options.get(CONF_UNUSUAL_SENSITIVITY, DEFAULT_SENSITIVITY),
         scope=entry.options.get(CONF_UNUSUAL_SCOPE, DEFAULT_SCOPE),
+        signals=signals,
     )
     if not entry.options.get(CONF_LEARN_NORMAL, DEFAULT_LEARN_NORMAL):
         # Off: no journal on disk, whether it was running or left from before.
@@ -287,6 +290,7 @@ async def _async_apply_learning(
         await journal.async_delete()
         return
     starting = not journal.running
+    await journal.async_set_signals(signals)
     await journal.async_start()
     if not (starting or changed):
         return

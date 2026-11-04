@@ -43,6 +43,7 @@ from .const import (
     SCORE_QUANTILE,
     TIME_WEIGHT,
     UNMARKED_KINDS,
+    UNREAD_STATES,
 )
 from .events import Event
 from .rates import (
@@ -445,6 +446,10 @@ def _terms(
         distribution = specific.signals.get(entity_id)
         if distribution is not None and not informative(distribution):
             continue
+        # Ours: a signal not reading (Home Assistant starting, an entity offline)
+        # says nothing about this event; scored, it would be rare every restart.
+        if seen.get(entity_id, "unknown").lower() in UNREAD_STATES:
+            continue
         # Through the same function the training pass used. A numeric signal is counted as the
         # band its reading fell in, and training recording "12 to 18" while scoring looked up
         # "14.2" would mean no numeric signal ever matched anything it had learned.
@@ -634,9 +639,10 @@ def _phrase(term: Term, *, lead: bool = True) -> str:
         return term.label
     if term.name == "signal" and term.subject:
         # A chosen signal has a name of its own, and the state alone is meaningless in a
-        # sentence: "with armed_away" says nothing about what was armed.
-        return f"with {term.subject} {term.label}"
-    return f"with {term.label}"
+        # sentence: "with armed_away" says nothing about what was armed. (Ours: and the
+        # state spelled, "with Alarm armed away".)
+        return f"with {term.subject} {term.label.replace('_', ' ')}"
+    return f"with {term.label.replace('_', ' ')}"
 
 
 def calibrate(

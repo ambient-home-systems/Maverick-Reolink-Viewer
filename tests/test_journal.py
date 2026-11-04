@@ -18,7 +18,11 @@ from pytest_homeassistant_custom_component.common import (
 from pytest_homeassistant_custom_component.typing import WebSocketGenerator
 
 from custom_components.reolink_viewer import backup, devices, journal
-from custom_components.reolink_viewer.const import CONF_LEARN_NORMAL, DOMAIN
+from custom_components.reolink_viewer.const import (
+    CONF_LEARN_NORMAL,
+    CONF_UNUSUAL_SIGNALS,
+    DOMAIN,
+)
 from custom_components.reolink_viewer.journal import JOURNAL_FILE, Journal
 from homeassistant.core import HomeAssistant, State
 from homeassistant.helpers import entity_registry as er
@@ -530,3 +534,164 @@ async def test_the_write_ahead_file_is_cut_back_at_open(
     finally:
         await hass.async_add_executor_job(store.close)
         writer.close()
+
+
+# ------------------------------------------------- house-wide signals (Phase 8)
+
+ALARM = "alarm_control_panel.house"
+OUTSIDE = "sensor.outside_temperature"
+
+
+def _signal_rows(path: Path) -> list[tuple[str, int, str]]:
+    """(entity, when, state) of each signal change kept, oldest first."""
+    db = sqlite3.connect(path)
+    try:
+        return list(
+            db.execute(
+                "SELECT s.entity_id, c.at, c.state FROM signal_changes c"
+                " JOIN signals s ON s.id = c.signal ORDER BY c.at, s.entity_id"
+            )
+        )
+    finally:
+        db.close()
+
+
+def test_a_number_is_kept_every_few_minutes_and_states_as_they_came() -> None:
+    """A thermometer reading each minute is a reading each SIGNAL_SAMPLE_S, its latest."""
+    minute = 60_000
+    readings = [
+        journal.SignalChange(OUTSIDE, i * minute, str(10 + i)) for i in range(12)
+    ]
+    alarm = [
+        journal.SignalChange(ALARM, 30_000, "armed_away"),
+        journal.SignalChange(ALARM, 90_000, "disarmed"),
+    ]
+    kept = journal.sample_signals(readings + alarm)
+    numbers = [(c.at // minute, c.state) for c in kept if c.entity_id == OUTSIDE]
+    # The first of each five minutes, and the latest before the next.
+    assert numbers == [
+        (0, "10"),
+        (4, "14"),
+        (5, "15"),
+        (9, "19"),
+        (10, "20"),
+        (11, "21"),
+    ]
+    assert [c.state for c in kept if c.entity_id == ALARM] == ["armed_away", "disarmed"]
+
+
+async def test_records_the_chosen_signals_beside_the_detections(
+    hass: HomeAssistant,
+    freezer: FrozenDateTimeFactory,
+    config_dir: Path,
+    learning: MockConfigEntry,
+) -> None:
+    """Their states as they change, from the state they stood at when chosen."""
+    log = _journal(learning)
+    path = config_dir / JOURNAL_FILE
+    hass.states.async_set(ALARM, "disarmed")
+    hass.states.async_set(OUTSIDE, "11.5")
+    hass.states.async_set("light.kitchen", "on")
+    chose_at = dt_util.utcnow()
+    hass.config_entries.async_update_entry(
+        learning,
+        options={**learning.options, CONF_UNUSUAL_SIGNALS: [ALARM, OUTSIDE]},
+    )
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert log.signals == {ALARM, OUTSIDE}
+    freezer.tick(timedelta(seconds=10))
+    hass.states.async_set(ALARM, "armed_away")
+    # An attribute alone is no change; the kitchen light was not chosen.
+    hass.states.async_set(ALARM, "armed_away", {"friendly_name": "House alarm"})
+    hass.states.async_set("light.kitchen", "off")
+    # A number again within SIGNAL_SAMPLE_S is held, the latest written once it is up.
+    freezer.tick(timedelta(seconds=10))
+    hass.states.async_set(OUTSIDE, "11.0")
+    freezer.tick(timedelta(seconds=10))
+    hass.states.async_set(OUTSIDE, "10.5")
+    await hass.async_block_till_done()
+    await log.async_flush()
+    rows = _signal_rows(path)
+    assert [(e, s) for e, _, s in rows] == [
+        (ALARM, "disarmed"),
+        (OUTSIDE, "11.5"),
+        (ALARM, "armed_away"),
+    ]
+    assert rows[0][1] <= int(chose_at.timestamp() * 1000)
+    freezer.tick(timedelta(seconds=journal.SIGNAL_SAMPLE_S))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done(wait_background_tasks=True)
+    await log.async_flush()
+    assert [s for e, _, s in _signal_rows(path) if e == OUTSIDE] == ["11.5", "10.5"]
+    status = await log.async_status()
+    assert [s["entity_id"] for s in status["signals"]] == [ALARM, OUTSIDE]
+    assert status["signals"][0]["changes"] == 2
+
+
+async def test_a_new_signal_gets_its_history_once_and_keeps_its_last_state_a_year_on(
+    hass: HomeAssistant,
+    freezer: FrozenDateTimeFactory,
+    config_dir: Path,
+    learning: MockConfigEntry,
+) -> None:
+    """Back to the journal's first change, with its state then; pruned, its last before."""
+    log = _journal(learning)
+    path = config_dir / JOURNAL_FILE
+    now = dt_util.utcnow()
+    asked: list[dict[str, Any]] = []
+
+    def history(_hass: HomeAssistant, start: Any, end: Any, **kwargs: Any) -> Any:
+        asked.append({"start": start, "end": end, **kwargs})
+        return {
+            ALARM: [
+                State(ALARM, "armed_night", last_changed=start),
+                State(ALARM, "disarmed", last_changed=now - timedelta(days=1)),
+            ]
+        }
+
+    # The journal's first change, two days ago.
+    db = sqlite3.connect(path)
+    with db:
+        db.execute(
+            "INSERT OR IGNORE INTO sources VALUES (99, 'x.old', 'c', 'C', 'person')"
+        )
+        db.execute(
+            "INSERT INTO changes VALUES (99, ?, 1)",
+            (int((now - timedelta(days=2)).timestamp() * 1000),),
+        )
+    db.close()
+    recorder = SimpleNamespace(async_add_executor_job=hass.async_add_executor_job)
+    hass.config.components.add("recorder")
+    hass.states.async_set(ALARM, "disarmed")
+    with (
+        patch("homeassistant.components.recorder.get_instance", return_value=recorder),
+        patch(
+            "homeassistant.components.recorder.history.get_significant_states",
+            side_effect=history,
+        ),
+    ):
+        hass.config_entries.async_update_entry(
+            learning, options={**learning.options, CONF_UNUSUAL_SIGNALS: [ALARM]}
+        )
+        await hass.async_block_till_done(wait_background_tasks=True)
+        await log.async_imported()
+        (call,) = asked
+        assert call["entity_ids"] == [ALARM]
+        assert call["include_start_time_state"] is True
+        assert abs((now - call["start"]) - timedelta(days=2)) < timedelta(minutes=1)
+        # (Its state when chosen is written too: the same, at the same time or after.)
+        states = [s for e, _, s in _signal_rows(path)]
+        assert [s for i, s in enumerate(states) if not i or states[i - 1] != s] == [
+            "armed_night",
+            "disarmed",
+        ]
+        # Not again: chosen still, it was imported.
+        await hass.config_entries.async_reload(learning.entry_id)
+        await hass.async_block_till_done(wait_background_tasks=True)
+        assert len(asked) == 1
+    hass.config.components.remove("recorder")
+    # A year on, the prune keeps what it stood at before.
+    log = _journal(learning)
+    freezer.tick(timedelta(days=journal.KEEP_DAYS + 3))
+    await log.async_prune()
+    assert [s for e, _, s in _signal_rows(path)] == ["disarmed"]

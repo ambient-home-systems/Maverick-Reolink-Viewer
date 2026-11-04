@@ -1,7 +1,7 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
 import { X as i, j as a, st as o } from "./live-13uUozrt.js";
-import { P as s, a as c, d as l, i as u, n as d, r as f } from "./home-C1sc5yMG.js";
-import "./device-list-CcOfjU0O.js";
+import { P as s, a as c, d as l, i as u, n as d, r as f } from "./home-C5UYFJa8.js";
+import "./device-list-vqaIWAdH.js";
 var p = (e) => `${String(e % 24).padStart(2, "0")}:00`, m = (e) => e.toLocaleString("en-US");
 function h(e) {
 	let t = s(l(e));
@@ -60,6 +60,7 @@ var _ = class extends r {
       <div class="lists">
         ${this._renderList("How long", e.duration, r)}
         ${this._renderList("What fired first", e.predecessor, r)}
+        ${(e.signals ?? []).map((e) => this._renderList(e.label, e.values, r))}
       </div>
       ${e.kind === "motion" ? n`<p class="muted small">Motion is learned from, never marked.</p>` : t}
     </details>`;

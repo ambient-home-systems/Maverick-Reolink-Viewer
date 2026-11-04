@@ -40,7 +40,7 @@ function g(e, t) {
 }
 //#endregion
 //#region src/version.ts
-var _ = "0.49.0", se = "https://github.com/ambient-home-systems/Maverick-Reolink-Viewer", ce = {
+var _ = "0.50.0", se = "https://github.com/ambient-home-systems/Maverick-Reolink-Viewer", ce = {
 	guide: ["user-guide"],
 	troubleshooting: ["troubleshooting"],
 	cameras: ["cameras"],
@@ -687,6 +687,11 @@ function Fe(e) {
 	return e.name === "signal" ? e.subject || "Signal" : Pe[e.name] ?? e.name;
 }
 function Ie(e) {
+	let t = e.replace(/_/g, " ").trim();
+	return t.charAt(0).toUpperCase() + t.slice(1);
+}
+function Le(e) {
+	if (e.name === "signal") return Ie(e.label);
 	if (e.name !== "duration") return e.label;
 	if (e.label === "open") return "Still going";
 	if (e.label === "instant") return "An instant";
@@ -696,23 +701,23 @@ function Ie(e) {
 	let n = Math.round(t / 60);
 	return n >= 2 ? `About ${String(n)} min` : "About a minute";
 }
-function Le(e) {
+function Re(e) {
 	return e.contribution > .05 ? "rarer than chance" : e.contribution < -.05 ? "more usual" : "as by chance";
 }
 //#endregion
 //#region src/components/unusual-reason.ts
-var Re = 4, ze = class extends r {
+var ze = 4, Be = class extends r {
 	static properties = { mark: { attribute: !1 } };
 	render() {
 		let e = this.mark;
 		return e ? n`<p class="sentence">${e.reason}</p>
       <ul class="terms" aria-label="Each signal">
         ${e.terms.map((e) => {
-			let t = Math.abs(e.contribution), r = t > .05 ? Math.min(1, t / Re) * 50 : 0, i = e.contribution >= 0 ? "rarer" : "usual";
+			let t = Math.abs(e.contribution), r = t > .05 ? Math.min(1, t / ze) * 50 : 0, i = e.contribution >= 0 ? "rarer" : "usual";
 			return n`<li>
             <span class="name">${Fe(e)}</span>
-            <span class="value">${Ie(e)}</span>
-            <span class="way">${Le(e)}</span>
+            <span class="value">${Le(e)}</span>
+            <span class="way">${Re(e)}</span>
             <span class="bar" aria-hidden="true">
               <span
                 class="fill ${i}"
@@ -797,8 +802,8 @@ var Re = 4, ze = class extends r {
       }
     `];
 };
-customElements.get("rv-unusual-reason") || customElements.define("rv-unusual-reason", ze);
-var Be = 12e4, Ve = 3600, He = 10, Ue = "rv-timetable-feed", We = "rv-timetable-marks", Ge = class extends r {
+customElements.get("rv-unusual-reason") || customElements.define("rv-unusual-reason", Be);
+var Ve = 12e4, He = 3600, Ue = 10, We = "rv-timetable-feed", Ge = "rv-timetable-marks", Ke = class extends r {
 	static properties = {
 		hass: { attribute: !1 },
 		cameras: { attribute: !1 },
@@ -828,7 +833,7 @@ var Be = 12e4, Ve = 3600, He = 10, Ue = "rv-timetable-feed", We = "rv-timetable-
 	connectedCallback() {
 		super.connectedCallback(), document.addEventListener("visibilitychange", this._onVisibility), this._refresh = setInterval(() => {
 			document.visibilityState !== "hidden" && this._isToday && this._load(!0);
-		}, Be), this._tick();
+		}, Ve), this._tick();
 	}
 	disconnectedCallback() {
 		super.disconnectedCallback(), document.removeEventListener("visibilitychange", this._onVisibility), clearInterval(this._refresh), clearTimeout(this._clock);
@@ -858,10 +863,10 @@ var Be = 12e4, Ve = 3600, He = 10, Ue = "rv-timetable-feed", We = "rv-timetable-
 		try {
 			let i = await te(t, {
 				...r === void 0 ? {} : { date: r },
-				...e ? { background: e } : { maxAge: Ve }
+				...e ? { background: e } : { maxAge: He }
 			});
 			if (n !== this._seq || r !== this.date) return;
-			this._newestBefore = e ? this._feed?.events[0]?.start : void 0, this._feed = i, this._error = void 0, this.dispatchEvent(new CustomEvent(Ue, { detail: { feed: i } })), this._loadMarks(t, i, n), this._loadThumbs();
+			this._newestBefore = e ? this._feed?.events[0]?.start : void 0, this._feed = i, this._error = void 0, this.dispatchEvent(new CustomEvent(We, { detail: { feed: i } })), this._loadMarks(t, i, n), this._loadThumbs();
 		} catch (e) {
 			n === this._seq && (this._error = i(e).message);
 		}
@@ -870,7 +875,7 @@ var Be = 12e4, Ve = 3600, He = 10, Ue = "rv-timetable-feed", We = "rv-timetable-
 		try {
 			let r = e.config?.time_zone, [i, a] = ne(this.date ?? p(t.now, r), r), o = await ee(e, i, a);
 			if (n !== this._seq) return;
-			this._marks = Ne(t.events, o.marks, i, a), this.dispatchEvent(new CustomEvent(We, { detail: { marks: o } }));
+			this._marks = Ne(t.events, o.marks, i, a), this.dispatchEvent(new CustomEvent(Ge, { detail: { marks: o } }));
 		} catch {}
 	}
 	get _rows() {
@@ -898,7 +903,7 @@ var Be = 12e4, Ve = 3600, He = 10, Ue = "rv-timetable-feed", We = "rv-timetable-
 		}
 		await Promise.all([...t].map(async ([t, n]) => {
 			try {
-				let { urls: r } = await f(e, t, n, He), i = new Map(this._thumbs);
+				let { urls: r } = await f(e, t, n, Ue), i = new Map(this._thumbs);
 				r.forEach((e, r) => i.set(`${t}:${String(n[r] ?? e.time)}`, e.url)), this._thumbs = i;
 			} catch {}
 		}));
@@ -1006,7 +1011,7 @@ var Be = 12e4, Ve = 3600, He = 10, Ue = "rv-timetable-feed", We = "rv-timetable-
             Show all ${i.length} events
           </button>` : t}
       ${e.failed.length ? n`<p class="failed">
-            ${Ke(e.failed.map((e) => a.get(e.camera_id)?.name ?? "A camera"), s)}
+            ${qe(e.failed.map((e) => a.get(e.camera_id)?.name ?? "A camera"), s)}
           </p>` : t}`;
 	}
 	_renderRow(e, r, i) {
@@ -1357,7 +1362,7 @@ var Be = 12e4, Ve = 3600, He = 10, Ue = "rv-timetable-feed", We = "rv-timetable-
       }
     `];
 };
-function Ke(e, t) {
+function qe(e, t) {
 	return `${e.join(", ")}: ${t ? "today's" : "this day's"} recordings could not be searched, so some events may be missing.`;
 }
 function q(e) {
@@ -1386,10 +1391,10 @@ function Z(e) {
 	let t = Math.max(0, Math.round(e / 1e3)), n = Math.floor(t / 3600), r = Math.floor(t % 3600 / 60), i = String(t % 60).padStart(2, "0");
 	return n ? `${String(n)}:${String(r).padStart(2, "0")}:${i}` : `${String(r)}:${i}`;
 }
-customElements.get("rv-timetable") || customElements.define("rv-timetable", Ge);
+customElements.get("rv-timetable") || customElements.define("rv-timetable", Ke);
 //#endregion
 //#region src/download.ts
-function qe(e, t, n = document) {
+function Je(e, t, n = document) {
 	let r = new Blob([JSON.stringify(e, null, 2)], { type: "application/json" }), i = URL.createObjectURL(r), a = n.createElement("a");
 	a.href = i, a.download = t, a.rel = "noopener", n.body.appendChild(a), a.click(), a.remove(), setTimeout(() => {
 		URL.revokeObjectURL(i);
@@ -1397,16 +1402,16 @@ function qe(e, t, n = document) {
 }
 //#endregion
 //#region src/format.ts
-var Je = {
+var Ye = {
 	camera: "Camera",
 	nvr: "NVR",
 	hub: "Home Hub"
-}, Ye = (e) => Je[e];
-function Xe(e) {
-	let t = [];
-	return e.codec && t.push(Ze(e.codec)), e.width && e.height && t.push(`${e.width}×${e.height}`), e.frame_rate && t.push(`${e.frame_rate} fps`), e.bit_rate && t.push(`${e.bit_rate} kbps`), t.length ? t.join(" · ") : "unknown";
-}
+}, Xe = (e) => Ye[e];
 function Ze(e) {
+	let t = [];
+	return e.codec && t.push(Q(e.codec)), e.width && e.height && t.push(`${e.width}×${e.height}`), e.frame_rate && t.push(`${e.frame_rate} fps`), e.bit_rate && t.push(`${e.bit_rate} kbps`), t.length ? t.join(" · ") : "unknown";
+}
+function Q(e) {
 	switch (e.toLowerCase()) {
 		case "h264": return "H.264";
 		case "h265":
@@ -1414,27 +1419,27 @@ function Ze(e) {
 		default: return e;
 	}
 }
-function Q(e) {
+function Qe(e) {
 	return e === null ? "unknown" : e ? "on" : "off";
 }
-function Qe(e) {
+function $e(e) {
 	return `reolink-viewer-probe-${e.toISOString().slice(0, 19).replace(/:/g, "-")}.json`;
 }
-function $e(e) {
+function et(e) {
 	return e.via === "nvr" ? `Through ${e.host_name ?? e.entry_title}` : "Added directly";
 }
 //#endregion
 //#region src/views.ts
-var et = {
-	events: () => import("./events-view-DtbykhYe.js"),
-	list: () => import("./device-list-CcOfjU0O.js"),
-	device: () => import("./device-page-E25Vp10a.js"),
-	"live-check": () => import("./live-check-GnuMu4uj.js"),
-	soak: () => import("./live-soak-DN8u3HGM.js"),
-	cards: () => import("./card-report-CsJVfN1X.js")
+var tt = {
+	events: () => import("./events-view-BHiBpuIE.js"),
+	list: () => import("./device-list-vqaIWAdH.js"),
+	device: () => import("./device-page-5V85Dv2J.js"),
+	"live-check": () => import("./live-check-Cb9w5Kw2.js"),
+	soak: () => import("./live-soak-BaODcTDr.js"),
+	cards: () => import("./card-report-BYQfLJpq.js")
 }, $ = /* @__PURE__ */ new Map();
-function tt(e) {
-	let t = et[e];
+function nt(e) {
+	let t = tt[e];
 	if (!t) return Promise.resolve();
 	let n = $.get(e);
 	return n || (n = t().catch((t) => {
@@ -1442,4 +1447,4 @@ function tt(e) {
 	}), $.set(e, n)), n;
 }
 //#endregion
-export { Oe as A, C as B, Se as C, W as D, z as E, _e as F, y as G, ue as H, F as I, g as J, v as K, E as L, ye as M, ge as N, U as O, H as P, x as R, we as S, Te as T, le as U, de as V, b as W, ae as Y, ve as _, Q as a, je as b, Y as c, G as d, M as f, be as g, Ae as h, Xe as i, R as j, I as k, Z as l, N as m, $e as n, Qe as o, A as p, _ as q, Ye as r, qe as s, tt as t, X as u, P as v, De as w, ke as x, Ce as y, S as z };
+export { Oe as A, C as B, Se as C, W as D, z as E, _e as F, y as G, ue as H, F as I, g as J, v as K, E as L, ye as M, ge as N, U as O, H as P, x as R, we as S, Te as T, le as U, de as V, b as W, ae as Y, ve as _, Qe as a, je as b, Y as c, G as d, M as f, be as g, Ae as h, Ze as i, R as j, I as k, Z as l, N as m, et as n, $e as o, A as p, _ as q, Xe as r, Je as s, nt as t, X as u, P as v, De as w, ke as x, Ce as y, S as z };

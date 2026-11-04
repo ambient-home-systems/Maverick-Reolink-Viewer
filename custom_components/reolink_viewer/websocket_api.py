@@ -91,6 +91,13 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_unusual_profile)
 
 
+def _friendly(hass: HomeAssistant, entity_id: str) -> str:
+    """Return what Home Assistant calls an entity (its entity id if nothing)."""
+    state = hass.states.get(entity_id)
+    name = state.attributes.get("friendly_name") if state is not None else None
+    return str(name) if name else entity_id
+
+
 def _loaded_entry(hass: HomeAssistant) -> ReolinkViewerConfigEntry | None:
     entries: list[ReolinkViewerConfigEntry] = hass.config_entries.async_loaded_entries(
         DOMAIN
@@ -1037,6 +1044,12 @@ async def ws_journal_status(
         connection.send_result(msg["id"], {"enabled": False})
         return
     status: dict[str, Any] = {"enabled": True, **await journal.async_status()}
+    # The house-wide signals learned with now (one no longer chosen is kept, unread).
+    status["signals"] = [
+        {**signal, "name": _friendly(hass, signal["entity_id"])}
+        for signal in status.get("signals", [])
+        if signal["entity_id"] in journal.signals
+    ]
     # Phase 8 step 2: what the model makes of each camera, and its marks.
     if (unusual := entry.runtime_data.unusual) is not None:
         status["unusual"] = await unusual.async_status(
@@ -1189,6 +1202,11 @@ def ws_unusual_profile(
             "enabled": True,
             "built": bool(model.built_at),
             "state": unusual.state(camera),
-            **profile_payload(model, [camera], names=unusual.names),
+            **profile_payload(
+                model,
+                [camera],
+                names=unusual.names,
+                label=lambda entity_id: _friendly(hass, entity_id),
+            ),
         },
     )

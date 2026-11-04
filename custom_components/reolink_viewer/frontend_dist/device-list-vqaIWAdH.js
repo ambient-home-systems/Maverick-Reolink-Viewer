@@ -1,6 +1,6 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
 import { At as i, X as a, j as o, ot as s, p as c } from "./live-13uUozrt.js";
-import { B as l, r as u } from "./home-C1sc5yMG.js";
+import { B as l, r as u } from "./home-C5UYFJa8.js";
 //#region src/components/learning.ts
 var d = class extends r {
 	static properties = {
@@ -57,6 +57,16 @@ var d = class extends r {
                   >${a?.built ? n`. ${g(a.cameras[e.id])}` : t}
                 </li>`)}
           </ul>` : t}
+      ${e.signals?.length ? n`<p>
+            Learned with
+            ${e.signals.map((t, i) => n`${i ? i === (e.signals?.length ?? 0) - 1 ? " and " : ", " : ""}<span
+                    class="name"
+                    >${t.name}</span
+                  >
+                  <span class="muted"
+                    >(${f(t.changes, "change")} since ${c(t.first, r)})</span
+                  >`)}.
+          </p>` : t}
       ${a ? this._renderUnusual(a, r, new Map(i.map((e) => [e.id, e.name]))) : t}`;
 	}
 	_renderUnusual(e, r, i) {

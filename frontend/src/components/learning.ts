@@ -100,6 +100,21 @@ export class RvLearning extends LitElement {
             )}
           </ul>`
         : nothing}
+      ${state.signals?.length
+        ? html`<p>
+            Learned with
+            ${state.signals.map(
+              (signal, index) =>
+                html`${index ? (index === (state.signals?.length ?? 0) - 1 ? " and " : ", ") : ""}<span
+                    class="name"
+                    >${signal.name}</span
+                  >
+                  <span class="muted"
+                    >(${count(signal.changes, "change")} since ${formatStamp(signal.first, zone)})</span
+                  >`,
+            )}.
+          </p>`
+        : nothing}
       ${unusual
         ? this._renderUnusual(
             unusual,

@@ -18,6 +18,7 @@ its tests (`tests/test_relevance_score.py`, `test_relevance_events.py`,
 | `custom_components/reolink_viewer/unusual/score.py` | `relevance/score.py`, and `relevance/shapes.py`'s `informative` and `duration_phrase` |
 | `custom_components/reolink_viewer/unusual/model.py` | `relevance/analysis.py` (adapted) |
 | `custom_components/reolink_viewer/unusual/shapes.py` | `relevance/shapes.py` |
+| `custom_components/reolink_viewer/config_flow.py`'s `unhelpful_signals`, and the signal picker's domains in `unusual/const.py` | `signal_picker.py`, and `const.py`'s `RELEVANCE_SIGNAL_*` |
 | `custom_components/reolink_viewer/unusual/const.py` | `const.py`'s relevance numbers |
 | `tests/test_unusual_events.py`, `test_unusual_score.py`, `test_unusual_model.py`, `test_unusual_shapes.py` | `tests/test_relevance_events.py`, `test_relevance_score.py`, `test_relevance_analysis.py`, `test_relevance_shapes.py` |
 

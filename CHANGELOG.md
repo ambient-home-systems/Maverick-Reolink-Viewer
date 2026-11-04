@@ -3,6 +3,19 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.50.0
+
+House-wide signals: what the house says beside each detection.
+
+- **House-wide signals to learn with**, in the options: anyone home, the alarm, a gate
+  or door lock, the light outside... Each detection is learned with what they stood
+  at, so a person on the drive with everyone away can stand out where the same person
+  with someone home does not. Their last days come from Home Assistant's history.
+- **Said where it counts:** a mark's sentence ("…, and with House alarm armed away"),
+  Why it is unusual, Devices → Learning what is normal ("Learned with …"), and each
+  camera's What it has learned.
+- A signal that is offline or starting up says nothing either way.
+
 ## 0.49.0
 
 - **What it has learned**, on each camera's Overview: per kind of thing it sees, when

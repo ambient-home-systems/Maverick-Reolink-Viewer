@@ -55,6 +55,8 @@ DEFAULT_LEARN_NORMAL: Final = False
 # sensitivities) and what a camera is compared with (its scopes).
 CONF_UNUSUAL_SENSITIVITY: Final = "unusual_sensitivity"
 CONF_UNUSUAL_SCOPE: Final = "unusual_scope"
+# Phase 8: house-wide signals (anyone home, the alarm...) learned with, by entity id.
+CONF_UNUSUAL_SIGNALS: Final = "unusual_signals"
 
 # Playback caches (under HA's cache directory) and their size caps.
 VOD_CACHE_DIR: Final = "vod"

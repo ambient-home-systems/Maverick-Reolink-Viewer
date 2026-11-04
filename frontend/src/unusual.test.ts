@@ -94,6 +94,7 @@ describe("a mark's signals, in words", () => {
     expect(termValue(term("duration", "open", 1))).toBe("Still going");
     expect(termValue(term("duration", "instant", 1))).toBe("An instant");
     expect(termValue(term("kind", "person", 1))).toBe("person");
+    expect(termValue(term("signal", "armed_away", 1, "House alarm"))).toBe("Armed away");
   });
 
   it("says which way a signal points, and when it says nothing", () => {

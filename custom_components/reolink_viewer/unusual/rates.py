@@ -51,6 +51,7 @@ from .const import (
     SIGNAL_BAND_MIN,
     SIGNAL_BANDS,
     UNMARKED_KINDS,
+    UNREAD_STATES,
 )
 from .events import Event
 
@@ -579,6 +580,8 @@ def build(
         profile.day_of_week.add(event.day_of_week, weight)
         profile.kinds.add(event.kind, weight)
         for entity_id, value in event.context:
+            if value.lower() in UNREAD_STATES:
+                continue  # ours: not a reading (const.UNREAD_STATES)
             profile.signals.setdefault(entity_id, Categorical()).add(
                 signal_value(entity_id, value, model), weight
             )
