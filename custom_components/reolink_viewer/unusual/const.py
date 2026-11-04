@@ -84,19 +84,25 @@ SCORE_MIN_EVENTS: Final = 200
 SENSITIVITY_FEW: Final = "few"
 SENSITIVITY_BALANCED: Final = "balanced"
 SENSITIVITY_MANY: Final = "many"
+#
+# Ours (v0.47.5): with "known after 10" (below) a score's terms can only rise for
+# what is new, so Stamina's floors sat too high: Balanced marked 1.4 a day on the
+# owner's property, all of them rare by count. The floors are now the least a
+# mark must be ("rarer than chance" by that much), and the property's daily
+# allowance (DAILY_MARKS) sets the line on a busy one.
 SENSITIVITY_FLOORS: Final = {
-    SENSITIVITY_FEW: 2.1,
-    SENSITIVITY_BALANCED: SCORE_FLOOR,
-    SENSITIVITY_MANY: 0.7,
+    SENSITIVITY_FEW: 1.4,
+    SENSITIVITY_BALANCED: 0.0,
+    SENSITIVITY_MANY: 0.0,
 }
 DEFAULT_SENSITIVITY: Final = SENSITIVITY_BALANCED
-# Ours: and about how many marks a day each allows across the property, at most
-# (Stamina's measured rates above). Its floor alone marks in proportion to how
-# much a property sees: a busy one would get ten times as many.
+# Ours: about how many marks a day each allows across the property, at most. The
+# floor alone marks in proportion to how much a property sees: a busy one would
+# get ten times as many. (v0.47.0 to v0.47.4: 2, 4 and 9, Stamina's measured rates.)
 DAILY_MARKS: Final = {
-    SENSITIVITY_FEW: 2.0,
-    SENSITIVITY_BALANCED: 4.0,
-    SENSITIVITY_MANY: 9.0,
+    SENSITIVITY_FEW: 0.7,
+    SENSITIVITY_BALANCED: 3.0,
+    SENSITIVITY_MANY: 6.0,
 }
 
 # What a camera with too little history of its own may borrow from, and which
@@ -132,6 +138,13 @@ INCIDENT_SECONDS: Final = 60.0
 # days"). Lasting shorter than usual no longer raises one either, and only what
 # can be marked is ever "what fired before" (not motion).
 KNOWN_AFTER: Final = 10
+# (v0.47.5) "More, including borderline ones" knows a value only after twice as
+# many: on a busy property known-after-10 leaves little that can be marked.
+KNOWN_AFTERS: Final = {
+    SENSITIVITY_FEW: KNOWN_AFTER,
+    SENSITIVITY_BALANCED: KNOWN_AFTER,
+    SENSITIVITY_MANY: 2 * KNOWN_AFTER,
+}
 # And from its third (2026-11-04, v0.47.3: 37 marks, 39 without the cap): this
 # applies to every signal, not kinds alone (a time, a length, a day, what fired
 # before); and only "nothing fired first" can raise a score.

@@ -46,9 +46,9 @@
   "selector": {
     "unusual_sensitivity": {
       "options": {
-        "few": "Only the strangest (about 2 a day at most)",
-        "balanced": "Balanced (about 4 a day at most)",
-        "many": "More, including borderline ones (about 9 a day at most)"
+        "few": "Only the strangest (under 1 a day)",
+        "balanced": "Balanced (a few a day at most)",
+        "many": "More, including borderline ones (about 6 a day at most)"
       }
     },
     "unusual_scope": {

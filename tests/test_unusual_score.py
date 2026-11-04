@@ -1310,3 +1310,14 @@ def test_only_nothing_fired_first_raises_a_score() -> None:
 
     assert alone > 0.0
     assert after_odd <= 0.0
+
+
+def test_more_knows_a_value_only_after_twenty() -> None:
+    """Ours: "More, including borderline ones" counts what was seen 12 times as new."""
+    model = _with_long_visits(12)
+    visit = _event(_NOW, 18 * 60 + 15, "person", duration=600.0)
+    assert _term(score(visit, model, previous=None), "duration") <= 0.0
+
+    model.known_after = 20
+
+    assert _term(score(visit, model, previous=None), "duration") > 0.0

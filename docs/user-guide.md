@@ -245,9 +245,10 @@ follows a household that changes.
   many a day, and the latest, each with a sentence saying why: "Person at 03:12 on
   Doorbell — 2nd time in 3 weeks, and nothing fired first." **The numbers behind it**
   show how the line was drawn, and what stood out most in the marks.
-- **How much to mark unusual** (in the options): **Only the strangest**,
-  **Balanced** (the default) or **More, including borderline ones**: at most about 2,
-  4 or 9 a day across the property.
+- **How much to mark unusual** (in the options): **Only the strangest** (under one a
+  day), **Balanced** (the default: a few a day at most, fewer on a quiet property) or
+  **More, including borderline ones** (about 6 a day at most, counting as new what a
+  camera has seen fewer than 20 times rather than 10).
 - **What each camera is compared with** (in the options): every camera is judged
   against its own past first; this decides what a camera with little history may
   borrow from, and which cameras count as having seen something just before another.

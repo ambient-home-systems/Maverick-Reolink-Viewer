@@ -37,6 +37,7 @@ from typing import Any
 from .const import (
     DEFAULT_SCOPE,
     INCIDENT_SECONDS,
+    KNOWN_AFTER,
     RATE_BACKOFF_WEIGHT,
     RATE_BANDWIDTH_MINUTES,
     RATE_BIN_MINUTES,
@@ -355,6 +356,9 @@ class Model:
     # built. Stamina's floor was measured at about 400 events a day across nine
     # cameras; a property with ten times that would get ten times the marks.
     cap: float = -math.inf
+    # Ours: how many sightings make a value known (const.KNOWN_AFTERS, by
+    # sensitivity); a known value can only lower a score.
+    known_after: int = KNOWN_AFTER
 
     def profile(self, camera: str, kind: str) -> Profile:
         """Return what is known about this camera and kind, possibly nothing."""
@@ -682,6 +686,7 @@ def model_dict(model: Model) -> dict[str, Any]:
         "signal_bands": {k: list(v) for k, v in model.signal_bands.items()},
         "floor": model.floor,
         "cap": None if math.isinf(model.cap) else model.cap,
+        "known_after": model.known_after,
     }
 
 
@@ -700,6 +705,7 @@ def model_of(data: dict[str, Any]) -> Model:
         },
         floor=float(data["floor"]),
         cap=-math.inf if data["cap"] is None else float(data["cap"]),
+        known_after=int(data.get("known_after", KNOWN_AFTER)),
     )
     for item in data["profiles"]:
         profile = Profile(

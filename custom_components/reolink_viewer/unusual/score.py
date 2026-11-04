@@ -36,7 +36,6 @@ from typing import Any
 
 from .const import (
     INCIDENT_SECONDS,
-    KNOWN_AFTER,
     RATE_BINS,
     SCORE_FLOOR,
     SCORE_MIN_DAYS,
@@ -476,7 +475,7 @@ def _terms(
     # is not rare ("Vehicle lasting about 16 s — 14th time in 8 days").
     return [
         replace(term, contribution=min(term.contribution, 0.0))
-        if term.seen >= KNOWN_AFTER
+        if term.seen >= model.known_after
         else term
         for term in terms
     ]

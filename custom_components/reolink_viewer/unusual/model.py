@@ -42,6 +42,7 @@ from .const import (
     DAILY_MARKS,
     DEFAULT_SCOPE,
     DEFAULT_SENSITIVITY,
+    KNOWN_AFTERS,
     SCOPES,
     SCORE_MIN_DAYS,
     SCORE_MIN_EVENTS,
@@ -374,6 +375,7 @@ class Unusual:
                 spread = (int(event.started_at * 1000) * 2654435761) % 2**32
                 return spread % stride.get(event.camera, 1) == 0
 
+            model.known_after = KNOWN_AFTERS[sensitivity]
             pairs = calibrate(
                 model,
                 derive_streams(

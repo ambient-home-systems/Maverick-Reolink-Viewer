@@ -598,6 +598,7 @@ async def test_a_new_sensitivity_rebuilds_and_off_forgets(
     )
     await hass.async_block_till_done(wait_background_tasks=True)
     assert unusual.model.floor == SENSITIVITY_FLOORS["many"]
+    assert unusual.model.known_after == 20
 
     hass.config_entries.async_update_entry(learning, options={CONF_LEARN_NORMAL: False})
     await hass.async_block_till_done(wait_background_tasks=True)

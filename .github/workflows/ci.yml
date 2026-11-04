@@ -130,8 +130,10 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
           cache-dependency-path: frontend/package-lock.json
+      # The same as the browser job's: 1.56 cannot install Chromium on the
+      # runners' Ubuntu 26.04 (ubuntu-latest from 2026-11-04).
       - name: Install Playwright's Chromium
-        run: npm install -g playwright@1.56.1 && playwright install --with-deps chromium
+        run: npm install -g playwright@1.63.0 && playwright install --with-deps chromium
       - run: npm ci
       - name: Every view meets WCAG 2.1 AA, light and dark, desktop and phone, and works from the keyboard
         run: |
