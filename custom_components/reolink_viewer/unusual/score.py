@@ -176,13 +176,9 @@ def _solar_phrase(phase: str | None, offset: int) -> str:
     return f"{span} {'after' if offset > 0 else 'before'} sunset"
 
 
-def _ordinal(number: int) -> str:
-    """Render a small counting number as 1st, 2nd, 3rd."""
-    if 10 <= number % 100 <= 20:
-        suffix = "th"
-    else:
-        suffix = {1: "st", 2: "nd", 3: "rd"}.get(number % 10, "th")
-    return f"{number}{suffix}"
+def _times(number: int) -> str:
+    """Render how many times: once, twice, 8 times (ours)."""
+    return {1: "once", 2: "twice"}.get(number, f"{number} times")
 
 
 def _span(days: float) -> str:
@@ -526,7 +522,12 @@ def score(
         unusual=unusual,
         terms=tuple(terms),
         reason=_reason(
-            event, terms, model.profile(event.camera, event.kind), names, marked=unusual
+            event,
+            terms,
+            model.profile(event.camera, event.kind),
+            names,
+            marked=unusual,
+            held=event.started_at <= model.built_at,
         ),
     )
 
@@ -550,6 +551,7 @@ def reason(
         model.profile(event.camera, event.kind),
         names,
         marked=result.unusual,
+        held=event.started_at <= model.built_at,
     )
 
 
@@ -560,6 +562,7 @@ def _reason(
     names: dict[str, str],
     *,
     marked: bool = False,
+    held: bool = False,
 ) -> str:
     """Build the sentence a person reads instead of the numbers.
 
@@ -584,12 +587,16 @@ def _reason(
         return f"{kind} at {_clock_time(event.minute_of_day)} — usual for {subject}."
 
     head = leading[0]
-    opening = f"{kind} {_phrase(head)}"
+    # Ours: "Package on Doorbell — seen 8 times" says it; "Package at all on" is clipped.
+    opening = kind if head.name == "kind" else f"{kind} {_phrase(head)}"
 
-    # The count includes this one, which is how a person counts.
-    occurrence = _ordinal(head.seen + 1)
+    # The count includes this one, which is how a person counts. (Ours: as a total, "seen
+    # 8 times", not "the 8th time": Stamina scores an event against the model before it,
+    # but the panel scores the past against today's model, which already holds it
+    # (`held`) and what came after, so two marks a day apart both said "8th time".)
+    times = max(1, head.seen + (0 if held else 1))
     span = _span(profile.days) if profile.days else "the record so far"
-    sentence = f"{opening} on {subject} — {occurrence} time in {span}"
+    sentence = f"{opening} on {subject} — seen {_times(times)} in {span}"
 
     if len(leading) > 1:
         sentence += f", and {_phrase(leading[1], lead=False)}"

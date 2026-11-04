@@ -552,7 +552,13 @@ class Unusual:
             "sensitivity": self._sensitivity,
             "scope": model.scope,
             "floor": model.floor,
-            "cap": None if math.isinf(model.cap) else round(model.cap, 3),
+            # The cap only when it is the line: at or under the floor it holds nothing back
+            # ("0 (the daily cap; the floor is 0)" read as if it did).
+            "cap": (
+                round(model.cap, 3)
+                if not math.isinf(model.cap) and model.cap > model.floor
+                else None
+            ),
             "cameras": {camera: self.state(camera) for camera in cameras},
             "days": days,
             "events": len(window),

@@ -31,6 +31,7 @@ from .timeconv import epoch_ms
 from .timeline import TimelineError
 from .unusual.model import mark_payload
 from .unusual.score import incidents
+from .unusual.shapes import profile_payload
 from .views import (
     CLIP_PATH,
     MSE_PATH,
@@ -87,6 +88,7 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_journal_status)
     websocket_api.async_register_command(hass, ws_unusual_events)
     websocket_api.async_register_command(hass, ws_unusual_marks)
+    websocket_api.async_register_command(hass, ws_unusual_profile)
 
 
 def _loaded_entry(hass: HomeAssistant) -> ReolinkViewerConfigEntry | None:
@@ -1149,5 +1151,44 @@ async def ws_unusual_marks(
             "built": bool(unusual.model.built_at),
             "marks": marks,
             "cameras": {camera: unusual.state(camera) for camera in sorted(cameras)},
+        },
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        probatio.Required("type"): f"{DOMAIN}/unusual/profile",
+        probatio.Required("camera_id"): str,
+    }
+)
+@callback
+def ws_unusual_profile(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Return what one camera has learned (Phase 8.3), and whether it marks yet.
+
+    Per kind it has seen: when, for how long, what fired first and on which days.
+    Read off the model in memory (built nightly), so it costs nothing to ask.
+    Learning off is no error: nothing has been learned.
+    """
+    entry = _loaded_entry(hass)
+    if entry is None:
+        connection.send_error(msg["id"], ERR_NOT_LOADED, "Reolink Viewer is not loaded")
+        return
+    journal, unusual = entry.runtime_data.journal, entry.runtime_data.unusual
+    if journal is None or not journal.running or unusual is None:
+        connection.send_result(msg["id"], {"enabled": False})
+        return
+    camera = msg["camera_id"]
+    model = unusual.model
+    connection.send_result(
+        msg["id"],
+        {
+            "enabled": True,
+            "built": bool(model.built_at),
+            "state": unusual.state(camera),
+            **profile_payload(model, [camera], names=unusual.names),
         },
     )

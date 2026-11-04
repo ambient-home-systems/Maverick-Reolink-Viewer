@@ -1,6 +1,6 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
-import { M as i, X as a, _ as o, d as s, g as c, j as l, jt as u, kt as d, rt as f, st as p, t as m, tt as h, v as g, wt as _, y as v } from "./live-_jyOGRi0.js";
-import { B as y, G as b, I as x, J as S, K as C, L as w, R as T, U as E, V as D, W as O, o as k, q as A, s as j, t as M } from "./home-C-2P8fU_.js";
+import { At as i, M as a, Mt as o, Tt as s, X as c, _ as l, ct as u, d, g as f, j as p, rt as m, t as h, tt as g, v as _, y as v } from "./live-13uUozrt.js";
+import { G as y, H as b, J as x, K as S, L as C, R as w, V as T, W as E, Y as D, o as O, q as k, s as A, t as j, z as M } from "./home-C1sc5yMG.js";
 //#region src/reolink-viewer-panel.ts
 var N = {
 	live: "Live",
@@ -49,17 +49,17 @@ var N = {
 	_toastTimer;
 	_clockTimer;
 	_onHashChange = () => {
-		this._route = y(window.location.hash);
+		this._route = T(window.location.hash);
 	};
 	constructor() {
 		super(), this.narrow = !1, this._now = Date.now(), this._board = [], this._probe = { status: "idle" }, this._includeBattery = !1, this._concurrency = !1, this._maxStreams = 4, this._playback = !1, this._playbackOnly = !1, this._playbackConcurrency = !1, this._playbackStreams = 4, this._baichuan = !1, this._baichuanOnly = !0, this._baichuanMain = !1, this._baichuanDownload = !0, this._baichuanSession = !1, this._baichuanCameras = "", this._baichuanHold = 5, this._events = !1, this._eventsOnly = !0, this._copied = !1, this._route = { view: "live" }, this.addEventListener(w, (e) => {
 			this.navigate(e.detail);
-		}), this.addEventListener(T, (e) => {
+		}), this.addEventListener(M, (e) => {
 			this.showToast(e.detail);
 		});
 	}
 	connectedCallback() {
-		super.connectedCallback(), m(import.meta.url), this._route = y(window.location.hash), window.addEventListener("hashchange", this._onHashChange), this._tick();
+		super.connectedCallback(), h(import.meta.url), this._route = T(window.location.hash), window.addEventListener("hashchange", this._onHashChange), this._tick();
 	}
 	disconnectedCallback() {
 		super.disconnectedCallback(), window.removeEventListener("hashchange", this._onHashChange), clearTimeout(this._toastTimer), clearTimeout(this._clockTimer), this._run?.cancel(), this._run = void 0;
@@ -72,19 +72,19 @@ var N = {
 	willUpdate(e) {
 		if (this.toggleAttribute("dark", this.hass?.themes?.darkMode === !0), e.has("_route")) {
 			let e = this._route.view;
-			this._viewError = void 0, M(e).catch((t) => {
-				this._route.view === e && (this._viewError = d(t).message);
+			this._viewError = void 0, j(e).catch((t) => {
+				this._route.view === e && (this._viewError = i(t).message);
 			});
 		}
 	}
 	updated(e) {
-		if (e.has("hass") && this.hass && !this._devices && !this._loading && (this._load(), h(this.hass).catch(() => void 0)), e.get("_route") !== void 0 && !this.shadowRoot?.activeElement) {
+		if (e.has("hass") && this.hass && !this._devices && !this._loading && (this._load(), g(this.hass).catch(() => void 0)), e.get("_route") !== void 0 && !this.shadowRoot?.activeElement) {
 			let e = document.activeElement;
 			(!e || e === document.body) && this.shadowRoot?.querySelector("main")?.focus({ preventScroll: !0 });
 		}
 	}
 	navigate(e) {
-		let t = D(e);
+		let t = b(e);
 		if (window.location.hash !== t) {
 			let e = `${window.location.pathname}${window.location.search}${t}`;
 			window.history.pushState(null, "", e);
@@ -100,11 +100,11 @@ var N = {
 		if (this.hass) {
 			this._loading = !0;
 			try {
-				this._devices = await f(this.hass), this._loadError = void 0, !this._board.length && !this._devices.degraded && p(this.hass).then(({ cameras: e }) => {
-					this._board.length || (this._board = x(e));
-				}).catch(() => void 0), !this._warmed && !this._devices.degraded && (this._warmed = !0, u(this.hass).catch(() => void 0));
+				this._devices = await m(this.hass), this._loadError = void 0, !this._board.length && !this._devices.degraded && u(this.hass).then(({ cameras: e }) => {
+					this._board.length || (this._board = C(e));
+				}).catch(() => void 0), !this._warmed && !this._devices.degraded && (this._warmed = !0, o(this.hass).catch(() => void 0));
 			} catch (e) {
-				this._loadError = d(e).message;
+				this._loadError = i(e).message;
 			} finally {
 				this._loading = !1;
 			}
@@ -125,7 +125,7 @@ var N = {
           ${this._renderTab("Devices", { view: "list" }, e.view !== "live" && e.view !== "events")}
         </nav>
         <time class="clock" aria-label="Time">
-          ${s(this._now, this.hass?.config?.time_zone)}
+          ${d(this._now, this.hass?.config?.time_zone)}
         </time>
       </header>
       <main
@@ -137,7 +137,7 @@ var N = {
             <span>${this._toast.message}</span>
             <button class="dismiss" aria-label="Dismiss" @click=${() => {
 			this._toast = void 0;
-		}}>${a("close")}</button>
+		}}>${c("close")}</button>
           </div>` : t}
     `;
 	}
@@ -158,25 +158,25 @@ var N = {
         Could not load this page: ${this._viewError}. Check the connection to Home Assistant, then
         <button
           @click=${() => {
-			this._viewError = void 0, M(e.view).catch((e) => {
-				this._viewError = d(e).message;
+			this._viewError = void 0, j(e.view).catch((e) => {
+				this._viewError = i(e).message;
 			});
 		}}
         >
           Try again
         </button>
       </div>`;
-		let r = S(this._devices), i = r ? this._renderIntegration(r) : t;
+		let r = D(this._devices), a = r ? this._renderIntegration(r) : t;
 		switch (e.view) {
-			case "live": return r ? n`<div class="wide-note">${i}</div>` : n`<rv-live-grid
+			case "live": return r ? n`<div class="wide-note">${a}</div>` : n`<rv-live-grid
             .hass=${this.hass}
             @rv-board=${(e) => {
 				this._board = e.detail.cameras;
 			}}
           ></rv-live-grid>
           <rv-timetable .hass=${this.hass} .cameras=${this._board} .filters=${!0}></rv-timetable>`;
-			case "events": return r ? n`<div class="wide-note">${i}</div>` : n`<rv-events .hass=${this.hass} .cameras=${this._board} .date=${e.date}></rv-events>`;
-			case "device": return n`${i}<rv-device-page
+			case "events": return r ? n`<div class="wide-note">${a}</div>` : n`<rv-events .hass=${this.hass} .cameras=${this._board} .date=${e.date}></rv-events>`;
+			case "device": return n`${a}<rv-device-page
           .hass=${this.hass}
           .cameras=${this._board}
           .devices=${this._devices}
@@ -186,20 +186,20 @@ var N = {
         ></rv-device-page>`;
 			case "live-check": return n`${this._renderBack()}
           <h1>Live check</h1>
-          ${i}
+          ${a}
           <rv-live-check .hass=${this.hass}></rv-live-check>`;
 			case "soak": return n`${this._renderBack()}
           <h1>Soak report</h1>
-          ${i}
+          ${a}
           <rv-live-soak .hass=${this.hass}></rv-live-soak>`;
 			case "cards": return n`${this._renderBack()}
           <h1>Dashboard cards</h1>
-          ${i}
+          ${a}
           <rv-card-report .hass=${this.hass}></rv-card-report>`;
 			case "list": return n`<div class="heading">
             <h1>Devices</h1>
             <button class="text with-icon" @click=${() => void this._load()} ?disabled=${this._loading}>
-              ${a("refresh")}Refresh
+              ${c("refresh")}Refresh
             </button>
           </div>
           ${this._renderBanner()}
@@ -214,15 +214,15 @@ var N = {
 		return n`<div>
       <button class="text with-icon back" @click=${() => {
 			this.navigate({ view: "list" });
-		}}>${a("back")}All devices</button>
+		}}>${c("back")}All devices</button>
     </div>`;
 	}
 	_renderBanner() {
-		if (this._loadError) return O(A(this._loadError, "Your devices"), this._loadError, {
+		if (this._loadError) return y(x(this._loadError, "Your devices"), this._loadError, {
 			action: n`<button @click=${() => void this._load()} ?disabled=${this._loading}>Try again</button>`,
 			help: "loading"
 		});
-		let e = S(this._devices);
+		let e = D(this._devices);
 		return !e || e.kind === "none" ? t : this._renderIntegration(e);
 	}
 	_renderIntegration(e) {
@@ -233,7 +233,7 @@ var N = {
       <p>${e.advice}</p>
       <div class="actions">
         <button class="check" @click=${() => void this._load()} ?disabled=${this._loading}>
-          ${a("refresh")}${this._loading ? "Checking…" : "Check again"}
+          ${c("refresh")}${this._loading ? "Checking…" : "Check again"}
         </button>
         ${E(e.kind)}
       </div>
@@ -253,7 +253,7 @@ var N = {
 		}}
       >
         <span class="what"><span class="name">${e}</span><span class="muted">${t}</span></span>
-        ${a("chevron")}
+        ${c("chevron")}
       </button>
     </li>`;
 		return n`<section class="card">
@@ -272,7 +272,7 @@ var N = {
 	}
 	_renderThisDevice() {
 		let e = (e, t, r) => {
-			let i = c({
+			let i = f({
 				where: e,
 				why: ""
 			}).hd;
@@ -282,7 +282,7 @@ var N = {
           <select
             aria-label=${t}
             @change=${(t) => {
-				g(e, t.target.value === "hd"), this.requestUpdate();
+				_(e, t.target.value === "hd"), this.requestUpdate();
 			}}
           >
             <option value="hd" ?selected=${i}>${r[0]}</option>
@@ -300,7 +300,7 @@ var N = {
         <label class="option">
           <input
             type="checkbox"
-            .checked=${o()}
+            .checked=${l()}
             @change=${(e) => {
 			v(e.target.checked), this.requestUpdate();
 		}}
@@ -315,14 +315,14 @@ var N = {
 	}
 	_renderHelp() {
 		let e = (e, t, r) => n`<li>
-      <a class="row" href=${b(r)} target="_blank" rel="noopener noreferrer">
+      <a class="row" href=${S(r)} target="_blank" rel="noopener noreferrer">
         <span class="what"><span class="name">${e}</span><span class="muted">${t}</span></span>
-        ${a("external")}
+        ${c("external")}
       </a>
     </li>`;
 		return n`<section class="card">
       <h2>Help</h2>
-      <p class="muted">The guides to this version of Reolink Viewer (${C}). They open in a new tab.</p>
+      <p class="muted">The guides to this version of Reolink Viewer (${k}). They open in a new tab.</p>
       <ul class="checks">
         ${e("User guide", "What each part of the panel does, and how to use it.", "guide")}
         ${e("Troubleshooting", "What a message means, and what to do about it.", "troubleshooting")}
@@ -587,7 +587,7 @@ var N = {
           <p class="now">Testing your cameras… this can take several minutes with an NVR.</p>
           ${e.log.length ? n`<p class="muted small">Now: ${e.log.at(-1)}</p>` : t}
           <details>
-            <summary class="small">Every step so far${a("chevronDown")}</summary>
+            <summary class="small">Every step so far${c("chevronDown")}</summary>
             <ol class="log">
               ${e.log.map((e) => n`<li>${e}</li>`)}
             </ol>
@@ -601,7 +601,7 @@ var N = {
           </p>
           <div class="actions">
             <button @click=${() => {
-				j(e.report, e.filename);
+				A(e.report, e.filename);
 			}}>
               Download again
             </button>
@@ -610,7 +610,7 @@ var N = {
             </button>
           </div>
           <details>
-            <summary class="small">Show what is in the file${a("chevronDown")}</summary>
+            <summary class="small">Show what is in the file${c("chevronDown")}</summary>
             <pre class="report">${JSON.stringify(e.report, null, 2)}</pre>
           </details>
         </div>`;
@@ -624,7 +624,7 @@ var N = {
 			started: Date.now(),
 			log: e
 		};
-		let t = _(this.hass, {
+		let t = s(this.hass, {
 			include_battery: this._includeBattery,
 			concurrency_test: this._concurrency,
 			max_streams: this._maxStreams,
@@ -651,16 +651,16 @@ var N = {
 		this._run = t, t.result.then((e) => {
 			if (this._run !== t) return;
 			this._run = void 0;
-			let n = k(/* @__PURE__ */ new Date());
+			let n = O(/* @__PURE__ */ new Date());
 			this._probe = {
 				status: "done",
 				report: e,
 				filename: n
-			}, j(e, n);
+			}, A(e, n);
 		}, (e) => {
 			this._run === t && (this._run = void 0, this._probe = {
 				status: "error",
-				message: d(e).message
+				message: i(e).message
 			});
 		});
 	}
@@ -676,8 +676,8 @@ var N = {
 		}
 	}
 	static styles = [
-		i,
-		l,
+		a,
+		p,
 		e`
       :host {
         display: flex;
@@ -985,4 +985,4 @@ var N = {
 };
 customElements.get("reolink-viewer-panel") || customElements.define("reolink-viewer-panel", F);
 //#endregion
-export { F as ReolinkViewerPanel, M as loadView };
+export { F as ReolinkViewerPanel, j as loadView };

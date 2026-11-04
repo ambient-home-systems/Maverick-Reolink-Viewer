@@ -28,6 +28,7 @@ from custom_components.reolink_viewer.unusual import const, events, model as mod
 from custom_components.reolink_viewer.unusual.const import SENSITIVITY_FLOORS
 from custom_components.reolink_viewer.unusual.events import Event
 from custom_components.reolink_viewer.unusual.model import Unusual
+from custom_components.reolink_viewer.unusual.rates import Profile
 from custom_components.reolink_viewer.unusual.score import daily_cap, incidents
 from homeassistant.core import HomeAssistant, is_callback
 
@@ -401,6 +402,9 @@ async def test_a_busy_property_is_kept_to_its_daily_marks(
     assert status["by_kind"] == {"person": status["marks"]}
     assert status["latest"][0]["reason"].startswith("Person at ")
     assert status["cameras"][_CAMERA]["marking"] is True
+    # A cap at or under the floor holds nothing back, and is not called the line.
+    model.cap = model.floor
+    assert (await unusual.async_status([_CAMERA]))["cap"] is None
 
 
 async def test_motion_is_learned_from_but_never_marked(
@@ -752,3 +756,46 @@ async def test_the_panel_s_marks_say_when_learning_is_off(
         "marks": [],
         "cameras": {},
     }
+
+
+async def test_the_panel_shows_what_a_camera_has_learned(
+    hass: HomeAssistant,
+    learning: MockConfigEntry,
+    hass_ws_client: WebSocketGenerator,
+) -> None:
+    """Per kind, when, for how long, after what and on which days; off: nothing."""
+    unusual = learning.runtime_data.unusual
+    assert unusual is not None
+    profile = Profile()
+    for minute in (1080, 1085, 1090):
+        profile.clock.add(minute, 1.0)
+        profile.duration.add("~8s", 1.0)
+        profile.predecessor.add("none", 1.0)
+        profile.day_of_week.add("Fri", 1.0)
+        profile.events += 1
+    unusual.model.profiles[("cam-drive", "person")] = profile
+    unusual.model.per_camera["cam-drive"] = profile
+
+    client = await hass_ws_client(hass)
+    await client.send_json_auto_id(
+        {"type": "reolink_viewer/unusual/profile", "camera_id": "cam-drive"}
+    )
+    result = (await client.receive_json())["result"]
+    assert result["enabled"] is True
+    assert result["built"] is True
+    assert result["known_after"] == 10
+    assert result["state"]["marking"] is False
+    (person,) = result["kinds"]
+    assert person["kind"] == "person"
+    assert person["events"] == 3
+    assert person["clock"][18]["events"] == 3
+    assert person["duration"][0]["label"] == "About 8 s"
+    assert person["predecessor"][0]["label"] == "Nothing fired first"
+    assert [day["events"] for day in person["day_of_week"]] == [0, 0, 0, 0, 3, 0, 0]
+
+    hass.config_entries.async_update_entry(learning, options={CONF_LEARN_NORMAL: False})
+    await hass.async_block_till_done(wait_background_tasks=True)
+    await client.send_json_auto_id(
+        {"type": "reolink_viewer/unusual/profile", "camera_id": "cam-drive"}
+    )
+    assert (await client.receive_json())["result"] == {"enabled": False}

@@ -1,6 +1,6 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
-import { X as i, j as a, kt as o, nt as s, tt as c } from "./live-_jyOGRi0.js";
-import { r as l, z as u } from "./home-C-2P8fU_.js";
+import { At as i, X as a, j as o, nt as s, tt as c } from "./live-13uUozrt.js";
+import { B as l, r as u } from "./home-C1sc5yMG.js";
 //#region src/render-filter.ts
 function d(e, t, n) {
 	if (e === t) return !1;
@@ -11,10 +11,10 @@ function d(e, t, n) {
 //#endregion
 //#region src/components/device-page.ts
 var f = {
-	overview: () => import("./overview-kYoL_web.js"),
-	playback: () => import("./playback-BL95jlmr.js"),
-	pictures: () => import("./event-pictures-DxanJF3j.js"),
-	settings: () => import("./settings-BfGvpHfC.js")
+	overview: () => import("./overview-Cp6ygs-8.js"),
+	playback: () => import("./playback-BowYSqre.js"),
+	pictures: () => import("./event-pictures-rUdGc-Yn.js"),
+	settings: () => import("./settings-DuKX7CIb.js")
 }, p = 1e3, m = class extends r {
 	static properties = {
 		hass: { attribute: !1 },
@@ -59,7 +59,7 @@ var f = {
 	}
 	_loadTab(e) {
 		e !== "live" && e !== "no-recordings" && (this._tabError = void 0, f[e]().catch((e) => {
-			this._tabError = o(e).message;
+			this._tabError = i(e).message;
 		}));
 	}
 	updated() {
@@ -79,7 +79,7 @@ var f = {
 			this._catalog = r, this._device = e, this._error = void 0, this._watched = w(e);
 		} catch (e) {
 			if (n !== this._loadSeq) return;
-			this._error = o(e).message;
+			this._error = i(e).message;
 		}
 	}
 	_subscribeRegistry(e) {
@@ -97,8 +97,8 @@ var f = {
 		return n`
       <div class="header">
         <button class="text with-icon back" @click=${() => {
-			u(this, { view: "list" });
-		}}>${i("back")}All devices</button>
+			l(this, { view: "list" });
+		}}>${a("back")}All devices</button>
       </div>
       ${this._error ? n`<div class="banner error" role="alert">Could not load the device: ${this._error}</div>` : t}
       ${r ? n`<div class="title">
@@ -122,7 +122,7 @@ var f = {
                   tabindex=${this.tab === e ? "0" : "-1"}
                   class=${this.tab === e ? "active" : ""}
                   @click=${() => {
-			u(this, {
+			l(this, {
 				view: "device",
 				id: this.deviceId,
 				tab: e
@@ -170,7 +170,7 @@ var f = {
             </div>` : this._error ? t : n`<p class="muted">Loading…</p>`}
     `;
 	}
-	static styles = [a, e`
+	static styles = [o, e`
       :host {
         display: flex;
         flex-direction: column;
@@ -282,7 +282,7 @@ function v(e) {
   </div>`;
 }
 function y(e) {
-	let t = e.node, n = [l(t.kind), t.model ?? void 0];
+	let t = e.node, n = [u(t.kind), t.model ?? void 0];
 	if (t.kind === "camera" && t.connections.length > 1) {
 		let e = new Set(t.connections.map((e) => e.via));
 		n.push(e.has("nvr") && e.has("direct") ? "on the NVR and added directly" : `${String(t.connections.length)} connections`);

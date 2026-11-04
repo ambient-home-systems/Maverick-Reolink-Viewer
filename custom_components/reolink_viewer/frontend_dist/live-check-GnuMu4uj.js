@@ -1,8 +1,8 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
-import { B as i, Dt as a, E as o, G as s, H as c, J as l, K as u, Ot as d, R as f, S as p, T as m, Tt as h, U as g, V as _, W as v, X as y, Y as b, at as ee, b as x, ct as S, dt as C, h as te, j as w, kt as T, n as E, p as D, q as O, rt as k, st as A, ut as j, x as ne } from "./live-_jyOGRi0.js";
-import { H as re, K as ie } from "./home-C-2P8fU_.js";
-import { c as ae, o as oe, r as se, s as ce } from "./check-r16ipmmP.js";
-import { a as M, i as N, n as P, o as F, r as I, t as L } from "./findings-DBX5oBtP.js";
+import { At as i, B as a, E as o, Et as s, G as c, H as l, J as u, K as d, Ot as f, R as p, S as m, T as h, U as g, V as _, W as v, X as y, Y as b, at as x, b as S, ct as C, dt as w, ft as T, h as E, j as D, kt as O, lt as k, n as A, p as j, q as ee, rt as te, x as ne } from "./live-13uUozrt.js";
+import { U as re, q as ie } from "./home-C1sc5yMG.js";
+import { c as ae, o as oe, r as se, s as ce } from "./check-DoBav8aO.js";
+import { a as M, i as N, n as P, o as F, r as I, t as L } from "./findings-BWLYgkMM.js";
 //#region src/live/check.ts
 var R = [
 	"Desktop Chrome, LAN",
@@ -54,14 +54,14 @@ var R = [
 			}
 			this.options.capacity && (this.plainStatus = "Testing how many streams each NVR serves at once", await this._capacityTests()), this._summary(e);
 		} catch (e) {
-			this._log(e instanceof G ? "Stopped." : `Check failed: ${T(e).message}`);
+			this._log(e instanceof G ? "Stopped." : `Check failed: ${i(e).message}`);
 		} finally {
 			this._session?.close(), await this._go2rtcLog(), this.running = !1, this.status = "", this.plainStatus = "", this._log(`Done at ${(/* @__PURE__ */ new Date()).toLocaleTimeString()}.`), await this._save(!0);
 		}
 		return this.text;
 	}
 	async _go2rtcLog() {
-		let e = (await C(this._hass).catch(() => void 0))?.go2rtc.log;
+		let e = (await T(this._hass).catch(() => void 0))?.go2rtc.log;
 		if (e?.length) {
 			this._log(""), this._log(`go2rtc log (last ${String(e.length)} lines):`);
 			for (let t of e) this._log(`  ${t}`);
@@ -77,7 +77,7 @@ var R = [
 		return this._lastSave = performance.now(), this._saving = this._saving.then(() => this._hass.callWS({
 			type: "reolink_viewer/playback/check_report",
 			report_id: this.id,
-			setup: `${i}${this.options.setup}`,
+			setup: `${a}${this.options.setup}`,
 			text: this.text,
 			done: e
 		})).then(() => void 0).catch(() => void 0), this._saving;
@@ -87,71 +87,71 @@ var R = [
 	}
 	async _header() {
 		let e = this._hass.user?.is_admin === !0;
-		this._log(`Reolink Viewer live check v${ie} · ${this.options.setup} · ${(/* @__PURE__ */ new Date()).toLocaleString()}`), this._log(`Browser: ${oe(navigator.userAgent)} · page ${te(location.hostname)} over ${location.protocol.replace(":", "")} · screen ${screen.width}×${screen.height} @${window.devicePixelRatio}x`), this._log(`User agent: ${navigator.userAgent}`);
-		let t = m(), n = t ? window[t] : void 0;
-		this._log(`MSE: ${t ?? "none"}${n ? `, takes ${s((e) => n.isTypeSupported(e)) || "none of go2rtc's codecs"}` : ""}`), this._log(`WebRTC receives: ${he()}`);
-		let r = await ee(this._hass).catch(() => []);
-		this._ice = O(r), this._log(`ICE servers (Home Assistant's): ${g(r)}`);
+		this._log(`Reolink Viewer live check v${ie} · ${this.options.setup} · ${(/* @__PURE__ */ new Date()).toLocaleString()}`), this._log(`Browser: ${oe(navigator.userAgent)} · page ${E(location.hostname)} over ${location.protocol.replace(":", "")} · screen ${screen.width}×${screen.height} @${window.devicePixelRatio}x`), this._log(`User agent: ${navigator.userAgent}`);
+		let t = h(), n = t ? window[t] : void 0;
+		this._log(`MSE: ${t ?? "none"}${n ? `, takes ${c((e) => n.isTypeSupported(e)) || "none of go2rtc's codecs"}` : ""}`), this._log(`WebRTC receives: ${he()}`);
+		let r = await x(this._hass).catch(() => []);
+		this._ice = ee(r), this._log(`ICE servers (Home Assistant's): ${g(r)}`);
 		let i = this.options;
 		this._log(`Streams: ${i.streams.join(", ")} · warm: ${i.warm && e ? "yes" : e ? "no" : "no (not an admin)"} · Home Assistant's view: ${i.stock ? "yes" : "no"} · capacity test: ${i.capacity && e ? "yes" : "no"}`);
-		let a = performance.now(), o = (await C(this._hass)).go2rtc;
+		let a = performance.now(), o = (await T(this._hass)).go2rtc;
 		this._log(`go2rtc: ${o.state}${o.version ? ` ${o.version}` : ""}${o.binary ? ` (${o.binary === "system" ? "Home Assistant's binary" : "downloaded, checksum verified"})` : ""}${o.error ? ` · error: ${o.error}` : ""} · restarts ${o.restarts} · WebRTC port ${o.webrtc_port} · status in ${Math.round(performance.now() - a)} ms`);
 	}
 	async _cameras() {
-		let { cameras: e } = await A(this._hass), t = this.options.cameraIds?.length ? new Set(this.options.cameraIds) : void 0, n = e.filter((e) => !t || t.has(e.id));
+		let { cameras: e } = await C(this._hass), t = this.options.cameraIds?.length ? new Set(this.options.cameraIds) : void 0, n = e.filter((e) => !t || t.has(e.id));
 		return this._log(`Cameras: ${n.map((e) => `${e.name}${e.connections.length > 1 ? ` (${e.connections.map((e) => e.via).join(" + ")})` : ""}`).join(", ")}`), n;
 	}
 	async _ourImages(e) {
 		this._checkStopped(), this._status("our pictures");
-		let t = /* @__PURE__ */ new Map(), n, r = () => void 0, i = performance.now(), a;
+		let t = /* @__PURE__ */ new Map(), n, r = () => void 0, a = performance.now(), o;
 		this._log("");
 		try {
-			a = await d(this._hass, (e) => {
-				n ??= performance.now() - i;
+			o = await O(this._hass, (e) => {
+				n ??= performance.now() - a;
 				for (let [n, r] of Object.entries(e.images)) t.set(n, r);
 				r();
 			});
 		} catch (e) {
-			this._log(`First images (ours): failed (${T(e).message})`);
+			this._log(`First images (ours): failed (${i(e).message})`);
 			return;
 		}
-		let o = () => new Promise((e) => {
+		let s = () => new Promise((e) => {
 			r = e, setTimeout(e, 100);
 		});
 		try {
-			let r = i + U;
-			for (; n === void 0 && performance.now() < r;) await o();
+			let r = a + U;
+			for (; n === void 0 && performance.now() < r;) await s();
 			if (n === void 0) {
-				this._log(`First images (ours): no list in ${l(U)}`);
+				this._log(`First images (ours): no list in ${u(U)}`);
 				return;
 			}
 			this._log(`First images (ours, kept on the server): listed in ${Math.round(n)} ms`);
 			for (let r of e) {
 				this._checkStopped();
 				let e = performance.now();
-				for (; !t.has(r.id) && performance.now() < e + U;) await o();
+				for (; !t.has(r.id) && performance.now() < e + U;) await s();
 				let i = t.get(r.id);
 				if (!i) {
-					this._log(`  ${r.name}: none in ${l(U)}`);
+					this._log(`  ${r.name}: none in ${u(U)}`);
 					continue;
 				}
-				let a = performance.now() - e, s = await J(i.url);
-				s.ms !== void 0 && this._posters.push({
+				let a = performance.now() - e, o = await J(i.url);
+				o.ms !== void 0 && this._posters.push({
 					kind: "ours",
-					ms: n + a + s.ms,
+					ms: n + a + o.ms,
 					cameraId: r.id
 				});
 				let c = Math.max(0, Date.now() - i.taken) / 1e3;
-				this._log(`  ${r.name}: ${s.text}, taken ${c < 100 ? c.toFixed(1) : Math.round(c)} s before` + (a >= 50 ? ` (none kept: waited ${Math.round(a)} ms for it)` : ""));
+				this._log(`  ${r.name}: ${o.text}, taken ${c < 100 ? c.toFixed(1) : Math.round(c)} s before` + (a >= 50 ? ` (none kept: waited ${Math.round(a)} ms for it)` : ""));
 			}
 		} finally {
-			await a().catch(() => void 0);
+			await o().catch(() => void 0);
 		}
 	}
 	async _hdChoices(e) {
 		this._log(""), this._log("Full screen (HD), in this browser:");
 		for (let t of e) {
-			let e = f(t);
+			let e = p(t);
 			e && this._log(`  ${t.name}: ${(await o(e)).reason}`);
 		}
 	}
@@ -160,13 +160,13 @@ var R = [
 		let r = {
 			connectionId: t.connection_id,
 			stream: n
-		}, i = t.streams[n], a = t.via === "nvr" ? `via ${t.entry_title}` : "direct";
-		if (this._log(""), !i) {
-			this._log(`${e.name}${e.model ? ` (${e.model})` : ""} · ${a} · ${n}: not served by this connection`);
+		}, a = t.streams[n], o = t.via === "nvr" ? `via ${t.entry_title}` : "direct";
+		if (this._log(""), !a) {
+			this._log(`${e.name}${e.model ? ` (${e.model})` : ""} · ${o} · ${n}: not served by this connection`);
 			return;
 		}
-		this._log(`${e.name}${e.model ? ` (${e.model})` : ""} · ${a} · ${b(n, i.encoding)}`);
-		let o = `${e.name} ${a} ${n}`, s = (r, i, a) => {
+		this._log(`${e.name}${e.model ? ` (${e.model})` : ""} · ${o} · ${b(n, a.encoding)}`);
+		let c = `${e.name} ${o} ${n}`, l = (r, i, a) => {
 			this._measured.push({
 				cameraId: e.id,
 				camera: e.name,
@@ -176,19 +176,19 @@ var R = [
 				transport: i,
 				result: a
 			});
-		}, c = [], u = (e.keep_warm_entity ? this._hass.states[e.keep_warm_entity]?.state === "on" : !1) && n === "sub" && f(e) === t, d = u ? "kept warm by its switch; turn it off to measure cold" : "a viewer kept it running";
+		}, d = [], f = (e.keep_warm_entity ? this._hass.states[e.keep_warm_entity]?.state === "on" : !1) && n === "sub" && p(e) === t, m = f ? "kept warm by its switch; turn it off to measure cold" : "a viewer kept it running";
 		for (let e of ["WebRTC", "MSE"]) {
-			this._status(`${o}: cold ${e}`);
-			let t = !u && await this._waitCold(r), n = await this._session_(e, r, z);
-			s("cold", e, n), c.push(`${e} ${q(n)}${t ? "" : ` (${d}: not cold)`}`), e === "MSE" && c.push(...await this._videoOnly(n, r, z, o));
+			this._status(`${c}: cold ${e}`);
+			let t = !f && await this._waitCold(r), n = await this._session_(e, r, z);
+			l("cold", e, n), d.push(`${e} ${q(n)}${t ? "" : ` (${m}: not cold)`}`), e === "MSE" && d.push(...await this._videoOnly(n, r, z, c));
 		}
-		if (this._log(`  cold: ${c.join(" · ")}`), this.options.stock) {
-			let e = i.entity_id;
+		if (this._log(`  cold: ${d.join(" · ")}`), this.options.stock) {
+			let e = a.entity_id;
 			if (!e) this._log(`  Home Assistant's view: no enabled camera entity for ${n}`);
 			else {
-				this._status(`${o}: Home Assistant's view`);
+				this._status(`${c}: Home Assistant's view`);
 				let t = await this._stockPoster(e), n = await this._stock(e);
-				s("stock", "WebRTC", n), this._log(`  Home Assistant's view (${e}): snapshot ${t} · WebRTC ${q(n)}`);
+				l("stock", "WebRTC", n), this._log(`  Home Assistant's view (${e}): snapshot ${t} · WebRTC ${q(n)}`);
 			}
 		}
 		if (this.options.warm && this._hass.user?.is_admin) {
@@ -196,34 +196,34 @@ var R = [
 				this._log("  warm: not measured (battery camera: never kept warm)");
 				return;
 			}
-			this._status(`${o}: keeping it warm`);
+			this._status(`${c}: keeping it warm`);
 			let e = performance.now(), n;
 			try {
-				({key_frame: n} = await h(this._hass, r, !0));
+				({key_frame: n} = await s(this._hass, r, !0));
 			} catch (e) {
-				this._log(`  warm: keeping it warm failed: ${T(e).message}`);
+				this._log(`  warm: keeping it warm failed: ${i(e).message}`);
 				return;
 			}
-			let i = performance.now() - e;
+			let a = performance.now() - e;
 			try {
 				await this._pause(H);
 				let e = await this._frame(r), t = [];
 				for (let e of ["WebRTC", "MSE"]) {
-					this._status(`${o}: warm ${e}`);
+					this._status(`${c}: warm ${e}`);
 					let n = await this._session_(e, r, B);
-					s("warm", e, n), t.push(`${e} ${q(n)}`), e === "MSE" && t.push(...await this._videoOnly(n, r, B, o));
+					l("warm", e, n), t.push(`${e} ${q(n)}`), e === "MSE" && t.push(...await this._videoOnly(n, r, B, c));
 				}
-				let a = (await j(this._hass, r).catch(() => void 0))?.cache, c = n ? `key frame cached in ${l(i)}` : `no key frame in ${l(i)}`;
-				this._log(`  warm (${c}${_(a)}): frame ${e} · ${t.join(" · ")}`);
+				let i = (await w(this._hass, r).catch(() => void 0))?.cache, o = n ? `key frame cached in ${u(a)}` : `no key frame in ${u(a)}`;
+				this._log(`  warm (${o}${_(i)}): frame ${e} · ${t.join(" · ")}`);
 			} finally {
-				await h(this._hass, r, !1).catch(() => void 0);
+				await s(this._hass, r, !1).catch(() => void 0);
 			}
 		}
 	}
 	async _waitCold(e) {
 		let t = performance.now() + V;
 		for (; performance.now() < t;) {
-			if (this._checkStopped(), !(await j(this._hass, e).catch(() => void 0))?.state?.active) return !0;
+			if (this._checkStopped(), !(await w(this._hass, e).catch(() => void 0))?.state?.active) return !0;
 			await K(250);
 		}
 		return !1;
@@ -233,13 +233,13 @@ var R = [
 		for (; performance.now() < t;) this._checkStopped(), await K(Math.min(250, t - performance.now()));
 	}
 	async _session_(e, t, n) {
-		return this._watch((r) => e === "WebRTC" ? new ne(this._hass, r, t, this._ice, n) : new x(this._hass, r, t, n));
+		return this._watch((r) => e === "WebRTC" ? new ne(this._hass, r, t, this._ice, n) : new S(this._hass, r, t, n));
 	}
 	async _videoOnly(e, t, n, r) {
-		return !e.ok || e.firstFrameMs === void 0 || !("appended" in e.steps) || e.firstFrameMs - e.steps.appended <= W ? [] : (this._status(`${r}: MSE video only`), [`MSE video only ${q(await this._watch((e) => new x(this._hass, e, t, n, location.href, !0)))}`]);
+		return !e.ok || e.firstFrameMs === void 0 || !("appended" in e.steps) || e.firstFrameMs - e.steps.appended <= W ? [] : (this._status(`${r}: MSE video only`), [`MSE video only ${q(await this._watch((e) => new S(this._hass, e, t, n, location.href, !0)))}`]);
 	}
 	_stock(e) {
-		return this._watch((t) => new p(this._hass, t, e, z));
+		return this._watch((t) => new m(this._hass, t, e, z));
 	}
 	async _watch(e) {
 		this._checkStopped();
@@ -265,13 +265,13 @@ var R = [
 	}
 	async _frame(e) {
 		try {
-			let { path: t } = await S(this._hass, e), n = await J(t);
+			let { path: t } = await k(this._hass, e), n = await J(t);
 			return n.ms !== void 0 && this._posters.push({
 				kind: "go2rtc frame",
 				ms: n.ms
 			}), n.text;
 		} catch (e) {
-			return `failed (${T(e).message})`;
+			return `failed (${i(e).message})`;
 		}
 	}
 	async _capacityTests() {
@@ -279,7 +279,7 @@ var R = [
 			this._log(""), this._log("Capacity test: not run (admins only).");
 			return;
 		}
-		let e = await k(this._hass);
+		let e = await te(this._hass);
 		for (let t of e.hosts) {
 			this._checkStopped();
 			let e = t.name ?? t.id;
@@ -296,24 +296,24 @@ var R = [
 					host: e,
 					report: n
 				});
-				for (let e of c(n)) this._log(e);
+				for (let e of l(n)) this._log(e);
 			}
 		}
 	}
 	_capacity_(e, t) {
 		return new Promise((n) => {
-			let r, i = !1, o = (e) => {
-				i || (i = !0, r?.().catch(() => void 0), n(e));
+			let r, a = !1, o = (e) => {
+				a || (a = !0, r?.().catch(() => void 0), n(e));
 			};
-			a(this._hass, e, (e) => {
+			f(this._hass, e, (e) => {
 				e.type === "progress" ? t(e.message) : e.type === "result" ? o(e.report) : o(e.advice ? {
 					message: e.message,
 					advice: e.advice
 				} : { message: e.message });
 			}).then((e) => {
-				r = e, i && e().catch(() => void 0);
+				r = e, a && e().catch(() => void 0);
 			}).catch((e) => {
-				o({ message: T(e).message });
+				o({ message: i(e).message });
 			});
 		});
 	}
@@ -323,7 +323,7 @@ var R = [
 			return t.length ? Math.min(...t) : void 0;
 		};
 		for (let e of this._chosen) {
-			let s = f(e), c = this._measured.filter((t) => t.cameraId === e.id && t.connection === s), l = c.filter((e) => e.phase === "cold");
+			let s = p(e), c = this._measured.filter((t) => t.cameraId === e.id && t.connection === s), l = c.filter((e) => e.phase === "cold");
 			if (!l.length) continue;
 			i += 1;
 			let u = l.filter((e) => e.stream === "sub"), d = o(u.length ? u : l);
@@ -336,10 +336,10 @@ var R = [
 				continue;
 			}
 			n.push(d);
-			let p = u.length ? o(l.filter((e) => e.stream !== "sub")) : void 0, m = o(c.filter((e) => e.phase === "warm" && e.stream === "sub")), h = F(d, ue, de);
+			let f = u.length ? o(l.filter((e) => e.stream !== "sub")) : void 0, m = o(c.filter((e) => e.phase === "warm" && e.stream === "sub")), h = F(d, ue, de);
 			h === "slow" && r.push(e.name);
 			let g = [`live video starts in ${M(d)}`];
-			p !== void 0 && g.push(`full screen in HD in ${M(p)}`), m !== void 0 && g.push(`kept warm, in ${M(m)}`);
+			f !== void 0 && g.push(`full screen in HD in ${M(f)}`), m !== void 0 && g.push(`kept warm, in ${M(m)}`);
 			let _;
 			h !== "good" && s?.is_battery ? _ = "Battery cameras wake up before they stream, so a few seconds is normal." : h !== "good" && e.keep_warm_entity && this._hass.states[e.keep_warm_entity]?.state !== "on" && (_ = "Turn on its “keep live view warm” switch in Home Assistant to make it start faster" + (m === void 0 ? "." : ` (about ${M(m)} here).`)), t.push({
 				grade: h,
@@ -364,8 +364,8 @@ var R = [
 				text: `Compared with Home Assistant's own camera view: this viewer was quicker on ${String(e)} of ${L(u.length, "stream")} (typically ${M(n)} against ${M(r)}).`
 			});
 		}
-		let d = this._measured.filter((e) => e.transport === "WebRTC" && e.phase !== "stock"), p = this._measured.some((e) => e.transport === "MSE" && e.result.ok);
-		d.length && !d.some((e) => "connected" in e.result.steps) && p && t.push({
+		let d = this._measured.filter((e) => e.transport === "WebRTC" && e.phase !== "stock"), f = this._measured.some((e) => e.transport === "MSE" && e.result.ok);
+		d.length && !d.some((e) => "connected" in e.result.steps) && f && t.push({
 			grade: "note",
 			text: "WebRTC could not connect from this device, so live video used the viewer's other way of streaming (MSE), which worked."
 		});
@@ -412,7 +412,7 @@ var R = [
 		this._log(`- WebRTC connected ${r.length} of ${n.length} sessions${i ? ` (${i})` : ""}`);
 		for (let e of ["cold", "warm"]) for (let n of ["WebRTC", "MSE"]) for (let r of [["sub"], ["main", "ext"]]) {
 			let i = t.filter((t) => t.phase === e && t.transport === n && r.includes(t.stream)).filter((e) => e.result.ok).map((e) => e.result.firstFrameMs ?? 0), a = t.filter((t) => t.phase === e && t.transport === n && r.includes(t.stream)).length;
-			a && this._log(`- ${e} ${n}, ${r.join("/")}: median ${l(v(i))}, ${i.length} of ${a} played` + (i.length ? ` (${l(Math.min(...i))}–${l(Math.max(...i))})` : ""));
+			a && this._log(`- ${e} ${n}, ${r.join("/")}: median ${u(v(i))}, ${i.length} of ${a} played` + (i.length ? ` (${u(Math.min(...i))}–${u(Math.max(...i))})` : ""));
 		}
 		let a = t.filter((e) => e.phase === "stock");
 		if (a.length) {
@@ -422,7 +422,7 @@ var R = [
 				a !== void 0 && r.result.ok && (n += 1, a < (r.result.firstFrameMs ?? Infinity) && (e += 1));
 			}
 			let r = a.filter((e) => e.result.ok).map((e) => e.result.firstFrameMs ?? 0);
-			this._log(`- Home Assistant's view: median ${l(v(r))}, ${r.length} of ${a.length} played; ours (best of cold/warm) faster on ${e} of ${n}`);
+			this._log(`- Home Assistant's view: median ${u(v(r))}, ${r.length} of ${a.length} played; ours (best of cold/warm) faster on ${e} of ${n}`);
 		}
 		for (let e of [
 			"ours",
@@ -430,12 +430,12 @@ var R = [
 			"go2rtc frame"
 		]) {
 			let t = this._posters.filter((t) => t.kind === e).map((e) => e.ms);
-			t.length && this._log(`- first image, ${e}: median ${l(v(t))} (${t.length}), slowest ${l(Math.max(...t))}`);
+			t.length && this._log(`- first image, ${e}: median ${u(v(t))} (${t.length}), slowest ${u(Math.max(...t))}`);
 		}
 		for (let n of e.filter((e) => e.connections.length > 1)) {
 			let e = n.connections.map((e) => {
 				let n = t.filter((t) => t.connection === e && t.stream === "sub" && t.phase === "cold" && t.result.ok), r = v(n.map((e) => e.result.firstFrameMs ?? 0));
-				return `${e.via === "nvr" ? "via NVR" : "direct"} cold sub ${l(r)}`;
+				return `${e.via === "nvr" ? "via NVR" : "direct"} cold sub ${u(r)}`;
 			});
 			this._log(`- ${n.name}: ${e.join(" vs ")}`);
 		}
@@ -459,7 +459,7 @@ function q(e) {
 		r,
 		i
 	].filter(Boolean).join("; ");
-	return e.ok ? `${l(e.firstFrameMs)}${a ? ` (${a})` : ""}` : `✗ ${e.error ?? "failed"}${a ? ` (${a})` : ""}`;
+	return e.ok ? `${u(e.firstFrameMs)}${a ? ` (${a})` : ""}` : `✗ ${e.error ?? "failed"}${a ? ` (${a})` : ""}`;
 }
 function pe(e) {
 	return e.length < 2 ? e.join("") : `${e.slice(0, -1).join(", ")} and ${e.at(-1) ?? ""}`;
@@ -537,10 +537,10 @@ var $ = class extends r {
 		let e = this.hass;
 		if (e) {
 			try {
-				let [t, n] = await Promise.all([C(e), A(e)]);
+				let [t, n] = await Promise.all([T(e), C(e)]);
 				this._status = t, this._cameras = n.cameras;
 			} catch (e) {
-				this._error = T(e).message;
+				this._error = i(e).message;
 			}
 			this._loadReports();
 		}
@@ -548,7 +548,7 @@ var $ = class extends r {
 	async _loadReports() {
 		if (this.hass) try {
 			let { reports: e } = await se(this.hass);
-			this._reports = e.filter((e) => e.setup.startsWith(i));
+			this._reports = e.filter((e) => e.setup.startsWith(a));
 		} catch {
 			this._reports = [];
 		}
@@ -578,10 +578,10 @@ var $ = class extends r {
 		}
 	}
 	async _refreshStatus() {
-		this.hass && (this._status = await C(this.hass).catch(() => this._status));
+		this.hass && (this._status = await T(this.hass).catch(() => this._status));
 	}
 	async _copy(e, t) {
-		await E(e) ? this._copied = t : (this._copied = void 0, this._shown = t, re(this, "Copying is blocked here: select the text instead, or copy it from Saved reports on a computer", "error"));
+		await A(e) ? this._copied = t : (this._copied = void 0, this._shown = t, re(this, "Copying is blocked here: select the text instead, or copy it from Saved reports on a computer", "error"));
 	}
 	render() {
 		let e = this._check?.running === !0;
@@ -680,7 +680,7 @@ var $ = class extends r {
               ?disabled=${!this._streams.length || !this._cameras}
               @click=${() => {
 			this.runCheck({ setup: this._setup }).catch((e) => {
-				this._error = T(e).message;
+				this._error = i(e).message;
 			});
 		}}
             >
@@ -726,9 +726,9 @@ var $ = class extends r {
             <div class="report-row">
               <span class="when"
                 >${[
-			D(Date.parse(e.updated), this.hass?.config?.time_zone),
-			e.setup.slice(i.length),
-			u(e.text)
+			j(Date.parse(e.updated), this.hass?.config?.time_zone),
+			e.setup.slice(a.length),
+			d(e.text)
 		].filter(Boolean).join(" · ")}${e.done ? "" : " (not finished)"}</span
               >
               <button class="text" @click=${() => void this._copy(e.text, e.id)}>
@@ -757,7 +757,7 @@ var $ = class extends r {
         <pre class="report">${e}</pre>
       </details>` : n`<pre class="report">${e}</pre>`;
 	}
-	static styles = [w, e`
+	static styles = [D, e`
       :host {
         display: flex;
         flex-direction: column;

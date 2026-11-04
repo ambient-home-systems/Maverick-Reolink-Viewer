@@ -3,6 +3,18 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.49.0
+
+- **What it has learned**, on each camera's Overview: per kind of thing it sees, when
+  (each hour), on which days, for how long and what fired first, with what it has seen
+  too few times to know marked **Can stand out**. The way to spot a camera that learned
+  something wrong.
+- **A mark's count is a total:** "Package on Doorbell — seen 8 times in 10 days".
+  Marks of the past are scored against today's model, so two packages a day apart both
+  said "8th time"; and "Package at all on" now reads "Package on".
+- **The numbers behind it** name the daily cap as the line only when it is above the
+  floor; at or under it, it holds nothing back.
+
 ## 0.48.0
 
 Unusual events in the panel.

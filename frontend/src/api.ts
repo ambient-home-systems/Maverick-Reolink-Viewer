@@ -29,6 +29,7 @@ import type {
   ProbeOptions,
   ProbeReport,
   RecentEvents,
+  LearnedProfile,
   UnusualMarks,
 } from "./types";
 
@@ -308,6 +309,10 @@ export const fetchJournalStatus = (hass: HomeAssistant): Promise<JournalStatus> 
 /** The incidents marked unusual in [since, until) (epoch ms), for the panel (Phase 8.3). */
 export const fetchUnusualMarks = (hass: HomeAssistant, since: number, until: number): Promise<UnusualMarks> =>
   hass.callWS<UnusualMarks>({ type: "reolink_viewer/unusual/marks", since, until });
+
+/** What one camera has learned (Phase 8.3): when, how long, after what, which days. */
+export const fetchLearnedProfile = (hass: HomeAssistant, cameraId: string): Promise<LearnedProfile> =>
+  hass.callWS<LearnedProfile>({ type: "reolink_viewer/unusual/profile", camera_id: cameraId });
 
 /** What the dashboard cards saw, per device (the one heard from last first). */
 export const fetchCardLog = (hass: HomeAssistant): Promise<{ devices: CardLogDevice[] }> =>

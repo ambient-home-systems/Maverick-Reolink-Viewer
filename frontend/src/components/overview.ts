@@ -14,6 +14,7 @@ import type {
   StorageInfo,
 } from "../types";
 import "./device-list";
+import "./learned";
 import type { BoardCamera } from "./live-grid";
 
 
@@ -94,6 +95,7 @@ export class RvOverview extends LitElement {
     const node = device.node;
     return html`
       ${node.kind === "camera" ? this._renderSnapshot(node) : this._renderCameras()}
+      ${node.kind === "camera" ? html`<rv-learned .hass=${this.hass} .camera=${node.id}></rv-learned>` : nothing}
       <div class="connections">${device.connections.map((conn) => this._renderConnection(conn, device))}</div>
     `;
   }
