@@ -26,8 +26,9 @@ from custom_components.reolink_viewer.const import (
 from custom_components.reolink_viewer.journal import JOURNAL_FILE
 from custom_components.reolink_viewer.unusual import const, events, model as module
 from custom_components.reolink_viewer.unusual.const import SENSITIVITY_FLOORS
+from custom_components.reolink_viewer.unusual.events import Event
 from custom_components.reolink_viewer.unusual.model import Unusual
-from custom_components.reolink_viewer.unusual.score import daily_cap
+from custom_components.reolink_viewer.unusual.score import daily_cap, incidents
 from homeassistant.core import HomeAssistant, is_callback
 
 _CAMERA = "cam-drive"
@@ -332,14 +333,41 @@ async def test_it_reads_while_the_journal_writes(
 
 
 def test_the_daily_cap_keeps_to_about_so_many_a_day() -> None:
-    """Scores stand for their camera's events; the line passes about per_day a day."""
-    scores = {"a": [5.0, 4.0, 3.0, 2.0, 1.0], "b": [4.5, 0.5]}
-    # Each of a's scores stands for 2 events, b's for 10: 4 a day over 2 days is 8.
-    line = daily_cap(scores, weight={"a": 2, "b": 10}, days=2, per_day=4)
-    assert line == 4.5  # 5.0 (2 events), then 4.5 (10 more) passes the 8
-    assert daily_cap(scores, weight={"a": 1, "b": 1}, days=10, per_day=4) == float(
-        "-inf"
+    """Incidents stand for as many as they were sampled from; about per_day a day pass."""
+    # (score, stands for): 4 a day over 2 days is 8.
+    values = [(5.0, 2), (4.0, 2), (4.5, 10), (3.0, 2), (0.5, 10)]
+    assert daily_cap(values, days=2, per_day=4) == 4.5  # 2, then 10 more passes 8
+    assert daily_cap(values, days=10, per_day=4) == float("-inf")
+
+
+def _event_at(camera: str, kind: str, start: float, length: float = 8.0) -> Event:
+    return Event(
+        camera=camera,
+        kind=kind,
+        started_at=start,
+        ended_at=start + length,
+        duration=length,
+        minute_of_day=0,
+        solar_offset=None,
+        solar_phase=None,
+        is_weekend=False,
     )
+
+
+def test_one_kind_on_several_cameras_within_a_minute_is_one_incident() -> None:
+    """Chained from each one's end; another kind, or a longer quiet, is another."""
+    pairs = [
+        (_event_at("fyr", "animal", 0.0), 1),
+        (_event_at("fyl", "animal", 20.0), 2),
+        (_event_at("door", "person", 25.0), 3),
+        (_event_at("door", "animal", 80.0), 4),  # 52 s after the last ended
+        (_event_at("fyr", "animal", 200.0), 5),  # 112 s: a new one
+    ]
+    assert [[value for _, value in group] for group in incidents(pairs)] == [
+        [1, 2, 4],
+        [3],
+        [5],
+    ]
 
 
 async def test_a_busy_property_is_kept_to_its_daily_marks(
@@ -351,11 +379,16 @@ async def test_a_busy_property_is_kept_to_its_daily_marks(
     for day in range(10):
         rows.extend(_pair(_NOW - (10 - day) * _DAY + 3 * 3600 + day * 60))
     _write(path, rows)
-    with patch.dict(const.DAILY_MARKS, {"many": 0.1}):
+    # (A history this regular compresses its scores, as Stamina's tests note: the
+    # floor is lowered so the cap is what decides here.)
+    with (
+        patch.dict(const.DAILY_MARKS, {"many": 0.1}),
+        patch.dict(const.SENSITIVITY_FLOORS, {"many": -1.0}),
+    ):
         unusual = _unusual(hass, path, sensitivity="many")
         model = await unusual.async_rebuild()
 
-    assert model.floor == SENSITIVITY_FLOORS["many"]
+    assert model.floor == -1.0
     status = await unusual.async_status([_CAMERA])
     assert status["sensitivity"] == "many"
     assert status["cap"] is not None
@@ -365,6 +398,60 @@ async def test_a_busy_property_is_kept_to_its_daily_marks(
     assert status["by_kind"] == {"person": status["marks"]}
     assert status["latest"][0]["reason"].startswith("Person at ")
     assert status["cameras"][_CAMERA]["marking"] is True
+
+
+async def test_motion_is_learned_from_but_never_marked(
+    hass: HomeAssistant, path: Path
+) -> None:
+    """Motion at a strange hour scores high, and is still not marked."""
+    rows = _busy(days=60)
+    for day in range(60):
+        rows.extend(
+            _pair(_NOW - (60 - day) * _DAY + 12 * 3600, "binary_sensor.drive_motion")
+        )
+    odd = _NOW - 2 * _DAY + 3 * 3600
+    rows.extend(_pair(odd, "binary_sensor.drive_motion"))
+    _write(path, rows)
+    unusual = _unusual(hass, path, sensitivity="many")
+    model = await unusual.async_rebuild()
+    scored = await unusual.async_window(since=odd - 1, until=odd + 60)
+    ((event, result),) = scored
+
+    assert event.kind == "motion"
+    assert result.threshold is not None
+    assert result.total > result.threshold
+    assert result.unusual is False
+    # And it counts toward nothing the cap is drawn from.
+    assert model.per_camera[_CAMERA].kinds.count("motion") == 61
+
+
+async def test_an_incident_on_three_cameras_is_one_mark(
+    hass: HomeAssistant, path: Path
+) -> None:
+    """One person in the night on the drive and the gate: one mark naming both."""
+    rows = _busy(days=60, hours=(7, 8, 9, 12, 17, 18, 19, 20))
+    for day in range(60):
+        rows.extend(
+            _pair(_NOW - (60 - day) * _DAY + 7 * 3600, "binary_sensor.gate_person")
+        )
+    night = _NOW - 1 * _DAY + 2 * 3600
+    rows.extend(_pair(night))
+    rows.extend(_pair(night + 20, "binary_sensor.gate_person"))
+    _write(path, rows)
+    unusual = _unusual(hass, path, sensitivity="many")
+    await unusual.async_rebuild()
+
+    status = await unusual.async_status([_CAMERA, "cam-gate"])
+    (mark,) = [m for m in status["latest"] if m["start"] >= night * 1000]
+    assert sorted(mark["cameras"]) == ["Drive", "Gate"]
+    assert (
+        " on Drive and Gate " in mark["reason"]
+        or " on Gate and Drive " in mark["reason"]
+    )
+    assert status["marks"] == len(status["latest"])
+    # What fired first was this same incident: not said.
+    assert "after Drive" not in mark["reason"]
+    assert "after Gate" not in mark["reason"]
 
 
 async def test_a_rebuild_finishing_after_off_is_not_kept(
@@ -466,6 +553,7 @@ async def test_events_are_scored_on_request(
     )
     events = (await client.receive_json())["result"]["events"]
     person = next(e for e in events if e["kind"] == "person")
+    assert isinstance(person["incident"], int)
     assert person["unusual"] is False  # still learning
     assert person["line"] is None
     assert "test_reolink_cam" in person["reason"]

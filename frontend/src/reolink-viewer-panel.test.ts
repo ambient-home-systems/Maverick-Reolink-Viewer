@@ -25,6 +25,10 @@ async function mount(hass: FakeHass): Promise<ReolinkViewerPanel> {
   el.hass = hass;
   document.body.appendChild(el);
   await flush();
+  // The device list is loaded when shown: waited for, not a tick (a cold
+  // transform cache once took longer than one, and the list was missing).
+  await loadView("list");
+  await flush();
   await el.updateComplete;
   return el;
 }

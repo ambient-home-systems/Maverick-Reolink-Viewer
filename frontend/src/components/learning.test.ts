@@ -120,6 +120,7 @@ describe("rv-learning", () => {
     expect(text()).toContain("the time of day 15, what fired before it 10");
     expect(text()).toContain("Doorbell 3.912");
     expect(text()).toContain("All cameras together");
+    expect(text()).toContain("Motion is learned from, never marked");
   });
 
   it("says it is learning before the model's first build", async () => {

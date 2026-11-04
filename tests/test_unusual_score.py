@@ -1119,3 +1119,52 @@ def test_a_duration_reads_as_people_say_it() -> None:
 
     assert "lasting about 4 min" in lingering.reason
     assert "~" not in lingering.reason
+
+
+def test_time_is_counted_once() -> None:
+    """Ours: with sunset known, the clock and the light each count half."""
+    events = [replace(e, solar_offset=e.minute_of_day - 1080) for e in _history()]
+    model = build(events, now=_NOW)
+    odd = replace(
+        _event(_NOW, 60, "person"), solar_offset=60 - 1080, solar_phase="night"
+    )
+    no_sun = _event(_NOW, 60, "person")
+
+    halved = score(odd, model, previous=None)
+    whole = score(no_sun, model, previous=None)
+
+    clock = _term(halved, "clock")
+    assert math.isclose(clock * 2, _term(whole, "clock"))
+    assert math.isclose(_term(halved, "solar") + clock, clock * 2, rel_tol=0.05)
+
+
+def test_the_sentence_says_the_time_once() -> None:
+    """Ours: "at 01:00" and "after dark" are one fact; the second phrase is another term."""
+    events = [replace(e, solar_offset=e.minute_of_day - 1080) for e in _history()]
+    model = build(events, now=_NOW)
+    calibrate(model, events, floor=0.0)
+    odd = replace(
+        _event(_NOW, 60, "person", duration=600.0),
+        solar_offset=60 - 1080,
+        solar_phase="night",
+    )
+
+    result = score(odd, model, previous=None, names={_CAMERA: "Drive"})
+
+    said = ("at 01:00" in result.reason) + ("after dark" in result.reason)
+    assert said == 1, result.reason
+
+
+def test_motion_is_never_marked() -> None:
+    """Ours: motion is learned from, but a mark goes to what was seen."""
+    events = _mostly_motion()
+    model = build(events, now=_NOW)
+    calibrate(model, events, floor=0.0)
+
+    night_motion = score(
+        _on(_BALCONY, _NOW, 3 * 60, "motion", 20.0), model, previous=None
+    )
+
+    assert night_motion.threshold is not None
+    assert night_motion.total > night_motion.threshold
+    assert night_motion.unusual is False

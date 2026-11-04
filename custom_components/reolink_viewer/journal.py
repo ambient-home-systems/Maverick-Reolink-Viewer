@@ -53,6 +53,7 @@ JOURNAL_FILE = "reolink_viewer_journal.db"
 SCHEMA_VERSION = 2
 FLUSH_S = 30.0
 FLUSH_ROWS = 200
+WAL_LIMIT = 1_000_000
 # Registry changes come in bursts (at startup, say): the map is read again once.
 REFRESH_S = 5.0
 IMPORT_DAYS = 10
@@ -170,6 +171,10 @@ class _Store:
         db = sqlite3.connect(self._path, check_same_thread=False)
         db.execute("PRAGMA journal_mode=WAL")
         db.execute("PRAGMA synchronous=NORMAL")
+        # The write-ahead file is cut back to this after each checkpoint; left
+        # alone it stays as large as the largest write ever made (v0.47.0's
+        # compaction left about 4 MB at the owner's).
+        db.execute(f"PRAGMA journal_size_limit={WAL_LIMIT}")
         db.executescript(_SCHEMA)
         with db:
             db.execute(
@@ -190,6 +195,8 @@ class _Store:
             with db:
                 db.execute("UPDATE meta SET value = '2' WHERE key = 'schema'")
             db.execute("VACUUM")
+        # Into the file, the write-ahead file emptied (a v0.47.0 compaction's too).
+        db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
         self._sources = dict(db.execute("SELECT entity_id, id FROM sources"))
         self._db = db
         return created

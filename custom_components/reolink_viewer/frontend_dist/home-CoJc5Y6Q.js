@@ -40,7 +40,7 @@ function m(e, t) {
 }
 //#endregion
 //#region src/version.ts
-var h = "0.47.0", se = "https://github.com/ambient-home-systems/Maverick-Reolink-Viewer", ce = {
+var h = "0.47.1", se = "https://github.com/ambient-home-systems/Maverick-Reolink-Viewer", ce = {
 	guide: ["user-guide"],
 	troubleshooting: ["troubleshooting"],
 	cameras: ["cameras"],
@@ -1181,12 +1181,12 @@ function Be(e) {
 //#endregion
 //#region src/views.ts
 var Ve = {
-	events: () => import("./events-view-C85txih2.js"),
-	list: () => import("./device-list-B-oTW2UF.js"),
-	device: () => import("./device-page-Dy-gY5Jt.js"),
-	"live-check": () => import("./live-check-f6yvceAB.js"),
-	soak: () => import("./live-soak-CIS2MwGO.js"),
-	cards: () => import("./card-report-DpRzxq_S.js")
+	events: () => import("./events-view-D4plt1T_.js"),
+	list: () => import("./device-list-PP-qiM6T.js"),
+	device: () => import("./device-page-D9ijb9v2.js"),
+	"live-check": () => import("./live-check-BxPycM4I.js"),
+	soak: () => import("./live-soak-Bvc2E9M8.js"),
+	cards: () => import("./card-report-CHq-y5wX.js")
 }, $ = /* @__PURE__ */ new Map();
 function He(e) {
 	let t = Ve[e];

@@ -3,6 +3,26 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.47.1
+
+Unusual events, tuned on the first week of marks.
+
+- **Motion is no longer marked.** It still counts toward what is normal (what fired
+  first, what a camera usually sees), but the marks go to people, vehicles, animals,
+  doorbell presses and the like. Motion was 10 of the first 25 marks.
+- **One mark per incident:** the same kind of thing on several cameras within a
+  minute is one mark, naming every camera: "Animal at 02:25 on Front Yard Right,
+  Front Yard Left and Doorbell". The daily allowance counts incidents, so more
+  different things get through.
+- **The time of day counts once.** The time of day and the time from sunset were
+  counted as two signals though they say nearly the same thing, so night-time events
+  stood out twice over. Now each counts half, and a sentence says the time once.
+- **The journal's size is right again:** the one-time compaction in 0.47.0 left a
+  write-ahead file of a few megabytes beside it; it is now emptied at the next start,
+  and kept small.
+- **"Learned … in N s"** now shows how long the learning took, not counting its wait
+  for a free thread at Home Assistant's start.
+
 ## 0.47.0
 
 Phase 8, step 2: Reolink Viewer learns what is normal for each camera, and marks what

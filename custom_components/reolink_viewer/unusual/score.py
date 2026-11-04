@@ -28,18 +28,21 @@ generate, the model has become too clever for its own good.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from functools import partial
 import math
 from typing import Any
 
 from .const import (
+    INCIDENT_SECONDS,
     RATE_BINS,
     SCORE_FLOOR,
     SCORE_MIN_DAYS,
     SCORE_MIN_EVENTS,
     SCORE_QUANTILE,
+    TIME_WEIGHT,
+    UNMARKED_KINDS,
 )
 from .events import Event
 from .rates import (
@@ -63,6 +66,9 @@ def informative(table: Any) -> bool:
     """Whether a distribution holds any reading at all, as opposed to only absences."""
     return any(value.lower() not in UNINFORMATIVE for value in table.weights)
 
+
+# The two readings of the clock (ours: counted once, said once).
+_TIME_TERMS = frozenset({"clock", "solar"})
 
 # Below this a term is not worth mentioning in the sentence: it agrees with the model, and
 # saying so would bury the one thing that does not.
@@ -271,11 +277,17 @@ def _terms(
             )
         )
 
+    # Ours: the time of day and the time from sunset are two readings of one clock
+    # (they agreed 95% of the time on the owner's first 11 days), so where both
+    # are known each counts half (TIME_WEIGHT): time is counted once. Sunset
+    # still moves the score as it shifts through the seasons.
+    halved = TIME_WEIGHT if event.solar_offset is not None else 1.0
     terms.append(
         Term(
             name="clock",
             label=_clock_time(event.minute_of_day),
-            contribution=_surprisal(
+            contribution=halved
+            * _surprisal(
                 blend(lambda p: p.clock.probability(event.minute_of_day)), RATE_BINS
             ),
             seen=specific.clock.nearby(event.minute_of_day),
@@ -288,7 +300,8 @@ def _terms(
             Term(
                 name="solar",
                 label=_solar_phrase(event.solar_phase, offset),
-                contribution=_surprisal(
+                contribution=halved
+                * _surprisal(
                     blend(lambda p: p.solar.probability(offset % 1440)), RATE_BINS
                 ),
                 seen=specific.solar.nearby(offset % 1440),
@@ -457,10 +470,30 @@ def score(
     return Score(
         total=summed,
         threshold=against,
-        unusual=against is not None and summed > against,
+        # Ours: motion is learned from (what fired first, each camera's mix) but
+        # never marked: on the owner's property it was 10 of the first 25 marks.
+        unusual=against is not None
+        and summed > against
+        and event.kind not in UNMARKED_KINDS,
         terms=tuple(terms),
         reason=_reason(event, terms, model.profile(event.camera, event.kind), names),
     )
+
+
+def reason(
+    event: Event,
+    result: Score,
+    model: Model,
+    names: dict[str, str],
+    *,
+    unsaid: Callable[[Term], bool] | None = None,
+) -> str:
+    """Return a scored event's sentence again, with other names (ours: an incident's).
+
+    Terms ``unsaid`` picks are left out of the sentence (not out of the score).
+    """
+    terms = [term for term in result.terms if unsaid is None or not unsaid(term)]
+    return _reason(event, terms, model.profile(event.camera, event.kind), names)
 
 
 def _reason(
@@ -476,7 +509,11 @@ def _reason(
     kind = event.kind.replace("_", " ").capitalize()
 
     ranked = sorted(terms, key=lambda term: term.contribution, reverse=True)
-    leading = [term for term in ranked if term.contribution >= _WORTH_SAYING][:2]
+    leading = [term for term in ranked if term.contribution >= _WORTH_SAYING]
+    # Ours: "at 01:57" and "after dark" say the same thing; one of them is enough.
+    if leading and leading[0].name in _TIME_TERMS:
+        leading = [leading[0]] + [t for t in leading[1:] if t.name not in _TIME_TERMS]
+    leading = leading[:2]
     if not leading:
         return f"{kind} at {_clock_time(event.minute_of_day)} — usual for {subject}."
 
@@ -536,7 +573,7 @@ def calibrate(
     share: float = SCORE_QUANTILE,
     floor: float = SCORE_FLOOR,
     scored: Callable[[Event], bool] | None = None,
-) -> dict[str, list[float]]:
+) -> list[tuple[Event, float]]:
     """Work out how high a score has to be before it is worth marking.
 
     Two numbers, and an event has to clear both.
@@ -555,12 +592,15 @@ def calibrate(
 
     ``scored`` picks which events are scored (all by default); every event is still walked,
     so each scored one has its true predecessor. A camera that is ready but had none scored
-    is judged by the floor alone. Returns the scores, by camera.
+    is judged by the floor alone. Returns the events scored, with their scores.
     """
+    scored_pairs: list[tuple[Event, float]] = []
     scores: dict[str, list[float]] = {}
     for event, previous in preceded(events, scope=model.scope, hosts=model.hosts):
         if scored is None or scored(event):
-            scores.setdefault(event.camera, []).append(total(event, previous, model))
+            value = total(event, previous, model)
+            scored_pairs.append((event, value))
+            scores.setdefault(event.camera, []).append(value)
 
     model.thresholds = {
         camera: quantile(scores[camera], share) if camera in scores else -math.inf
@@ -568,29 +608,43 @@ def calibrate(
         if ready(profile)
     }
     model.floor = floor
-    return scores
+    return scored_pairs
+
+
+def incidents[T](pairs: Iterable[tuple[Event, T]]) -> list[list[tuple[Event, T]]]:
+    """Group events, oldest first, into incidents (ours).
+
+    The same kind on any camera, each starting within INCIDENT_SECONDS of the
+    incident's last end (or start, while it runs), is one incident: one animal
+    crossing three cameras is one, not three.
+    """
+    groups: list[list[tuple[Event, T]]] = []
+    current: dict[str, tuple[list[tuple[Event, T]], float]] = {}
+    for event, value in pairs:
+        end = event.started_at if event.ended_at is None else event.ended_at
+        found = current.get(event.kind)
+        if found is not None and event.started_at - found[1] <= INCIDENT_SECONDS:
+            found[0].append((event, value))
+            current[event.kind] = (found[0], max(found[1], end))
+        else:
+            group = [(event, value)]
+            groups.append(group)
+            current[event.kind] = (group, end)
+    return groups
 
 
 def daily_cap(
-    scores: dict[str, list[float]],
+    values: Iterable[tuple[float, float]],
     *,
-    weight: Mapping[str, float],
     days: float,
     per_day: float,
 ) -> float:
-    """Return the line above which the property has about `per_day` events a day (ours).
+    """Return the line above which the property has about `per_day` a day (ours).
 
-    ``scores`` are a sample, each standing for ``weight[camera]`` events, over
-    ``days``. Only the scores of cameras that mark count.
+    ``values`` are (score, how many it stands for) of the incidents of ``days``
+    (each scored as its highest event; a sample's stand for more than one).
     """
-    ranked = sorted(
-        (
-            (value, weight.get(camera, 1))
-            for camera, values in scores.items()
-            for value in values
-        ),
-        reverse=True,
-    )
+    ranked = sorted(values, reverse=True)
     budget = per_day * max(days, 1.0)
     above = 0.0
     for value, stands_for in ranked:

@@ -142,8 +142,9 @@ export class RvLearning extends LitElement {
         </dl>
       </details>
       <p class="muted small">
-        Unusual means rare for that camera, never dangerous. It learns again each night at 03:17, and from what it has
-        seen since in between.
+        Unusual means rare for that camera, never dangerous. Motion is learned from, never marked, and the same thing
+        seen on several cameras within a minute is one mark. It learns again each night at 03:17, and scores what it
+        has seen since against that.
       </p>`;
   }
 
