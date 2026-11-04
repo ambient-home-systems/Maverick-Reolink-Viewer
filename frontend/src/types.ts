@@ -528,6 +528,8 @@ export interface UnusualStatus {
   /** When it was last built (epoch ms); null before its first build. */
   built: number | null;
   built_in_s: number;
+  /** Of that, what its thread computed (the rest it waited, behind others). */
+  computed_s?: number;
   sensitivity: UnusualSensitivity;
   scope: UnusualScope;
   floor: number;

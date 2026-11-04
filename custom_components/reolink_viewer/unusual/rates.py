@@ -47,6 +47,7 @@ from .const import (
     SCORE_LAG_BUCKETS,
     SIGNAL_BAND_MIN,
     SIGNAL_BANDS,
+    UNMARKED_KINDS,
 )
 from .events import Event
 
@@ -83,12 +84,17 @@ def preceded(
     preceded a gate at another, which it plainly never was.
 
     Events must arrive oldest first, which `derive` guarantees.
+
+    Ours: only what can be marked (not motion) is ever what fired before: with
+    motion on six cameras most of the day, the camera whose motion came last was
+    close to random ("Vehicle on Doorbell, 9s after Dogs").
     """
     latest: dict[str, Event] = {}
     for event in events:
         group = group_key(event.camera, scope, hosts)
         yield event, latest.get(group)
-        latest[group] = event
+        if event.kind not in UNMARKED_KINDS:
+            latest[group] = event
 
 
 def _kernel(bandwidth: float) -> list[float]:

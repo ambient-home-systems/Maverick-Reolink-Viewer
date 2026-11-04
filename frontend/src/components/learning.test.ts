@@ -78,6 +78,7 @@ describe("rv-learning", () => {
         unusual: {
           built: DAY,
           built_in_s: 2.4,
+          computed_s: 1.9,
           sensitivity: "balanced",
           scope: "together",
           floor: 1.4,
@@ -121,6 +122,7 @@ describe("rv-learning", () => {
     expect(text()).toContain("Doorbell 3.912");
     expect(text()).toContain("All cameras together");
     expect(text()).toContain("Motion is learned from, never marked");
+    expect(text()).toContain("in 2.4 s, 1.9 s of it computing");
   });
 
   it("says it is learning before the model's first build", async () => {

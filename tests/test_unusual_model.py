@@ -409,12 +409,18 @@ async def test_motion_is_learned_from_but_never_marked(
         rows.extend(
             _pair(_NOW - (60 - day) * _DAY + 12 * 3600, "binary_sensor.drive_motion")
         )
+    # At 3 am, and lasting minutes where it usually lasts seconds.
     odd = _NOW - 2 * _DAY + 3 * 3600
-    rows.extend(_pair(odd, "binary_sensor.drive_motion"))
+    rows.extend(
+        [
+            ("binary_sensor.drive_motion", odd, 1),
+            ("binary_sensor.drive_motion", odd + 250, 0),
+        ]
+    )
     _write(path, rows)
     unusual = _unusual(hass, path, sensitivity="many")
     model = await unusual.async_rebuild()
-    scored = await unusual.async_window(since=odd - 1, until=odd + 60)
+    scored = await unusual.async_window(since=odd - 1, until=odd + 300)
     ((event, result),) = scored
 
     assert event.kind == "motion"

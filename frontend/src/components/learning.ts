@@ -3,7 +3,13 @@ import { LitElement, css, html, nothing, type TemplateResult } from "lit";
 import { fetchJournalStatus, toError } from "../api";
 import { formatStamp } from "../playback/time";
 import { sharedStyles } from "../styles";
-import type { HomeAssistant, JournalStatus, UnusualCamera, UnusualSensitivity, UnusualStatus } from "../types";
+import type {
+  HomeAssistant,
+  JournalStatus,
+  UnusualCamera,
+  UnusualSensitivity,
+  UnusualStatus,
+} from "../types";
 
 type LearningState = "loading" | JournalStatus | { error: string };
 
@@ -52,37 +58,55 @@ export class RvLearning extends LitElement {
 
   private _renderState(): TemplateResult | typeof nothing {
     const state = this._state;
-    if (state === "loading") return html`<p class="muted">Reading the journal…</p>`;
-    if ("error" in state) return html`<p class="muted">Could not read the journal: ${state.error}</p>`;
+    if (state === "loading")
+      return html`<p class="muted">Reading the journal…</p>`;
+    if ("error" in state)
+      return html`<p class="muted">
+        Could not read the journal: ${state.error}
+      </p>`;
     if (!state.enabled) {
       return html`<p class="muted">
-        Off. Turn on <strong>Learn what is normal</strong> in Reolink Viewer's options (Settings → Devices &amp;
-        services → Reolink Viewer → Configure), and Reolink Viewer keeps a journal of what each camera detects and when,
-        so it can learn what is normal for each and, later, mark what is unusual. The journal stays on this Home
-        Assistant.
+        Off. Turn on <strong>Learn what is normal</strong> in Reolink Viewer's
+        options (Settings → Devices &amp; services → Reolink Viewer →
+        Configure), and Reolink Viewer keeps a journal of what each camera
+        detects and when, so it can learn what is normal for each and, later,
+        mark what is unusual. The journal stays on this Home Assistant.
       </p>`;
     }
     const zone = this.hass?.config?.time_zone;
     const cameras = state.cameras;
     const unusual = state.unusual;
     return html`<p>
-        On since ${formatStamp(state.created, zone)}: ${count(state.detections, "detection")} from
-        ${count(cameras.length, "camera")} so far (${size(state.bytes)}).${state.imported
+        On since ${formatStamp(state.created, zone)}:
+        ${count(state.detections, "detection")} from
+        ${count(cameras.length, "camera")} so far
+        (${size(state.bytes)}).${state.imported
           ? ` It started with ${count(state.imported, "change")} from Home Assistant's history.`
           : ""}
       </p>
       ${cameras.length
         ? html`<ul>
             ${cameras.map(
-              (camera) => html`<li>
-                <span class="name">${camera.name}</span>:
-                <span class="muted">${count(camera.detections, "detection")}, since ${formatStamp(camera.first, zone)}</span
-                >${unusual?.built ? html`. ${cameraState(unusual.cameras[camera.id])}` : nothing}
-              </li>`,
+              (camera) =>
+                html`<li>
+                  <span class="name">${camera.name}</span>:
+                  <span class="muted"
+                    >${count(camera.detections, "detection")}, since
+                    ${formatStamp(camera.first, zone)}</span
+                  >${unusual?.built
+                    ? html`. ${cameraState(unusual.cameras[camera.id])}`
+                    : nothing}
+                </li>`,
             )}
           </ul>`
         : nothing}
-      ${unusual ? this._renderUnusual(unusual, zone, new Map(cameras.map((c) => [c.id, c.name]))) : nothing}`;
+      ${unusual
+        ? this._renderUnusual(
+            unusual,
+            zone,
+            new Map(cameras.map((c) => [c.id, c.name])),
+          )
+        : nothing}`;
   }
 
   private _renderUnusual(
@@ -92,26 +116,33 @@ export class RvLearning extends LitElement {
   ): TemplateResult {
     if (!unusual.built) {
       return html`<p class="muted small">
-        It is learning from the journal; what it makes of each camera shows here once it has (a minute or so after
-        Home Assistant starts).
+        It is learning from the journal; what it makes of each camera shows here
+        once it has (a minute or so after Home Assistant starts).
       </p>`;
     }
-    const marking = Object.values(unusual.cameras).some((camera) => camera.marking);
+    const marking = Object.values(unusual.cameras).some(
+      (camera) => camera.marking,
+    );
     const perDay = unusual.marks / unusual.days;
     return html`<h3>Unusual in the last ${unusual.days} days</h3>
       ${marking
         ? html`<p>
-            ${count(unusual.marks, "mark")}, about ${perDay < 10 ? perDay.toFixed(1) : Math.round(perDay)} a day, of
-            ${count(unusual.events, "event")}, at <strong>${SENSITIVITY[unusual.sensitivity]}</strong>.
+            ${count(unusual.marks, "mark")}, about
+            ${perDay < 10 ? perDay.toFixed(1) : Math.round(perDay)} a day, of
+            ${count(unusual.events, "event")}, at
+            <strong>${SENSITIVITY[unusual.sensitivity]}</strong>.
           </p>`
-        : html`<p class="muted">None yet: no camera has a week of history and 200 detections.</p>`}
+        : html`<p class="muted">
+            None yet: no camera has a week of history and 200 detections.
+          </p>`}
       ${unusual.latest.length
         ? html`<ol class="marks">
             ${unusual.latest.map(
-              (mark) => html`<li>
-                <span class="when">${formatStamp(mark.start, zone)}</span>
-                <span>${mark.reason}</span>
-              </li>`,
+              (mark) =>
+                html`<li>
+                  <span class="when">${formatStamp(mark.start, zone)}</span>
+                  <span>${mark.reason}</span>
+                </li>`,
             )}
           </ol>`
         : nothing}
@@ -119,10 +150,15 @@ export class RvLearning extends LitElement {
         <summary>The numbers behind it</summary>
         <dl>
           <dt>Without the daily cap</dt>
-          <dd>${count(unusual.uncapped, "mark")} (the cap keeps a busy property to about its sensitivity's number a day)</dd>
+          <dd>
+            ${count(unusual.uncapped, "mark")} (the cap keeps a busy property to
+            about its sensitivity's number a day)
+          </dd>
           <dt>The line a score must pass</dt>
           <dd>
-            ${unusual.cap === null ? `the floor, ${unusual.floor}` : `${unusual.cap} (the daily cap; the floor is ${unusual.floor})`}
+            ${unusual.cap === null
+              ? `the floor, ${unusual.floor}`
+              : `${unusual.cap} (the daily cap; the floor is ${unusual.floor})`}
           </dd>
           <dt>Marks by kind</dt>
           <dd>${tally(unusual.by_kind, (kind) => kind.replace(/_/g, " "))}</dd>
@@ -138,13 +174,19 @@ export class RvLearning extends LitElement {
           <dt>Compared with</dt>
           <dd>${SCOPE[unusual.scope]}</dd>
           <dt>Learned</dt>
-          <dd>${formatStamp(unusual.built, zone)}, in ${unusual.built_in_s} s</dd>
+          <dd>
+            ${formatStamp(unusual.built, zone)}, in ${unusual.built_in_s}
+            s${unusual.computed_s === undefined
+              ? ""
+              : `, ${unusual.computed_s} s of it computing`}
+          </dd>
         </dl>
       </details>
       <p class="muted small">
-        Unusual means rare for that camera, never dangerous. Motion is learned from, never marked, and the same thing
-        seen on several cameras within a minute is one mark. It learns again each night at 03:17, and scores what it
-        has seen since against that.
+        Unusual means rare for that camera, never dangerous. Motion is learned
+        from, never marked, and the same thing seen on several cameras within a
+        minute is one mark. It learns again each night at 03:17, and scores what
+        it has seen since against that.
       </p>`;
   }
 
@@ -208,7 +250,8 @@ export class RvLearning extends LitElement {
   ];
 }
 
-const count = (n: number, noun: string) => `${n.toLocaleString("en-US")} ${noun}${n === 1 ? "" : "s"}`;
+const count = (n: number, noun: string) =>
+  `${n.toLocaleString("en-US")} ${noun}${n === 1 ? "" : "s"}`;
 
 const SENSITIVITY: Record<UnusualSensitivity, string> = {
   few: "Only the strangest",
@@ -245,13 +288,20 @@ function cameraState(camera: UnusualCamera | undefined): string {
 }
 
 /** "person 3, animal 2", most first. */
-function tally(counts: Record<string, number>, label: (key: string) => string): string {
+function tally(
+  counts: Record<string, number>,
+  label: (key: string) => string,
+): string {
   const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
-  return entries.length ? entries.map(([key, n]) => `${label(key)} ${n}`).join(", ") : "none";
+  return entries.length
+    ? entries.map(([key, n]) => `${label(key)} ${n}`).join(", ")
+    : "none";
 }
 
 function size(bytes: number): string {
-  return bytes < 1_000_000 ? `${Math.max(1, Math.round(bytes / 1000))} KB` : `${(bytes / 1_000_000).toFixed(1)} MB`;
+  return bytes < 1_000_000
+    ? `${Math.max(1, Math.round(bytes / 1000))} KB`
+    : `${(bytes / 1_000_000).toFixed(1)} MB`;
 }
 
 if (!customElements.get("rv-learning")) {

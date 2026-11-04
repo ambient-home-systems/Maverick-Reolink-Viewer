@@ -3,6 +3,22 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.47.2
+
+Unusual events, tuned on the second week of marks: fewer that are not worth a look.
+
+- **Only lasting longer than usual stands out.** A detection briefer than usual (a
+  passing car, a false one: "Vehicle lasting about 1 s") is no longer marked for
+  being brief; someone lingering still is.
+- **A kind a camera has seen 10 times is known there:** the doorbell on the doorbell
+  camera, or a package, no longer stands out just for being one. It still does at a
+  strange hour or for a strange length, and a kind new to a camera still stands out.
+- **What fired first** now means another camera's detection, not its motion: with
+  motion on several cameras most of the day, which camera came last was close to
+  random ("9s after Dogs").
+- **"Learned … in N s"** now also says how much of that was computing, and how much
+  waiting behind Home Assistant.
+
 ## 0.47.1
 
 Unusual events, tuned on the first week of marks.
