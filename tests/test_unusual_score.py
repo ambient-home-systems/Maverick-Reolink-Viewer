@@ -661,8 +661,39 @@ def test_the_sentence_says_what_stood_out_and_how_often() -> None:
 
     assert "Person" in result.reason
     assert "Drive" in result.reason
-    assert "time in" in result.reason
+    assert "seen " in result.reason
+    assert " in " in result.reason
     assert result.reason.endswith(".")
+
+
+def test_the_count_is_a_total_the_same_for_every_mark_it_covers() -> None:
+    """Ours: the past is scored against today's model, which already holds it.
+
+    Two packages a day apart both said "8th time in 10 days"; the model's count is what it
+    has seen in all, this one included if it is in the model, and so it says.
+    """
+    model, _ = _model()
+    names = {_CAMERA: "Doorbell"}
+    terms = (Term(name="kind", label="Package", contribution=2.5, seen=8),)
+    marked = Score(total=2.5, threshold=0.0, unusual=True, terms=terms, reason="")
+
+    def said(started_at: float) -> str:
+        return reason(_event(started_at, 600, "package"), marked, model, names)
+
+    before = said(model.built_at - 2 * _DAY)
+    assert before == said(model.built_at - _DAY)
+    assert before.startswith("Package on Doorbell — seen 8 times in ")
+    # One after the build is not in it yet: it adds itself.
+    assert said(model.built_at + 3600).startswith(
+        "Package on Doorbell — seen 9 times in "
+    )
+    once = (Term(name="kind", label="Package", contribution=2.5, seen=0),)
+    assert " — seen once in " in reason(
+        _event(model.built_at + 60, 600, "package"),
+        replace(marked, terms=once),
+        model,
+        names,
+    )
 
 
 def test_an_ordinary_event_says_so_plainly() -> None:
@@ -1028,7 +1059,8 @@ def test_the_kind_term_is_skipped_where_a_camera_has_seen_only_one() -> None:
 
 
 def test_the_kind_reads_as_a_clause_in_both_positions() -> None:
-    """A phrase appended after "and" has to stand up alone; "at all" does not."""
+    """A phrase appended after "and" has to stand up alone. (Ours: and leading, the kind
+    needs no phrase: "Person on Balcone Nord — seen 9 times", not "Person at all on".)"""
     events = _mostly_motion()
     model = build(events, now=_NOW)
     calibrate(model, events, floor=0.0)
@@ -1038,7 +1070,7 @@ def test_the_kind_reads_as_a_clause_in_both_positions() -> None:
     leading = score(
         _on(_BALCONY, _NOW, 19 * 60, "person", 8.0), model, previous=None, names=names
     )
-    assert "Person at all on Balcone Nord" in leading.reason
+    assert "Person on Balcone Nord — seen " in leading.reason
 
     # Trailing: when something stranger leads, the kind falls to second place and has to
     # become a clause of its own. (Ours: from terms, since with 9 people, below KNOWN_AFTER,

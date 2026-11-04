@@ -529,6 +529,40 @@ export interface UnusualMarks {
   cameras: Record<string, UnusualCamera>;
 }
 
+/** One value of a learned distribution (unusual/profile), commonest first. */
+export interface LearnedValue {
+  value: string;
+  /** As read: "About 8 s", "Front Yard Left, within 30 s", "Fri". */
+  label: string;
+  /** How many times it was seen (unweighted). */
+  events: number;
+  /** Its recency-weighted share, 0–1. */
+  share: number;
+}
+
+/** What a camera has learned about one kind of thing it sees. */
+export interface LearnedKind {
+  kind: string;
+  events: number;
+  days: number;
+  /** Each hour of the day, 0–23. */
+  clock: { hour: number; events: number; weight: number }[];
+  duration: LearnedValue[];
+  predecessor: LearnedValue[];
+  /** Monday to Sunday. */
+  day_of_week: LearnedValue[];
+}
+
+/** What one camera has learned (unusual/profile, Phase 8.3). */
+export interface LearnedProfile {
+  enabled: boolean;
+  built?: boolean;
+  state?: UnusualCamera;
+  /** Seen this many times, a value is known there and no longer stands out. */
+  known_after?: number;
+  kinds?: LearnedKind[];
+}
+
 export interface UnusualCamera {
   marking: boolean;
   days: number;

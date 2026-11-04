@@ -1,6 +1,6 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
-import { X as i, j as a, kt as o, ot as s, p as c } from "./live-_jyOGRi0.js";
-import { r as l, z as u } from "./home-C-2P8fU_.js";
+import { At as i, X as a, j as o, ot as s, p as c } from "./live-13uUozrt.js";
+import { B as l, r as u } from "./home-C1sc5yMG.js";
 //#region src/components/learning.ts
 var d = class extends r {
 	static properties = {
@@ -19,7 +19,7 @@ var d = class extends r {
 		try {
 			this._state = await s(e);
 		} catch (e) {
-			this._state = { error: o(e).message };
+			this._state = { error: i(e).message };
 		}
 	}
 	render() {
@@ -116,7 +116,7 @@ var d = class extends r {
         it has seen since against that.
       </p>`;
 	}
-	static styles = [a, e`
+	static styles = [o, e`
       :host {
         display: block;
       }
@@ -235,12 +235,12 @@ var y = class extends r {
     `;
 	}
 	_renderHost(e, t) {
-		let r = l(e.kind);
+		let r = u(e.kind);
 		return n`<section class="card">
       <div class="head">
         <h2>
           <button class="link host" @click=${() => {
-			u(this, {
+			l(this, {
 				view: "device",
 				id: e.id,
 				tab: "overview"
@@ -260,7 +260,7 @@ var y = class extends r {
 	}
 	_renderCameras(e, t) {
 		let r = e.camera_ids.map((e) => t.get(e)).filter((e) => e !== void 0);
-		return r.length ? this._renderTable(r.map((t) => this._renderCamera(t, e))) : n`<p class="muted">No cameras on this ${l(e.kind)}.</p>`;
+		return r.length ? this._renderTable(r.map((t) => this._renderCamera(t, e))) : n`<p class="muted">No cameras on this ${u(e.kind)}.</p>`;
 	}
 	_renderTable(e) {
 		return n`<div class="cols" aria-hidden="true">
@@ -271,12 +271,12 @@ var y = class extends r {
       </ul>`;
 	}
 	_renderCamera(e, r) {
-		let a = r ? e.connections.find((e) => e.host_id === r.id)?.channel : void 0, o = r !== void 0 && e.connections.some((e) => e.via === "direct"), s = this.cameras.find((t) => t.id === e.id)?.number, c = [o ? "Also added directly" : void 0, e.primary_view === "snapshot" ? "Snapshots only" : void 0].filter((e) => e !== void 0);
+		let i = r ? e.connections.find((e) => e.host_id === r.id)?.channel : void 0, o = r !== void 0 && e.connections.some((e) => e.via === "direct"), s = this.cameras.find((t) => t.id === e.id)?.number, c = [o ? "Also added directly" : void 0, e.primary_view === "snapshot" ? "Snapshots only" : void 0].filter((e) => e !== void 0);
 		return n`<li>
       <button
         class="row"
         @click=${() => {
-			u(this, {
+			l(this, {
 				view: "device",
 				id: e.id,
 				tab: "overview"
@@ -285,14 +285,14 @@ var y = class extends r {
       >
         <span class="plat-cell">${s === void 0 ? t : n`<span class="plat" aria-hidden="true">${s}</span>`}</span>
         <span class="name">${e.name ?? "Camera"}</span>
-        <span class="ch muted">${a == null ? "Direct" : `Ch ${String(a + 1)}`}</span>
+        <span class="ch muted">${i == null ? "Direct" : `Ch ${String(i + 1)}`}</span>
         <span class="model muted">${e.model ?? ""}</span>
         <span class="state">${b(e)}${c.length ? n`<span class="flags muted">${c.join(" · ")}</span>` : t}</span>
-        ${i("chevron")}
+        ${a("chevron")}
       </button>
     </li>`;
 	}
-	static styles = [a, e`
+	static styles = [o, e`
       :host {
         display: flex;
         flex-direction: column;

@@ -8,8 +8,8 @@ Code ported into Reolink Viewer from other projects, with their licences.
 
 Phase 8 step 2's model of what is normal for each camera is ported from its
 `custom_components/reolink_stamina/relevance/` package and `const.py`, with
-its tests (`tests/test_relevance_score.py`, `test_relevance_events.py` and
-`test_relevance_analysis.py`):
+its tests (`tests/test_relevance_score.py`, `test_relevance_events.py`,
+`test_relevance_analysis.py` and, for step 3, `test_relevance_shapes.py`):
 
 | Ours | From Stamina |
 | --- | --- |
@@ -17,8 +17,9 @@ its tests (`tests/test_relevance_score.py`, `test_relevance_events.py` and
 | `custom_components/reolink_viewer/unusual/rates.py` | `relevance/rates.py` |
 | `custom_components/reolink_viewer/unusual/score.py` | `relevance/score.py`, and `relevance/shapes.py`'s `informative` and `duration_phrase` |
 | `custom_components/reolink_viewer/unusual/model.py` | `relevance/analysis.py` (adapted) |
+| `custom_components/reolink_viewer/unusual/shapes.py` | `relevance/shapes.py` |
 | `custom_components/reolink_viewer/unusual/const.py` | `const.py`'s relevance numbers |
-| `tests/test_unusual_events.py`, `test_unusual_score.py`, `test_unusual_model.py` | `tests/test_relevance_events.py`, `test_relevance_score.py`, `test_relevance_analysis.py` |
+| `tests/test_unusual_events.py`, `test_unusual_score.py`, `test_unusual_model.py`, `test_unusual_shapes.py` | `tests/test_relevance_events.py`, `test_relevance_score.py`, `test_relevance_analysis.py`, `test_relevance_shapes.py` |
 
 Each ported file says what was changed. The licence ships with the
 integration too, as `custom_components/reolink_viewer/unusual/LICENSE-reolink-stamina.txt`.

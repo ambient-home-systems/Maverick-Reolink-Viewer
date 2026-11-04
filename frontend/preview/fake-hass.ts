@@ -22,6 +22,8 @@ import type {
   StreamEncoding,
   RecentEvent,
   RecentEvents,
+  LearnedKind,
+  LearnedProfile,
   UnusualMarks,
   TimelineDay,
   TimelineEvent,
@@ -672,6 +674,84 @@ function recent(date?: string): RecentEvents {
   };
 }
 
+/** What a camera has learned (Phase 8.3): a day's rhythm per kind, shaped by hand. */
+function learned(camera: string): LearnedProfile {
+  // Each kind's hours as a bell or two around its busy times (hour, height).
+  const rhythm = (peaks: [number, number][], base: number): number[] =>
+    Array.from({ length: 24 }, (_, hour) =>
+      Math.round(base + peaks.reduce((sum, [at, height]) => sum + height * Math.exp(-((hour - at) ** 2) / 4), 0)),
+    );
+  const values = (rows: [string, string, number][]) => {
+    const total = rows.reduce((sum, [, , n]) => sum + n, 0);
+    return rows.map(([value, label, events]) => ({ value, label, events, share: events / total }));
+  };
+  const week = (weights: number[]) =>
+    values(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d, i) => [d, d, weights[i] ?? 0]));
+  const kind = (
+    name: string,
+    hours: number[],
+    duration: [string, string, number][],
+    predecessor: [string, string, number][],
+    days: number[],
+  ): LearnedKind => ({
+    kind: name,
+    events: hours.reduce((a, b) => a + b, 0),
+    days: 12,
+    clock: hours.map((events, hour) => ({ hour, events, weight: events * 0.95 })),
+    duration: values(duration),
+    predecessor: values(predecessor),
+    day_of_week: week(days),
+  });
+  const kinds =
+    camera === "cam-door"
+      ? [
+          kind(
+            "person",
+            rhythm([[8, 30], [12, 20], [18, 40]], 1),
+            [["~8s", "About 8 s", 210], ["~16s", "About 16 s", 160], ["~4s", "About 4 s", 90], ["~32s", "About 32 s", 40], ["~64s", "About 64 s", 9]],
+            [["none", "Nothing fired first", 300], ["cam-fyl|<30s", "Front Yard Left, within 30 s", 150], ["cam-fyr|<30s", "Front Yard Right, within 30 s", 50], ["cam-garage|<60s", "Garage Camera, within 1 min", 7]],
+            [70, 72, 69, 75, 80, 66, 60],
+          ),
+          kind(
+            "motion",
+            rhythm([[8, 40], [13, 30], [19, 45]], 6),
+            [["~4s", "About 4 s", 600], ["~8s", "About 8 s", 300], ["~2s", "About 2 s", 200]],
+            [["none", "Nothing fired first", 1100]],
+            [150, 160, 155, 158, 170, 140, 120],
+          ),
+          kind(
+            "package",
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 2, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0],
+            [["~8s", "About 8 s", 5], ["~16s", "About 16 s", 3]],
+            [["cam-door|<30s", "Doorbell, within 30 s", 6], ["none", "Nothing fired first", 2]],
+            [2, 1, 1, 2, 1, 1, 0],
+          ),
+        ]
+      : [
+          kind(
+            "vehicle",
+            rhythm([[7, 25], [17, 35]], 1),
+            [["~16s", "About 16 s", 200], ["~8s", "About 8 s", 150], ["~32s", "About 32 s", 60], ["~128s", "About 2 min", 6]],
+            [["none", "Nothing fired first", 250], ["cam-door|<30s", "Doorbell, within 30 s", 120], ["cam-fyr|<10s", "Front Yard Right, within 10 s", 46]],
+            [65, 66, 64, 68, 70, 40, 35],
+          ),
+          kind(
+            "animal",
+            rhythm([[1, 12], [5, 10], [22, 8]], 0),
+            [["~4s", "About 4 s", 60], ["~8s", "About 8 s", 30], ["~256s", "About 4 min", 2]],
+            [["none", "Nothing fired first", 80], ["cam-door|<60s", "Doorbell, within 1 min", 12]],
+            [14, 12, 13, 15, 12, 13, 13],
+          ),
+        ];
+  return {
+    enabled: true,
+    built: true,
+    state: { marking: true, days: 12, events: 2400, needs_days: 0, needs_events: 0, line: 0 },
+    known_after: 10,
+    kinds,
+  };
+}
+
 /** The day's marks (Phase 8.3): one on a camera's event, one seen only by the journal. */
 function marks(since: number): UnusualMarks {
   // Whole days back from the preview's day (the zone's midnight may differ a little).
@@ -724,7 +804,7 @@ function marks(since: number): UnusualMarks {
         "person",
         at(2, 14) - offset,
         40_000,
-        "Person after dark on Garage Camera — 2nd time in 3 weeks.",
+        "Person after dark on Garage Camera — seen twice in 3 weeks.",
         [
           {
             name: "kind",
@@ -775,7 +855,7 @@ function marks(since: number): UnusualMarks {
         "person",
         at(15, 47) - offset,
         78_000,
-        "Person lasting about 64 s on Back Yard — 3rd time in 3 weeks.",
+        "Person lasting about 64 s on Back Yard — seen 3 times in 3 weeks.",
         [
           {
             name: "kind",
@@ -1004,6 +1084,7 @@ export function fakeHass(options: {
     "reolink_viewer/live/card_log": () => ({ devices: CARD_LOG }),
     "reolink_viewer/journal/status": () => JOURNAL,
     "reolink_viewer/unusual/marks": (m) => marks(Number(m.since)),
+    "reolink_viewer/unusual/profile": (m) => learned(String(m.camera_id)),
     "reolink_viewer/live/status": () => ({
       go2rtc: { state: "running", version: "1.9.14", restarts: 0 },
       running: {},
@@ -1199,7 +1280,7 @@ const JOURNAL = {
         line: 3.912,
         unusual: true,
         reason:
-          "Person at 03:12 on Doorbell — 2nd time in 3 weeks, and nothing fired first.",
+          "Person at 03:12 on Doorbell — seen twice in 3 weeks, and nothing fired first.",
         terms: [],
       },
       {
@@ -1211,7 +1292,7 @@ const JOURNAL = {
         line: 3.912,
         unusual: true,
         reason:
-          "Animal at 02:25 on Front Yard Left, Doorbell and Garage Camera — 2nd time in 3 weeks.",
+          "Animal at 02:25 on Front Yard Left, Doorbell and Garage Camera — seen twice in 3 weeks.",
         terms: [],
         cameras: ["Front Yard Left", "Doorbell", "Garage Camera"],
       },

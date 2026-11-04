@@ -236,8 +236,9 @@ follows a household that changes.
   a detection briefer than usual (a passing car, a false one) is not.
 - **Whatever a camera has seen 10 times is known there:** a kind, a time of day, a
   length, a day of the week. It no longer makes an event stand out (the doorbell on
-  the doorbell camera, the car that arrives most evenings), so a mark always says
-  "2nd time", "7th time", never "14th".
+  the doorbell camera, the car that arrives most evenings), so a mark says "seen
+  twice", "seen 7 times", never many more: how many times the camera has seen that,
+  this time included.
 - **What fired just before** means another camera's detection (a person, vehicle,
   animal...), not its motion; and only **nothing firing first**, where something
   usually does, makes an event stand out.
@@ -247,12 +248,17 @@ follows a household that changes.
   with a bar for how much. The row itself still opens the recording.
 - **Events → Marked: Unusual** shows only the marked events of the day. It reads
   **Learning…** until a camera has learned enough to mark.
+- **What it has learned**, on each camera's Overview: per kind of thing it sees, when
+  (each hour of the day), on which days, for how long and what fired first. A value it
+  has seen fewer times than it takes to know it says **Can stand out**. It is the way
+  to spot a camera that learned something wrong: a spider on the lens every night is
+  normal to it after ten nights or so.
 - **A marked event the camera does not list** (a camera whose recordings cannot be
   searched, or an event its list has not caught up with) still gets a row, "seen by
   Home Assistant's sensors".
 - **Unusual in the last 7 days**, on the Devices page: how many were marked, about how
   many a day, and the latest, each with a sentence saying why: "Person at 03:12 on
-  Doorbell — 2nd time in 3 weeks, and nothing fired first." **The numbers behind it**
+  Doorbell — seen twice in 3 weeks, and nothing fired first." **The numbers behind it**
   show how the line was drawn, and what stood out most in the marks.
 - **How much to mark unusual** (in the options): **Only the strangest** (under one a
   day), **Balanced** (the default: a few a day at most, fewer on a quiet property) or
