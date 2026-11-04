@@ -3,6 +3,18 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.47.4
+
+Unusual events, tuned on the third week of marks: what happens most days is not unusual.
+
+- **Whatever a camera has seen 10 times is known there:** a time of day, a length, a
+  day of the week, as kinds already were. "Vehicle lasting about 16 s — 14th time in 8
+  days" is no longer marked; a mark's sentence now says "2nd time", "7th time", never
+  "14th". Expect fewer marks; **More** in the options marks more.
+- **What fired first only counts when nothing did:** someone appearing without what
+  usually comes first still stands out, but "21s after Dogs" no longer does (on a busy
+  property, which camera fired last is mostly chance).
+
 ## 0.47.3
 
 - **A mark never says "usual" any more.** One person crossing several cameras counted

@@ -979,7 +979,7 @@ def _mostly_motion(days: int = 180) -> list[Event]:
     The shape the kind term exists for. Every other term is measured against a profile the
     kind was used to select, so none of them can say that a person here is rare at all.
     (Ours: every twentieth day, not tenth, so the person is seen 9 times: a kind seen
-    KIND_KNOWN times is known on that camera and no longer raises a score.)
+    KNOWN_AFTER times is known on that camera and no longer raises a score.)
     """
     events: list[Event] = []
     for day in range(days):
@@ -1041,7 +1041,7 @@ def test_the_kind_reads_as_a_clause_in_both_positions() -> None:
     assert "Person at all on Balcone Nord" in leading.reason
 
     # Trailing: when something stranger leads, the kind falls to second place and has to
-    # become a clause of its own. (Ours: from terms, since with 9 people, below KIND_KNOWN,
+    # become a clause of its own. (Ours: from terms, since with 9 people, below KNOWN_AFTER,
     # the kind and three in the morning now tie on this fixture.)
     event = _on(_BALCONY, _NOW, 3 * 60, "person", 8.0)
     terms = (
@@ -1189,7 +1189,7 @@ def test_motion_is_never_marked() -> None:
 
 
 def test_a_kind_seen_often_on_a_camera_no_longer_stands_out_for_it() -> None:
-    """Ours: once a camera has seen a kind KIND_KNOWN times, the kind alone adds nothing."""
+    """Ours: once a camera has seen a kind KNOWN_AFTER times, the kind alone adds nothing."""
     events: list[Event] = []
     for day in range(180):
         base = _NOW - (180 - day) * _DAY
@@ -1262,3 +1262,51 @@ def test_a_mark_is_never_said_to_be_usual() -> None:
 
     assert "usual" not in sentence
     assert "lasting about 8 s" in sentence
+
+
+def _with_long_visits(count: int) -> Model:
+    events = _history()
+    for day in range(count):
+        events.append(
+            _event(
+                _NOW - (day + 1) * _DAY + 18 * 3600 + 900,
+                18 * 60 + 15,
+                "person",
+                duration=600.0,
+            )
+        )
+    return build(sorted(events, key=lambda e: e.started_at), now=_NOW)
+
+
+def test_anything_seen_ten_times_is_known() -> None:
+    """Ours: a long visit seen 12 times is no longer unusual for its length; 5 times still is."""
+    visit = _event(_NOW, 18 * 60 + 15, "person", duration=600.0)
+
+    rare = _term(score(visit, _with_long_visits(5), previous=None), "duration")
+    known = _term(score(visit, _with_long_visits(12), previous=None), "duration")
+
+    assert rare > 0.0
+    assert known <= 0.0
+
+
+def _approached(days: int = 120) -> list[Event]:
+    """A hall camera whose people always come 5 s after the gate's."""
+    events: list[Event] = []
+    for day in range(days):
+        base = _NOW - (days - day) * _DAY + 18 * 3600
+        events.append(replace(_event(base, 18 * 60, "vehicle"), camera="entry1:0"))
+        events.append(replace(_event(base + 13, 18 * 60, "person"), camera="entry1:1"))
+    return events
+
+
+def test_only_nothing_fired_first_raises_a_score() -> None:
+    """Ours: appearing without the usual approach stands out; a rare "after" cannot."""
+    model = build(_approached(), now=_NOW)
+    hall = replace(_event(_NOW, 18 * 60, "person"), camera="entry1:1")
+    odd_camera = replace(_event(_NOW - 20, 18 * 60, "animal"), camera="entry1:7")
+
+    alone = _term(score(hall, model, previous=None), "predecessor")
+    after_odd = _term(score(hall, model, previous=odd_camera), "predecessor")
+
+    assert alone > 0.0
+    assert after_odd <= 0.0

@@ -377,9 +377,10 @@ async def test_a_busy_property_is_kept_to_its_daily_marks(
 ) -> None:
     """Many odd events a day: about the sensitivity's number are marked, no more."""
     rows = _busy(days=60, hours=(7, 8, 9, 12, 17, 18, 19, 20))
-    # A person in the small hours, every night of the last 10.
-    for day in range(10):
-        rows.extend(_pair(_NOW - (10 - day) * _DAY + 3 * 3600 + day * 60))
+    # A person in the small hours, every night of the last 7 (fewer than 10: seen
+    # 10 times, it would be known there, and nothing to mark).
+    for day in range(7):
+        rows.extend(_pair(_NOW - (7 - day) * _DAY + 3 * 3600 + day * 60))
     _write(path, rows)
     # (A history this regular compresses its scores, as Stamina's tests note: the
     # floor is lowered so the cap is what decides here.)
@@ -395,7 +396,7 @@ async def test_a_busy_property_is_kept_to_its_daily_marks(
     assert status["sensitivity"] == "many"
     assert status["cap"] is not None
     # About 0.1 a day (3 in the four weeks), where the floor alone marks every night.
-    assert status["uncapped"] >= 5
+    assert status["uncapped"] >= 4
     assert 0 < status["marks"] < status["uncapped"]
     assert status["by_kind"] == {"person": status["marks"]}
     assert status["latest"][0]["reason"].startswith("Person at ")

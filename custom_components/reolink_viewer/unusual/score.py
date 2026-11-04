@@ -29,14 +29,14 @@ generate, the model has become too clever for its own good.
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import partial
 import math
 from typing import Any
 
 from .const import (
     INCIDENT_SECONDS,
-    KIND_KNOWN,
+    KNOWN_AFTER,
     RATE_BINS,
     SCORE_FLOOR,
     SCORE_MIN_DAYS,
@@ -297,11 +297,6 @@ def _terms(
             ),
             many,
         )
-        # Ours: a kind the camera has seen KIND_KNOWN times is known here, and no
-        # longer raises a score for being that kind ("Doorbell at all on Doorbell
-        # — 12th time in 7 days"); it can still lower one.
-        if seen_here >= KIND_KNOWN:
-            surprise = min(surprise, 0.0)
         terms.append(
             Term(
                 name="kind",
@@ -392,16 +387,20 @@ def _terms(
     categories = max(
         len(specific.predecessor.weights), len(overall.predecessor.weights), 2
     )
+    came_after = _surprisal(
+        blend(lambda p: p.predecessor.probability(label, categories=categories)),
+        categories,
+    )
+    # Ours: only "nothing fired first" (appearing without the usual approach) can
+    # raise a score; on a busy property which camera came last is mostly chance
+    # ("Vehicle 21s after Dogs"), so a rare "after" can only lower one.
+    if label != "none":
+        came_after = min(came_after, 0.0)
     terms.append(
         Term(
             name="predecessor",
             label=phrase,
-            contribution=_surprisal(
-                blend(
-                    lambda p: p.predecessor.probability(label, categories=categories)
-                ),
-                categories,
-            ),
+            contribution=came_after,
             seen=specific.predecessor.count(label),
         )
     )
@@ -433,8 +432,9 @@ def _terms(
             contribution=-math.log(
                 max(interpolate(exact, coarse, specific.day_of_week.total / 7.0), 1e-9)
             ),
-            seen=specific.day_of_week.count(event.day_of_week)
-            or specific.weekend.count(group),
+            # Ours: the day itself, as the sentence names it ("on a Sunday"), not
+            # weekend days at large: what is known is counted by its own name.
+            seen=specific.day_of_week.count(event.day_of_week),
         )
     )
 
@@ -471,7 +471,15 @@ def _terms(
             )
         )
 
-    return terms
+    # Ours: whatever a camera has seen KNOWN_AFTER times for this kind is known
+    # there, and can only lower a score: rare as a share of a busy camera's events
+    # is not rare ("Vehicle lasting about 16 s — 14th time in 8 days").
+    return [
+        replace(term, contribution=min(term.contribution, 0.0))
+        if term.seen >= KNOWN_AFTER
+        else term
+        for term in terms
+    ]
 
 
 def total(event: Event, previous: Event | None, model: Model) -> float:
