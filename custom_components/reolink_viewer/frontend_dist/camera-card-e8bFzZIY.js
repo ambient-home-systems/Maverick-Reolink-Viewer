@@ -1,5 +1,5 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
-import { A as i, F as a, I as o, L as s, M as c, O as l, P as u, T as d, k as f, t as p } from "./live-DWqtt9-p.js";
+import { A as i, E as a, F as o, I as s, L as c, N as l, R as u, j as d, k as f, t as p } from "./live-_jyOGRi0.js";
 import { s as m } from "./config-D80frQMF.js";
 //#region src/card/tablet.ts
 var h = 6e4, g = 3e5, _ = 300, v = {
@@ -30,7 +30,7 @@ var h = 6e4, g = 3e5, _ = 300, v = {
 		return this._win.fully;
 	}
 	get device() {
-		let e = c(this._win.navigator.userAgent);
+		let e = l(this._win.navigator.userAgent);
 		return this.fully ? `${e.split(" · ")[0] ?? "Android"} · Fully Kiosk` : e;
 	}
 	start(e) {
@@ -150,7 +150,7 @@ var E = class extends r {
 		config: { attribute: !1 },
 		_hd: { state: !0 }
 	};
-	_data = new u(this);
+	_data = new o(this);
 	_choosing;
 	_unwatch;
 	_doing = "loading";
@@ -159,7 +159,7 @@ var E = class extends r {
 	_ringTimer;
 	_ringFull = !1;
 	get _name() {
-		return (this._data.cameras && this.config?.camera ? a(this._data.cameras, this.config.camera) : void 0)?.name ?? this.config?.camera ?? "Card";
+		return (this._data.cameras && this.config?.camera ? s(this._data.cameras, this.config.camera) : void 0)?.name ?? this.config?.camera ?? "Card";
 	}
 	connectedCallback() {
 		super.connectedCallback(), p(import.meta.url), x.add(this), y.start(() => this.hass), this._unwatch = y.watch({
@@ -175,7 +175,7 @@ var E = class extends r {
 		return this.renderRoot.querySelector("rv-live-tile");
 	}
 	updated() {
-		let e = this._data.cameras && this.config?.camera ? a(this._data.cameras, this.config.camera) : void 0;
+		let e = this._data.cameras && this.config?.camera ? s(this._data.cameras, this.config.camera) : void 0;
 		e && this._ring(e);
 	}
 	_ring(e) {
@@ -205,7 +205,7 @@ var E = class extends r {
 				break;
 			}
 			case "waiting":
-				this._doing = "retrying", y.note("retrying", e, `${n}: ${l(r.error).text}`);
+				this._doing = "retrying", y.note("retrying", e, `${n}: ${f(r.error).text}`);
 				break;
 			default: (n === "SD" || this.config?.quality === "hd") && (this._doing = "stopped"), y.note("stopped", e, n);
 		}
@@ -223,7 +223,7 @@ var E = class extends r {
 		if (this.config?.quality !== "hd") return "sub";
 		let t = e.connection_id;
 		if (this._hd?.connectionId === t) return this._hd.stream ?? "sub";
-		this._choosing !== t && (this._choosing = t, d(e).then((e) => {
+		this._choosing !== t && (this._choosing = t, a(e).then((e) => {
 			this._choosing === t && (this._hd = {
 				connectionId: t,
 				stream: e.stream
@@ -244,13 +244,13 @@ var E = class extends r {
           </button>
         </div>`);
 		if (!t.cameras) return this._card(n`<p class="note on-board">Loading…</p>`, !0);
-		let r = a(t.cameras, e.camera);
+		let r = s(t.cameras, e.camera);
 		if (!r) return this._card(n`<p class="note">This camera cannot be watched live. Choose another in this card's settings.</p>`);
-		let i = s(r), o = i ? this._stream(i) : "sub", c = T(i, o ?? "sub");
-		return c && m(r.id, c), this._card(o === void 0 ? n`<p class="note on-board">Loading…</p>` : this._tile(r, i, o), !0, c);
+		let i = u(r), a = i ? this._stream(i) : "sub", o = T(i, a ?? "sub");
+		return o && m(r.id, o), this._card(a === void 0 ? n`<p class="note on-board">Loading…</p>` : this._tile(r, i, a), !0, o);
 	}
 	_tile(e, t, r) {
-		let i = this.config, a = i?.tap_action ?? "full_screen", s = e.name;
+		let i = this.config, a = i?.tap_action ?? "full_screen", o = e.name;
 		return n`<rv-live-tile
       fill
       compact
@@ -261,12 +261,12 @@ var E = class extends r {
       .stream=${r}
       .image=${this._data.images[e.id]}
       .iceServers=${this._data.iceServers}
-      .warm=${r === "sub" ? o(this.hass, e) : void 0}
+      .warm=${r === "sub" ? c(this.hass, e) : void 0}
       .controls=${e.controls}
       .suspended=${y.asleep || S !== void 0 && S !== this}
       .hideName=${i?.show_name === !1}
       .hideState=${i?.show_state === !1}
-      .tapLabel=${a === "open_panel" ? `Open ${s} in Reolink` : `${s} full screen`}
+      .tapLabel=${a === "open_panel" ? `Open ${o} in Reolink` : `${o} full screen`}
       ?openable=${a !== "none"}
       @rv-live-open=${(t) => {
 			t.stopPropagation(), a === "open_panel" ? w(e.id) : t.target.enterFull();
@@ -275,7 +275,7 @@ var E = class extends r {
 			e.stopPropagation(), e.detail.full ? C(this) : (this._ringFull = !1, S === this && C(void 0));
 		}}
       @rv-live-player=${(e) => {
-			this._logPlayer(s, e.detail);
+			this._logPlayer(o, e.detail);
 		}}
     ></rv-live-tile>`;
 	}
@@ -285,8 +285,8 @@ var E = class extends r {
     </ha-card>`;
 	}
 	static styles = [
-		f,
 		i,
+		d,
 		e`
       /* Around the video, Home Assistant's theme (the panel's own is inside it). */
       :host {

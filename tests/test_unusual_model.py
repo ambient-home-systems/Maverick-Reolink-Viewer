@@ -691,3 +691,64 @@ async def test_a_restart_takes_the_saved_model(
     again = learning.runtime_data.unusual
     assert again is not None
     assert again.model.built_at == built_at
+
+
+# ------------------------------------------------- the panel's marks (Phase 8.3)
+
+
+async def test_the_panel_gets_each_incident_with_every_camera_s_event(
+    hass: HomeAssistant, path: Path
+) -> None:
+    """One person in the night on the drive and the gate: one mark, both events."""
+    rows = _busy(days=60, hours=(7, 8, 9, 12, 17, 18, 19, 20))
+    for day in range(60):
+        rows.extend(
+            _pair(_NOW - (60 - day) * _DAY + 7 * 3600, "binary_sensor.gate_person")
+        )
+    night = _NOW - 1 * _DAY + 2 * 3600
+    rows.extend(_pair(night))
+    rows.extend(_pair(night + 20, "binary_sensor.gate_person"))
+    _write(path, rows)
+    unusual = _unusual(hass, path, sensitivity="many")
+    await unusual.async_rebuild()
+
+    marks = await unusual.async_marks(since=night - 60, until=night + 3600)
+
+    (mark,) = marks
+    assert sorted(mark["camera_ids"]) == [_CAMERA, "cam-gate"]
+    assert {(m["camera"], m["start"]) for m in mark["members"]} == {
+        (_CAMERA, int(night * 1000)),
+        ("cam-gate", int((night + 20) * 1000)),
+    }
+    assert mark["reason"].startswith("Person ")
+    # A window in the past is kept until the next build.
+    assert await unusual.async_marks(since=night - 60, until=night + 3600) is marks
+
+
+async def test_the_panel_s_marks_say_when_learning_is_off(
+    hass: HomeAssistant,
+    learning: MockConfigEntry,
+    hass_ws_client: WebSocketGenerator,
+) -> None:
+    """On: the marks and each camera's state; off: nothing marked, and no error."""
+    now = int(time.time() * 1000)
+    client = await hass_ws_client(hass)
+    await client.send_json_auto_id(
+        {"type": "reolink_viewer/unusual/marks", "since": now - 3_600_000, "until": now}
+    )
+    result = (await client.receive_json())["result"]
+    assert result["enabled"] is True
+    assert result["built"] is True
+    assert result["marks"] == []
+    assert all(state["marking"] is False for state in result["cameras"].values())
+
+    hass.config_entries.async_update_entry(learning, options={CONF_LEARN_NORMAL: False})
+    await hass.async_block_till_done(wait_background_tasks=True)
+    await client.send_json_auto_id(
+        {"type": "reolink_viewer/unusual/marks", "since": now - 3_600_000, "until": now}
+    )
+    assert (await client.receive_json())["result"] == {
+        "enabled": False,
+        "marks": [],
+        "cameras": {},
+    }

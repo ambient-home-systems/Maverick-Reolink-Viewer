@@ -29,6 +29,7 @@ import type {
   ProbeOptions,
   ProbeReport,
   RecentEvents,
+  UnusualMarks,
 } from "./types";
 
 export const fetchDevices = (hass: HomeAssistant): Promise<DevicesResponse> =>
@@ -303,6 +304,10 @@ export const fetchLiveStatus = (hass: HomeAssistant): Promise<LiveStatus> =>
 /** The detection journal: whether it records, and what it holds (Phase 8). */
 export const fetchJournalStatus = (hass: HomeAssistant): Promise<JournalStatus> =>
   hass.callWS<JournalStatus>({ type: "reolink_viewer/journal/status" });
+
+/** The incidents marked unusual in [since, until) (epoch ms), for the panel (Phase 8.3). */
+export const fetchUnusualMarks = (hass: HomeAssistant, since: number, until: number): Promise<UnusualMarks> =>
+  hass.callWS<UnusualMarks>({ type: "reolink_viewer/unusual/marks", since, until });
 
 /** What the dashboard cards saw, per device (the one heard from last first). */
 export const fetchCardLog = (hass: HomeAssistant): Promise<{ devices: CardLogDevice[] }> =>

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 
 import { makeHass, okDevices, type FakeHass } from "../test-fixtures";
-import type { RecentEvent, RecentEvents } from "../types";
+import type { RecentEvent, RecentEvents, UnusualEvent, UnusualMarks } from "../types";
 import type { BoardCamera } from "./live-grid";
 import type { Route } from "./navigation";
 import { FIRST_ROWS, eventLabel, formatLength, pictogram } from "./timetable";
@@ -25,13 +25,16 @@ function feed(events: RecentEvent[], failed: RecentEvents["failed"] = []): Recen
   return { events, cameras: 2, failed, since: at(19, 0), now: at(21, 24) };
 }
 
-function timetableHass(answer: RecentEvents | Error): FakeHass {
+function timetableHass(answer: RecentEvents | Error, marks?: UnusualMarks | Error): FakeHass {
   const hass = makeHass(okDevices());
   hass.config = { time_zone: "America/Chicago" };
   hass.callWS = <T,>(message: Record<string, unknown>) => {
     hass.sent.push(message);
     if (message.type === "reolink_viewer/events/recent") {
       return answer instanceof Error ? Promise.reject(answer) : Promise.resolve(answer as T);
+    }
+    if (message.type === "reolink_viewer/unusual/marks" && marks) {
+      return marks instanceof Error ? Promise.reject(marks) : Promise.resolve(marks as T);
     }
     if (message.type === "reolink_viewer/thumbnail/urls") {
       const times = message.times as number[];
@@ -180,6 +183,102 @@ describe("rv-timetable on another day", () => {
     await el.updateComplete;
     await flush();
     expect(sentOf(hass, "reolink_viewer/events/recent").at(-1)).toMatchObject({ date: "2026-10-24" });
+  });
+});
+
+function unusual(kind: string, members: { camera: string; start: number; end: number | null }[], reason: string): UnusualEvent {
+  const first = members[0] ?? { camera: "door", start: 0, end: null };
+  return {
+    camera: first.camera,
+    kind,
+    start: first.start,
+    end: first.end,
+    score: 7.4,
+    line: 4.2,
+    unusual: true,
+    reason,
+    terms: [
+      { name: "clock", label: "02:00", subject: "", contribution: 3.1, seen: 1 },
+      { name: "kind", label: kind, subject: "", contribution: -0.6, seen: 240 },
+    ],
+    members,
+  };
+}
+
+const MARKING = { marking: true, days: 40, events: 900, needs_days: 0, needs_events: 0, line: 4.2 };
+
+describe("rv-timetable's unusual marks", () => {
+  const person = event(20, 58, "door", ["MOTION", "PERSON"]);
+  const quiet = event(19, 40, "yard", ["MOTION", "VEHICLE"]);
+  const marks: UnusualMarks = {
+    enabled: true,
+    built: true,
+    cameras: { door: MARKING, yard: MARKING },
+    marks: [
+      unusual("vehicle", [{ camera: "yard", start: at(2, 14), end: at(2, 15) }], "Vehicle at 02:14, at an hour it has not been seen"),
+      unusual("person", [{ camera: "door", start: at(20, 58) + 5_000, end: at(20, 59) }], "Person at the Doorbell at an odd hour"),
+    ],
+  };
+
+  it("asks for the day's marks, and badges the rows they match, with why", async () => {
+    const hass = timetableHass(feed([person, quiet]), marks);
+    const fired: UnusualMarks[] = [];
+    const hear = (e: Event) => fired.push((e as CustomEvent<{ marks: UnusualMarks }>).detail.marks);
+    document.addEventListener("rv-timetable-marks", hear, true);
+    const { el, rows, text } = await mount(hass);
+    await flush();
+    await el.updateComplete;
+    // Today, midnight to midnight in the home's zone.
+    expect(sentOf(hass, "reolink_viewer/unusual/marks").at(0)).toEqual({
+      type: "reolink_viewer/unusual/marks",
+      since: T0,
+      until: T0 + 86_400_000,
+    });
+    // The journal's vehicle at 02:14 no row matched: a row of its own, oldest last.
+    expect(rows().map((r) => r.querySelector(".t")?.textContent)).toEqual(["20:58", "19:40", "02:14"]);
+    expect(text()).toContain("3 events on 2 cameras");
+    const badges = rows().map((r) => r.querySelector(".badge.unusual")?.textContent ?? "");
+    expect(badges).toEqual(["Unusual", "", "Unusual"]);
+    const why = [...(el.shadowRoot?.querySelectorAll("details.why") ?? [])];
+    expect(why).toHaveLength(2);
+    const first = why[0];
+    expect(first.querySelector("summary")?.textContent).toContain("Why it is unusual");
+    const reason = first.querySelector("rv-unusual-reason");
+    await reason?.updateComplete;
+    expect(reason?.shadowRoot?.textContent).toContain("Person at the Doorbell at an odd hour");
+    // Only the journal's own row says the camera does not list it.
+    const said = (d: Element | undefined) => d?.textContent.replace(/\s+/g, " ") ?? "";
+    expect(said(first)).not.toContain("own events do not list it");
+    expect(said(why[1])).toContain("Seen by Home Assistant's sensors; the camera's own events do not list it.");
+    // The Events page hears of them, for its filter.
+    expect(fired.at(-1)).toEqual(marks);
+    document.removeEventListener("rv-timetable-marks", hear, true);
+  });
+
+  it("shows only the marked rows when asked, and says when none are", async () => {
+    const hass = timetableHass(feed([person, quiet]), marks);
+    const { el, rows } = await mount(hass);
+    await flush();
+    el.unusualOnly = true;
+    await el.updateComplete;
+    expect(rows().map((r) => r.querySelector(".t")?.textContent)).toEqual(["20:58", "02:14"]);
+    document.body.innerHTML = "";
+    const none = await mount(timetableHass(feed([person, quiet]), { ...marks, marks: [] }));
+    await flush();
+    none.el.unusualOnly = true;
+    await none.el.updateComplete;
+    expect(none.rows()).toHaveLength(0);
+    expect(none.text()).toContain("None match");
+    expect(none.text()).toContain("Nothing unusual today.");
+  });
+
+  it("shows the rows unmarked when the marks cannot be read", async () => {
+    const hass = timetableHass(feed([person, quiet]), new Error("Unknown command"));
+    const { rows, el } = await mount(hass);
+    await flush();
+    await el.updateComplete;
+    expect(rows()).toHaveLength(2);
+    expect(el.shadowRoot?.querySelector(".badge.unusual")).toBeNull();
   });
 });
 

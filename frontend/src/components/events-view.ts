@@ -1,4 +1,11 @@
-import { LitElement, css, html, nothing, type PropertyValues, type TemplateResult } from "lit";
+import {
+  LitElement,
+  css,
+  html,
+  nothing,
+  type PropertyValues,
+  type TemplateResult,
+} from "lit";
 
 import { fetchEventDays } from "../api";
 import { icon } from "../icons";
@@ -6,7 +13,7 @@ import "../playback/calendar";
 import { dateIn, firstDayOfWeek } from "../playback/time";
 import { shownTypes, sortTypes, typeLabel } from "../playback/timeline-math";
 import { sharedStyles } from "../styles";
-import type { HomeAssistant, RecentEvents } from "../types";
+import type { HomeAssistant, RecentEvents, UnusualMarks } from "../types";
 import type { BoardCamera } from "./live-grid";
 import { navigate } from "./navigation";
 import { pictogram } from "./timetable";
@@ -29,6 +36,8 @@ export class RvEvents extends LitElement {
     _daysLoading: { state: true },
     _cameraFilter: { state: true },
     _typeFilter: { state: true },
+    _unusualOnly: { state: true },
+    _marks: { state: true },
   };
 
   declare hass: HomeAssistant | undefined;
@@ -45,6 +54,10 @@ export class RvEvents extends LitElement {
   declare _daysLoading: boolean;
   declare _cameraFilter: ReadonlySet<string>;
   declare _typeFilter: ReadonlySet<string>;
+  /** Only the rows marked unusual (Phase 8.3). */
+  declare _unusualOnly: boolean;
+  /** The day's marks, as the timetable read them. */
+  declare _marks: UnusualMarks | undefined;
 
   private _monthSeq = 0;
 
@@ -56,6 +69,7 @@ export class RvEvents extends LitElement {
     this._daysLoading = false;
     this._cameraFilter = new Set();
     this._typeFilter = new Set();
+    this._unusualOnly = false;
   }
 
   private get _zone(): string | undefined {
@@ -75,7 +89,11 @@ export class RvEvents extends LitElement {
     if (changed.has("date")) this._feed = undefined;
     if ((changed.has("date") || changed.has("hass")) && this.hass) {
       const [year, month] = this._day.split("-").map(Number);
-      if (year && month && (this._month?.year !== year || this._month.month !== month)) {
+      if (
+        year &&
+        month &&
+        (this._month?.year !== year || this._month.month !== month)
+      ) {
         void this._loadMonth(year, month);
       }
     }
@@ -100,13 +118,18 @@ export class RvEvents extends LitElement {
   /** Show a day (today has no date in the URL). */
   private _go(date: string): void {
     this._calendar = false;
-    navigate(this, date >= this._today ? { view: "events" } : { view: "events", date });
+    navigate(
+      this,
+      date >= this._today ? { view: "events" } : { view: "events", date },
+    );
   }
 
   private _shift(delta: number): void {
     const [y, m, d] = this._day.split("-").map(Number);
     if (!y || !m || !d) return;
-    this._go(new Date(Date.UTC(y, m - 1, d + delta)).toISOString().slice(0, 10));
+    this._go(
+      new Date(Date.UTC(y, m - 1, d + delta)).toISOString().slice(0, 10),
+    );
   }
 
   private _toggle<T>(set: ReadonlySet<T>, value: T): ReadonlySet<T> {
@@ -122,9 +145,15 @@ export class RvEvents extends LitElement {
     return html`<div class="head">
         <h1>Events</h1>
         <div class="day-nav" role="group" aria-label="Day">
-          <button class="step" aria-label="The day before" @click=${() => {
-            this._shift(-1);
-          }}>${icon("chevronBack")}</button>
+          <button
+            class="step"
+            aria-label="The day before"
+            @click=${() => {
+              this._shift(-1);
+            }}
+          >
+            ${icon("chevronBack")}
+          </button>
           <button
             class="pick"
             aria-expanded=${this._calendar ? "true" : "false"}
@@ -135,14 +164,26 @@ export class RvEvents extends LitElement {
           >
             ${today ? "Today" : shortDay(day)}${icon("chevronDown")}
           </button>
-          <button class="step" aria-label="The day after" ?disabled=${today} @click=${() => {
-            this._shift(1);
-          }}>${icon("chevron")}</button>
+          <button
+            class="step"
+            aria-label="The day after"
+            ?disabled=${today}
+            @click=${() => {
+              this._shift(1);
+            }}
+          >
+            ${icon("chevron")}
+          </button>
           ${today
             ? nothing
-            : html`<button class="text" @click=${() => {
-                this._go(this._today);
-              }}>Today</button>`}
+            : html`<button
+                class="text"
+                @click=${() => {
+                  this._go(this._today);
+                }}
+              >
+                Today
+              </button>`}
         </div>
       </div>
       ${this._calendar && this._month ? this._renderCalendar(day) : nothing}
@@ -155,8 +196,12 @@ export class RvEvents extends LitElement {
         .limit=${Number.POSITIVE_INFINITY}
         .cameraFilter=${this._cameraFilter}
         .typeFilter=${this._typeFilter}
+        .unusualOnly=${this._unusualOnly}
         @rv-timetable-feed=${(e: CustomEvent<{ feed: RecentEvents }>) => {
           this._feed = e.detail.feed;
+        }}
+        @rv-timetable-marks=${(e: CustomEvent<{ marks: UnusualMarks }>) => {
+          this._marks = e.detail.marks;
         }}
       ></rv-timetable>`;
   }
@@ -172,7 +217,8 @@ export class RvEvents extends LitElement {
         .today=${this._today}
         .firstDay=${firstDayOfWeek(this.hass?.locale?.language)}
         ?loading=${this._daysLoading}
-        @rv-month=${(e: CustomEvent<{ year: number; month: number }>) => void this._loadMonth(e.detail.year, e.detail.month)}
+        @rv-month=${(e: CustomEvent<{ year: number; month: number }>) =>
+          void this._loadMonth(e.detail.year, e.detail.month)}
         @rv-day=${(e: CustomEvent<{ date: string }>) => {
           this._go(e.detail.date);
         }}
@@ -184,24 +230,39 @@ export class RvEvents extends LitElement {
   private _renderFilters(): TemplateResult | typeof nothing {
     const events = this._feed?.events ?? [];
     const present = new Set(events.map((e) => e.camera_id));
-    const cameras = this.cameras.filter((c) => present.has(c.id) || this._cameraFilter.has(c.id));
-    const types = [...new Set([...events.flatMap((e) => shownTypes(e.types)), ...this._typeFilter])];
-    if (!cameras.length && !types.length) return nothing;
-    const any = this._cameraFilter.size > 0 || this._typeFilter.size > 0;
+    const cameras = this.cameras.filter(
+      (c) => present.has(c.id) || this._cameraFilter.has(c.id),
+    );
+    const types = [
+      ...new Set([
+        ...events.flatMap((e) => shownTypes(e.types)),
+        ...this._typeFilter,
+      ]),
+    ];
+    const marks = this._marks?.enabled ? this._marks : undefined;
+    if (!cameras.length && !types.length && !marks) return nothing;
+    const any =
+      this._cameraFilter.size > 0 ||
+      this._typeFilter.size > 0 ||
+      this._unusualOnly;
     return html`<div class="filters">
       ${cameras.length
         ? html`<div class="group" role="group" aria-label="Cameras">
             <span class="label">Cameras</span>
             ${cameras.map(
-              (c) => html`<button
-                class="chip"
-                aria-pressed=${this._cameraFilter.has(c.id) ? "true" : "false"}
-                @click=${() => {
-                  this._cameraFilter = this._toggle(this._cameraFilter, c.id);
-                }}
-              >
-                <span class="plat" aria-hidden="true">${c.number}</span>${c.name}
-              </button>`,
+              (c) =>
+                html`<button
+                  class="chip"
+                  aria-pressed=${this._cameraFilter.has(c.id)
+                    ? "true"
+                    : "false"}
+                  @click=${() => {
+                    this._cameraFilter = this._toggle(this._cameraFilter, c.id);
+                  }}
+                >
+                  <span class="plat" aria-hidden="true">${c.number}</span
+                  >${c.name}
+                </button>`,
             )}
           </div>`
         : nothing}
@@ -209,24 +270,53 @@ export class RvEvents extends LitElement {
         ? html`<div class="group" role="group" aria-label="What was detected">
             <span class="label">Detected</span>
             ${sortTypes(types).map(
-              (t) => html`<button
-                class="chip"
-                aria-pressed=${this._typeFilter.has(t) ? "true" : "false"}
-                @click=${() => {
-                  this._typeFilter = this._toggle(this._typeFilter, t);
-                }}
-              >
-                ${icon(pictogram([t]))}${typeLabel(t)}
-              </button>`,
+              (t) =>
+                html`<button
+                  class="chip"
+                  aria-pressed=${this._typeFilter.has(t) ? "true" : "false"}
+                  @click=${() => {
+                    this._typeFilter = this._toggle(this._typeFilter, t);
+                  }}
+                >
+                  ${icon(pictogram([t]))}${typeLabel(t)}
+                </button>`,
             )}
           </div>`
         : nothing}
+      ${marks ? this._renderUnusual(marks) : nothing}
       ${any
-        ? html`<button class="text clear" @click=${() => {
-            this._cameraFilter = new Set();
-            this._typeFilter = new Set();
-          }}>Show every event</button>`
+        ? html`<button
+            class="text clear"
+            @click=${() => {
+              this._cameraFilter = new Set();
+              this._typeFilter = new Set();
+              this._unusualOnly = false;
+            }}
+          >
+            Show every event
+          </button>`
         : nothing}
+    </div>`;
+  }
+
+  /** Only what is unusual (Phase 8.3); "Learning…" while no camera marks yet. */
+  private _renderUnusual(marks: UnusualMarks): TemplateResult {
+    const marking =
+      marks.built !== false &&
+      Object.values(marks.cameras).some((camera) => camera.marking);
+    return html`<div class="group" role="group" aria-label="Unusual events">
+      <span class="label">Marked</span>
+      ${marking
+        ? html`<button
+            class="chip plain"
+            aria-pressed=${this._unusualOnly ? "true" : "false"}
+            @click=${() => {
+              this._unusualOnly = !this._unusualOnly;
+            }}
+          >
+            Unusual
+          </button>`
+        : html`<button class="chip plain" disabled>Learning…</button>`}
     </div>`;
   }
 
@@ -320,6 +410,9 @@ export class RvEvents extends LitElement {
         height: 18px;
         margin-left: 4px;
       }
+      .chip.plain {
+        padding: 0 12px;
+      }
       .chip[aria-pressed="true"] {
         background: var(--rv-text);
         border-color: var(--rv-text);
@@ -367,8 +460,18 @@ export class RvEvents extends LitElement {
 }
 
 // Each page render shows the day: one formatter each, not one per render.
-const LONG_DAY = new Intl.DateTimeFormat(undefined, { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" });
-const SHORT_DAY = new Intl.DateTimeFormat(undefined, { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
+const LONG_DAY = new Intl.DateTimeFormat(undefined, {
+  weekday: "long",
+  day: "numeric",
+  month: "long",
+  timeZone: "UTC",
+});
+const SHORT_DAY = new Intl.DateTimeFormat(undefined, {
+  weekday: "short",
+  day: "numeric",
+  month: "short",
+  timeZone: "UTC",
+});
 
 /** "Tuesday 27 October" (a calendar date, not a time: no time zone shift). */
 export function dayLabel(date: string): string {

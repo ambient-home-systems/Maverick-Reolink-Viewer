@@ -187,6 +187,10 @@ class Unusual:
         self._computed = 0.0
         # Bumped when the model is dropped, so a rebuild running then is not kept.
         self._generation = 0
+        # The panel's marks by window and model (async_marks): when, and what.
+        self._marks: dict[
+            tuple[int, int, float], tuple[float, list[dict[str, Any]]]
+        ] = {}
 
     @property
     def model(self) -> Model:
@@ -466,6 +470,43 @@ class Unusual:
 
         return await self._hass.async_add_executor_job(read)
 
+    async def async_marks(self, *, since: float, until: float) -> list[dict[str, Any]]:
+        """Return the marked incidents that began in [since, until), oldest first.
+
+        Each as its highest marked event (the sentence naming every camera that
+        saw it), with every event of the incident (``members``: camera, start,
+        end), for the panel to mark each camera's row. A window ending in the
+        past is kept until the next build; one reaching now, for a minute.
+        """
+        model = self._model
+        key = (int(since), int(until), model.built_at)
+        now = time.time()
+        kept = self._marks.get(key)
+        if kept is not None and (until < now - 120 or now - kept[0] < 60):
+            return kept[1]
+        window = await self.async_window(since=since, until=until)
+        marks: list[dict[str, Any]] = []
+        for group in incidents(window):
+            if not any(result.unusual for _, result in group):
+                continue
+            top = max((m for m in group if m[1].unusual), key=lambda m: m[1].total)
+            payload = incident_payload(group, top, model, self._names)
+            payload["members"] = [
+                {
+                    "camera": event.camera,
+                    "start": int(event.started_at * 1000),
+                    "end": None
+                    if event.ended_at is None
+                    else int(event.ended_at * 1000),
+                }
+                for event, _ in group
+            ]
+            marks.append(payload)
+        if len(self._marks) >= 16:
+            self._marks.clear()
+        self._marks[key] = (now, marks)
+        return marks
+
     async def async_status(
         self, cameras: Iterable[str], *, days: int = 7
     ) -> dict[str, Any]:
@@ -553,6 +594,7 @@ def incident_payload(
     called = [names.get(camera, "another camera") for camera in seen]
     payload = mark_payload(event, result)
     payload["cameras"] = called
+    payload["camera_ids"] = seen
     if len(called) > 1:
         # Named once, for all of them; "50s after Back Yard" says nothing when
         # Back Yard saw the same thing.
