@@ -36,6 +36,7 @@ from typing import Any
 
 from .const import (
     INCIDENT_SECONDS,
+    KIND_KNOWN,
     RATE_BINS,
     SCORE_FLOOR,
     SCORE_MIN_DAYS,
@@ -216,6 +217,32 @@ def _lasting(bucket: str) -> str:
     )
 
 
+def _bucket_seconds(bucket: str) -> float:
+    """Return a duration bucket's seconds: ``instant`` 0, ``open`` endless (ours)."""
+    if bucket == "open":
+        return math.inf
+    if bucket == "instant":
+        return 0.0
+    try:
+        return float(bucket.removeprefix("~").removesuffix("s"))
+    except ValueError:
+        return math.inf
+
+
+def _typical_seconds(*profiles: Profile) -> float | None:
+    """Return the median duration bucket of the first profile with any (ours)."""
+    for profile in profiles:
+        table = profile.duration
+        if table.total <= 0:
+            continue
+        half, running = table.total / 2, 0.0
+        for label in sorted(table.weights, key=_bucket_seconds):
+            running += table.weights[label]
+            if running >= half:
+                return _bucket_seconds(label)
+    return None
+
+
 def _signal_share(key: str, was: str, many: int, profile: Profile) -> float:
     """Return a signal value's smoothed share in one profile (even where unseen)."""
     if key in profile.signals:
@@ -261,19 +288,26 @@ def _terms(
     # nothing to notice here too.
     if len(own.kinds.weights) > 1:
         many = max(len(own.kinds.weights), len(pool.kinds.weights), 2)
+        seen_here = own.kinds.count(event.kind)
+        surprise = _surprisal(
+            interpolate(
+                own.kinds.probability(event.kind, categories=many),
+                pool.kinds.probability(event.kind, categories=many),
+                own.weight,
+            ),
+            many,
+        )
+        # Ours: a kind the camera has seen KIND_KNOWN times is known here, and no
+        # longer raises a score for being that kind ("Doorbell at all on Doorbell
+        # — 12th time in 7 days"); it can still lower one.
+        if seen_here >= KIND_KNOWN:
+            surprise = min(surprise, 0.0)
         terms.append(
             Term(
                 name="kind",
                 label=event.kind.replace("_", " ").capitalize(),
-                contribution=_surprisal(
-                    interpolate(
-                        own.kinds.probability(event.kind, categories=many),
-                        pool.kinds.probability(event.kind, categories=many),
-                        own.weight,
-                    ),
-                    many,
-                ),
-                seen=own.kinds.count(event.kind),
+                contribution=surprise,
+                seen=seen_here,
             )
         )
 
@@ -310,14 +344,21 @@ def _terms(
 
     bucket = duration_bucket(event.duration)
     categories = max(len(specific.duration.weights), len(overall.duration.weights), 2)
+    lasted = _surprisal(
+        blend(lambda p: p.duration.probability(bucket, categories=categories)),
+        categories,
+    )
+    # Ours: only lasting longer than usual stands out (someone lingering); shorter
+    # than usual can only make an event look more ordinary. Brief detections are
+    # mostly passing cars and false ones ("Vehicle lasting about 1 s").
+    typical = _typical_seconds(specific, broader, overall)
+    if typical is not None and _bucket_seconds(bucket) < typical:
+        lasted = min(lasted, 0.0)
     terms.append(
         Term(
             name="duration",
             label=bucket,
-            contribution=_surprisal(
-                blend(lambda p: p.duration.probability(bucket, categories=categories)),
-                categories,
-            ),
+            contribution=lasted,
             seen=specific.duration.count(bucket),
         )
     )

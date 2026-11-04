@@ -46,6 +46,7 @@ from custom_components.reolink_viewer.unusual.score import (
     Term,
     calibrate,
     ready,
+    reason,
     score,
 )
 
@@ -973,10 +974,12 @@ _BALCONY = "entry1:5"
 
 
 def _mostly_motion(days: int = 180) -> list[Event]:
-    """Return a balcony camera: motion four times a day, a person every tenth day.
+    """Return a balcony camera: motion four times a day, a person every twentieth day.
 
     The shape the kind term exists for. Every other term is measured against a profile the
     kind was used to select, so none of them can say that a person here is rare at all.
+    (Ours: every twentieth day, not tenth, so the person is seen 9 times: a kind seen
+    KIND_KNOWN times is known on that camera and no longer raises a score.)
     """
     events: list[Event] = []
     for day in range(days):
@@ -985,7 +988,7 @@ def _mostly_motion(days: int = 180) -> list[Event]:
             _on(_BALCONY, base + hour * 3600, hour * 60, "motion", 20.0)
             for hour in (7, 12, 19, 22)
         )
-        if day % 10 == 0:
+        if day % 20 == 0:
             events.append(_on(_BALCONY, base + 19 * 3600, 19 * 60, "person", 8.0))
     events.sort(key=lambda item: item.started_at)
     return events
@@ -1007,7 +1010,7 @@ def test_a_kind_a_camera_rarely_sees_is_scored_as_such() -> None:
 
     assert person.contribution > 0 > motion.contribution
     assert person.label == "Person"
-    assert person.seen == 18
+    assert person.seen == 9
 
 
 def test_the_kind_term_is_skipped_where_a_camera_has_seen_only_one() -> None:
@@ -1037,10 +1040,25 @@ def test_the_kind_reads_as_a_clause_in_both_positions() -> None:
     )
     assert "Person at all on Balcone Nord" in leading.reason
 
-    # Trailing: three in the morning is stranger still, so the kind falls to second place
-    # and has to become a clause of its own.
-    trailing = score(
-        _on(_BALCONY, _NOW, 3 * 60, "person", 8.0), model, previous=None, names=names
+    # Trailing: when something stranger leads, the kind falls to second place and has to
+    # become a clause of its own. (Ours: from terms, since with 9 people, below KIND_KNOWN,
+    # the kind and three in the morning now tie on this fixture.)
+    event = _on(_BALCONY, _NOW, 3 * 60, "person", 8.0)
+    terms = (
+        Term(name="clock", label="03:00", contribution=4.0, seen=0),
+        Term(name="kind", label="Person", contribution=3.0, seen=9),
+    )
+    trailing = Score(
+        total=7.0,
+        threshold=0.0,
+        unusual=True,
+        terms=terms,
+        reason=reason(
+            event,
+            Score(total=7.0, threshold=0.0, unusual=True, terms=terms, reason=""),
+            model,
+            names,
+        ),
     )
     assert trailing.reason.endswith("and rarely seen here.")
 
@@ -1168,3 +1186,46 @@ def test_motion_is_never_marked() -> None:
     assert night_motion.threshold is not None
     assert night_motion.total > night_motion.threshold
     assert night_motion.unusual is False
+
+
+def test_a_kind_seen_often_on_a_camera_no_longer_stands_out_for_it() -> None:
+    """Ours: once a camera has seen a kind KIND_KNOWN times, the kind alone adds nothing."""
+    events: list[Event] = []
+    for day in range(180):
+        base = _NOW - (180 - day) * _DAY
+        events.extend(
+            _on(_BALCONY, base + hour * 3600, hour * 60, "motion", 20.0)
+            for hour in (7, 12, 19, 22)
+        )
+        if day % 10 == 0:  # 18 people: known here
+            events.append(_on(_BALCONY, base + 19 * 3600, 19 * 60, "person", 8.0))
+    model = build(sorted(events, key=lambda e: e.started_at), now=_NOW)
+
+    result = score(_on(_BALCONY, _NOW, 19 * 60, "person", 8.0), model, previous=None)
+
+    kind = next(term for term in result.terms if term.name == "kind")
+    assert kind.seen == 18
+    assert kind.contribution <= 0.0
+
+
+def test_only_lasting_longer_than_usual_stands_out() -> None:
+    """Ours: a brief detection (a passing car) is not unusual for being brief."""
+    model, _ = _model()  # people last 8 s here
+
+    brief = score(_event(_NOW, 18 * 60, "person", duration=0.5), model, previous=None)
+    long = score(_event(_NOW, 18 * 60, "person", duration=600.0), model, previous=None)
+
+    assert _term(brief, "duration") <= 0.0
+    assert _term(long, "duration") > 0.0
+
+
+def test_motion_is_never_what_fired_before() -> None:
+    """Ours: the last detection that could be marked fired first, not the last motion."""
+    gate = _at("entry1:0", _NOW, 8.0)
+    motion = replace(_at("entry1:1", _NOW + 5, 8.0), kind="motion")
+    hall = _at("entry1:2", _NOW + 20, 8.0)
+
+    pairs = list(preceded([gate, motion, hall], scope=RELEVANCE_SCOPE_TOGETHER))
+
+    assert pairs[2] == (hall, gate)
+    assert pairs[1] == (motion, gate)

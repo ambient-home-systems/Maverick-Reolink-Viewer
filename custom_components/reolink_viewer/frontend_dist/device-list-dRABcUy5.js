@@ -1,6 +1,6 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
 import { A as i, Dt as a, Y as o, at as s, f as c } from "./live-DWqtt9-p.js";
-import { r as l, z as u } from "./home-CoJc5Y6Q.js";
+import { r as l, z as u } from "./home-Hf7z2hcF.js";
 //#region src/components/learning.ts
 var d = class extends r {
 	static properties = {
@@ -31,49 +31,63 @@ var d = class extends r {
 	_renderState() {
 		let e = this._state;
 		if (e === "loading") return n`<p class="muted">Reading the journal…</p>`;
-		if ("error" in e) return n`<p class="muted">Could not read the journal: ${e.error}</p>`;
+		if ("error" in e) return n`<p class="muted">
+        Could not read the journal: ${e.error}
+      </p>`;
 		if (!e.enabled) return n`<p class="muted">
-        Off. Turn on <strong>Learn what is normal</strong> in Reolink Viewer's options (Settings → Devices &amp;
-        services → Reolink Viewer → Configure), and Reolink Viewer keeps a journal of what each camera detects and when,
-        so it can learn what is normal for each and, later, mark what is unusual. The journal stays on this Home
-        Assistant.
+        Off. Turn on <strong>Learn what is normal</strong> in Reolink Viewer's
+        options (Settings → Devices &amp; services → Reolink Viewer →
+        Configure), and Reolink Viewer keeps a journal of what each camera
+        detects and when, so it can learn what is normal for each and, later,
+        mark what is unusual. The journal stays on this Home Assistant.
       </p>`;
 		let r = this.hass?.config?.time_zone, i = e.cameras, a = e.unusual;
 		return n`<p>
-        On since ${c(e.created, r)}: ${f(e.detections, "detection")} from
-        ${f(i.length, "camera")} so far (${v(e.bytes)}).${e.imported ? ` It started with ${f(e.imported, "change")} from Home Assistant's history.` : ""}
+        On since ${c(e.created, r)}:
+        ${f(e.detections, "detection")} from
+        ${f(i.length, "camera")} so far
+        (${v(e.bytes)}).${e.imported ? ` It started with ${f(e.imported, "change")} from Home Assistant's history.` : ""}
       </p>
       ${i.length ? n`<ul>
             ${i.map((e) => n`<li>
-                <span class="name">${e.name}</span>:
-                <span class="muted">${f(e.detections, "detection")}, since ${c(e.first, r)}</span
-                >${a?.built ? n`. ${g(a.cameras[e.id])}` : t}
-              </li>`)}
+                  <span class="name">${e.name}</span>:
+                  <span class="muted"
+                    >${f(e.detections, "detection")}, since
+                    ${c(e.first, r)}</span
+                  >${a?.built ? n`. ${g(a.cameras[e.id])}` : t}
+                </li>`)}
           </ul>` : t}
       ${a ? this._renderUnusual(a, r, new Map(i.map((e) => [e.id, e.name]))) : t}`;
 	}
 	_renderUnusual(e, r, i) {
 		if (!e.built) return n`<p class="muted small">
-        It is learning from the journal; what it makes of each camera shows here once it has (a minute or so after
-        Home Assistant starts).
+        It is learning from the journal; what it makes of each camera shows here
+        once it has (a minute or so after Home Assistant starts).
       </p>`;
 		let a = Object.values(e.cameras).some((e) => e.marking), o = e.marks / e.days;
 		return n`<h3>Unusual in the last ${e.days} days</h3>
       ${a ? n`<p>
-            ${f(e.marks, "mark")}, about ${o < 10 ? o.toFixed(1) : Math.round(o)} a day, of
-            ${f(e.events, "event")}, at <strong>${p[e.sensitivity]}</strong>.
-          </p>` : n`<p class="muted">None yet: no camera has a week of history and 200 detections.</p>`}
+            ${f(e.marks, "mark")}, about
+            ${o < 10 ? o.toFixed(1) : Math.round(o)} a day, of
+            ${f(e.events, "event")}, at
+            <strong>${p[e.sensitivity]}</strong>.
+          </p>` : n`<p class="muted">
+            None yet: no camera has a week of history and 200 detections.
+          </p>`}
       ${e.latest.length ? n`<ol class="marks">
             ${e.latest.map((e) => n`<li>
-                <span class="when">${c(e.start, r)}</span>
-                <span>${e.reason}</span>
-              </li>`)}
+                  <span class="when">${c(e.start, r)}</span>
+                  <span>${e.reason}</span>
+                </li>`)}
           </ol>` : t}
       <details>
         <summary>The numbers behind it</summary>
         <dl>
           <dt>Without the daily cap</dt>
-          <dd>${f(e.uncapped, "mark")} (the cap keeps a busy property to about its sensitivity's number a day)</dd>
+          <dd>
+            ${f(e.uncapped, "mark")} (the cap keeps a busy property to
+            about its sensitivity's number a day)
+          </dd>
           <dt>The line a score must pass</dt>
           <dd>
             ${e.cap === null ? `the floor, ${e.floor}` : `${e.cap} (the daily cap; the floor is ${e.floor})`}
@@ -89,13 +103,17 @@ var d = class extends r {
           <dt>Compared with</dt>
           <dd>${m[e.scope]}</dd>
           <dt>Learned</dt>
-          <dd>${c(e.built, r)}, in ${e.built_in_s} s</dd>
+          <dd>
+            ${c(e.built, r)}, in ${e.built_in_s}
+            s${e.computed_s === void 0 ? "" : `, ${e.computed_s} s of it computing`}
+          </dd>
         </dl>
       </details>
       <p class="muted small">
-        Unusual means rare for that camera, never dangerous. Motion is learned from, never marked, and the same thing
-        seen on several cameras within a minute is one mark. It learns again each night at 03:17, and scores what it
-        has seen since against that.
+        Unusual means rare for that camera, never dangerous. Motion is learned
+        from, never marked, and the same thing seen on several cameras within a
+        minute is one mark. It learns again each night at 03:17, and scores what
+        it has seen since against that.
       </p>`;
 	}
 	static styles = [i, e`

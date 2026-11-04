@@ -125,3 +125,10 @@ CALIBRATE_EVENTS: Final = 20_000
 UNMARKED_KINDS: Final = frozenset({"motion"})
 TIME_WEIGHT: Final = 0.5
 INCIDENT_SECONDS: Final = 60.0
+
+# Ours, from the owner's second week (2026-11-04, v0.47.1: 36 marks in 7 days):
+# a kind seen this many times on a camera is known there, and no longer raises a
+# score for being that kind ("Doorbell at all on Doorbell — 12th time in 7
+# days"). Lasting shorter than usual no longer raises one either, and only what
+# can be marked is ever "what fired before" (not motion).
+KIND_KNOWN: Final = 10

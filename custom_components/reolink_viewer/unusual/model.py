@@ -157,6 +157,7 @@ class Unusual:
         self._names: dict[str, str] = {}
         self._cancel: CALLBACK_TYPE | None = None
         self._built_in = 0.0
+        self._computed = 0.0
         # Bumped when the model is dropped, so a rebuild running then is not kept.
         self._generation = 0
 
@@ -223,7 +224,7 @@ class Unusual:
             return self._model
         if generation != self._generation:
             return self._model  # dropped meanwhile: learning was turned off
-        self._built_in = took
+        self._built_in, self._computed = took
         self._model, self._names = model, names
         _LOGGER.debug(
             "Unusual events: model rebuilt in %.1f s, %s cameras, scope %s",
@@ -235,15 +236,16 @@ class Unusual:
 
     def _learn(
         self, now: float, scope: str, sensitivity: str, hosts: dict[str, str]
-    ) -> tuple[Model, dict[str, str], float]:
+    ) -> tuple[Model, dict[str, str], tuple[float, float]]:
         """Fold the history into events and learn from them (in the executor).
 
         Returns the model, the cameras' names, and how long it took here (not
-        counting the wait for an executor thread).
+        counting the wait for an executor thread) and how much of that this
+        thread computed (the rest it waited for Python's lock, behind others).
         """
-        began = time.monotonic()
+        began, computed = time.monotonic(), time.thread_time()
         if not self._path.exists():
-            return Model(scope=scope, built_at=now), {}, 0.0
+            return Model(scope=scope, built_at=now), {}, (0.0, 0.0)
         db = _connect(self._path)
         try:
             since = now - CALIBRATE_DAYS * _DAY
@@ -303,7 +305,11 @@ class Unusual:
                 days=(now - first[0]) / _DAY,
                 per_day=DAILY_MARKS[sensitivity],
             )
-            return model, _names(db), time.monotonic() - began
+            return (
+                model,
+                _names(db),
+                (time.monotonic() - began, time.thread_time() - computed),
+            )
         finally:
             db.close()
 
@@ -406,6 +412,7 @@ class Unusual:
         return {
             "built": int(model.built_at * 1000) if model.built_at else None,
             "built_in_s": round(self._built_in, 2),
+            "computed_s": round(self._computed, 2),
             "sensitivity": self._sensitivity,
             "scope": model.scope,
             "floor": model.floor,

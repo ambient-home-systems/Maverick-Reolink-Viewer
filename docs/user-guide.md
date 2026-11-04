@@ -232,6 +232,13 @@ follows a household that changes.
 - **One thing on several cameras is one mark:** the same kind of thing seen on
   several cameras within a minute, such as an animal crossing the front of the house,
   is marked once, naming every camera that saw it.
+- **Only lasting longer than usual stands out.** Someone lingering is worth a look;
+  a detection briefer than usual (a passing car, a false one) is not.
+- **A kind a camera has seen 10 times is known there.** It no longer stands out just
+  for being that kind (the doorbell on the doorbell camera); it still does at a
+  strange hour, or for a strange length. A kind new to a camera stands out.
+- **What fired just before** means another camera's detection (a person, vehicle,
+  animal...), not its motion.
 - **Unusual in the last 7 days**, on the Devices page: how many were marked, about how
   many a day, and the latest, each with a sentence saying why: "Person at 03:12 on
   Doorbell — 2nd time in 3 weeks, and nothing fired first." **The numbers behind it**
@@ -256,7 +263,8 @@ What it will not do:
   every night for months has made spiders normal.
 - **Something new stands out for a while:** a new car is marked daily for a fortnight,
   then stops.
-- **A kind of thing a camera rarely sees stands out each time it appears.**
+- **A kind of thing a camera rarely sees stands out each time it appears,** until it
+  has seen it 10 times.
 - **A person walking past three cameras is three events.**
 
 Marks on the timetable, an "Unusual" filter, and an event for automations come in
