@@ -23,6 +23,7 @@ from collections import Counter
 from collections.abc import Callable, Iterable, Iterator
 import datetime as dt
 import heapq
+import json
 import logging
 import math
 from operator import attrgetter
@@ -48,7 +49,7 @@ from .const import (
     UNMARKED_KINDS,
 )
 from .events import SUBJECTS, Event, SolarClock, Transition, derive_streams
-from .rates import Model, build, preceded
+from .rates import Model, build, model_dict, model_of, preceded
 from .score import Score, calibrate, daily_cap, incidents, ready, reason, score
 
 _LOGGER = logging.getLogger(__name__)
@@ -130,6 +131,24 @@ def _groups(
     ]
 
 
+def model_path(journal: Path) -> Path:
+    """Return where the model learned from a journal is saved (beside it)."""
+    return journal.with_name(f"{journal.stem}.model.json")
+
+
+def _created(db: sqlite3.Connection) -> str | None:
+    """Return when the journal was created (its meta), to match a saved model to it."""
+    row = db.execute("SELECT value FROM meta WHERE key = 'created'").fetchone()
+    return None if row is None else str(row[0])
+
+
+def _keep(path: Path, kept: dict[str, Any]) -> None:
+    """Save the model beside the journal (in the executor), replacing the last."""
+    spare = path.with_name(f"{path.name}.new")
+    spare.write_text(json.dumps(kept, separators=(",", ":")), encoding="utf-8")
+    spare.replace(path)
+
+
 def _names(db: sqlite3.Connection) -> dict[str, str]:
     """Return what each camera is called, as the journal last saw it."""
     return dict(db.execute("SELECT camera, camera_name FROM sources ORDER BY id"))
@@ -146,10 +165,17 @@ class Unusual:
         hosts: Callable[[], dict[str, str]],
         sensitivity: str = DEFAULT_SENSITIVITY,
         scope: str = DEFAULT_SCOPE,
+        version: str = "",
     ) -> None:
-        """Prepare, without building anything yet."""
+        """Prepare, without building anything yet.
+
+        ``version`` (Reolink Viewer's) is kept with a saved model: one saved by
+        another version is learned again, not loaded.
+        """
         self._hass = hass
         self._path = path
+        self._kept = model_path(path)
+        self._version = version
         self._hosts = hosts
         self._scope = scope
         self._sensitivity = sensitivity
@@ -172,7 +198,7 @@ class Unusual:
         return self._names
 
     def forget(self) -> None:
-        """Drop the model (the journal it was built from is gone)."""
+        """Drop the model (the journal it was built from is gone, its saved model too)."""
         self._model, self._names = Model(scope=self._scope), {}
         self._generation += 1
 
@@ -216,7 +242,7 @@ class Unusual:
         hosts = self._hosts()
         generation = self._generation
         try:
-            model, names, took = await self._hass.async_add_executor_job(
+            model, names, took, created = await self._hass.async_add_executor_job(
                 self._learn, time.time(), self._scope, self._sensitivity, hosts
             )
         except sqlite3.Error:
@@ -232,20 +258,86 @@ class Unusual:
             len(model.per_camera),
             model.scope,
         )
+        kept = self._kept_dict(created)
+        try:
+            await self._hass.async_add_executor_job(_keep, self._kept, kept)
+        except OSError:
+            _LOGGER.warning("Cannot save the unusual events model", exc_info=True)
         return model
+
+    def _kept_dict(self, created: str | None) -> dict[str, Any]:
+        """Return what is saved with the model: what it was learned from, and how."""
+        return {
+            "version": self._version,
+            "sensitivity": self._sensitivity,
+            "scope": self._scope,
+            "journal_created": created,
+            "built_in": self._built_in,
+            "computed": self._computed,
+            "names": self._names,
+            "model": model_dict(self._model),
+        }
+
+    async def async_load(self, *, now: float | None = None) -> bool:
+        """Take the model saved by the last build, if it still holds; True if taken.
+
+        It holds when it was learned from this journal (its creation time), by
+        this version, with these options, less than a day ago. Otherwise the
+        caller learns again (a restart then waits for it).
+        """
+        now = time.time() if now is None else now
+        generation = self._generation
+
+        def read() -> tuple[Model, dict[str, Any]] | None:
+            if not self._kept.exists() or not self._path.exists():
+                return None
+            try:
+                kept = json.loads(self._kept.read_text(encoding="utf-8"))
+                db = _connect(self._path)
+                try:
+                    created = _created(db)
+                finally:
+                    db.close()
+                if (
+                    kept.get("version") != self._version
+                    or kept.get("sensitivity") != self._sensitivity
+                    or kept.get("scope") != self._scope
+                    or kept.get("journal_created") != created
+                ):
+                    return None
+                model = model_of(kept["model"])
+            except OSError, ValueError, KeyError, TypeError, sqlite3.Error:
+                _LOGGER.debug(
+                    "Unusual events: the saved model is not used", exc_info=True
+                )
+                return None
+            if not 0 <= now - model.built_at < _DAY:
+                return None
+            return model, kept
+
+        found = await self._hass.async_add_executor_job(read)
+        if found is None or generation != self._generation:
+            return False
+        model, kept = found
+        self._model = model
+        self._names = {str(k): str(v) for k, v in kept.get("names", {}).items()}
+        self._built_in = float(kept.get("built_in", 0.0))
+        self._computed = float(kept.get("computed", 0.0))
+        return True
 
     def _learn(
         self, now: float, scope: str, sensitivity: str, hosts: dict[str, str]
-    ) -> tuple[Model, dict[str, str], tuple[float, float]]:
+    ) -> tuple[Model, dict[str, str], tuple[float, float], str | None]:
         """Fold the history into events and learn from them (in the executor).
 
-        Returns the model, the cameras' names, and how long it took here (not
+        Returns the model, the cameras' names, how long it took here (not
         counting the wait for an executor thread) and how much of that this
-        thread computed (the rest it waited for Python's lock, behind others).
+        thread computed (the rest it waited for Python's lock, behind others),
+        and when the journal was created (what a saved model is matched to).
         """
         began, computed = time.monotonic(), time.thread_time()
         if not self._path.exists():
-            return Model(scope=scope, built_at=now), {}, (0.0, 0.0)
+            return Model(scope=scope, built_at=now), {}, (0.0, 0.0), None
         db = _connect(self._path)
         try:
             since = now - CALIBRATE_DAYS * _DAY
@@ -309,6 +401,7 @@ class Unusual:
                 model,
                 _names(db),
                 (time.monotonic() - began, time.thread_time() - computed),
+                _created(db),
             )
         finally:
             db.close()

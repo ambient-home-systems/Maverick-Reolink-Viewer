@@ -1223,9 +1223,42 @@ def test_motion_is_never_what_fired_before() -> None:
     """Ours: the last detection that could be marked fired first, not the last motion."""
     gate = _at("entry1:0", _NOW, 8.0)
     motion = replace(_at("entry1:1", _NOW + 5, 8.0), kind="motion")
-    hall = _at("entry1:2", _NOW + 20, 8.0)
+    # A person (a vehicle 20 s after the gate's vehicle would be the same incident).
+    hall = replace(_at("entry1:2", _NOW + 20, 8.0), kind="person")
 
     pairs = list(preceded([gate, motion, hall], scope=RELEVANCE_SCOPE_TOGETHER))
 
     assert pairs[2] == (hall, gate)
     assert pairs[1] == (motion, gate)
+
+
+def test_an_incident_s_later_events_take_what_fired_before_it() -> None:
+    """Ours: one vehicle crossing three cameras is one arrival, after what came first."""
+    person = replace(_at("entry1:9", _NOW - 30, 8.0), kind="person")
+    gate = _at("entry1:0", _NOW, 8.0)
+    drive = _at("entry1:1", _NOW + 15, 8.0)
+    house = _at("entry1:2", _NOW + 40, 8.0)
+    later = _at("entry1:0", _NOW + 400, 8.0)  # long after: a new incident
+
+    pairs = list(
+        preceded([person, gate, drive, house, later], scope=RELEVANCE_SCOPE_TOGETHER)
+    )
+
+    assert [previous for _, previous in pairs[1:4]] == [person, person, person]
+    assert pairs[4] == (later, house)
+
+
+def test_a_mark_is_never_said_to_be_usual() -> None:
+    """Ours: small rarities adding up past the line are said, not called usual."""
+    model, _ = _model()
+    event = _event(_NOW, 18 * 60, "person")
+    terms = (
+        Term(name="clock", label="18:00", contribution=0.3, seen=40),
+        Term(name="duration", label="~8s", contribution=0.4, seen=40),
+    )
+    marked = Score(total=0.7, threshold=0.5, unusual=True, terms=terms, reason="")
+
+    sentence = reason(event, marked, model, {_CAMERA: "Drive"})
+
+    assert "usual" not in sentence
+    assert "lasting about 8 s" in sentence

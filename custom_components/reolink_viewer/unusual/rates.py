@@ -32,9 +32,11 @@ from __future__ import annotations
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 import math
+from typing import Any
 
 from .const import (
     DEFAULT_SCOPE,
+    INCIDENT_SECONDS,
     RATE_BACKOFF_WEIGHT,
     RATE_BANDWIDTH_MINUTES,
     RATE_BIN_MINUTES,
@@ -90,9 +92,23 @@ def preceded(
     close to random ("Vehicle on Doorbell, 9s after Dogs").
     """
     latest: dict[str, Event] = {}
+    # Ours: each pool and kind's incident going on (what fired before it began, and
+    # its last end). An event continuing one, on any camera within INCIDENT_SECONDS,
+    # takes what fired before the incident: one person crossing five cameras is
+    # one arrival, not four rare camera-to-camera steps (the owner's "Person at
+    # 16:56" on five cameras was marked by them alone).
+    going: dict[tuple[str, str], tuple[Event | None, float]] = {}
     for event in events:
         group = group_key(event.camera, scope, hosts)
-        yield event, latest.get(group)
+        end = event.started_at if event.ended_at is None else event.ended_at
+        incident = going.get((group, event.kind))
+        if incident is not None and event.started_at - incident[1] <= INCIDENT_SECONDS:
+            previous = incident[0]
+            going[group, event.kind] = (previous, max(incident[1], end))
+        else:
+            previous = latest.get(group)
+            going[group, event.kind] = (previous, end)
+        yield event, previous
         if event.kind not in UNMARKED_KINDS:
             latest[group] = event
 
@@ -568,20 +584,139 @@ def build(
             profile.first_seen = event.started_at
         profile.last_seen = event.started_at
 
-    for (camera, kind), profile in profiles.items():
-        group = group_key(camera, scope, model.hosts)
+    _aggregate(model)
+    return model
+
+
+def _aggregate(model: Model) -> None:
+    """Sum the specific profiles into the broader ones, and spread every rate (ours).
+
+    In the executor, so no read on the event loop pays for the spreading.
+    """
+    model.per_kind, model.per_camera, model.pooled = {}, {}, {}
+    for (camera, kind), profile in model.profiles.items():
+        group = group_key(camera, model.scope, model.hosts)
         for target in (
             model.per_kind.setdefault((group, kind), Profile()),
             model.per_camera.setdefault(camera, Profile()),
             model.pooled.setdefault(group, Profile()),
         ):
             _add_profile(target, profile)
-
-    # Spread every rate's kernel now, while building (in the executor), so no
-    # read on the event loop pays for it.
     for table in (model.profiles, model.per_kind, model.per_camera, model.pooled):
         for profile in table.values():
             _ = profile.clock.weights, profile.solar.weights
+
+
+# Ours: a model kept between restarts (unusual/model.py saves it beside the
+# journal). Only the specific profiles are kept; the broader ones are their sums.
+
+
+def _rate_dict(rate: CircularRate) -> dict[str, Any]:
+    return {
+        "landed": [round(value, 6) for value in rate.landed],
+        "counts": rate.counts,
+        "total": rate.total,
+        "observations": rate.observations,
+    }
+
+
+def _rate_of(data: dict[str, Any]) -> CircularRate:
+    rate = CircularRate(
+        landed=[float(value) for value in data["landed"]],
+        counts=[int(value) for value in data["counts"]],
+        total=float(data["total"]),
+        observations=int(data["observations"]),
+    )
+    if len(rate.landed) != RATE_BINS or len(rate.counts) != RATE_BINS:
+        raise ValueError("a rate of another size")
+    return rate
+
+
+def _table_dict(table: Categorical) -> dict[str, Any]:
+    return {
+        "weights": table.weights,
+        "counts": table.counts,
+        "total": table.total,
+        "observations": table.observations,
+    }
+
+
+def _table_of(data: dict[str, Any]) -> Categorical:
+    return Categorical(
+        weights={str(k): float(v) for k, v in data["weights"].items()},
+        counts={str(k): int(v) for k, v in data["counts"].items()},
+        total=float(data["total"]),
+        observations=int(data["observations"]),
+    )
+
+
+_TABLES = ("duration", "predecessor", "weekend", "day_of_week", "kinds")
+
+
+def model_dict(model: Model) -> dict[str, Any]:
+    """Return a model as plain data, to be kept (ours)."""
+    return {
+        "profiles": [
+            {
+                "camera": camera,
+                "kind": kind,
+                "clock": _rate_dict(profile.clock),
+                "solar": _rate_dict(profile.solar),
+                **{name: _table_dict(getattr(profile, name)) for name in _TABLES},
+                "signals": {k: _table_dict(v) for k, v in profile.signals.items()},
+                "weight": profile.weight,
+                "events": profile.events,
+                "first_seen": profile.first_seen,
+                "last_seen": profile.last_seen,
+            }
+            for (camera, kind), profile in model.profiles.items()
+        ],
+        "scope": model.scope,
+        "hosts": model.hosts,
+        "built_at": model.built_at,
+        # -inf (a camera judged by the floor alone; no cap) is kept as None.
+        "thresholds": {
+            camera: None if math.isinf(line) else line
+            for camera, line in model.thresholds.items()
+        },
+        "signal_bands": {k: list(v) for k, v in model.signal_bands.items()},
+        "floor": model.floor,
+        "cap": None if math.isinf(model.cap) else model.cap,
+    }
+
+
+def model_of(data: dict[str, Any]) -> Model:
+    """Return a kept model (ours); raises KeyError, TypeError or ValueError if malformed."""
+    model = Model(
+        scope=str(data["scope"]),
+        hosts={str(k): str(v) for k, v in data["hosts"].items()},
+        built_at=float(data["built_at"]),
+        thresholds={
+            str(camera): -math.inf if line is None else float(line)
+            for camera, line in data["thresholds"].items()
+        },
+        signal_bands={
+            str(k): tuple(float(x) for x in v) for k, v in data["signal_bands"].items()
+        },
+        floor=float(data["floor"]),
+        cap=-math.inf if data["cap"] is None else float(data["cap"]),
+    )
+    for item in data["profiles"]:
+        profile = Profile(
+            clock=_rate_of(item["clock"]),
+            solar=_rate_of(item["solar"]),
+            signals={str(k): _table_of(v) for k, v in item["signals"].items()},
+            weight=float(item["weight"]),
+            events=int(item["events"]),
+            first_seen=None
+            if item["first_seen"] is None
+            else float(item["first_seen"]),
+            last_seen=None if item["last_seen"] is None else float(item["last_seen"]),
+        )
+        for name in _TABLES:
+            setattr(profile, name, _table_of(item[name]))
+        model.profiles[str(item["camera"]), str(item["kind"])] = profile
+    _aggregate(model)
     return model
 
 

@@ -253,7 +253,9 @@ follows a household that changes.
   connection** suits cameras at different properties; **each camera on its own**
   shares nothing (and takes longest to start).
 - **It learns again each night** at 03:17, and scores what happened since against
-  that.
+  that. What it learned is kept beside the journal
+  (`reolink_viewer_journal.model.json`), so a restart shows it at once; it is deleted
+  with the journal.
 
 What it will not do:
 
