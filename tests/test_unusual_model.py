@@ -52,6 +52,7 @@ def _write(path: Path, changes: Iterable[tuple[str, float, int]]) -> None:
     try:
         db.executescript(journal._SCHEMA)
         with db:
+            db.execute("INSERT OR IGNORE INTO meta VALUES ('created', '1700000000000')")
             db.executemany(
                 "INSERT OR IGNORE INTO sources (id, entity_id, camera, camera_name, kind)"
                 " VALUES (?, ?, ?, ?, ?)",
@@ -178,9 +179,10 @@ async def test_scoring_a_window_walks_the_whole_history_for_context(
 ) -> None:
     """The predecessor of the first event in a window sits outside it."""
     rows = _busy()
-    # A gate camera fires a minute before the first event of the window, outside it.
+    # A gate camera fires 90 s before the first event of the window, outside it (a
+    # minute or less would make the two one incident, with the gate's predecessor).
     first = _NOW - 2 * _DAY + 7 * 3600
-    rows.extend(_pair(first - 60, "binary_sensor.gate_person"))
+    rows.extend(_pair(first - 90, "binary_sensor.gate_person"))
     _write(path, rows)
     unusual = _unusual(hass, path)
     await unusual.async_rebuild()
@@ -190,7 +192,7 @@ async def test_scoring_a_window_walks_the_whole_history_for_context(
     assert scored
     assert scored[0][0].started_at == first
     predecessor = next(t for t in scored[0][1].terms if t.name == "predecessor")
-    assert predecessor.label == "52s after Gate"
+    assert predecessor.label == "82s after Gate"
     assert all("Drive" in result.reason for _, result in scored)
 
 
@@ -604,3 +606,86 @@ async def test_a_new_sensitivity_rebuilds_and_off_forgets(
         {"type": "reolink_viewer/unusual/events", "since": 0, "until": 1000}
     )
     assert (await client.receive_json())["error"]["code"] == "not_learning"
+
+
+# ------------------------------------------- the model kept between restarts (ours)
+
+
+async def test_a_saved_model_scores_as_the_one_built(
+    hass: HomeAssistant, path: Path
+) -> None:
+    """Saved after the build, taken back at the next start: the same scores."""
+    _write(path, _busy(days=60))
+    built = _unusual(hass, path, version="1")
+    await built.async_rebuild()
+    assert module.model_path(path).exists()
+
+    loaded = _unusual(hass, path, version="1")
+    assert await loaded.async_load() is True
+    since = _NOW - 2 * _DAY
+    first = await built.async_window(since=since, until=_NOW)
+    again = await loaded.async_window(since=since, until=_NOW)
+    # (Saved to six decimals.)
+    assert [r.total for _, r in again] == pytest.approx([r.total for _, r in first])
+    assert [(r.threshold, r.unusual, r.reason) for _, r in again] == [
+        (r.threshold, r.unusual, r.reason) for _, r in first
+    ]
+    assert first[0][1].threshold is not None
+    assert loaded.state(_CAMERA) == built.state(_CAMERA)
+    assert (await loaded.async_status([_CAMERA]))["built_in_s"] == (
+        await built.async_status([_CAMERA])
+    )["built_in_s"]
+
+
+async def test_a_saved_model_is_learned_again_when_it_no_longer_holds(
+    hass: HomeAssistant, path: Path
+) -> None:
+    """Another version, other options, a day old, or another journal: not taken."""
+    _write(path, _busy(days=30))
+    await _unusual(hass, path, version="1").async_rebuild()
+
+    assert await _unusual(hass, path, version="2").async_load() is False
+    assert (
+        await _unusual(hass, path, version="1", sensitivity="few").async_load() is False
+    )
+    assert await _unusual(hass, path, version="1", scope="camera").async_load() is False
+    later = time.time() + _DAY + 60
+    assert await _unusual(hass, path, version="1").async_load(now=later) is False
+    # A new journal (turned off and on again): not the model of the old one.
+    db = sqlite3.connect(path)
+    with db:
+        db.execute("UPDATE meta SET value = '1' WHERE key = 'created'")
+    db.close()
+    assert await _unusual(hass, path, version="1").async_load() is False
+
+
+async def test_deleting_the_journal_deletes_its_model(
+    hass: HomeAssistant, path: Path
+) -> None:
+    """The model says when people are seen too: it goes with the journal."""
+    _write(path, _busy(days=10))
+    await _unusual(hass, path).async_rebuild()
+    assert module.model_path(path).exists()
+
+    await hass.async_add_executor_job(journal.delete_journal, path)
+
+    assert not module.model_path(path).exists()
+
+
+async def test_a_restart_takes_the_saved_model(
+    hass: HomeAssistant,
+    learning: MockConfigEntry,
+) -> None:
+    """Reloaded with nothing changed: the saved model, not a new build."""
+    unusual = learning.runtime_data.unusual
+    assert unusual is not None
+    built_at = unusual.model.built_at
+    assert built_at > 0
+    assert await hass.config_entries.async_unload(learning.entry_id)
+    with patch.object(Unusual, "async_rebuild", AsyncMock()) as rebuild:
+        assert await hass.config_entries.async_setup(learning.entry_id)
+        await hass.async_block_till_done(wait_background_tasks=True)
+    rebuild.assert_not_awaited()
+    again = learning.runtime_data.unusual
+    assert again is not None
+    assert again.model.built_at == built_at

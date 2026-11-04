@@ -3,6 +3,16 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.47.3
+
+- **A mark never says "usual" any more.** One person crossing several cameras counted
+  each step from one camera to the next as "what fired first", a rare step, which alone
+  could mark them ("Person at 16:56 — usual for Back Yard, Front Yard Left, …"). Now
+  the later cameras of an incident take what fired before the whole incident, and a
+  mark always says what stood out.
+- **A restart shows what it learned at once:** the model is kept beside the journal
+  between restarts (and deleted with it), instead of being learned again each time.
+
 ## 0.47.2
 
 Unusual events, tuned on the second week of marks: fewer that are not worth a look.

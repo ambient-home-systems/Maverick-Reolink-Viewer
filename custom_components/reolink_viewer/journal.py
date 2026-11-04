@@ -45,6 +45,7 @@ from homeassistant.helpers.event import async_call_later, async_track_time_inter
 from homeassistant.util import dt as dt_util
 
 from .devices import DetectionSensor
+from .unusual.model import model_path
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -148,11 +149,12 @@ def journal_path(hass: HomeAssistant) -> Path:
 
 
 def delete_journal(path: Path) -> None:
-    """Delete the journal and its write-ahead files (in the executor)."""
+    """Delete the journal, its write-ahead files and its model (in the executor)."""
     for file in (
         path,
         path.with_name(f"{path.name}-wal"),
         path.with_name(f"{path.name}-shm"),
+        model_path(path),
     ):
         file.unlink(missing_ok=True)
 

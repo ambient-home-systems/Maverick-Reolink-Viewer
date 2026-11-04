@@ -13,6 +13,7 @@ from homeassistant.helpers import config_validation as cv, issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.start import async_at_started
 from homeassistant.helpers.typing import ConfigType
+from homeassistant.loader import async_get_integration
 from homeassistant.util.hass_dict import HassKey
 from homeassistant.util.ssl import SSLCipherList
 
@@ -209,6 +210,7 @@ async def async_setup_entry(
             hass,
             journal_path(hass),
             hosts=lambda: devices.async_camera_hosts(hass, degraded=not compat.ok),
+            version=str((await async_get_integration(hass, DOMAIN)).version),
         ),
     )
     await _async_apply_learning(hass, entry)
@@ -292,7 +294,10 @@ async def _async_apply_learning(
 
     async def build() -> None:
         await journal.async_imported()
-        await unusual.async_rebuild()
+        # A restart takes the model saved last night, if it still holds; a new
+        # journal, version or option learns again.
+        if not (starting and await unusual.async_load()):
+            await unusual.async_rebuild()
 
     @callback
     def started(_hass: HomeAssistant) -> None:

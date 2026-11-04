@@ -508,16 +508,19 @@ def score(
     # measured against, so a gauge showing a score just past its camera's threshold but short
     # of the floor does not look like a mark that failed to appear. (Ours: and the daily cap.)
     against = None if threshold is None else max(threshold, model.floor, model.cap)
+    # Ours: motion is learned from (what fired first, each camera's mix) but never
+    # marked: on the owner's property it was 10 of the first 25 marks.
+    unusual = (
+        against is not None and summed > against and event.kind not in UNMARKED_KINDS
+    )
     return Score(
         total=summed,
         threshold=against,
-        # Ours: motion is learned from (what fired first, each camera's mix) but
-        # never marked: on the owner's property it was 10 of the first 25 marks.
-        unusual=against is not None
-        and summed > against
-        and event.kind not in UNMARKED_KINDS,
+        unusual=unusual,
         terms=tuple(terms),
-        reason=_reason(event, terms, model.profile(event.camera, event.kind), names),
+        reason=_reason(
+            event, terms, model.profile(event.camera, event.kind), names, marked=unusual
+        ),
     )
 
 
@@ -534,11 +537,22 @@ def reason(
     Terms ``unsaid`` picks are left out of the sentence (not out of the score).
     """
     terms = [term for term in result.terms if unsaid is None or not unsaid(term)]
-    return _reason(event, terms, model.profile(event.camera, event.kind), names)
+    return _reason(
+        event,
+        terms,
+        model.profile(event.camera, event.kind),
+        names,
+        marked=result.unusual,
+    )
 
 
 def _reason(
-    event: Event, terms: list[Term], profile: Profile, names: dict[str, str]
+    event: Event,
+    terms: list[Term],
+    profile: Profile,
+    names: dict[str, str],
+    *,
+    marked: bool = False,
 ) -> str:
     """Build the sentence a person reads instead of the numbers.
 
@@ -551,6 +565,10 @@ def _reason(
 
     ranked = sorted(terms, key=lambda term: term.contribution, reverse=True)
     leading = [term for term in ranked if term.contribution >= _WORTH_SAYING]
+    # Ours: a marked event is never "usual": several small rarities can add up
+    # past the line with none worth saying alone, and then the largest are said.
+    if marked and not leading:
+        leading = [term for term in ranked if term.contribution > 0]
     # Ours: "at 01:57" and "after dark" say the same thing; one of them is enough.
     if leading and leading[0].name in _TIME_TERMS:
         leading = [leading[0]] + [t for t in leading[1:] if t.name not in _TIME_TERMS]
