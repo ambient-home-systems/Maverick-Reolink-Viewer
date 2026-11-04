@@ -1,15 +1,37 @@
-import { LitElement, css, html, nothing, type PropertyValues, type TemplateResult } from "lit";
+import {
+  LitElement,
+  css,
+  html,
+  nothing,
+  type PropertyValues,
+  type TemplateResult,
+} from "lit";
 
-import { fetchRecentEvents, fetchThumbnailUrls, markAllEventsSeen, markEventSeen, toError } from "../api";
+import {
+  fetchRecentEvents,
+  fetchThumbnailUrls,
+  fetchUnusualMarks,
+  markAllEventsSeen,
+  markEventSeen,
+  toError,
+} from "../api";
 import { icon, type IconName } from "../icons";
 import { explainLoad } from "../integration";
-import { dateIn, formatClock } from "../playback/time";
+import { dateIn, dayWindow, formatClock } from "../playback/time";
 import { primaryType, shownTypes, typeLabel } from "../playback/timeline-math";
 import { problem } from "../problem";
 import { sharedStyles } from "../styles";
-import type { HomeAssistant, RecentEvent, RecentEvents } from "../types";
+import type {
+  HomeAssistant,
+  RecentEvent,
+  RecentEvents,
+  UnusualEvent,
+  UnusualMarks,
+} from "../types";
+import { markRows, rowKey, type MarkedRows } from "../unusual";
 import type { BoardCamera } from "./live-grid";
 import { navigate } from "./navigation";
+import "./unusual-reason";
 
 /** Rows shown before "Show all", unless told otherwise. */
 export const FIRST_ROWS = 8;
@@ -20,6 +42,8 @@ const FIRST_MAX_AGE_S = 3600;
 const THUMB_BUCKET_S = 10;
 /** Fired with each feed read: `{ feed: RecentEvents }` (the Events view's filters). */
 export const FEED_EVENT = "rv-timetable-feed";
+/** Fired with each read of the day's marks: `{ marks: UnusualMarks }` (Phase 8.3). */
+export const MARKS_EVENT = "rv-timetable-marks";
 
 /**
  * A day's events across cameras, set as a timetable: the time, what was
@@ -40,8 +64,10 @@ export class RvTimetable extends LitElement {
     limit: { attribute: false },
     cameraFilter: { attribute: false },
     typeFilter: { attribute: false },
+    unusualOnly: { attribute: false },
     filters: { attribute: false },
     _feed: { state: true },
+    _marks: { state: true },
     _pick: { state: true },
     _error: { state: true },
     _all: { state: true },
@@ -61,9 +87,13 @@ export class RvTimetable extends LitElement {
   declare cameraFilter: ReadonlySet<string>;
   /** Only events showing one of these types (`shownTypes`; none: all). */
   declare typeFilter: ReadonlySet<string>;
+  /** Only the rows marked unusual (the Events view's filter, Phase 8.3). */
+  declare unusualOnly: boolean;
   /** Its own camera filter and a way to every event (the home view; the Events view has its own). */
   declare filters: boolean;
   declare _feed: RecentEvents | undefined;
+  /** The day's marks (Phase 8.3), joined to the rows. */
+  declare _marks: MarkedRows | undefined;
   /** The cameras picked in its own filter. */
   declare _pick: ReadonlySet<string>;
   declare _error: string | undefined;
@@ -87,6 +117,7 @@ export class RvTimetable extends LitElement {
     this.limit = FIRST_ROWS;
     this.cameraFilter = new Set();
     this.typeFilter = new Set();
+    this.unusualOnly = false;
     this.filters = false;
     this._pick = new Set();
     this._all = false;
@@ -98,7 +129,8 @@ export class RvTimetable extends LitElement {
     super.connectedCallback();
     document.addEventListener("visibilitychange", this._onVisibility);
     this._refresh = setInterval(() => {
-      if (document.visibilityState !== "hidden" && this._isToday) void this._load(true);
+      if (document.visibilityState !== "hidden" && this._isToday)
+        void this._load(true);
     }, REFRESH_MS);
     this._tick();
   }
@@ -111,27 +143,35 @@ export class RvTimetable extends LitElement {
   }
 
   private readonly _onVisibility = (): void => {
-    if (document.visibilityState !== "hidden" && this._feed && this._isToday) void this._load(true);
+    if (document.visibilityState !== "hidden" && this._feed && this._isToday)
+      void this._load(true);
   };
 
   /** The "now" line moves on at the start of each minute. */
   private _tick(): void {
     this._now = Date.now();
     clearTimeout(this._clock);
-    this._clock = setTimeout(() => {
-      this._tick();
-    }, 60_000 - (this._now % 60_000) + 50);
+    this._clock = setTimeout(
+      () => {
+        this._tick();
+      },
+      60_000 - (this._now % 60_000) + 50,
+    );
   }
 
   /** Showing today (which is refreshed, and has a line at the time now). */
   private get _isToday(): boolean {
-    return this.date === undefined || this.date === dateIn(this._now, this.hass?.config?.time_zone);
+    return (
+      this.date === undefined ||
+      this.date === dateIn(this._now, this.hass?.config?.time_zone)
+    );
   }
 
   protected override willUpdate(changed: PropertyValues<this>): void {
     if (changed.has("date") && changed.get("date") !== undefined) {
       // Another day: start afresh.
       this._feed = undefined;
+      this._marks = undefined;
       this._error = undefined;
       this._all = false;
       this._newestBefore = undefined;
@@ -139,13 +179,21 @@ export class RvTimetable extends LitElement {
   }
 
   protected override updated(changed: PropertyValues<this>): void {
-    const first = changed.has("hass") && this.hass && !this._feed && this._seq === 0;
+    const first =
+      changed.has("hass") && this.hass && !this._feed && this._seq === 0;
     const otherDay = changed.has("date") && changed.get("date") !== undefined;
     if (first || otherDay) {
       // Cached copies at once, then today searched again behind them.
-      void this._load(false).then(() => (this._isToday ? this._load(true) : undefined));
+      void this._load(false).then(() =>
+        this._isToday ? this._load(true) : undefined,
+      );
     }
-    if (changed.has("cameraFilter") || changed.has("typeFilter") || changed.has("_pick")) void this._loadThumbs();
+    if (
+      changed.has("cameraFilter") ||
+      changed.has("typeFilter") ||
+      changed.has("_pick")
+    )
+      void this._loadThumbs();
   }
 
   private async _load(background: boolean): Promise<void> {
@@ -159,22 +207,59 @@ export class RvTimetable extends LitElement {
         ...(background ? { background } : { maxAge: FIRST_MAX_AGE_S }),
       });
       if (seq !== this._seq || date !== this.date) return;
-      this._newestBefore = background ? this._feed?.events[0]?.start : undefined;
+      this._newestBefore = background
+        ? this._feed?.events[0]?.start
+        : undefined;
       this._feed = feed;
       this._error = undefined;
       this.dispatchEvent(new CustomEvent(FEED_EVENT, { detail: { feed } }));
+      void this._loadMarks(hass, feed, seq);
       void this._loadThumbs();
     } catch (err) {
       if (seq === this._seq) this._error = toError(err).message;
     }
   }
 
+  /** The day's marks, joined to its rows; none if they cannot be read (the rows still show). */
+  private async _loadMarks(
+    hass: HomeAssistant,
+    feed: RecentEvents,
+    seq: number,
+  ): Promise<void> {
+    try {
+      const zone = hass.config?.time_zone;
+      const [from, to] = dayWindow(this.date ?? dateIn(feed.now, zone), zone);
+      const marks: UnusualMarks = await fetchUnusualMarks(hass, from, to);
+      if (seq !== this._seq) return;
+      this._marks = markRows(feed.events, marks.marks, from, to);
+      this.dispatchEvent(new CustomEvent(MARKS_EVENT, { detail: { marks } }));
+    } catch {
+      // No marks: the rows still show, unmarked.
+    }
+  }
+
+  /** The day's rows: the cameras' events, and marked ones seen only by the journal. */
+  private get _rows(): RecentEvent[] {
+    const events = this._feed?.events ?? [];
+    const journal = this._marks?.journal ?? [];
+    return journal.length
+      ? [...events, ...journal].sort((a, b) => b.start - a.start)
+      : events;
+  }
+
+  private _markOf(event: RecentEvent): UnusualEvent | undefined {
+    return this._marks?.marks.get(rowKey(event));
+  }
+
   /** The day's events that pass the filters. */
   private get _matching(): RecentEvent[] {
     const cameras = this.cameraFilter.size ? this.cameraFilter : this._pick;
     const types = this.typeFilter;
-    return (this._feed?.events ?? []).filter(
-      (e) => (!cameras.size || cameras.has(e.camera_id)) && (!types.size || shownTypes(e.types).some((t) => types.has(t))),
+    return this._rows.filter(
+      (e) =>
+        (!cameras.size || cameras.has(e.camera_id)) &&
+        (!types.size || shownTypes(e.types).some((t) => types.has(t))) &&
+        (!this.unusualOnly || this._markOf(e) !== undefined),
     );
   }
 
@@ -192,14 +277,24 @@ export class RvTimetable extends LitElement {
       const key = eventKey(event);
       if (this._thumbsAsked.has(key)) continue;
       this._thumbsAsked.add(key);
-      byCamera.set(event.camera_id, [...(byCamera.get(event.camera_id) ?? []), event.start]);
+      byCamera.set(event.camera_id, [
+        ...(byCamera.get(event.camera_id) ?? []),
+        event.start,
+      ]);
     }
     await Promise.all(
       [...byCamera].map(async ([camera, times]) => {
         try {
-          const { urls } = await fetchThumbnailUrls(hass, camera, times, THUMB_BUCKET_S);
+          const { urls } = await fetchThumbnailUrls(
+            hass,
+            camera,
+            times,
+            THUMB_BUCKET_S,
+          );
           const thumbs = new Map(this._thumbs);
-          urls.forEach((u, i) => thumbs.set(`${camera}:${String(times[i] ?? u.time)}`, u.url));
+          urls.forEach((u, i) =>
+            thumbs.set(`${camera}:${String(times[i] ?? u.time)}`, u.url),
+          );
           this._thumbs = thumbs;
         } catch {
           // No thumbnails: the rows still say everything.
@@ -214,20 +309,31 @@ export class RvTimetable extends LitElement {
       this._markOpened(event);
       markEventSeen(hass, event.camera_id, event.start).catch(() => undefined);
     }
-    navigate(this, { view: "device", id: event.camera_id, tab: "playback", at: event.start });
+    navigate(this, {
+      view: "device",
+      id: event.camera_id,
+      tab: "playback",
+      at: event.start,
+    });
   }
 
   private _markOpened(opened: RecentEvent): void {
     const feed = this._feed;
     if (!feed) return;
-    this._feed = { ...feed, events: feed.events.map((e) => (e === opened ? { ...e, new: false } : e)) };
+    this._feed = {
+      ...feed,
+      events: feed.events.map((e) => (e === opened ? { ...e, new: false } : e)),
+    };
   }
 
   private async _allSeen(): Promise<void> {
     const hass = this.hass;
     const feed = this._feed;
     if (!hass || !feed) return;
-    this._feed = { ...feed, events: feed.events.map((e) => ({ ...e, new: false })) };
+    this._feed = {
+      ...feed,
+      events: feed.events.map((e) => ({ ...e, new: false })),
+    };
     try {
       await markAllEventsSeen(hass);
     } catch (err) {
@@ -240,7 +346,11 @@ export class RvTimetable extends LitElement {
     const events = this._matching;
     const zone = this.hass?.config?.time_zone;
     const cameras = new Set(events.map((e) => e.camera_id)).size;
-    const filtered = this.cameraFilter.size > 0 || this.typeFilter.size > 0 || this._pick.size > 0;
+    const filtered =
+      this.cameraFilter.size > 0 ||
+      this.typeFilter.size > 0 ||
+      this._pick.size > 0 ||
+      this.unusualOnly;
     const day = this._isToday ? "today's" : "this day's";
     return html`<div class="head">
         ${this.heading ? html`<h2>${this.heading}</h2>` : nothing}
@@ -256,63 +366,104 @@ export class RvTimetable extends LitElement {
             </p>`
           : nothing}
         ${(feed?.events ?? []).some((e) => e.new)
-          ? html`<button class="text all-seen" @click=${() => void this._allSeen()}>Mark all seen</button>`
+          ? html`<button
+              class="text all-seen"
+              @click=${() => void this._allSeen()}
+            >
+              Mark all seen
+            </button>`
           : nothing}
         ${this.filters
-          ? html`<button class="text with-icon all-events" @click=${() => {
-              navigate(this, { view: "events" });
-            }}>All events${icon("chevron")}</button>`
+          ? html`<button
+              class="text with-icon all-events"
+              @click=${() => {
+                navigate(this, { view: "events" });
+              }}
+            >
+              All events${icon("chevron")}
+            </button>`
           : nothing}
       </div>
       ${this.filters && feed ? this._renderPick(feed) : nothing}
       ${this._error
-        ? problem(explainLoad(this._error, this._isToday ? "Today's events" : "This day's events"), this._error, {
-            action: html`<button @click=${() => void this._load(false)}>Try again</button>`,
-            help: "loading",
-          })
+        ? problem(
+            explainLoad(
+              this._error,
+              this._isToday ? "Today's events" : "This day's events",
+            ),
+            this._error,
+            {
+              action: html`<button @click=${() => void this._load(false)}>
+                Try again
+              </button>`,
+              help: "loading",
+            },
+          )
         : nothing}
-      ${feed ? this._renderTable(feed, zone) : this._error ? nothing : html`<p class="muted">Reading ${day} events…</p>`}`;
+      ${feed
+        ? this._renderTable(feed, zone)
+        : this._error
+          ? nothing
+          : html`<p class="muted">Reading ${day} events…</p>`}`;
   }
 
   /** The day's cameras, by their number on the board, to show only some. */
   private _renderPick(feed: RecentEvents): TemplateResult | typeof nothing {
     const present = new Set(feed.events.map((e) => e.camera_id));
-    const cameras = this.cameras.filter((c) => present.has(c.id) || this._pick.has(c.id));
+    const cameras = this.cameras.filter(
+      (c) => present.has(c.id) || this._pick.has(c.id),
+    );
     if (cameras.length < 2) return nothing;
     return html`<div class="pick" role="group" aria-label="Cameras">
       ${cameras.map(
-        (c) => html`<button
-          class="chip"
-          aria-pressed=${this._pick.has(c.id) ? "true" : "false"}
-          @click=${() => {
-            const pick = new Set(this._pick);
-            if (!pick.delete(c.id)) pick.add(c.id);
-            this._pick = pick;
-          }}
-        >
-          <span class="plat" aria-hidden="true">${c.number}</span>${c.name}
-        </button>`,
+        (c) =>
+          html`<button
+            class="chip"
+            aria-pressed=${this._pick.has(c.id) ? "true" : "false"}
+            @click=${() => {
+              const pick = new Set(this._pick);
+              if (!pick.delete(c.id)) pick.add(c.id);
+              this._pick = pick;
+            }}
+          >
+            <span class="plat" aria-hidden="true">${c.number}</span>${c.name}
+          </button>`,
       )}
     </div>`;
   }
 
-  private _renderTable(feed: RecentEvents, zone: string | undefined): TemplateResult {
+  private _renderTable(
+    feed: RecentEvents,
+    zone: string | undefined,
+  ): TemplateResult {
     const events = this._matching;
     const byId = new Map(this.cameras.map((c) => [c.id, c]));
     const hidden = events.length - this._shown.length;
     const today = this._isToday;
-    const empty = feed.events.length
-      ? "No events match these filters."
-      : today
-        ? "Nothing recorded an event since midnight."
-        : "Nothing recorded an event on this day.";
+    const empty =
+      this.unusualOnly && !this._rows.some((e) => this._markOf(e))
+        ? today
+          ? "Nothing unusual today."
+          : "Nothing unusual on this day."
+        : feed.events.length
+          ? "No events match these filters."
+          : today
+            ? "Nothing recorded an event since midnight."
+            : "Nothing recorded an event on this day.";
     return html`<div class="cols" aria-hidden="true">
-        <span>Time</span><span>Event</span><span>Camera</span><span class="right">Length</span><span></span>
+        <span>Time</span><span>Event</span><span>Camera</span
+        ><span class="right">Length</span><span></span>
       </div>
-      ${today ? html`<div class="now"><b>${formatClock(this._now, zone)} now</b></div>` : nothing}
+      ${today
+        ? html`<div class="now">
+            <b>${formatClock(this._now, zone)} now</b>
+          </div>`
+        : nothing}
       ${events.length
         ? html`<ol class="rows">
-            ${this._shown.map((event) => this._renderRow(event, byId.get(event.camera_id), zone))}
+            ${this._shown.map((event) =>
+              this._renderRow(event, byId.get(event.camera_id), zone),
+            )}
           </ol>`
         : html`<p class="muted empty">${empty}</p>`}
       ${hidden > 0
@@ -336,12 +487,18 @@ export class RvTimetable extends LitElement {
         : nothing}`;
   }
 
-  private _renderRow(event: RecentEvent, camera: BoardCamera | undefined, zone: string | undefined): TemplateResult {
+  private _renderRow(
+    event: RecentEvent,
+    camera: BoardCamera | undefined,
+    zone: string | undefined,
+  ): TemplateResult {
     const label = eventLabel(event.types);
     const time = formatClock(event.start, zone);
     const name = camera?.name ?? "Camera";
     const thumb = this._thumbs.get(eventKey(event));
-    const arrived = this._newestBefore !== undefined && event.start > this._newestBefore;
+    const arrived =
+      this._newestBefore !== undefined && event.start > this._newestBefore;
+    const mark = this._markOf(event);
     return html`<li class=${arrived ? "arrived" : ""}>
       <button
         class="row ${event.new ? "new" : ""}"
@@ -351,13 +508,38 @@ export class RvTimetable extends LitElement {
       >
         <span class="t">${time}</span>
         <span class="ev">
-          ${icon(pictogram(event.types))}<span>${label}</span>${event.new ? html`<span class="tag">New</span>` : nothing}
+          ${icon(pictogram(event.types))}<span>${label}</span>${event.new
+            ? html`<span class="tag">New</span>`
+            : nothing}${mark
+            ? html`<span class="badge unusual">Unusual</span>`
+            : nothing}
         </span>
-        <span class="cam">${platform(camera)}<span class="name">${name}</span></span>
+        <span class="cam"
+          >${platform(camera)}<span class="name">${name}</span></span
+        >
         <span class="len">${formatLength(event.end - event.start)}</span>
-        <span class="thumb">${thumb ? html`<img src=${thumb} alt="" loading="lazy" />` : nothing}</span>
-        <span class="meta">${platform(camera)}${name} · ${formatLength(event.end - event.start)}</span>
+        <span class="thumb"
+          >${thumb
+            ? html`<img src=${thumb} alt="" loading="lazy" />`
+            : nothing}</span
+        >
+        <span class="meta"
+          >${platform(camera)}${name} ·
+          ${formatLength(event.end - event.start)}</span
+        >
       </button>
+      ${mark
+        ? html`<details class="why">
+            <summary>Why it is unusual${icon("chevronDown")}</summary>
+            <rv-unusual-reason .mark=${mark}></rv-unusual-reason>
+            ${event.journal
+              ? html`<p class="muted small">
+                  Seen by Home Assistant's sensors; the camera's own events do
+                  not list it.
+                </p>`
+              : nothing}
+          </details>`
+        : nothing}
     </li>`;
   }
 
@@ -520,6 +702,29 @@ export class RvTimetable extends LitElement {
         font-size: 13px;
         font-weight: 600;
       }
+      .ev .badge {
+        flex: none;
+      }
+      /* Why a row is unusual (Phase 8.3): a disclosure under it, in line with its event. */
+      .why {
+        padding: 0 8px 10px 124px;
+      }
+      .why > summary {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        min-height: 32px;
+        color: var(--rv-action);
+        font-size: 14px;
+        font-weight: 500;
+      }
+      .why rv-unusual-reason {
+        margin-top: 6px;
+        max-width: 720px;
+      }
+      .why p {
+        margin: 8px 0 0;
+      }
       .cam {
         display: flex;
         align-items: center;
@@ -618,6 +823,9 @@ export class RvTimetable extends LitElement {
         .len {
           display: none;
         }
+        .why {
+          padding: 0 4px 10px 74px;
+        }
         .thumb {
           grid-area: thumb;
           width: 84px;
@@ -660,8 +868,12 @@ function eventKey(event: RecentEvent): string {
   return `${event.camera_id}:${String(event.start)}`;
 }
 
-function platform(camera: BoardCamera | undefined): TemplateResult | typeof nothing {
-  return camera ? html`<span class="plat" aria-hidden="true">${camera.number}</span>` : nothing;
+function platform(
+  camera: BoardCamera | undefined,
+): TemplateResult | typeof nothing {
+  return camera
+    ? html`<span class="plat" aria-hidden="true">${camera.number}</span>`
+    : nothing;
 }
 
 export function eventLabel(types: readonly string[]): string {
@@ -694,7 +906,9 @@ export function formatLength(ms: number): string {
   const h = Math.floor(total / 3600);
   const m = Math.floor((total % 3600) / 60);
   const s = String(total % 60).padStart(2, "0");
-  return h ? `${String(h)}:${String(m).padStart(2, "0")}:${s}` : `${String(m)}:${s}`;
+  return h
+    ? `${String(h)}:${String(m).padStart(2, "0")}:${s}`
+    : `${String(m)}:${s}`;
 }
 
 if (!customElements.get("rv-timetable")) {

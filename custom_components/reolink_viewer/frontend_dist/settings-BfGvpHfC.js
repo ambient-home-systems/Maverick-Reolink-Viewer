@@ -1,6 +1,6 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
-import { A as i, Dt as a, Y as o, Z as s } from "./live-DWqtt9-p.js";
-import { H as c, n as l } from "./home-f48M3oXR.js";
+import { Q as i, X as a, j as o, kt as s } from "./live-_jyOGRi0.js";
+import { H as c, n as l } from "./home-C-2P8fU_.js";
 //#region src/catalog.ts
 var u = {
 	id: "other",
@@ -239,11 +239,11 @@ var b = 1e4, x = class {
     </div>`;
 	}
 	_renderRow(e) {
-		let { entity: r, entry: i, label: a } = e, s = this._open.has(r.entity_id);
+		let { entity: r, entry: i, label: o } = e, s = this._open.has(r.entity_id);
 		return n`<li class="row" data-entity-id=${r.entity_id}>
       <div class="info">
         <div class="label">
-          ${a}
+          ${o}
           ${r.sub_device ? n`<span class="badge">${r.sub_device}</span>` : t}
           ${r.disabled_by === null ? t : n`<span class="badge">Turned off</span>`}
           ${r.hidden_by === null ? t : n`<span class="badge">Hidden</span>`}
@@ -252,7 +252,7 @@ var b = 1e4, x = class {
         </div>
         ${i ? n`<div class="muted small">${i.summary}</div>` : t}
       </div>
-      <div class="control">${this._renderControl(r, a)}</div>
+      <div class="control">${this._renderControl(r, o)}</div>
       ${i ? n`<details
             class="about"
             .open=${s}
@@ -260,7 +260,7 @@ var b = 1e4, x = class {
 			this._setOpen(r.entity_id, e.target.open);
 		}}
           >
-            <summary class="small" aria-label=${`About this setting: ${a}`}>About this setting${o("chevronDown")}</summary>
+            <summary class="small" aria-label=${`About this setting: ${o}`}>About this setting${a("chevronDown")}</summary>
             ${s ? this._renderAbout(i) : t}
           </details>` : t}
     </li>`;
@@ -424,16 +424,16 @@ var b = 1e4, x = class {
     </span>`;
 	}
 	async _write(e, t, n, r, i) {
-		let o = this.hass;
-		if (!o) return;
-		let s = m(d(this.catalog, e.domain, e.key), r);
-		if (s !== null && !await this.confirm(t, s)) return;
-		let l = i ?? v(e.domain, e.domain === "button" ? "press" : e.domain === "update" ? "install" : n), u = e.entity_id, f = this.writes.begin(u, n, o.states[u]);
+		let a = this.hass;
+		if (!a) return;
+		let o = m(d(this.catalog, e.domain, e.key), r);
+		if (o !== null && !await this.confirm(t, o)) return;
+		let l = i ?? v(e.domain, e.domain === "button" ? "press" : e.domain === "update" ? "install" : n), u = e.entity_id, f = this.writes.begin(u, n, a.states[u]);
 		this.requestUpdate();
 		try {
-			await o.callService(l.domain, l.service, l.data, { entity_id: u }, !1), this.writes.confirm(u, f), this._scheduleSettle();
+			await a.callService(l.domain, l.service, l.data, { entity_id: u }, !1), this.writes.confirm(u, f), this._scheduleSettle();
 		} catch (e) {
-			this.writes.fail(u, f) && c(this, `Could not change ${t}: ${a(e).message}`, "error");
+			this.writes.fail(u, f) && c(this, `Could not change ${t}: ${s(e).message}`, "error");
 		}
 		this.requestUpdate();
 	}
@@ -486,20 +486,20 @@ var b = 1e4, x = class {
 		if (n) {
 			this._enabling = /* @__PURE__ */ new Set([...this._enabling, e.entity_id]);
 			try {
-				let r = (await s(n, e.entity_id)).reload_delay;
+				let r = (await i(n, e.entity_id)).reload_delay;
 				c(this, `${t} enabled. Home Assistant reloads the Reolink entry${r ? ` in about ${r} seconds` : ""}; the entity becomes available after that.`), this.dispatchEvent(new CustomEvent("rv-entity-enabled", {
 					bubbles: !0,
 					composed: !0
 				}));
 			} catch (e) {
-				c(this, `Could not enable ${t}: ${a(e).message}`, "error");
+				c(this, `Could not enable ${t}: ${s(e).message}`, "error");
 			} finally {
 				let t = new Set(this._enabling);
 				t.delete(e.entity_id), this._enabling = t;
 			}
 		}
 	}
-	static styles = [i, e`
+	static styles = [o, e`
       :host {
         display: flex;
         flex-direction: column;

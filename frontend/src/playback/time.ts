@@ -81,6 +81,21 @@ export function offsetAt(ms: number, timeZone?: string): number {
   return asUtc - Math.floor(ms / 1000) * 1000;
 }
 
+/** A calendar day (YYYY-MM-DD) in a zone, as [its start, the next day's start] (epoch ms). */
+export function dayWindow(date: string, timeZone?: string): [number, number] {
+  const [year, month, day] = date.split("-").map(Number) as [number, number, number];
+  const startOf = (y: number, m: number, d: number): number => {
+    const utc = Date.UTC(y, m - 1, d);
+    // Twice: the offset at local midnight, not at UTC midnight (a DST day).
+    return utc - offsetAt(utc - offsetAt(utc, timeZone), timeZone);
+  };
+  const next = new Date(Date.UTC(year, month - 1, day + 1));
+  return [
+    startOf(year, month, day),
+    startOf(next.getUTCFullYear(), next.getUTCMonth() + 1, next.getUTCDate()),
+  ];
+}
+
 /** First day of the week for a locale (0 = Sunday, 1 = Monday). */
 export function firstDayOfWeek(language?: string): number {
   try {

@@ -86,6 +86,7 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_check_reports)
     websocket_api.async_register_command(hass, ws_journal_status)
     websocket_api.async_register_command(hass, ws_unusual_events)
+    websocket_api.async_register_command(hass, ws_unusual_marks)
 
 
 def _loaded_entry(hass: HomeAssistant) -> ReolinkViewerConfigEntry | None:
@@ -1100,3 +1101,53 @@ async def ws_unusual_events(
         )
     events.sort(key=lambda payload: payload["start"])
     connection.send_result(msg["id"], {"events": events})
+
+
+@websocket_api.websocket_command(
+    {
+        probatio.Required("type"): f"{DOMAIN}/unusual/marks",
+        probatio.Required("since"): int,
+        probatio.Required("until"): int,
+    }
+)
+@websocket_api.async_response
+async def ws_unusual_marks(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Return the incidents marked unusual in [since, until) (epoch ms), for the panel.
+
+    Each with its sentence, its signals and every camera's event in it; and
+    whether each camera marks yet. Learning off is no error: nothing is marked.
+    """
+    entry = _loaded_entry(hass)
+    if entry is None:
+        connection.send_error(msg["id"], ERR_NOT_LOADED, "Reolink Viewer is not loaded")
+        return
+    journal, unusual = entry.runtime_data.journal, entry.runtime_data.unusual
+    if journal is None or not journal.running or unusual is None:
+        connection.send_result(
+            msg["id"], {"enabled": False, "marks": [], "cameras": {}}
+        )
+        return
+    since, until = msg["since"], msg["until"]
+    if not 0 < until - since <= UNUSUAL_MAX_SPAN_MS:
+        connection.send_error(
+            msg["id"],
+            websocket_api.ERR_INVALID_FORMAT,
+            "until must be after since, by at most 7 days",
+        )
+        return
+    await journal.async_flush()
+    marks = await unusual.async_marks(since=since / 1000, until=until / 1000)
+    cameras = {*unusual.model.per_camera, *unusual.names}
+    connection.send_result(
+        msg["id"],
+        {
+            "enabled": True,
+            "built": bool(unusual.model.built_at),
+            "marks": marks,
+            "cameras": {camera: unusual.state(camera) for camera in sorted(cameras)},
+        },
+    )

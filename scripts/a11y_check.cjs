@@ -46,6 +46,7 @@ const VIEWS = {
   "siren-confirm": { hash: "#device/cam-fyl/live", press: "button.siren" },
   "full-screen": { hash: "", press: ".corner-button.full" },
   "debug-view": { hash: "", press: ".corner-button.info" },
+  "unusual-why": { hash: "#events", press: "details.why summary" },
 };
 const VIEWPORTS = {
   desktop: { width: 1440, height: 900 },

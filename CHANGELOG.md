@@ -3,6 +3,19 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.48.0
+
+Unusual events in the panel.
+
+- **Marked events on the timetable.** On the home view and Events, an event marked
+  unusual has an **Unusual** tag, and **Why it is unusual** under it: its sentence,
+  then each signal (what it was, the time of day, how long...) in words, with a bar
+  for how far it pushed the event towards rare or usual.
+- **Events → Marked: Unusual** shows only the day's marked events ("Learning…" until a
+  camera marks).
+- **A marked event the camera does not list** gets a row of its own, seen by Home
+  Assistant's sensors.
+
 ## 0.47.5
 
 - **Balanced marks a few a day again.** With what is known no longer standing out

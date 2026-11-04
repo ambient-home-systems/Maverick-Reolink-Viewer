@@ -1,6 +1,6 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
-import { A as i, Dt as a, Y as o, at as s, f as c } from "./live-DWqtt9-p.js";
-import { r as l, z as u } from "./home-f48M3oXR.js";
+import { X as i, j as a, kt as o, ot as s, p as c } from "./live-_jyOGRi0.js";
+import { r as l, z as u } from "./home-C-2P8fU_.js";
 //#region src/components/learning.ts
 var d = class extends r {
 	static properties = {
@@ -19,7 +19,7 @@ var d = class extends r {
 		try {
 			this._state = await s(e);
 		} catch (e) {
-			this._state = { error: a(e).message };
+			this._state = { error: o(e).message };
 		}
 	}
 	render() {
@@ -116,7 +116,7 @@ var d = class extends r {
         it has seen since against that.
       </p>`;
 	}
-	static styles = [i, e`
+	static styles = [a, e`
       :host {
         display: block;
       }
@@ -271,7 +271,7 @@ var y = class extends r {
       </ul>`;
 	}
 	_renderCamera(e, r) {
-		let i = r ? e.connections.find((e) => e.host_id === r.id)?.channel : void 0, a = r !== void 0 && e.connections.some((e) => e.via === "direct"), s = this.cameras.find((t) => t.id === e.id)?.number, c = [a ? "Also added directly" : void 0, e.primary_view === "snapshot" ? "Snapshots only" : void 0].filter((e) => e !== void 0);
+		let a = r ? e.connections.find((e) => e.host_id === r.id)?.channel : void 0, o = r !== void 0 && e.connections.some((e) => e.via === "direct"), s = this.cameras.find((t) => t.id === e.id)?.number, c = [o ? "Also added directly" : void 0, e.primary_view === "snapshot" ? "Snapshots only" : void 0].filter((e) => e !== void 0);
 		return n`<li>
       <button
         class="row"
@@ -285,14 +285,14 @@ var y = class extends r {
       >
         <span class="plat-cell">${s === void 0 ? t : n`<span class="plat" aria-hidden="true">${s}</span>`}</span>
         <span class="name">${e.name ?? "Camera"}</span>
-        <span class="ch muted">${i == null ? "Direct" : `Ch ${String(i + 1)}`}</span>
+        <span class="ch muted">${a == null ? "Direct" : `Ch ${String(a + 1)}`}</span>
         <span class="model muted">${e.model ?? ""}</span>
         <span class="state">${b(e)}${c.length ? n`<span class="flags muted">${c.join(" · ")}</span>` : t}</span>
-        ${o("chevron")}
+        ${i("chevron")}
       </button>
     </li>`;
 	}
-	static styles = [i, e`
+	static styles = [a, e`
       :host {
         display: flex;
         flex-direction: column;

@@ -82,7 +82,10 @@ export const okDevices = (
   cameras: CameraNode[] = [makeCamera()],
 ): DevicesResponse => ({ degraded: false, compat: COMPAT, hosts, cameras });
 
-export function makeEntity(entityId: string, overrides: Partial<EntityInfo> = {}): EntityInfo {
+export function makeEntity(
+  entityId: string,
+  overrides: Partial<EntityInfo> = {},
+): EntityInfo {
   const [domain = "switch", object = ""] = entityId.split(".");
   return {
     entity_id: entityId,
@@ -105,13 +108,29 @@ export const ENTITIES: EntityInfo[] = [
   makeEntity("switch.record", { category: "recording" }),
   makeEntity("number.motion_sensitivity", { category: "detection" }),
   makeEntity("select.day_night_mode", { category: "image" }),
-  makeEntity("button.reboot", { key: "reboot", translation_key: null, category: "system" }),
-  makeEntity("sensor.wifi_signal", { category: "system", entity_category: "diagnostic" }),
-  makeEntity("switch.ftp_upload", { category: "notifications", disabled_by: "integration" }),
-  makeEntity("camera.front_yard_fluent", { key: "sub", translation_key: "sub", category: "streams" }),
+  makeEntity("button.reboot", {
+    key: "reboot",
+    translation_key: null,
+    category: "system",
+  }),
+  makeEntity("sensor.wifi_signal", {
+    category: "system",
+    entity_category: "diagnostic",
+  }),
+  makeEntity("switch.ftp_upload", {
+    category: "notifications",
+    disabled_by: "integration",
+  }),
+  makeEntity("camera.front_yard_fluent", {
+    key: "sub",
+    translation_key: "sub",
+    category: "streams",
+  }),
 ];
 
-export function makeConnection(overrides: Partial<DeviceConnection> = {}): DeviceConnection {
+export function makeConnection(
+  overrides: Partial<DeviceConnection> = {},
+): DeviceConnection {
   return {
     device_id: "dev-cam",
     entry_id: "entry-nvr",
@@ -127,7 +146,9 @@ export function makeConnection(overrides: Partial<DeviceConnection> = {}): Devic
   };
 }
 
-export function makeDevice(overrides: Partial<DeviceResponse> = {}): DeviceResponse {
+export function makeDevice(
+  overrides: Partial<DeviceResponse> = {},
+): DeviceResponse {
   return {
     degraded: false,
     compat: COMPAT,
@@ -137,7 +158,10 @@ export function makeDevice(overrides: Partial<DeviceResponse> = {}): DeviceRespo
   };
 }
 
-function entry(title: string, overrides: Partial<CatalogEntry> = {}): CatalogEntry {
+function entry(
+  title: string,
+  overrides: Partial<CatalogEntry> = {},
+): CatalogEntry {
   return {
     title,
     summary: `${title} summary.`,
@@ -146,7 +170,12 @@ function entry(title: string, overrides: Partial<CatalogEntry> = {}): CatalogEnt
     related: [],
     requires: "Any Reolink camera",
     impact: "safe",
-    sources: [{ title: "HA docs", url: "https://www.home-assistant.io/integrations/reolink/" }],
+    sources: [
+      {
+        title: "HA docs",
+        url: "https://www.home-assistant.io/integrations/reolink/",
+      },
+    ],
     verification: "verified",
     verified_against: ["ha_docs"],
     ...overrides,
@@ -161,11 +190,17 @@ export const CATALOG: Catalog = {
     { id: "lighting", title: "Lights and night vision", description: "l" },
     { id: "streams", title: "Streams and encoding", description: "s" },
     { id: "recording", title: "Recording", description: "r" },
-    { id: "notifications", title: "Notifications and alerts", description: "n" },
+    {
+      id: "notifications",
+      title: "Notifications and alerts",
+      description: "n",
+    },
     { id: "system", title: "System and maintenance", description: "y" },
   ],
   entities: {
-    light: { status_led: entry("Status LED", { related: ["switch.record", "nope.x"] }) },
+    light: {
+      status_led: entry("Status LED", { related: ["switch.record", "nope.x"] }),
+    },
     switch: {
       record: entry("Record", {
         impact: "disruptive",
@@ -174,7 +209,11 @@ export const CATALOG: Catalog = {
       }),
       ftp_upload: entry("FTP upload"),
     },
-    number: { motion_sensitivity: entry("Motion sensitivity", { verification: "unverified" }) },
+    number: {
+      motion_sensitivity: entry("Motion sensitivity", {
+        verification: "unverified",
+      }),
+    },
     select: {
       day_night_mode: entry("Day night mode", {
         impact: "disruptive",
@@ -209,7 +248,9 @@ export function makeState(
 }
 
 export const STATES: HassEntities = {
-  "light.status_led": makeState("light.status_led", "on", { supported_color_modes: ["onoff"] }),
+  "light.status_led": makeState("light.status_led", "on", {
+    supported_color_modes: ["onoff"],
+  }),
   "switch.record": makeState("switch.record", "on"),
   "number.motion_sensitivity": makeState("number.motion_sensitivity", "30", {
     min: 1,
@@ -222,7 +263,9 @@ export const STATES: HassEntities = {
     options: ["auto", "color", "blackwhite"],
   }),
   "button.reboot": makeState("button.reboot", "unknown"),
-  "sensor.wifi_signal": makeState("sensor.wifi_signal", "-45", { unit_of_measurement: "dBm" }),
+  "sensor.wifi_signal": makeState("sensor.wifi_signal", "-45", {
+    unit_of_measurement: "dBm",
+  }),
   "camera.front_yard_fluent": makeState("camera.front_yard_fluent", "idle", {
     entity_picture: "/api/camera_proxy/camera.front_yard_fluent?token=abc",
   }),
@@ -263,6 +306,12 @@ export function makeHass(devices: DevicesResponse, isAdmin = true): FakeHass {
       "config/entity_registry/update": { reload_delay: 30 },
       // The Devices page's "Learning what is normal" (Phase 8).
       "reolink_viewer/journal/status": { enabled: false },
+      // The timetable's marks (Phase 8.3): learning off, nothing marked.
+      "reolink_viewer/unusual/marks": {
+        enabled: false,
+        marks: [],
+        cameras: {},
+      },
     },
     user: { is_admin: isAdmin },
     emit: (event) => listener?.(event),
@@ -282,7 +331,10 @@ export function makeHass(devices: DevicesResponse, isAdmin = true): FakeHass {
     },
     connection: {
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters -- HA's signature
-      subscribeMessage: <T>(callback: (message: T) => void, message: Record<string, unknown>) => {
+      subscribeMessage: <T>(
+        callback: (message: T) => void,
+        message: Record<string, unknown>,
+      ) => {
         hass.sent.push(message);
         if (hass.failSubscribe) {
           // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
@@ -311,7 +363,10 @@ export function makeHass(devices: DevicesResponse, isAdmin = true): FakeHass {
 
 /** HA replaces the hass object (and changed state objects) on every state change. */
 export function withStates(hass: FakeHass, changes: HassEntities): FakeHass {
-  const next = Object.assign(Object.create(Object.getPrototypeOf(hass) as object) as FakeHass, hass);
+  const next = Object.assign(
+    Object.create(Object.getPrototypeOf(hass) as object) as FakeHass,
+    hass,
+  );
   next.states = { ...hass.states, ...changes };
   return next;
 }
@@ -332,7 +387,10 @@ export function deepText(root: Node): string {
 }
 
 /** All elements matching a selector, searching through shadow roots. */
-export function deepQueryAll<T extends Element = HTMLElement>(root: Node, selector: string): T[] {
+export function deepQueryAll<T extends Element = HTMLElement>(
+  root: Node,
+  selector: string,
+): T[] {
   const found: T[] = [];
   const walk = (node: Node) => {
     if (node instanceof Element) {
@@ -359,7 +417,10 @@ export function fakePip(): {
   let current: HTMLVideoElement | null = null;
   let refusing = false;
   const requested: HTMLVideoElement[] = [];
-  const proto = HTMLVideoElement.prototype as unknown as Record<string, unknown>;
+  const proto = HTMLVideoElement.prototype as unknown as Record<
+    string,
+    unknown
+  >;
   const before = proto.requestPictureInPicture;
   const leave = () => {
     const was = current;
@@ -368,7 +429,8 @@ export function fakePip(): {
   };
   const request = (video: HTMLVideoElement) => {
     requested.push(video);
-    if (refusing) return Promise.reject(new DOMException("Not allowed", "NotAllowedError"));
+    if (refusing)
+      return Promise.reject(new DOMException("Not allowed", "NotAllowedError"));
     if (current !== video) leave();
     current = video;
     video.dispatchEvent(new Event("enterpictureinpicture"));
@@ -377,8 +439,14 @@ export function fakePip(): {
   proto.requestPictureInPicture = function (this: HTMLVideoElement) {
     return request(this);
   };
-  Object.defineProperty(document, "pictureInPictureEnabled", { value: true, configurable: true });
-  Object.defineProperty(document, "pictureInPictureElement", { get: () => current, configurable: true });
+  Object.defineProperty(document, "pictureInPictureEnabled", {
+    value: true,
+    configurable: true,
+  });
+  Object.defineProperty(document, "pictureInPictureElement", {
+    get: () => current,
+    configurable: true,
+  });
   Object.defineProperty(document, "exitPictureInPicture", {
     value: () => {
       leave();
@@ -395,7 +463,11 @@ export function fakePip(): {
     restore: () => {
       leave();
       proto.requestPictureInPicture = before;
-      for (const name of ["pictureInPictureEnabled", "pictureInPictureElement", "exitPictureInPicture"]) {
+      for (const name of [
+        "pictureInPictureEnabled",
+        "pictureInPictureElement",
+        "exitPictureInPicture",
+      ]) {
         Reflect.deleteProperty(document, name);
       }
     },

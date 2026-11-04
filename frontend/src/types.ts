@@ -358,6 +358,8 @@ export interface RecentEvent {
   segment: string | null;
   /** Not yet opened by this Home Assistant user, and after their first look. */
   new: boolean;
+  /** Seen only by the detection journal (Phase 8.3): no event of the camera's matched it. */
+  journal?: boolean;
 }
 
 export interface RecentEvents {
@@ -509,6 +511,22 @@ export interface UnusualEvent {
   incident?: number;
   /** A mark in the status: every camera that saw its incident. */
   cameras?: string[];
+  /** A mark: the cameras' ids, as `cameras` names them. */
+  camera_ids?: string[];
+  /** A mark (unusual/marks): every event of its incident, on every camera. */
+  members?: { camera: string; start: number; end: number | null }[];
+}
+
+/** The incidents marked unusual in a window (unusual/marks), for the panel (Phase 8.3). */
+export interface UnusualMarks {
+  /** Learn what is normal is on. */
+  enabled: boolean;
+  /** The model is built (it learns for a minute or so after a start). */
+  built?: boolean;
+  /** Oldest first. */
+  marks: UnusualEvent[];
+  /** Whether each camera marks yet, or what it is short of. */
+  cameras: Record<string, UnusualCamera>;
 }
 
 export interface UnusualCamera {

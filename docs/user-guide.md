@@ -241,6 +241,15 @@ follows a household that changes.
 - **What fired just before** means another camera's detection (a person, vehicle,
   animal...), not its motion; and only **nothing firing first**, where something
   usually does, makes an event stand out.
+- **On the timetable** (the home view and Events), a marked event has a plain
+  **Unusual** tag. **Why it is unusual**, under the row, opens its sentence and each
+  signal: what it was, and whether it made the event rarer than chance or more usual,
+  with a bar for how much. The row itself still opens the recording.
+- **Events → Marked: Unusual** shows only the marked events of the day. It reads
+  **Learning…** until a camera has learned enough to mark.
+- **A marked event the camera does not list** (a camera whose recordings cannot be
+  searched, or an event its list has not caught up with) still gets a row, "seen by
+  Home Assistant's sensors".
 - **Unusual in the last 7 days**, on the Devices page: how many were marked, about how
   many a day, and the latest, each with a sentence saying why: "Person at 03:12 on
   Doorbell — 2nd time in 3 weeks, and nothing fired first." **The numbers behind it**

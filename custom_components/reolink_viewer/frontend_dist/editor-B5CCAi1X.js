@@ -1,5 +1,5 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
-import { Dt as i, I as a, L as o, ot as s } from "./live-DWqtt9-p.js";
+import { L as i, R as a, kt as o, st as s } from "./live-_jyOGRi0.js";
 import { a as c, c as l, r as u } from "./config-D80frQMF.js";
 //#region src/card/editor.ts
 var d = "config-changed", f = class extends r {
@@ -32,7 +32,7 @@ var d = "config-changed", f = class extends r {
 		try {
 			this._cameras = (await s(e)).cameras;
 		} catch (e) {
-			this._error = i(e).message;
+			this._error = o(e).message;
 		} finally {
 			this._loading = !1;
 		}
@@ -96,13 +96,13 @@ var d = "config-changed", f = class extends r {
     </div>`;
 	}
 	_renderWarm(e, r) {
-		if (o(e)?.is_battery) return n`<p class="note">
+		if (a(e)?.is_battery) return n`<p class="note">
         A battery camera is never kept warm, so it can sleep: the card shows its last picture, and its video plays when
         tapped.
       </p>`;
 		let s = e.keep_warm_entity;
 		if (!s) return t;
-		let c = a(this.hass, e), l = this.hass?.states[s]?.state;
+		let c = i(this.hass, e), l = this.hass?.states[s]?.state;
 		return n`<div class=${c ? "warm" : "warm cold"}>
       ${c || r.quality === "hd" ? t : n`<p class="warning" role="status">
             Not kept warm: its video takes a few seconds to start. Keep it warm to start at once.
@@ -115,7 +115,7 @@ var d = "config-changed", f = class extends r {
           @change=${(e) => {
 			let t = e.target.checked;
 			this._switchError = void 0, this.hass?.callService("switch", t ? "turn_on" : "turn_off", { entity_id: s }).catch((e) => {
-				this._switchError = i(e).message;
+				this._switchError = o(e).message;
 			});
 		}}
         />

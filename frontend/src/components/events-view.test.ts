@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { makeHass, okDevices, type FakeHass } from "../test-fixtures";
-import type { RecentEvent, RecentEvents } from "../types";
+import type { RecentEvent, RecentEvents, UnusualCamera, UnusualMarks } from "../types";
 import { dayLabel, shortDay } from "./events-view";
 import type { BoardCamera } from "./live-grid";
 import { routeFromHash, routeToHash, type Route } from "./navigation";
@@ -29,7 +29,7 @@ const EVENTS = [
   event(300, "door", ["MOTION"]),
 ];
 
-function eventsHass(): FakeHass {
+function eventsHass(marks?: UnusualMarks): FakeHass {
   const hass = makeHass(okDevices());
   hass.config = { time_zone: "America/Chicago" };
   hass.callWS = <T,>(message: Record<string, unknown>) => {
@@ -39,6 +39,7 @@ function eventsHass(): FakeHass {
       return Promise.resolve(feed as T);
     }
     if (message.type === "reolink_viewer/events/days") return Promise.resolve({ days: [25, 27], failed: [] } as T);
+    if (message.type === "reolink_viewer/unusual/marks" && marks) return Promise.resolve(marks as T);
     return Promise.resolve({ urls: [] } as T);
   };
   return hass;
@@ -135,6 +136,71 @@ describe("rv-events", () => {
     await el.updateComplete;
     expect(timetable()?.cameraFilter.size).toBe(0);
     expect(timetable()?.typeFilter.size).toBe(0);
+  });
+});
+
+describe("rv-events' unusual filter", () => {
+  const camera = (marking: boolean): UnusualCamera => ({
+    marking,
+    days: marking ? 40 : 3,
+    events: marking ? 900 : 60,
+    needs_days: marking ? 0 : 4,
+    needs_events: 0,
+    line: marking ? 4.2 : null,
+  });
+  const vehicle = EVENTS[2];
+  const marks = (marking: boolean): UnusualMarks => ({
+    enabled: true,
+    built: true,
+    cameras: { yard: camera(marking), door: camera(false) },
+    marks: [
+      {
+        camera: "yard",
+        kind: "vehicle",
+        start: vehicle.start,
+        end: vehicle.end,
+        score: 6.8,
+        line: 4.2,
+        unusual: true,
+        reason: "Vehicle at the Front Yard at an odd hour",
+        terms: [],
+        members: [{ camera: "yard", start: vehicle.start, end: vehicle.end }],
+      },
+    ],
+  });
+  const settle = async (el: HTMLElement & { updateComplete: Promise<boolean> }) => {
+    await flush();
+    await el.updateComplete;
+  };
+
+  it("shows only what is unusual, and every event again", async () => {
+    const { el, chip, timetable } = await mount(eventsHass(marks(true)));
+    await settle(el);
+    expect(el.shadowRoot?.querySelector('[aria-label="Unusual events"]')?.textContent).toContain("Marked");
+    chip("Unusual")?.click();
+    await el.updateComplete;
+    expect(chip("Unusual")?.getAttribute("aria-pressed")).toBe("true");
+    expect(timetable()?.unusualOnly).toBe(true);
+    await timetable()?.updateComplete;
+    const rows = timetable()?.shadowRoot?.querySelectorAll("button.row") ?? [];
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.textContent).toContain("Vehicle");
+    const clear = [...(el.shadowRoot?.querySelectorAll("button") ?? [])].find((b) => b.textContent.trim() === "Show every event");
+    clear?.click();
+    await el.updateComplete;
+    expect(timetable()?.unusualOnly).toBe(false);
+  });
+
+  it("says it is learning while no camera marks yet, and is not there when learning is off", async () => {
+    const learning = await mount(eventsHass(marks(false)));
+    await settle(learning.el);
+    const chip = learning.chip("Learning…");
+    expect(chip?.disabled).toBe(true);
+    expect(learning.chip("Unusual")).toBeUndefined();
+    document.body.innerHTML = "";
+    const off = await mount(eventsHass({ enabled: false, marks: [], cameras: {} }));
+    await settle(off.el);
+    expect(off.el.shadowRoot?.querySelector('[aria-label="Unusual events"]')).toBeNull();
   });
 });
 
