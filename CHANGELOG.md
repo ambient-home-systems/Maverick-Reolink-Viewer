@@ -3,6 +3,15 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.47.5
+
+- **Balanced marks a few a day again.** With what is known no longer standing out
+  (0.47.4), its line sat too high: it marked about 1 a day. It now marks whatever is
+  new enough to be rarer than chance, at most 3 a day across the property.
+- **More, including borderline ones** now counts as new what a camera has seen fewer
+  than 20 times (rather than 10), at most about 6 a day; **Only the strangest** marks
+  under one a day.
+
 ## 0.47.4
 
 Unusual events, tuned on the third week of marks: what happens most days is not unusual.
