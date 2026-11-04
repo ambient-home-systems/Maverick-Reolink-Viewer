@@ -131,4 +131,7 @@ INCIDENT_SECONDS: Final = 60.0
 # score for being that kind ("Doorbell at all on Doorbell — 12th time in 7
 # days"). Lasting shorter than usual no longer raises one either, and only what
 # can be marked is ever "what fired before" (not motion).
-KIND_KNOWN: Final = 10
+KNOWN_AFTER: Final = 10
+# And from its third (2026-11-04, v0.47.3: 37 marks, 39 without the cap): this
+# applies to every signal, not kinds alone (a time, a length, a day, what fired
+# before); and only "nothing fired first" can raise a score.

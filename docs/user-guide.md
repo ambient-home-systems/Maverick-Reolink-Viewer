@@ -234,11 +234,13 @@ follows a household that changes.
   is marked once, naming every camera that saw it.
 - **Only lasting longer than usual stands out.** Someone lingering is worth a look;
   a detection briefer than usual (a passing car, a false one) is not.
-- **A kind a camera has seen 10 times is known there.** It no longer stands out just
-  for being that kind (the doorbell on the doorbell camera); it still does at a
-  strange hour, or for a strange length. A kind new to a camera stands out.
+- **Whatever a camera has seen 10 times is known there:** a kind, a time of day, a
+  length, a day of the week. It no longer makes an event stand out (the doorbell on
+  the doorbell camera, the car that arrives most evenings), so a mark always says
+  "2nd time", "7th time", never "14th".
 - **What fired just before** means another camera's detection (a person, vehicle,
-  animal...), not its motion.
+  animal...), not its motion; and only **nothing firing first**, where something
+  usually does, makes an event stand out.
 - **Unusual in the last 7 days**, on the Devices page: how many were marked, about how
   many a day, and the latest, each with a sentence saying why: "Person at 03:12 on
   Doorbell — 2nd time in 3 weeks, and nothing fired first." **The numbers behind it**
@@ -267,6 +269,8 @@ What it will not do:
   then stops.
 - **A kind of thing a camera rarely sees stands out each time it appears,** until it
   has seen it 10 times.
+- **A busy property marks less as the weeks go on:** more of what it sees is known.
+  **More, including borderline ones** marks more.
 - **A person walking past three cameras is three events.**
 
 Marks on the timetable, an "Unusual" filter, and an event for automations come in
