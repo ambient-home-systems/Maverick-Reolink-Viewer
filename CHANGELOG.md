@@ -3,6 +3,18 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.52.0
+
+The Wall: the Live page as a monitor.
+
+- **Wall**, on the board: the cameras' video only, large, fitted to the screen with
+  nothing to scroll, under a thin bar with the layout, the time, full screen and the
+  way back to the board.
+- **Layouts:** All cameras (packed by shape, as the board), 1, 2 × 2, 3 × 3, 4 × 4,
+  1 + 5 and 1 + 7, named and saved for your user, so every device you sign in on can
+  show them; each has its own address (`#wall/<name>`) for a kiosk's start page.
+- **Each device remembers** whether it shows the board or the Wall, and which layout.
+
 ## 0.51.0
 
 Unusual events for automations.

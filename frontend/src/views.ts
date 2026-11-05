@@ -11,6 +11,7 @@ const LOADERS: Partial<Record<Route["view"], () => Promise<unknown>>> = {
   "live-check": () => import("./components/live-check"),
   soak: () => import("./components/live-soak"),
   cards: () => import("./components/card-report"),
+  wall: () => import("./components/wall"),
 };
 
 const loading = new Map<string, Promise<unknown>>();

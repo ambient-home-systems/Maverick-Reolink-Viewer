@@ -16,6 +16,8 @@ const path = require("node:path");
 const args = process.argv.slice(2);
 const ROOT = path.resolve(args.find((a) => !a.startsWith("--")) ?? path.join(__dirname, "..", "frontend", ".preview"));
 const SHOW_TABS = args.includes("--tabs");
+// --only=wall,wall-layout: check just these views (all by default).
+const ONLY = args.find((a) => a.startsWith("--only="))?.slice("--only=".length).split(",");
 const AXE = require.resolve("axe-core/axe.min.js", { paths: [path.join(__dirname, "..", "frontend")] });
 const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".jpg": "image/jpeg", ".woff2": "font/woff2" };
 
@@ -47,6 +49,8 @@ const VIEWS = {
   "full-screen": { hash: "", press: ".corner-button.full" },
   "debug-view": { hash: "", press: ".corner-button.info" },
   "unusual-why": { hash: "#events", press: "details.why summary" },
+  wall: "#wall",
+  "wall-layout": { hash: "#wall/front", press: "rv-wall .bar button[aria-expanded]" },
 };
 const VIEWPORTS = {
   desktop: { width: 1440, height: 900 },
@@ -144,6 +148,7 @@ async function main() {
   let failures = 0;
   try {
     for (const [name, view] of Object.entries(VIEWS)) {
+      if (ONLY && !ONLY.includes(name)) continue;
       const { hash, press } = typeof view === "string" ? { hash: view, press: undefined } : view;
       for (const theme of ["light", "dark"]) {
         for (const [size, viewport] of Object.entries(VIEWPORTS)) {

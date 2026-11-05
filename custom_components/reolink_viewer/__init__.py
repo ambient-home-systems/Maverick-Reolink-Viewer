@@ -65,6 +65,7 @@ from .unusual.live import UnusualWatch
 from .unusual.model import Unusual
 from .views import ClipView, MseView, ThumbView, VodView
 from .vodcache import VodCache
+from .wall import WallStore
 from .websocket_api import async_register_commands
 
 _LOGGER = logging.getLogger(__name__)
@@ -179,10 +180,12 @@ async def async_setup_entry(
     )
     check_reports = CheckReports(hass)
     seen = SeenStore(hass)
+    wall = WallStore(hass)
     await vod_cache.async_setup()
     await thumbnails.async_setup()
     await check_reports.async_load()
     await seen.async_load()
+    await wall.async_load()
     # go2rtc starts on the first live request.
     live = LiveService(
         hass,
@@ -226,6 +229,7 @@ async def async_setup_entry(
         journal=journal,
         unusual=unusual,
         watch=watch,
+        wall=wall,
     )
     entry.async_on_unload(journal.listen_detections(watch.detected))
     entry.async_on_unload(watch.async_stop)

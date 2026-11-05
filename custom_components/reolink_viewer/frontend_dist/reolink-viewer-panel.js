@@ -1,16 +1,17 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
-import { At as i, M as a, Mt as o, Tt as s, X as c, _ as l, ct as u, d, g as f, j as p, rt as m, t as h, tt as g, v as _, y as v } from "./live-13uUozrt.js";
-import { G as y, H as b, J as x, K as S, L as C, R as w, V as T, W as E, Y as D, o as O, q as k, s as A, t as j, z as M } from "./home-CrFnHhPZ.js";
+import { Dt as i, Ft as a, M as o, Nt as s, X as c, _ as l, d as u, g as d, it as f, j as p, lt as m, nt as h, t as g, v as _, y as v } from "./live-BgF9G32W.js";
+import { $ as y, B as b, J as x, L as S, Q as C, U as w, V as T, W as E, X as D, Y as O, Z as k, et as A, o as j, s as M, t as N, tt as P } from "./home-5sgcocLr.js";
 //#region src/reolink-viewer-panel.ts
-var N = {
+var F = {
 	live: "Live",
 	events: "Events",
 	list: "Devices",
 	device: "Device",
 	"live-check": "Live check",
 	soak: "Soak report",
-	cards: "Dashboard cards"
-}, P = 6e3, F = class extends r {
+	cards: "Dashboard cards",
+	wall: "Wall"
+}, I = 6e3, L = class extends r {
 	static properties = {
 		hass: { attribute: !1 },
 		narrow: {
@@ -49,17 +50,17 @@ var N = {
 	_toastTimer;
 	_clockTimer;
 	_onHashChange = () => {
-		this._route = T(window.location.hash);
+		this._route = w(window.location.hash);
 	};
 	constructor() {
-		super(), this.narrow = !1, this._now = Date.now(), this._board = [], this._probe = { status: "idle" }, this._includeBattery = !1, this._concurrency = !1, this._maxStreams = 4, this._playback = !1, this._playbackOnly = !1, this._playbackConcurrency = !1, this._playbackStreams = 4, this._baichuan = !1, this._baichuanOnly = !0, this._baichuanMain = !1, this._baichuanDownload = !0, this._baichuanSession = !1, this._baichuanCameras = "", this._baichuanHold = 5, this._events = !1, this._eventsOnly = !0, this._copied = !1, this._route = { view: "live" }, this.addEventListener(w, (e) => {
+		super(), this.narrow = !1, this._now = Date.now(), this._board = [], this._probe = { status: "idle" }, this._includeBattery = !1, this._concurrency = !1, this._maxStreams = 4, this._playback = !1, this._playbackOnly = !1, this._playbackConcurrency = !1, this._playbackStreams = 4, this._baichuan = !1, this._baichuanOnly = !0, this._baichuanMain = !1, this._baichuanDownload = !0, this._baichuanSession = !1, this._baichuanCameras = "", this._baichuanHold = 5, this._events = !1, this._eventsOnly = !0, this._copied = !1, this._route = { view: "live" }, this.addEventListener(b, (e) => {
 			this.navigate(e.detail);
-		}), this.addEventListener(M, (e) => {
+		}), this.addEventListener(T, (e) => {
 			this.showToast(e.detail);
 		});
 	}
 	connectedCallback() {
-		super.connectedCallback(), h(import.meta.url), this._route = T(window.location.hash), window.addEventListener("hashchange", this._onHashChange), this._tick();
+		super.connectedCallback(), g(import.meta.url), this._route = this._start(w(window.location.hash)), window.addEventListener("hashchange", this._onHashChange), this._tick();
 	}
 	disconnectedCallback() {
 		super.disconnectedCallback(), window.removeEventListener("hashchange", this._onHashChange), clearTimeout(this._toastTimer), clearTimeout(this._clockTimer), this._run?.cancel(), this._run = void 0;
@@ -72,39 +73,47 @@ var N = {
 	willUpdate(e) {
 		if (this.toggleAttribute("dark", this.hass?.themes?.darkMode === !0), e.has("_route")) {
 			let e = this._route.view;
-			this._viewError = void 0, j(e).catch((t) => {
-				this._route.view === e && (this._viewError = i(t).message);
+			this._viewError = void 0, N(e).catch((t) => {
+				this._route.view === e && (this._viewError = s(t).message);
 			});
 		}
 	}
 	updated(e) {
-		if (e.has("hass") && this.hass && !this._devices && !this._loading && (this._load(), g(this.hass).catch(() => void 0)), e.get("_route") !== void 0 && !this.shadowRoot?.activeElement) {
+		if (e.has("hass") && this.hass && !this._devices && !this._loading && (this._load(), h(this.hass).catch(() => void 0)), e.get("_route") !== void 0 && !this.shadowRoot?.activeElement) {
 			let e = document.activeElement;
 			(!e || e === document.body) && this.shadowRoot?.querySelector("main")?.focus({ preventScroll: !0 });
 		}
 	}
+	_start(e) {
+		if (e.view !== "live" || O() !== "wall") return e;
+		let t = x(), n = t ? {
+			view: "wall",
+			layout: t
+		} : { view: "wall" }, r = E(n);
+		return window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}${r}`), n;
+	}
 	navigate(e) {
-		let t = b(e);
-		if (window.location.hash !== t) {
-			let e = `${window.location.pathname}${window.location.search}${t}`;
+		let t = this._start(e), n = E(t);
+		if (window.location.hash !== n) {
+			let e = `${window.location.pathname}${window.location.search}${n}`;
 			window.history.pushState(null, "", e);
 		}
-		e.view === "list" && this._route.view !== "list" && this._load(), this._route = e;
+		t.view === "list" && this._route.view !== "list" && this._load(), this._route = t;
 	}
 	showToast(e) {
 		clearTimeout(this._toastTimer), this._toast = e, this._toastTimer = setTimeout(() => {
 			this._toast = void 0;
-		}, P);
+		}, I);
 	}
 	async _load() {
 		if (this.hass) {
 			this._loading = !0;
 			try {
-				this._devices = await m(this.hass), this._loadError = void 0, !this._board.length && !this._devices.degraded && u(this.hass).then(({ cameras: e }) => {
-					this._board.length || (this._board = C(e));
-				}).catch(() => void 0), !this._warmed && !this._devices.degraded && (this._warmed = !0, o(this.hass).catch(() => void 0));
+				this._devices = await f(this.hass), this._loadError = void 0, !this._board.length && !this._devices.degraded && m(this.hass).then(({ cameras: e }) => {
+					this._board.length || (this._board = S(e));
+				}).catch(() => void 0), !this._warmed && !this._devices.degraded && (this._warmed = !0, a(this.hass).catch(() => void 0));
 			} catch (e) {
-				this._loadError = i(e).message;
+				this._loadError = s(e).message;
 			} finally {
 				this._loading = !1;
 			}
@@ -115,7 +124,7 @@ var N = {
 	}
 	render() {
 		let e = this._route;
-		return n`
+		return e.view === "wall" ? n`<main class="wall" tabindex="-1" aria-label=${F.wall}>${this._renderView()}</main>` : n`
       <header class="band">
         <ha-menu-button .hass=${this.hass} .narrow=${this.narrow}></ha-menu-button>
         <div class="title">Reolink</div>
@@ -125,13 +134,13 @@ var N = {
           ${this._renderTab("Devices", { view: "list" }, e.view !== "live" && e.view !== "events")}
         </nav>
         <time class="clock" aria-label="Time">
-          ${d(this._now, this.hass?.config?.time_zone)}
+          ${u(this._now, this.hass?.config?.time_zone)}
         </time>
       </header>
       <main
         class=${e.view === "live" || e.view === "events" ? "wide" : "page"}
         tabindex="-1"
-        aria-label=${N[e.view]}
+        aria-label=${F[e.view]}
       >${this._renderView()}</main>
       ${this._toast ? n`<div class="toast ${this._toast.kind}" role="status" aria-live="polite">
             <span>${this._toast.message}</span>
@@ -158,25 +167,25 @@ var N = {
         Could not load this page: ${this._viewError}. Check the connection to Home Assistant, then
         <button
           @click=${() => {
-			this._viewError = void 0, j(e.view).catch((e) => {
-				this._viewError = i(e).message;
+			this._viewError = void 0, N(e.view).catch((e) => {
+				this._viewError = s(e).message;
 			});
 		}}
         >
           Try again
         </button>
       </div>`;
-		let r = D(this._devices), a = r ? this._renderIntegration(r) : t;
+		let r = P(this._devices), i = r ? this._renderIntegration(r) : t;
 		switch (e.view) {
-			case "live": return r ? n`<div class="wide-note">${a}</div>` : n`<rv-live-grid
+			case "live": return r ? n`<div class="wide-note">${i}</div>` : n`<rv-live-grid
             .hass=${this.hass}
             @rv-board=${(e) => {
 				this._board = e.detail.cameras;
 			}}
           ></rv-live-grid>
           <rv-timetable .hass=${this.hass} .cameras=${this._board} .filters=${!0}></rv-timetable>`;
-			case "events": return r ? n`<div class="wide-note">${a}</div>` : n`<rv-events .hass=${this.hass} .cameras=${this._board} .date=${e.date}></rv-events>`;
-			case "device": return n`${a}<rv-device-page
+			case "events": return r ? n`<div class="wide-note">${i}</div>` : n`<rv-events .hass=${this.hass} .cameras=${this._board} .date=${e.date}></rv-events>`;
+			case "device": return n`${i}<rv-device-page
           .hass=${this.hass}
           .cameras=${this._board}
           .devices=${this._devices}
@@ -186,15 +195,16 @@ var N = {
         ></rv-device-page>`;
 			case "live-check": return n`${this._renderBack()}
           <h1>Live check</h1>
-          ${a}
+          ${i}
           <rv-live-check .hass=${this.hass}></rv-live-check>`;
 			case "soak": return n`${this._renderBack()}
           <h1>Soak report</h1>
-          ${a}
+          ${i}
           <rv-live-soak .hass=${this.hass}></rv-live-soak>`;
+			case "wall": return r ? n`<div class="wide-note">${i}</div>` : n`<rv-wall .hass=${this.hass} .layoutId=${e.layout}></rv-wall>`;
 			case "cards": return n`${this._renderBack()}
           <h1>Dashboard cards</h1>
-          ${a}
+          ${i}
           <rv-card-report .hass=${this.hass}></rv-card-report>`;
 			case "list": return n`<div class="heading">
             <h1>Devices</h1>
@@ -218,11 +228,11 @@ var N = {
     </div>`;
 	}
 	_renderBanner() {
-		if (this._loadError) return y(x(this._loadError, "Your devices"), this._loadError, {
+		if (this._loadError) return k(A(this._loadError, "Your devices"), this._loadError, {
 			action: n`<button @click=${() => void this._load()} ?disabled=${this._loading}>Try again</button>`,
 			help: "loading"
 		});
-		let e = D(this._devices);
+		let e = P(this._devices);
 		return !e || e.kind === "none" ? t : this._renderIntegration(e);
 	}
 	_renderIntegration(e) {
@@ -235,7 +245,7 @@ var N = {
         <button class="check" @click=${() => void this._load()} ?disabled=${this._loading}>
           ${c("refresh")}${this._loading ? "Checking…" : "Check again"}
         </button>
-        ${E(e.kind)}
+        ${D(e.kind)}
       </div>
       ${e.technical ? n`<details>
             <summary>Details</summary>
@@ -272,7 +282,7 @@ var N = {
 	}
 	_renderThisDevice() {
 		let e = (e, t, r) => {
-			let i = f({
+			let i = d({
 				where: e,
 				why: ""
 			}).hd;
@@ -315,14 +325,14 @@ var N = {
 	}
 	_renderHelp() {
 		let e = (e, t, r) => n`<li>
-      <a class="row" href=${S(r)} target="_blank" rel="noopener noreferrer">
+      <a class="row" href=${C(r)} target="_blank" rel="noopener noreferrer">
         <span class="what"><span class="name">${e}</span><span class="muted">${t}</span></span>
         ${c("external")}
       </a>
     </li>`;
 		return n`<section class="card">
       <h2>Help</h2>
-      <p class="muted">The guides to this version of Reolink Viewer (${k}). They open in a new tab.</p>
+      <p class="muted">The guides to this version of Reolink Viewer (${y}). They open in a new tab.</p>
       <ul class="checks">
         ${e("User guide", "What each part of the panel does, and how to use it.", "guide")}
         ${e("Troubleshooting", "What a message means, and what to do about it.", "troubleshooting")}
@@ -601,7 +611,7 @@ var N = {
           </p>
           <div class="actions">
             <button @click=${() => {
-				A(e.report, e.filename);
+				M(e.report, e.filename);
 			}}>
               Download again
             </button>
@@ -624,7 +634,7 @@ var N = {
 			started: Date.now(),
 			log: e
 		};
-		let t = s(this.hass, {
+		let t = i(this.hass, {
 			include_battery: this._includeBattery,
 			concurrency_test: this._concurrency,
 			max_streams: this._maxStreams,
@@ -651,16 +661,16 @@ var N = {
 		this._run = t, t.result.then((e) => {
 			if (this._run !== t) return;
 			this._run = void 0;
-			let n = O(/* @__PURE__ */ new Date());
+			let n = j(/* @__PURE__ */ new Date());
 			this._probe = {
 				status: "done",
 				report: e,
 				filename: n
-			}, A(e, n);
+			}, M(e, n);
 		}, (e) => {
 			this._run === t && (this._run = void 0, this._probe = {
 				status: "error",
-				message: i(e).message
+				message: s(e).message
 			});
 		});
 	}
@@ -676,7 +686,7 @@ var N = {
 		}
 	}
 	static styles = [
-		a,
+		o,
 		p,
 		e`
       :host {
@@ -843,6 +853,10 @@ var N = {
         white-space: pre-wrap;
         overflow-wrap: anywhere;
       }
+      main.wall {
+        display: flex;
+        flex-direction: column;
+      }
       main.page {
         width: 100%;
         max-width: 1100px;
@@ -983,6 +997,6 @@ var N = {
     `
 	];
 };
-customElements.get("reolink-viewer-panel") || customElements.define("reolink-viewer-panel", F);
+customElements.get("reolink-viewer-panel") || customElements.define("reolink-viewer-panel", L);
 //#endregion
-export { F as ReolinkViewerPanel, j as loadView };
+export { L as ReolinkViewerPanel, N as loadView };

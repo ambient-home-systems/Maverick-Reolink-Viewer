@@ -87,6 +87,29 @@ Some cameras wait for a tap:
 - **Cameras that keep no recordings** (no SD card, not on an NVR) show their latest
   picture and the time it was taken ("Picture 21:22"): tap one to watch it live.
 
+### The Wall
+
+**Wall**, top right of the board, shows the cameras' video only, large, fitted to the
+screen with nothing to scroll, like an NVR's monitor: for a wall tablet, a second
+screen, or a quiet look at everything. A thin bar along the top holds the layout, the
+time, **Full screen** and **Board** (back to the board).
+
+- **Layouts:** **All cameras** packs every camera by its shape, as the board does, in
+  as many columns as show each picture largest. A saved layout can be **1**, **2 × 2**,
+  **3 × 3**, **4 × 4**, or one large camera with five or seven around it (**1 + 5**,
+  **1 + 7**). A camera's picture is never cropped at its sides.
+- **Layout ⌄** names a layout and picks its grid; the screen shows it as you choose.
+  **Save** keeps it; **Save as new** keeps a copy; **Delete** removes it.
+- **Layouts are yours:** saved on this Home Assistant for your user, so the wall
+  tablet signed in as you shows the ones made on your desktop.
+- **Each device remembers** whether it shows the board or the Wall, and which layout:
+  the wall tablet opens on the Wall, the desktop on the board.
+- **A layout's address** opens it directly, for a kiosk's start page: the panel's
+  address followed by `#wall/` and the layout's name in lower case, with dashes for
+  spaces (`#wall/front-of-the-house`); the editor shows it.
+
+Arranging cameras in a layout's cells, pages and tours come next.
+
 ### A camera full screen
 
 Each tile has small buttons, bottom right:

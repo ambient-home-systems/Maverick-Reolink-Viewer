@@ -306,6 +306,21 @@ describe("rv-live-grid", () => {
     ]);
   });
 
+  it("switches to the Wall, and this device remembers it", async () => {
+    window.localStorage.clear();
+    const { hass } = fakeHass();
+    const { el } = await mountGrid(hass);
+    const routes: Route[] = [];
+    el.addEventListener("rv-navigate", (e) => routes.push((e as CustomEvent<Route>).detail));
+    const wall = [...(el.shadowRoot?.querySelectorAll<HTMLButtonElement>("button") ?? [])].find(
+      (b) => b.textContent.trim() === "Wall",
+    );
+    wall?.click();
+    expect(routes).toEqual([{ view: "wall" }]);
+    expect(window.localStorage.getItem("rv-live-mode")).toBe("wall");
+    window.localStorage.clear();
+  });
+
   it("shows a camera that records nowhere as its picture until tapped", async () => {
     const fake = fakeHass();
     const { tiles } = await mountGrid(fake.hass);

@@ -1,6 +1,6 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
-import { At as i, X as a, j as o, ot as s, p as c } from "./live-13uUozrt.js";
-import { B as l, r as u } from "./home-CrFnHhPZ.js";
+import { Nt as i, X as a, j as o, p as s, st as c } from "./live-BgF9G32W.js";
+import { H as l, r as u } from "./home-5sgcocLr.js";
 //#region src/components/learning.ts
 var d = class extends r {
 	static properties = {
@@ -17,7 +17,7 @@ var d = class extends r {
 	async _load(e) {
 		this._read = !0;
 		try {
-			this._state = await s(e);
+			this._state = await c(e);
 		} catch (e) {
 			this._state = { error: i(e).message };
 		}
@@ -43,7 +43,7 @@ var d = class extends r {
       </p>`;
 		let r = this.hass?.config?.time_zone, i = e.cameras, a = e.unusual;
 		return n`<p>
-        On since ${c(e.created, r)}:
+        On since ${s(e.created, r)}:
         ${f(e.detections, "detection")} from
         ${f(i.length, "camera")} so far
         (${v(e.bytes)}).${e.imported ? ` It started with ${f(e.imported, "change")} from Home Assistant's history.` : ""}
@@ -53,7 +53,7 @@ var d = class extends r {
                   <span class="name">${e.name}</span>:
                   <span class="muted"
                     >${f(e.detections, "detection")}, since
-                    ${c(e.first, r)}</span
+                    ${s(e.first, r)}</span
                   >${a?.built ? n`. ${g(a.cameras[e.id])}` : t}
                 </li>`)}
           </ul>` : t}
@@ -64,7 +64,7 @@ var d = class extends r {
                     >${t.name}</span
                   >
                   <span class="muted"
-                    >(${f(t.changes, "change")} since ${c(t.first, r)})</span
+                    >(${f(t.changes, "change")} since ${s(t.first, r)})</span
                   >`)}.
           </p>` : t}
       ${a ? this._renderUnusual(a, r, new Map(i.map((e) => [e.id, e.name]))) : t}`;
@@ -86,7 +86,7 @@ var d = class extends r {
           </p>`}
       ${e.latest.length ? n`<ol class="marks">
             ${e.latest.map((e) => n`<li>
-                  <span class="when">${c(e.start, r)}</span>
+                  <span class="when">${s(e.start, r)}</span>
                   <span>${e.reason}</span>
                 </li>`)}
           </ol>` : t}
@@ -114,7 +114,7 @@ var d = class extends r {
           <dd>${m[e.scope]}</dd>
           <dt>Learned</dt>
           <dd>
-            ${c(e.built, r)}, in ${e.built_in_s}
+            ${s(e.built, r)}, in ${e.built_in_s}
             s${e.computed_s === void 0 ? "" : `, ${e.computed_s} s of it computing`}
           </dd>
         </dl>

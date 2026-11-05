@@ -31,6 +31,7 @@ import type {
   RecentEvents,
   LearnedProfile,
   UnusualMarks,
+  WallLayout,
 } from "./types";
 
 export const fetchDevices = (hass: HomeAssistant): Promise<DevicesResponse> =>
@@ -425,3 +426,24 @@ export const subscribeCapacity = (
     host_id: hostId,
     ...options,
   });
+
+/** This user's saved Wall layouts (Phase 9). */
+export const fetchWallLayouts = (hass: HomeAssistant): Promise<{ layouts: WallLayout[] }> =>
+  hass.callWS<{ layouts: WallLayout[] }>({ type: "reolink_viewer/wall/layouts" });
+
+/** Keep a Wall layout: a new one without an id, else the one with that id. */
+export const saveWallLayout = (
+  hass: HomeAssistant,
+  layout: Omit<WallLayout, "id"> & { id?: string },
+): Promise<{ layout: WallLayout }> => {
+  const { id, ...rest } = layout;
+  return hass.callWS<{ layout: WallLayout }>({
+    type: "reolink_viewer/wall/layouts/save",
+    ...rest,
+    ...(id ? { layout_id: id } : {}),
+  });
+};
+
+/** Forget a saved Wall layout. */
+export const deleteWallLayout = (hass: HomeAssistant, id: string): Promise<unknown> =>
+  hass.callWS({ type: "reolink_viewer/wall/layouts/delete", layout_id: id });

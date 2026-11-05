@@ -89,6 +89,25 @@ describe("reolink-viewer-panel", () => {
     expect(el.shadowRoot?.querySelector("rv-live-grid")).not.toBeNull();
   });
 
+  it("opens Live as the Wall on a device that showed it last, without the band", async () => {
+    window.localStorage.setItem("rv-live-mode", "wall");
+    window.localStorage.setItem("rv-wall-layout", "front");
+    window.history.replaceState(null, "", "/");
+    const el = await mount(makeHass(okDevices()));
+    await loadView("wall");
+    await el.updateComplete;
+    expect(window.location.hash).toBe("#wall/front");
+    expect(el.shadowRoot?.querySelector("header.band")).toBeNull();
+    expect(el.shadowRoot?.querySelector<HTMLElement & { layoutId?: string }>("main.wall rv-wall")?.layoutId).toBe("front");
+    // The board, asked for, is the board again.
+    window.localStorage.setItem("rv-live-mode", "board");
+    el.navigate({ view: "live" });
+    await el.updateComplete;
+    expect(el.shadowRoot?.querySelector("header.band")).not.toBeNull();
+    expect(el.shadowRoot?.querySelector("rv-live-grid")).not.toBeNull();
+    window.localStorage.clear();
+  });
+
   it("numbers the cameras for the Events view without the board open", async () => {
     window.history.replaceState(null, "", "/#events");
     const hass = makeHass(okDevices());

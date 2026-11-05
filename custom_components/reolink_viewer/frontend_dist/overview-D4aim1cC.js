@@ -1,7 +1,7 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
-import { X as i, j as a, st as o } from "./live-13uUozrt.js";
-import { P as s, a as c, d as l, i as u, n as d, r as f } from "./home-CrFnHhPZ.js";
-import "./device-list-CLKsBRyV.js";
+import { X as i, ct as a, j as o } from "./live-BgF9G32W.js";
+import { P as s, a as c, d as l, i as u, n as d, r as f } from "./home-5sgcocLr.js";
+import "./device-list-DTvvWnzd.js";
 var p = (e) => `${String(e % 24).padStart(2, "0")}:00`, m = (e) => e.toLocaleString("en-US");
 function h(e) {
 	let t = s(l(e));
@@ -28,7 +28,7 @@ var _ = class extends r {
 	}
 	async _load(e, t) {
 		try {
-			let n = await o(e, t);
+			let n = await a(e, t);
 			t === this.camera && (this._profile = n);
 		} catch {}
 	}
@@ -113,7 +113,7 @@ var _ = class extends r {
           </p>` : t}
     </div>`;
 	}
-	static styles = [a, e`
+	static styles = [o, e`
       :host {
         display: block;
         container-type: inline-size;
@@ -377,7 +377,7 @@ var b = 3e4, x = {
       </p>
     </section>`;
 	}
-	static styles = [a, e`
+	static styles = [o, e`
       :host {
         display: flex;
         flex-direction: column;

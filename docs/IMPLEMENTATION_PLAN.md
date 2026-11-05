@@ -25,7 +25,7 @@ put on it:
 | 6 | The Doorbell's events: a camera that records but cannot be played lists its events | Standard / High | 0.5–1 wk | **Done** (2026-11-02, v0.43.0). **Step 1 done** (v0.41.0–v0.41.1): run 2 found the Doorbell's event and day searches working, its zone Home Assistant's, and its pictures refused by reolink-aio (a `1002` header). **Step 2 built** (v0.42.0): the Doorbell's events in the feed, the Events view and the calendar, on wired power. **Step 3 built** (v0.43.0): its pictures read here, and its Playback tab shows each event as pictures. **The owner's check** (2026-11-02): the Doorbell's events show and open as pictures, and a press of the doorbell is listed as a "Doorbell" event at the right time, so step 4 (the fallback) was not needed. Phase 7 started meanwhile, at the owner's request. See "Phase 6" |
 | 7 | Live video on dashboards: a Reolink Viewer camera card | Standard | 1–1.5 wk | **Done** (2026-11-03, v0.45.2), closed on daily use by the owner. **Step 1 done** (v0.44.0): the Reolink camera card, `custom:reolink-viewer-camera`, with its editor, on any dashboard and for any user. The owner's check (2026-11-02): on the wall tablet (Galaxy Tab A9+, Fully Kiosk, a sections view) and the iPhone app's dashboard, the Doorbell's and the front-yard camera's cards show their picture at once and their video quickly, kept warm or not, and go full screen in HD and back. **Step 2 built** (v0.45.0): what the cards see is logged per device (Devices → Dashboard cards), they sleep while Fully Kiosk's screen is off or its screensaver on, and a doorbell's card can wake the screen and go full screen when it rings. **Step 2 done** (2026-11-03, v0.45.2): on the owner's tablet the cards sleep under Fully's screensaver (no frames decoded) and a ring wakes the screen and shows the Doorbell full screen, playing in 0.6 s (v0.45.1 fills the window from the top layer). Step 3 stays gated. Not measured: a warm camera's wake time and 8 visible hours; the wall page's cards are the owner's choice. See "Phase 7" |
 | 8 | Unusual events: learning what is normal | High | 2–3 wk, then a week of learning | **Started** (2026-11-03). **Step 1 built** (v0.46.0): the detection journal, opt-in ("Learn what is normal"), with a 10-day head start from Home Assistant's recorder; on at the owner's since 2026-11-02, all 7 cameras. v0.46.1 keeps motion as bursts and a year of history (the owner's choices, from the first 10 days' sizes). **Step 2 built** (v0.47.0): Stamina's model, ported with its tests (MIT, in `THIRD_PARTY.md`), with a daily cap for a busy property; the Devices page shows each camera's state and the week's marks with their sentences. The owner's check: 3.6 marks a day at Balanced (243 a week without the cap). v0.47.1, the owner's choices: motion never marked, time counted once, one mark per incident across cameras; 5.1 a day, the journal 1.1 MB (about 2.8 MB a month). v0.47.2: only long stands out, a kind seen 10 times is known, only detections fire first; 5.3 a day. v0.47.3: an incident's later events take what fired before it; a mark always says why; the model saved between restarts; 5.3 a day, 39 without the cap. v0.47.4: anything seen 10 times is known, only "nothing fired first" raises; 1.4 a day, all rare by count. v0.47.5: Balanced aims at a few a day (floor 0, at most 3 a day), More knows a value after 20. **Step 3 built** (v0.48.0–v0.49.0), the owner's choice: marks on the timetable's rows with why, and an Unusual filter on Events (v0.48.0; the owner's check: 2.6 a day at Balanced); "What it has learned" on each camera's Overview, and a mark's count as a total (v0.49.0). **House-wide signals built** (v0.50.0): chosen in the options, kept beside the detections, learned and said. **Step 4 built** (v0.51.0): each detection scored as it begins and ends; `reolink_viewer_unusual`, an "unusual activity" sensor per camera, and a device trigger per camera, on Reolink Viewer's own device. See "Phase 8" |
-| 9 | The Wall: the Live page as a security monitor, with layouts, arranging, HD large tiles and the detection strip | Standard / High | 2–3 wk | Planned. See "Phase 9" |
+| 9 | The Wall: the Live page as a security monitor, with layouts, arranging, HD large tiles and the detection strip | Standard / High | 2–3 wk | **Started** (2026-11-05). **Step 1 built** (v0.52.0): the Wall, its layouts (Auto by shape, 1, 2×2, 3×3, 4×4, 1+5, 1+7), saved per user on the server, `#wall/<id>`, each device remembering board or Wall. See "Phase 9" |
 | 10 | Scrubbing that shows the picture while dragging | Very high | 2–4 wk | Planned. See "Phase 10" |
 | 11 | Playback and settings extras: zoom, event clips, filters, copying settings | Standard | 1–2 wk | Planned. See "Phase 11" |
 | 12 | Optional R&D: the Doorbell's recordings and talk | Very high | 3–5 wk, gated | Planned. See "Phase 12" |
@@ -6518,7 +6518,7 @@ large, arranged by the owner (PLAN.md §6.3). The owner named it "Wall" on
 
 | Step | Status |
 | --- | --- |
-| 1. The Wall, its layouts, saved | Not started |
+| 1. The Wall, its layouts, saved | Built (v0.52.0) |
 | 2. Arranging, pages and tours | Not started |
 | 3. HD in large tiles | Not started |
 | 4. The detection strip and instant highlights | Not started |
@@ -6544,6 +6544,48 @@ large, arranged by the owner (PLAN.md §6.3). The owner named it "Wall" on
     and store, like `events/seen`);
   - each device remembers which one it shows;
   - a layout holds the grid, the camera in each cell, the pages and the tour.
+
+**As built (v0.52.0), the owner's go-ahead ("Proceed with Phase 9"):**
+
+- **Board and Wall:** "Wall" on the board's head; "Board" on the Wall's bar.
+  Each device remembers which it shows (`rv-live-mode`) and the layout
+  (`rv-wall-layout`): Live (no address) opens what it showed last.
+- **`#wall` and `#wall/<id>`:** the Wall, and a saved layout by its id (a slug
+  of its name, unique per user); an id not saved shows every camera and says
+  so.
+- **Feeds only, fitted:** the panel's band goes; a 40 px bar holds the
+  layout, the clock, Layout (the editor), Full screen (the browser's, where it
+  has one) and Board. The cells fill the rest of the window's height and
+  width, nothing scrolls (desktop, tablet and phone sizes measured in the
+  preview).
+- **Layouts:** Auto packs every camera by shape as the board does (a square
+  camera two rows tall, a panorama two columns wide), in the columns that
+  show a 16:9 picture largest in the space; 1, 2×2, 3×3, 4×4, 1+5 (the large
+  slot 2×2 of 3×3) and 1+7 (3×3 of 4×4). Each picture keeps the board's rule
+  (`wallFit`): cropped at the top and bottom to fill, never at the sides.
+  More cameras than cells: the bar says how many (pages are step 2).
+- **Saved layouts:** `reolink_viewer/wall/layouts`, `…/save` and `…/delete`,
+  per Home Assistant user (`wall.py`, `WallStore`, like `events/seen`): a
+  name (60 characters at most), a grid, the camera in each cell (none: every
+  camera in the board's order; arranging is step 2) and a tour's seconds
+  (step 2); 50 at most. The editor (Layout ⌄): a name, the seven grids as
+  pictures (the screen previews the choice), Save, Save as new, Delete.
+- **Tiles:** the board's, on their sub stream, numbered as on the board; one
+  full screen pauses the others.
+- **Checks:** the grids, packing by shape, sizes and fit; the store (ids,
+  renames, limits, per user, kept across a restart, what no longer reads left
+  out) and its commands (another user sees nothing; errors said); the Wall
+  (a saved layout's cells, the large slot first, empty cells; every camera;
+  a layout not saved; more cameras than cells; save, save as new, delete; the
+  bar's layout and Board, remembered); the board's Wall button; the panel
+  opening the Wall on a device that showed it, without the band; the
+  accessibility check on the Wall and its editor.
+
+**Hardware checklist (the owner, v0.52.0):** on the desktop: Live → Wall,
+All cameras fills the screen with no scroll; Layout ⌄ → a 3×3 named, saved;
+on the wall tablet (signed in as the same user): the layout is listed, and
+`#wall/<id>` as Fully Kiosk's start page opens it; the board and the Wall each
+remembered after a reload.
 
 #### Step 9.2: arranging, pages and tours
 
