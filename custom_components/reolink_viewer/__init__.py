@@ -61,6 +61,7 @@ from .scheduler import HostLimits, Scheduler
 from .thumbnails import ThumbnailService
 from .timeline import TimelineService
 from .unusual.const import DEFAULT_SCOPE, DEFAULT_SENSITIVITY
+from .unusual.live import UnusualWatch
 from .unusual.model import Unusual
 from .views import ClipView, MseView, ThumbView, VodView
 from .vodcache import VodCache
@@ -70,7 +71,7 @@ _LOGGER = logging.getLogger(__name__)
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 # Keep-warm switches, one per mains-powered camera.
-PLATFORMS = [Platform.SWITCH]
+PLATFORMS = [Platform.BINARY_SENSOR, Platform.SWITCH]
 
 FRONTEND_DIR = Path(__file__).parent / FRONTEND_DIST_DIR
 # Static paths cannot be unregistered, so register them once per HA run.
@@ -194,6 +195,24 @@ async def async_setup_entry(
     await live.images.async_setup()
     await live.soak.async_load()
     await live.card_log.async_load()
+    journal = Journal(
+        hass, lambda: devices.async_detection_sensors(hass, degraded=not compat.ok)
+    )
+    unusual = Unusual(
+        hass,
+        journal_path(hass),
+        hosts=lambda: devices.async_camera_hosts(hass, degraded=not compat.ok),
+        version=str((await async_get_integration(hass, DOMAIN)).version),
+    )
+    # Phase 8 step 4: each detection scored as it begins and ends.
+    watch = UnusualWatch(
+        hass,
+        flush=journal.async_flush,
+        window=unusual.async_window,
+        model_built=lambda: bool(unusual.model.built_at),
+        running=lambda: journal.running,
+        names=lambda: unusual.names,
+    )
     entry.runtime_data = ReolinkViewerData(
         scheduler=scheduler,
         timeline=TimelineService(hass, scheduler),
@@ -204,16 +223,12 @@ async def async_setup_entry(
         seen=seen,
         live=live,
         compat_ok=compat.ok,
-        journal=Journal(
-            hass, lambda: devices.async_detection_sensors(hass, degraded=not compat.ok)
-        ),
-        unusual=Unusual(
-            hass,
-            journal_path(hass),
-            hosts=lambda: devices.async_camera_hosts(hass, degraded=not compat.ok),
-            version=str((await async_get_integration(hass, DOMAIN)).version),
-        ),
+        journal=journal,
+        unusual=unusual,
+        watch=watch,
     )
+    entry.async_on_unload(journal.listen_detections(watch.detected))
+    entry.async_on_unload(watch.async_stop)
     await _async_apply_learning(hass, entry)
     entry.async_on_unload(entry.add_update_listener(_async_options_updated))
 
@@ -283,15 +298,20 @@ async def _async_apply_learning(
         scope=entry.options.get(CONF_UNUSUAL_SCOPE, DEFAULT_SCOPE),
         signals=signals,
     )
+    watch = entry.runtime_data.watch
     if not entry.options.get(CONF_LEARN_NORMAL, DEFAULT_LEARN_NORMAL):
         # Off: no journal on disk, whether it was running or left from before.
         unusual.async_cancel()
         unusual.forget()
         await journal.async_delete()
+        if watch is not None:
+            watch.async_stop()  # its sensors unavailable
         return
     starting = not journal.running
     await journal.async_set_signals(signals)
     await journal.async_start()
+    if watch is not None and starting:
+        watch.async_stop()  # its sensors available again, and off
     if not (starting or changed):
         return
     unusual.async_schedule()

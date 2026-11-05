@@ -21,6 +21,11 @@
       "keep_warm": {
         "name": "{camera} keep live view warm"
       }
+    },
+    "binary_sensor": {
+      "unusual_activity": {
+        "name": "{camera} unusual activity"
+      }
     }
   },
   "options": {
@@ -59,6 +64,11 @@
         "host": "Each NVR, Home Hub or camera on its own connection",
         "camera": "Each camera on its own"
       }
+    }
+  },
+  "device_automation": {
+    "trigger_type": {
+      "unusual": "Something unusual seen on {subtype}"
     }
   }
 }
