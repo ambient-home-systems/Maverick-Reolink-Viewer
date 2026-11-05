@@ -108,7 +108,23 @@ time, **Full screen** and **Board** (back to the board).
   address followed by `#wall/` and the layout's name in lower case, with dashes for
   spaces (`#wall/front-of-the-house`); the editor shows it.
 
-Arranging cameras in a layout's cells, pages and tours come next.
+Arranging:
+
+- **Move a camera:** drag its tile onto another, and the two swap. On a touch screen,
+  tap **Arrange** in the bar, tap a camera, then where it goes (an empty cell too);
+  tap **Arrange** again when done. A saved layout keeps the new order at once, for
+  every device; **All cameras** keeps it until you leave, so save it as a layout to
+  keep it.
+- **Make one larger:** double-tap a tile. In **1 + 5** and **1 + 7** it goes into the
+  large slot; in any other grid it fills the screen alone, until another double tap,
+  **Esc** or **Back to the layout**.
+- **Pages:** a layout with more cameras than cells has pages: **‹ 1 / 2 ›** in the bar.
+- **A tour:** **Tour** in **Layout ⌄** turns the pages by itself, every 10 seconds to
+  every 2 minutes. It pauses while you arrange or edit, or watch one camera alone.
+
+From the keyboard: **Tab** reaches the cells, the **arrow keys** move between them,
+**Shift** with an arrow moves the camera, **Enter** makes it larger, **Esc** brings it
+back, and **Page Down** and **Page Up** turn pages. A screen reader is told each move.
 
 ### A camera full screen
 

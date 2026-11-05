@@ -3,6 +3,21 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.53.0
+
+Arranging the Wall.
+
+- **Move cameras between cells:** drag a tile onto another; on a touch screen, tap
+  **Arrange**, then a camera and where it goes. A saved layout keeps the new order for
+  every device you sign in on.
+- **A double tap** puts a camera in the large slot of 1 + 5 and 1 + 7, or shows it
+  alone on the screen and back.
+- **Pages and tours:** more cameras than cells make pages (‹ 1 / 2 › in the bar), and a
+  layout can turn them by itself, every 10 seconds to every 2 minutes.
+- **From the keyboard:** the arrows move between cells, Shift with an arrow moves a
+  camera, Enter makes it larger, Esc brings it back; each move is said to a screen
+  reader.
+
 ## 0.52.0
 
 The Wall: the Live page as a monitor.

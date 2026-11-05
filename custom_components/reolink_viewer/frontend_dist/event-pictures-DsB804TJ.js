@@ -1,6 +1,6 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
 import { Nt as i, X as a, c as o, d as s, j as c, vt as l, yt as u } from "./live-BgF9G32W.js";
-import { c as d, l as f } from "./home-5sgcocLr.js";
+import { c as d, l as f } from "./home-RRbdT2A4.js";
 //#region src/components/event-pictures.ts
 var p = 5e3, m = 15, h = 5, g = 1e3;
 function _(e) {

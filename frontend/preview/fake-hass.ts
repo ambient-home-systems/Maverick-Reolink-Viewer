@@ -679,6 +679,8 @@ function recent(date?: string): RecentEvents {
 const WALL_LAYOUTS: WallLayout[] = [
   { id: "front", name: "Front of the house", grid: "1+5", cameras: ["cam-door", "cam-fyl", "cam-fyr", "cam-garage"], tour_s: null },
   { id: "everything", name: "Everything", grid: "3x3", cameras: [], tour_s: null },
+  // Eight cameras in four cells: two pages, turned every 20 s.
+  { id: "tour", name: "Four at a time", grid: "2x2", cameras: [], tour_s: 20 },
 ];
 
 /** What a camera has learned (Phase 8.3): a day's rhythm per kind, shaped by hand. */

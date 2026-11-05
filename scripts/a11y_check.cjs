@@ -51,6 +51,7 @@ const VIEWS = {
   "unusual-why": { hash: "#events", press: "details.why summary" },
   wall: "#wall",
   "wall-layout": { hash: "#wall/front", press: "rv-wall .bar button[aria-expanded]" },
+  "wall-arrange": { hash: "#wall/tour", press: "rv-wall .bar button[aria-pressed]" },
 };
 const VIEWPORTS = {
   desktop: { width: 1440, height: 900 },
