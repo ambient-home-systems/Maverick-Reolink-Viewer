@@ -10,6 +10,7 @@ import { sharedStyles } from "../styles";
 import type { HomeAssistant, LiveCamera, LiveConnection } from "../types";
 import "./live-tile";
 import type { LiveCountDetail } from "./live-tile";
+import { rememberMode } from "../wall/remember";
 import { navigate } from "./navigation";
 
 const GAP = 8;
@@ -146,6 +147,17 @@ export class RvLiveGrid extends LitElement {
               )}
             </p>`
           : nothing}
+        ${cameras?.length
+          ? html`<button
+              class="text with-icon wall"
+              @click=${() => {
+                rememberMode("wall");
+                navigate(this, { view: "wall" });
+              }}
+            >
+              ${icon("enterFull")}Wall
+            </button>`
+          : nothing}
         ${canFull && cameras?.length
           ? html`<button class="text with-icon full" @click=${() => {
               this._toggleBoardFull();
@@ -257,11 +269,18 @@ export class RvLiveGrid extends LitElement {
         color: var(--rv-on-board-muted);
         font-size: 15px;
       }
-      button.full {
+      button.wall {
         margin-left: auto;
+      }
+      button.full,
+      button.wall {
         color: var(--rv-on-board);
       }
-      button.full:focus-visible {
+      button.wall + button.full {
+        margin-left: 0;
+      }
+      button.full:focus-visible,
+      button.wall:focus-visible {
         outline-color: var(--rv-on-board);
       }
       .grid {

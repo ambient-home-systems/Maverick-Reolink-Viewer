@@ -1,5 +1,5 @@
-import { $ as e, At as t, h as n, jt as r, pt as i, vt as a } from "./live-13uUozrt.js";
-import { a as o, n as s, o as c, r as l, s as u, t as d } from "./findings-BWLYgkMM.js";
+import { Nt as e, Pt as t, et as n, h as r, mt as i, yt as a } from "./live-BgF9G32W.js";
+import { a as o, n as s, o as c, r as l, s as u, t as d } from "./findings-CW2rJv52.js";
 //#region src/playback/check-util.ts
 var f = (e) => /iPhone|iPad|iPod/.test(e);
 function p(e) {
@@ -294,8 +294,8 @@ var H = (e) => new Date(e).toLocaleTimeString(), Se = class {
 			for (let e of s(this.inShort(!0))) this._log(e);
 			this._log(""), this._log("Summary:");
 			for (let e of this._summary) this._log(`- ${e}`);
-		} catch (e) {
-			this._log(e instanceof z ? "Stopped." : `Check failed: ${t(e).message}`);
+		} catch (t) {
+			this._log(t instanceof z ? "Stopped." : `Check failed: ${e(t).message}`);
 		} finally {
 			this._t.player?.pause(), this.running = !1, this._log(`Done at ${(/* @__PURE__ */ new Date()).toLocaleTimeString()}.`), await this._save(!0), De(this.id);
 		}
@@ -337,9 +337,9 @@ var H = (e) => new Date(e).toLocaleTimeString(), Se = class {
 	}
 	async _header() {
 		let e = this._t, t = navigator.connection;
-		this._log(`Reolink Viewer playback check v${le} · ${this.options.setup} · ${e.cameraName} · ${(/* @__PURE__ */ new Date()).toLocaleString()}`), this._log(`Browser: ${h(navigator.userAgent)} · page ${n(location.hostname)} over ${location.protocol.replace(":", "")} · screen ${screen.width}×${screen.height} @${window.devicePixelRatio}x` + (t?.effectiveType ? ` · network ${t.effectiveType}, ${t.downlink ?? "?"} Mbit/s (browser estimate)` : ""));
-		let r = performance.getEntriesByType("navigation")[0];
-		this._log(`User agent: ${navigator.userAgent}`), this._log(`Connection: page loaded over ${r?.nextHopProtocol || "? (from the app's cache)"}; each video request line gives its own (h2/h3 share one connection; http/1.1 allows 6 at once)`), this._log(`Player: ${e.mode} · file player delivery: ${e.progressive ? "progressive" : "whole file first (WebKit)"}`), this._summary.push(`Player: ${e.mode}`), await this._wait(() => !!e.day && !e.loading, 3e4);
+		this._log(`Reolink Viewer playback check v${le} · ${this.options.setup} · ${e.cameraName} · ${(/* @__PURE__ */ new Date()).toLocaleString()}`), this._log(`Browser: ${h(navigator.userAgent)} · page ${r(location.hostname)} over ${location.protocol.replace(":", "")} · screen ${screen.width}×${screen.height} @${window.devicePixelRatio}x` + (t?.effectiveType ? ` · network ${t.effectiveType}, ${t.downlink ?? "?"} Mbit/s (browser estimate)` : ""));
+		let n = performance.getEntriesByType("navigation")[0];
+		this._log(`User agent: ${navigator.userAgent}`), this._log(`Connection: page loaded over ${n?.nextHopProtocol || "? (from the app's cache)"}; each video request line gives its own (h2/h3 share one connection; http/1.1 allows 6 at once)`), this._log(`Player: ${e.mode} · file player delivery: ${e.progressive ? "progressive" : "whole file first (WebKit)"}`), this._summary.push(`Player: ${e.mode}`), await this._wait(() => !!e.day && !e.loading, 3e4);
 	}
 	async _loadDay(e) {
 		let t = this._t, n = t.metrics.timelineMs;
@@ -437,12 +437,12 @@ var H = (e) => new Date(e).toLocaleTimeString(), Se = class {
 		}
 	}
 	async _fillReport() {
-		let t = this._t.playing, n = r(t?.base ?? t?.url ?? "");
-		if (!n) return "server: nothing played";
-		let i = t?.file === "plain", a = null;
-		for (let t = 0; t < 90; t += 1) {
+		let e = this._t.playing, r = t(e?.base ?? e?.url ?? "");
+		if (!r) return "server: nothing played";
+		let i = e?.file === "plain", a = null;
+		for (let e = 0; e < 90; e += 1) {
 			try {
-				a = (await e(this._t.hass, n)).cache;
+				a = (await n(this._t.hass, r)).cache;
 			} catch {
 				a = null;
 			}
@@ -703,7 +703,7 @@ var H = (e) => new Date(e).toLocaleTimeString(), Se = class {
 		};
 	}
 	async _link() {
-		let e = this._t, n = e.playing, r = e.hass.fetchWithAuth?.bind(e.hass), i = n?.base, a = n?.url ?? n?.clip_url, o, s = "of the cached recording";
+		let t = this._t, n = t.playing, r = t.hass.fetchWithAuth?.bind(t.hass), i = n?.base, a = n?.url ?? n?.clip_url, o, s = "of the cached recording";
 		if (i && r ? (s = "of fragments", o = (e) => r(`${i}/frags?first=0&ms=${String(_e)}&bytes=${String(he)}`, {
 			cache: "no-store",
 			signal: e
@@ -732,8 +732,8 @@ var H = (e) => new Date(e).toLocaleTimeString(), Se = class {
 				grade: a >= 16 ? "good" : a >= 4 ? "fine" : "slow",
 				text: `Recordings come from Home Assistant at ${a.toFixed(0)} Mbit/s: ` + (a >= 16 ? "plenty for HD." : a >= 4 ? "enough for SD; HD may pause to load." : "SD may pause to load.")
 			});
-		} catch (e) {
-			this._log(`L  Link test failed: ${t(e).message}`);
+		} catch (t) {
+			this._log(`L  Link test failed: ${e(t).message}`);
 		} finally {
 			clearTimeout(u);
 		}
@@ -900,24 +900,24 @@ function X(e, t) {
 	}), o = i.length > 10 ? ` | … ${i.length - 10} more` : "", s = r.length - i.length, c = [...new Set(i.map((e) => e.nextHopProtocol).filter(Boolean))].join("/");
 	return `requests${c ? ` (${c})` : ""}: ${i.length} sent${s ? `, ${s} cancelled before sending` : ""}: ${a.join(" | ")}${o}`;
 }
-async function Ee(e, n, r) {
+async function Ee(t, n, r) {
 	let i = navigator.mediaCapabilities;
 	if (!i?.decodingInfo) return "MediaCapabilities absent";
 	let a = [];
 	for (let o of ["file", "media-source"]) try {
-		let t = await i.decodingInfo({
+		let e = await i.decodingInfo({
 			type: o,
 			video: {
-				contentType: `video/mp4; codecs="${e}"`,
+				contentType: `video/mp4; codecs="${t}"`,
 				width: n,
 				height: r,
 				bitrate: 8e6,
 				framerate: 25
 			}
 		});
-		a.push(`${o}: ${t.supported ? "supported" : "not supported"}${t.supported ? `, ${t.smooth ? "smooth" : "not smooth"}, ${t.powerEfficient ? "power efficient" : "not power efficient"}` : ""}`);
-	} catch (e) {
-		a.push(`${o}: ${t(e).message}`);
+		a.push(`${o}: ${e.supported ? "supported" : "not supported"}${e.supported ? `, ${e.smooth ? "smooth" : "not smooth"}, ${e.powerEfficient ? "power efficient" : "not power efficient"}` : ""}`);
+	} catch (t) {
+		a.push(`${o}: ${e(t).message}`);
 	}
 	return a.join(" · ");
 }

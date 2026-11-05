@@ -1,6 +1,6 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
-import { At as i, Q as a, X as o, j as s } from "./live-13uUozrt.js";
-import { U as c, n as l } from "./home-CrFnHhPZ.js";
+import { $ as i, Nt as a, X as o, j as s } from "./live-BgF9G32W.js";
+import { G as c, n as l } from "./home-5sgcocLr.js";
 //#region src/catalog.ts
 var u = {
 	id: "other",
@@ -423,17 +423,17 @@ var b = 1e4, x = class {
           </button>` : t}
     </span>`;
 	}
-	async _write(e, t, n, r, a) {
+	async _write(e, t, n, r, i) {
 		let o = this.hass;
 		if (!o) return;
 		let s = m(d(this.catalog, e.domain, e.key), r);
 		if (s !== null && !await this.confirm(t, s)) return;
-		let l = a ?? v(e.domain, e.domain === "button" ? "press" : e.domain === "update" ? "install" : n), u = e.entity_id, f = this.writes.begin(u, n, o.states[u]);
+		let l = i ?? v(e.domain, e.domain === "button" ? "press" : e.domain === "update" ? "install" : n), u = e.entity_id, f = this.writes.begin(u, n, o.states[u]);
 		this.requestUpdate();
 		try {
 			await o.callService(l.domain, l.service, l.data, { entity_id: u }, !1), this.writes.confirm(u, f), this._scheduleSettle();
 		} catch (e) {
-			this.writes.fail(u, f) && c(this, `Could not change ${t}: ${i(e).message}`, "error");
+			this.writes.fail(u, f) && c(this, `Could not change ${t}: ${a(e).message}`, "error");
 		}
 		this.requestUpdate();
 	}
@@ -486,13 +486,13 @@ var b = 1e4, x = class {
 		if (n) {
 			this._enabling = /* @__PURE__ */ new Set([...this._enabling, e.entity_id]);
 			try {
-				let r = (await a(n, e.entity_id)).reload_delay;
+				let r = (await i(n, e.entity_id)).reload_delay;
 				c(this, `${t} enabled. Home Assistant reloads the Reolink entry${r ? ` in about ${r} seconds` : ""}; the entity becomes available after that.`), this.dispatchEvent(new CustomEvent("rv-entity-enabled", {
 					bubbles: !0,
 					composed: !0
 				}));
 			} catch (e) {
-				c(this, `Could not enable ${t}: ${i(e).message}`, "error");
+				c(this, `Could not enable ${t}: ${a(e).message}`, "error");
 			} finally {
 				let t = new Set(this._enabling);
 				t.delete(e.entity_id), this._enabling = t;

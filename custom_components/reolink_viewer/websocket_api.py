@@ -45,6 +45,7 @@ from .views import (
     vod_ttl,
 )
 from .vodcache import Entry, Recording, VodCacheError, expected_size
+from .wall import GRIDS, LayoutError
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -89,6 +90,9 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_unusual_events)
     websocket_api.async_register_command(hass, ws_unusual_marks)
     websocket_api.async_register_command(hass, ws_unusual_profile)
+    websocket_api.async_register_command(hass, ws_wall_layouts)
+    websocket_api.async_register_command(hass, ws_wall_layout_save)
+    websocket_api.async_register_command(hass, ws_wall_layout_delete)
 
 
 def _friendly(hass: HomeAssistant, entity_id: str) -> str:
@@ -1210,3 +1214,75 @@ def ws_unusual_profile(
             ),
         },
     )
+
+
+@callback
+@websocket_api.websocket_command({probatio.Required("type"): f"{DOMAIN}/wall/layouts"})
+def ws_wall_layouts(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Return this user's saved Wall layouts (Phase 9)."""
+    entry = _loaded_entry(hass)
+    if entry is None or entry.runtime_data.wall is None:
+        connection.send_error(msg["id"], ERR_NOT_LOADED, "Reolink Viewer is not loaded")
+        return
+    connection.send_result(
+        msg["id"],
+        {"layouts": entry.runtime_data.wall.layouts(_user_id(connection))},
+    )
+
+
+@callback
+@websocket_api.websocket_command(
+    {
+        probatio.Required("type"): f"{DOMAIN}/wall/layouts/save",
+        # Not "id": that is the message's own.
+        probatio.Optional("layout_id"): str,
+        probatio.Required("name"): str,
+        probatio.Required("grid"): probatio.In(GRIDS),
+        probatio.Optional("cameras", default=[]): [probatio.Any(str, None)],
+        probatio.Optional("tour_s"): probatio.Any(int, None),
+    }
+)
+def ws_wall_layout_save(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Keep one of this user's Wall layouts (a new one without an id); return it."""
+    entry = _loaded_entry(hass)
+    if entry is None or entry.runtime_data.wall is None:
+        connection.send_error(msg["id"], ERR_NOT_LOADED, "Reolink Viewer is not loaded")
+        return
+    raw = {k: v for k, v in msg.items() if k not in ("type", "id", "layout_id")}
+    if msg.get("layout_id"):
+        raw["id"] = msg["layout_id"]
+    try:
+        layout = entry.runtime_data.wall.save(_user_id(connection), raw)
+    except LayoutError as err:
+        connection.send_error(msg["id"], websocket_api.ERR_INVALID_FORMAT, str(err))
+        return
+    connection.send_result(msg["id"], {"layout": layout})
+
+
+@callback
+@websocket_api.websocket_command(
+    {
+        probatio.Required("type"): f"{DOMAIN}/wall/layouts/delete",
+        probatio.Required("layout_id"): str,
+    }
+)
+def ws_wall_layout_delete(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Forget one of this user's Wall layouts."""
+    entry = _loaded_entry(hass)
+    if entry is None or entry.runtime_data.wall is None:
+        connection.send_error(msg["id"], ERR_NOT_LOADED, "Reolink Viewer is not loaded")
+        return
+    entry.runtime_data.wall.delete(_user_id(connection), msg["layout_id"])
+    connection.send_result(msg["id"], {})

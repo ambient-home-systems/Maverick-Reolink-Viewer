@@ -841,3 +841,18 @@ export type CapacityEvent =
   | { type: "progress"; message: string }
   | { type: "result"; report: CapacityReport }
   | { type: "error"; message: string; advice?: string };
+
+/** The Wall's grids (Phase 9): Auto packs every camera; 1+5 and 1+7 have one large slot. */
+export type WallGrid = "auto" | "1" | "2x2" | "3x3" | "4x4" | "1+5" | "1+7";
+
+/** A saved Wall layout (wall/layouts), per Home Assistant user. */
+export interface WallLayout {
+  /** Its address: #wall/<id>. */
+  id: string;
+  name: string;
+  grid: WallGrid;
+  /** The camera in each cell, in order (null: empty); none: every camera, in the board's order. */
+  cameras: (string | null)[];
+  /** A tour's seconds per page (step 2); null for none. */
+  tour_s: number | null;
+}

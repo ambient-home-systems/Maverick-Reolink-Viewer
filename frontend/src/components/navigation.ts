@@ -9,6 +9,7 @@ export type Route =
   | { view: "live-check" }
   | { view: "soak" }
   | { view: "cards" }
+  | { view: "wall"; layout?: string }
   | { view: "device"; id: string; tab: Tab; at?: number };
 
 export const NAVIGATE_EVENT = "rv-navigate";
@@ -40,6 +41,7 @@ export function routeToHash(route: Route): string {
   if (route.view === "live-check") return "#live-check";
   if (route.view === "soak") return "#soak";
   if (route.view === "cards") return "#cards";
+  if (route.view === "wall") return route.layout ? `#wall/${encodeURIComponent(route.layout)}` : "#wall";
   if (route.view === "list") return "#devices";
   if (route.view === "events") return route.date ? `#events/${route.date}` : "#events";
   if (route.view === "live") return "";
@@ -51,6 +53,9 @@ export function routeFromHash(hash: string): Route {
   if (hash === "#live-check") return { view: "live-check" };
   if (hash === "#soak") return { view: "soak" };
   if (hash === "#cards") return { view: "cards" };
+  if (hash === "#wall") return { view: "wall" };
+  const wall = /^#wall\/([^/]+)$/.exec(hash);
+  if (wall?.[1]) return { view: "wall", layout: decodeURIComponent(wall[1]) };
   if (hash === "#devices") return { view: "list" };
   if (hash === "#events") return { view: "events" };
   const day = /^#events\/(\d{4}-\d{2}-\d{2})$/.exec(hash);

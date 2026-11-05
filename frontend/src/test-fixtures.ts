@@ -314,6 +314,8 @@ export function makeHass(devices: DevicesResponse, isAdmin = true): FakeHass {
       },
       // A camera's Overview, "What it has learned" (Phase 8.3): learning off.
       "reolink_viewer/unusual/profile": { enabled: false },
+      // The Wall (Phase 9): no layouts saved yet.
+      "reolink_viewer/wall/layouts": { layouts: [] },
     },
     user: { is_admin: isAdmin },
     emit: (event) => listener?.(event),

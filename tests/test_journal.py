@@ -344,10 +344,18 @@ async def test_writes_in_batches(
     config_dir: Path,
     learning: MockConfigEntry,
 ) -> None:
-    """Written at FLUSH_ROWS changes, or every FLUSH_S, not one by one."""
+    """Written at FLUSH_ROWS changes, or every FLUSH_S, not one by one.
+
+    (A detection that can be marked is written at once, too, for the live check
+    of what is unusual, Phase 8 step 4: left out here, as before a first model.)
+    """
     path = config_dir / JOURNAL_FILE
     before = len(_rows(path))
-    with patch.object(journal, "FLUSH_ROWS", 4):
+    watch = learning.runtime_data.watch
+    with (
+        patch.object(journal, "FLUSH_ROWS", 4),
+        patch.object(watch, "_built", lambda: False),
+    ):
         # The person sensor is on to begin with: off, on, off are three changes.
         for state in ("off", "on", "off"):
             freezer.tick(timedelta(seconds=1))

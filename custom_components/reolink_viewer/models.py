@@ -17,6 +17,7 @@ from .unusual.live import UnusualWatch
 from .unusual.model import Unusual
 from .views import Grants
 from .vodcache import VodCache
+from .wall import WallStore
 
 
 @dataclass(slots=True)
@@ -42,6 +43,8 @@ class ReolinkViewerData:
     unusual: Unusual | None = None
     # Phase 8 step 4: what is unusual as it happens (an event, a sensor per camera).
     watch: UnusualWatch | None = None
+    # Phase 9: each user's saved Wall layouts.
+    wall: WallStore | None = None
 
 
 type ReolinkViewerConfigEntry = ConfigEntry[ReolinkViewerData]

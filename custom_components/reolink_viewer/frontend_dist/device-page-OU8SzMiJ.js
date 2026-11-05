@@ -1,6 +1,6 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
-import { At as i, X as a, j as o, nt as s, tt as c } from "./live-13uUozrt.js";
-import { B as l, r as u } from "./home-CrFnHhPZ.js";
+import { Nt as i, X as a, j as o, nt as s, rt as c } from "./live-BgF9G32W.js";
+import { H as l, r as u } from "./home-5sgcocLr.js";
 //#region src/render-filter.ts
 function d(e, t, n) {
 	if (e === t) return !1;
@@ -11,10 +11,10 @@ function d(e, t, n) {
 //#endregion
 //#region src/components/device-page.ts
 var f = {
-	overview: () => import("./overview-DPTMUF1T.js"),
-	playback: () => import("./playback-FHlL60ZY.js"),
-	pictures: () => import("./event-pictures-C2xa0AJP.js"),
-	settings: () => import("./settings-BKQ-Mpm7.js")
+	overview: () => import("./overview-D4aim1cC.js"),
+	playback: () => import("./playback-dsP7GFFM.js"),
+	pictures: () => import("./event-pictures-DmIvhl78.js"),
+	settings: () => import("./settings-DwZ1PglG.js")
 }, p = 1e3, m = class extends r {
 	static properties = {
 		hass: { attribute: !1 },
@@ -74,7 +74,7 @@ var f = {
 		let n = ++this._loadSeq;
 		e || (this._device = void 0, this._error = void 0);
 		try {
-			let [e, r] = await Promise.all([s(t, this.deviceId), c(t)]);
+			let [e, r] = await Promise.all([c(t, this.deviceId), s(t)]);
 			if (n !== this._loadSeq) return;
 			this._catalog = r, this._device = e, this._error = void 0, this._watched = w(e);
 		} catch (e) {

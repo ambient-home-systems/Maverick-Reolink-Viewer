@@ -20,7 +20,8 @@ it a head start.
   at start and daily. The model weighs history with a 90-day half-life.
 - **Its own SQLite file** in the config folder (JOURNAL_FILE), written in
   batches (every FLUSH_S, or FLUSH_ROWS changes) off the event loop, in
-  write-ahead mode. Before Home Assistant's backup, the log is checkpointed
+  write-ahead mode; and at once when a detection that can be marked begins or
+  ends, for the live check of what is unusual (Phase 8 step 4). Before Home Assistant's backup, the log is checkpointed
   into the file (backup.py).
 - **It stays on this machine.** Turning the option off deletes it, and so
   does removing the integration.

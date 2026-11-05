@@ -33,6 +33,7 @@ import { sharedStyles, themeTokens } from "./styles";
 import type { DevicesResponse, HomeAssistant, ProbeReport } from "./types";
 import { VERSION } from "./version";
 import { loadView } from "./views";
+import { rememberedLayout, rememberedMode } from "./wall/remember";
 
 // Scripts and the browser tests load a view's elements without opening it.
 export { loadView };
@@ -47,6 +48,7 @@ const VIEW_NAMES: Record<Route["view"], string> = {
   "live-check": "Live check",
   soak: "Soak report",
   cards: "Dashboard cards",
+  wall: "Wall",
 };
 const TOAST_MS = 6_000;
 
@@ -163,7 +165,7 @@ export class ReolinkViewerPanel extends LitElement {
   override connectedCallback(): void {
     super.connectedCallback();
     loadFonts(import.meta.url);
-    this._route = routeFromHash(window.location.hash);
+    this._route = this._start(routeFromHash(window.location.hash));
     window.addEventListener("hashchange", this._onHashChange);
     this._tick();
   }
@@ -212,8 +214,19 @@ export class ReolinkViewerPanel extends LitElement {
     }
   }
 
+  /** Live opens what this device showed last: the board, or the Wall (Phase 9). */
+  private _start(route: Route): Route {
+    if (route.view !== "live" || rememberedMode() !== "wall") return route;
+    const layout = rememberedLayout();
+    const wall: Route = layout ? { view: "wall", layout } : { view: "wall" };
+    const hash = routeToHash(wall);
+    window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}${hash}`);
+    return wall;
+  }
+
   /** Go to a view; the URL hash mirrors it so browser back works. */
-  navigate(route: Route): void {
+  navigate(target: Route): void {
+    const route = this._start(target);
     const hash = routeToHash(route);
     if (window.location.hash !== hash) {
       const url = `${window.location.pathname}${window.location.search}${hash}`;
@@ -263,6 +276,10 @@ export class ReolinkViewerPanel extends LitElement {
 
   protected override render(): TemplateResult {
     const route = this._route;
+    // The Wall is feeds only: its own thin bar, no band (Phase 9).
+    if (route.view === "wall") {
+      return html`<main class="wall" tabindex="-1" aria-label=${VIEW_NAMES.wall}>${this._renderView()}</main>`;
+    }
     return html`
       <header class="band">
         <ha-menu-button .hass=${this.hass} .narrow=${this.narrow}></ha-menu-button>
@@ -357,6 +374,9 @@ export class ReolinkViewerPanel extends LitElement {
           <h1>Soak report</h1>
           ${note}
           <rv-live-soak .hass=${this.hass}></rv-live-soak>`;
+      case "wall":
+        if (trouble) return html`<div class="wide-note">${note}</div>`;
+        return html`<rv-wall .hass=${this.hass} .layoutId=${route.layout}></rv-wall>`;
       case "cards":
         return html`${this._renderBack()}
           <h1>Dashboard cards</h1>
@@ -1044,6 +1064,10 @@ export class ReolinkViewerPanel extends LitElement {
         font-family: var(--rv-mono);
         white-space: pre-wrap;
         overflow-wrap: anywhere;
+      }
+      main.wall {
+        display: flex;
+        flex-direction: column;
       }
       main.page {
         width: 100%;

@@ -25,6 +25,7 @@ import type {
   LearnedKind,
   LearnedProfile,
   UnusualMarks,
+  WallLayout,
   TimelineDay,
   TimelineEvent,
 } from "../src/types";
@@ -674,6 +675,12 @@ function recent(date?: string): RecentEvents {
   };
 }
 
+/** The Wall's saved layouts (Phase 9): two to start with. */
+const WALL_LAYOUTS: WallLayout[] = [
+  { id: "front", name: "Front of the house", grid: "1+5", cameras: ["cam-door", "cam-fyl", "cam-fyr", "cam-garage"], tour_s: null },
+  { id: "everything", name: "Everything", grid: "3x3", cameras: [], tour_s: null },
+];
+
 /** What a camera has learned (Phase 8.3): a day's rhythm per kind, shaped by hand. */
 function learned(camera: string): LearnedProfile {
   // Each kind's hours as a bell or two around its busy times (hour, height).
@@ -1104,6 +1111,28 @@ export function fakeHass(options: {
     "reolink_viewer/journal/status": () => JOURNAL,
     "reolink_viewer/unusual/marks": (m) => marks(Number(m.since)),
     "reolink_viewer/unusual/profile": (m) => learned(String(m.camera_id)),
+    // Phase 9: the Wall's saved layouts, kept for the page's life.
+    "reolink_viewer/wall/layouts": () => ({ layouts: WALL_LAYOUTS }),
+    "reolink_viewer/wall/layouts/save": (m) => {
+      const layout = {
+        id:
+          (typeof m.layout_id === "string" && m.layout_id) ||
+          (typeof m.name === "string" ? m.name : "layout").toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+        name: typeof m.name === "string" ? m.name : "Layout",
+        grid: m.grid as WallLayout["grid"],
+        cameras: (m.cameras as (string | null)[] | undefined) ?? [],
+        tour_s: (m.tour_s as number | null | undefined) ?? null,
+      };
+      const index = WALL_LAYOUTS.findIndex((l) => l.id === layout.id);
+      if (index >= 0) WALL_LAYOUTS[index] = layout;
+      else WALL_LAYOUTS.push(layout);
+      return { layout };
+    },
+    "reolink_viewer/wall/layouts/delete": (m) => {
+      const index = WALL_LAYOUTS.findIndex((l) => l.id === m.layout_id);
+      if (index >= 0) WALL_LAYOUTS.splice(index, 1);
+      return {};
+    },
     "reolink_viewer/live/status": () => ({
       go2rtc: { state: "running", version: "1.9.14", restarts: 0 },
       running: {},
