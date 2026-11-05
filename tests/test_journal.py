@@ -695,3 +695,22 @@ async def test_a_new_signal_gets_its_history_once_and_keeps_its_last_state_a_yea
     freezer.tick(timedelta(days=journal.KEEP_DAYS + 3))
     await log.async_prune()
     assert [s for e, _, s in _signal_rows(path)] == ["disarmed"]
+
+
+async def test_tells_its_listeners_each_detection_as_it_records_it(
+    hass: HomeAssistant, learning: MockConfigEntry
+) -> None:
+    """The live check (Phase 8 step 4) hears every detection change, as it comes."""
+    log = _journal(learning)
+    heard: list[tuple[str, str, bool, float]] = []
+    undo = log.listen_detections(lambda *change: heard.append(change))
+    hass.states.async_set(PERSON, "off")
+    hass.states.async_set(PERSON, "on")
+    await hass.async_block_till_done()
+    undo()
+    hass.states.async_set(PERSON, "off")
+    await hass.async_block_till_done()
+    assert [(kind, on) for _camera, kind, on, _at in heard][-1] == ("person", True)
+    camera, _kind, _on, at = heard[-1]
+    assert camera
+    assert abs(at - dt_util.utcnow().timestamp()) < 5

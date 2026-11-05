@@ -696,6 +696,18 @@ def test_the_count_is_a_total_the_same_for_every_mark_it_covers() -> None:
     )
 
 
+def test_an_event_still_going_says_nothing_of_its_length_yet() -> None:
+    """Ours: scored as it begins (for automations), its length is not known yet."""
+    model, _ = _model()
+    going = replace(_event(_NOW, 60, "person"), ended_at=None, duration=None)
+
+    result = score(going, model, previous=None)
+
+    (lasted,) = [term for term in result.terms if term.name == "duration"]
+    assert lasted.label == "open"
+    assert lasted.contribution == 0.0
+
+
 def test_an_ordinary_event_says_so_plainly() -> None:
     """Seeing why a common event is common is what makes the mark believable when it appears."""
     model, _ = _model()

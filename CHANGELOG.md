@@ -3,6 +3,19 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.51.0
+
+Unusual events for automations.
+
+- **Each detection is scored as it begins** (and again when it ends, for one that
+  lingered), against what its camera has learned.
+- **`reolink_viewer_unusual`**, an event on Home Assistant's bus, once per incident: the
+  camera, what it was, the score and the sentence saying why. The user guide has a
+  notification automation using it.
+- **"<Camera> unusual activity"**, a sensor per camera on the Reolink Viewer device, on
+  while something unusual is going on; and a "Something unusual seen on <camera>" trigger
+  in the automation editor.
+
 ## 0.50.0
 
 House-wide signals: what the house says beside each detection.

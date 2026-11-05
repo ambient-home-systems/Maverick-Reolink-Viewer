@@ -345,6 +345,10 @@ def _terms(
     typical = _typical_seconds(specific, broader, overall)
     if typical is not None and _bucket_seconds(bucket) < typical:
         lasted = min(lasted, 0.0)
+    # Ours: an event still going has no length yet (scored as it begins, for
+    # automations): it says nothing either way until it ends.
+    if event.duration is None:
+        lasted = 0.0
     terms.append(
         Term(
             name="duration",

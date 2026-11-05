@@ -445,6 +445,9 @@ class Journal:
         self._signal_written: dict[str, int] = {}
         self._signal_held: dict[str, SignalChange] = {}
         self._signal_task: asyncio.Task[None] | None = None
+        # Told of each detection change as it is recorded (camera, kind, on, when
+        # in seconds): the live check for what is unusual (Phase 8 step 4).
+        self._detection_listeners: list[Callable[[str, str, bool, float], None]] = []
 
     @property
     def running(self) -> bool:
@@ -455,6 +458,14 @@ class Journal:
     def path(self) -> Path:
         """Return where its file is."""
         return self._path
+
+    @callback
+    def listen_detections(
+        self, listener: Callable[[str, str, bool, float], None]
+    ) -> Callable[[], None]:
+        """Call ``listener`` with each detection change recorded; return the undo."""
+        self._detection_listeners.append(listener)
+        return lambda: self._detection_listeners.remove(listener)
 
     @property
     def signals(self) -> frozenset[str]:
@@ -627,6 +638,10 @@ class Journal:
         if state is None or (old is not None and old.state == new.state):
             return
         change = Change(sensor, int(new.last_changed.timestamp() * 1000), state)
+        for listener in self._detection_listeners:
+            listener(
+                sensor.camera_id, sensor.kind, state == STATES["on"], change.at / 1000
+            )
         if sensor.kind in BURST_KINDS:
             off = self._quiet.pop(sensor.entity_id, None)
             if off is not None:

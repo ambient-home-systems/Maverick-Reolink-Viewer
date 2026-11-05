@@ -40,7 +40,7 @@ function g(e, t) {
 }
 //#endregion
 //#region src/version.ts
-var _ = "0.50.0", se = "https://github.com/ambient-home-systems/Maverick-Reolink-Viewer", ce = {
+var _ = "0.51.0", se = "https://github.com/ambient-home-systems/Maverick-Reolink-Viewer", ce = {
 	guide: ["user-guide"],
 	troubleshooting: ["troubleshooting"],
 	cameras: ["cameras"],
@@ -1431,12 +1431,12 @@ function et(e) {
 //#endregion
 //#region src/views.ts
 var tt = {
-	events: () => import("./events-view-BHiBpuIE.js"),
-	list: () => import("./device-list-vqaIWAdH.js"),
-	device: () => import("./device-page-5V85Dv2J.js"),
-	"live-check": () => import("./live-check-Cb9w5Kw2.js"),
-	soak: () => import("./live-soak-BaODcTDr.js"),
-	cards: () => import("./card-report-BYQfLJpq.js")
+	events: () => import("./events-view-DgOkWe9h.js"),
+	list: () => import("./device-list-CLKsBRyV.js"),
+	device: () => import("./device-page-CctXcY9a.js"),
+	"live-check": () => import("./live-check-BYutjSVc.js"),
+	soak: () => import("./live-soak-D-tGAoVd.js"),
+	cards: () => import("./card-report-D44VDUT4.js")
 }, $ = /* @__PURE__ */ new Map();
 function nt(e) {
 	let t = tt[e];

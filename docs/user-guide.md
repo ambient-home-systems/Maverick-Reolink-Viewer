@@ -285,6 +285,37 @@ follows a household that changes.
   (`reolink_viewer_journal.model.json`), so a restart shows it at once; it is deleted
   with the journal.
 
+#### Unusual events in automations
+
+As each detection begins (and again when it ends, for one that lingered), it is scored
+against what the camera has learned. When it is unusual:
+
+- **The event `reolink_viewer_unusual`** fires once per incident, with `device_id` (the
+  camera's), `camera` (its name), `kind`, `score`, `line`, `reason` (the sentence) and
+  `start`.
+- **"<Camera> unusual activity"**, a sensor per camera on the **Reolink Viewer** device
+  (Settings → Devices & services → Reolink Viewer), turns on until 30 s after the
+  detection ends. Its attributes hold the last mark's kind and reason.
+- **In the automation editor**, the Reolink Viewer device offers "Something unusual seen
+  on <camera>" for each camera, beside its sensors' "turned on".
+
+A notification only for what is unusual, with the reason:
+
+```yaml
+alias: Tell me about anything unusual
+triggers:
+  - trigger: event
+    event_type: reolink_viewer_unusual
+actions:
+  - action: notify.mobile_app_my_phone
+    data:
+      title: "Unusual: {{ trigger.event.data.camera }}"
+      message: "{{ trigger.event.data.reason }}"
+```
+
+It needs **Learn what is normal** on, and marks only on cameras that mark already (a week
+of history and 200 detections).
+
 What it will not do:
 
 - **Unusual is not dangerous.** It ranks by rarity: a burglar in a busy driveway at
