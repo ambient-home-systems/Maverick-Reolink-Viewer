@@ -8,6 +8,7 @@ import { sharedStyles } from "../styles";
 import type { HomeAssistant, LiveCamera, WallGrid, WallLayout } from "../types";
 import { ARROWS, neighbour, pageCount, swapCells, wallOrder } from "../wall/arrange";
 import { WALL_GAP, WALL_GRIDS, slotSize, wallFit, wallPlan, type WallPlan } from "../wall/geometry";
+import { tilesInHd, type WallCell } from "../wall/hd";
 import { rememberLayout, rememberMode, rememberedLayout } from "../wall/remember";
 import { boardOrder, tileShape } from "./live-grid";
 import "./live-tile";
@@ -530,6 +531,16 @@ export class RvWall extends LitElement {
     height: number,
   ): TemplateResult {
     const numbers = new Map(boardOrder([...(this._data.cameras ?? [])]).map((c, i) => [c.id, i + 1]));
+    // HD in the tiles drawn larger than their sub stream, the large slot first.
+    const grid = this._editing ? this._draft.grid : this._layout.grid;
+    const cells = plan.slots.map((slot, i): WallCell | undefined => {
+      const camera = shown[i];
+      if (!camera) return undefined;
+      const size = slotSize(plan, slot, width, height);
+      const large = this._alone ? "alone on the screen" : (grid === "1+5" || grid === "1+7") && i === 0 ? "the large slot" : undefined;
+      return { camera, ...size, fit: wallFit(pictureRatio(camera), size), ...(large ? { large } : {}) };
+    });
+    const hd = tilesInHd(cells, globalThis.devicePixelRatio || 1);
     return html`<div
       class="cells"
       style=${`grid-template-columns: repeat(${String(plan.cols)}, minmax(0, 1fr)); grid-template-rows: repeat(${String(plan.rows)}, minmax(0, 1fr))`}
@@ -593,7 +604,8 @@ export class RvWall extends LitElement {
           ${camera
             ? html`<rv-live-tile
                 fill
-                .fit=${wallFit(pictureRatio(camera), slotSize(plan, slot, width, height))}
+                .fit=${cells[i]?.fit ?? "cover"}
+                .tileHd=${hd.get(camera.id)}
                 .number=${numbers.get(camera.id)}
                 .hass=${this.hass}
                 .camera=${camera}

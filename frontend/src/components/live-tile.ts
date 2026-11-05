@@ -1,6 +1,7 @@
 import { LitElement, css, html, nothing, type PropertyValues, type TemplateResult } from "lit";
 
 import { icon } from "../icons";
+import type { LiveRef } from "../api";
 import type { DebugPlayer, TileDebug } from "../live/debug";
 import { offlineSince } from "../live/data";
 import { explainLive } from "../live/explain";
@@ -10,6 +11,7 @@ import { currentLink, fullScreenHd, keepsFullScreenTaps, rememberFullScreenHd, t
 import { formatClock, formatStamp } from "../playback/time";
 import { enterPip, exitPip, inPip, pipSupported } from "../pip";
 import { sharedStyles } from "../styles";
+import type { TileHd } from "../wall/hd";
 import type {
   HomeAssistant,
   LiveCamera,
@@ -24,6 +26,8 @@ import "./live-debug";
 
 /** Scrolled out of view this long, a tile stops its stream (a quick scroll back keeps it). */
 export const OFFSCREEN_GRACE_MS = 3000;
+/** HD in a Wall tile refused, or its slot taken back: SD this long, then it asks again. */
+export const TILE_HD_RETRY_MS = 60_000;
 /** Fired by an openable tile when it is clicked (or Enter/Space). */
 export const TILE_OPEN_EVENT = "rv-live-open";
 /** Fired when a tile goes full screen or back: `{ cameraId, full }`. */
@@ -71,6 +75,12 @@ export interface LiveCountDetail {
  * picture-in-picture only in full screen, as on the board; it may play an HD
  * stream itself, and full screen then shows that one larger.
  *
+ * A large Wall tile (`tileHd`, Phase 9 step 3) plays HD in place, the same
+ * way: the sub stream until HD's first frame. Its HD is spare (a free stream
+ * slot only, given back when another stream needs it); refused or given back,
+ * it stays on SD for TILE_HD_RETRY_MS, then asks again. Away from home it
+ * keeps to SD as full screen does, unless HD was chosen on this device.
+ *
  * Picture-in-picture (in full screen, and on the camera's own view) takes the
  * video showing. The stream in it keeps playing while the tile is off screen
  * or the page is hidden, and when HD replaces it or another tile goes full
@@ -95,6 +105,7 @@ export class RvLiveTile extends LitElement {
     number: { attribute: false },
     suspended: { attribute: false },
     controls: { attribute: false },
+    tileHd: { attribute: false },
     _state: { state: true },
     _onScreen: { state: true },
     _pageVisible: { state: true },
@@ -136,6 +147,8 @@ export class RvLiveTile extends LitElement {
   declare suspended: boolean;
   /** The camera's controls, shown on its own view and in full screen. */
   declare controls: LiveControls | undefined;
+  /** A Wall tile: whether it plays HD in place, and why (its debug view says). */
+  declare tileHd: TileHd | undefined;
   declare _state: PlayerState;
   declare _onScreen: boolean;
   declare _pageVisible: boolean;
@@ -155,6 +168,12 @@ export class RvLiveTile extends LitElement {
 
   private _player: LivePlayer | undefined;
   private _hdPlayer: LivePlayer | undefined;
+  /** HD in the tile here: as full screen's choice for this device and network. */
+  private _tileLink: { hd: boolean; why: string } = { hd: true, why: "at home" };
+  /** HD in the tile was refused or given back: SD until then (epoch ms), and why. */
+  private _tileHdUntil = 0;
+  private _tileHdError: string | undefined;
+  private _tileHdTimer: ReturnType<typeof setTimeout> | undefined;
   /** The connection an HD choice is being made for. */
   private _hdChoosing: LiveConnection | undefined;
   /** In the browser's full screen (not just filling the window). */
@@ -210,6 +229,7 @@ export class RvLiveTile extends LitElement {
     this._observer?.disconnect();
     this._observer = undefined;
     clearTimeout(this._offscreenTimer);
+    clearTimeout(this._tileHdTimer);
     void exitPip(this._pipVideo).catch(() => undefined);
     this._pip = undefined;
     this._player?.stop();
@@ -298,9 +318,22 @@ export class RvLiveTile extends LitElement {
     return this.stream !== "sub";
   }
 
-  /** Full screen, with HD showing (the sub stream is stopped). */
+  /** HD showing, in full screen or in a large Wall tile (the sub stream is stopped). */
   get hdShown(): boolean {
-    return this._full && this._hdState.kind === "playing";
+    return (this._full || this._hdInTile) && this._hdState.kind === "playing";
+  }
+
+  /** HD plays in the tile itself (a large Wall tile, not full screen, HD here, not held back). */
+  private get _hdInTile(): boolean {
+    return (
+      this.tileHd?.hd === true &&
+      !this._full &&
+      !this.playsHd &&
+      !this.waitsForTap &&
+      this.shouldPlay &&
+      this._tileLink.hd &&
+      Date.now() >= this._tileHdUntil
+    );
   }
 
   get full(): boolean {
@@ -391,6 +424,13 @@ export class RvLiveTile extends LitElement {
       this._hd = undefined;
       this._hdChoosing = undefined;
       this._wanted = this._full || !this.waitsForTap;
+      this._tileHdUntil = 0;
+      this._tileHdError = undefined;
+    }
+    if (changed.has("tileHd") && this.tileHd?.hd) {
+      const link = currentLink();
+      const choice = fullScreenHd(link);
+      this._tileLink = { hd: choice.hd, why: choice.chosen ? `${choice.hd ? "HD" : "SD"}, as chosen on this device` : link.why };
     }
     this.toggleAttribute("full", this._full);
   }
@@ -434,9 +474,10 @@ export class RvLiveTile extends LitElement {
     if (this.playsHd) return;
     const connection = this.connection;
     const full = this._full && this.shouldPlay;
-    const wanted = (full && this._hdWanted) || this._pip === "hd";
+    const inTile = this._hdInTile;
+    const wanted = (full && this._hdWanted) || this._pip === "hd" || inTile;
     // Choose the HD stream in full screen even in SD: its button needs to know.
-    if (full && connection && !this._hd && this._hdChoosing !== connection) {
+    if ((full || inTile) && connection && !this._hd && this._hdChoosing !== connection) {
       this._hdChoosing = connection;
       void chooseHd(connection).then((choice) => {
         if (this.connection === connection) this._hd = choice;
@@ -444,8 +485,18 @@ export class RvLiveTile extends LitElement {
     }
     const player = this._ensureHdPlayer();
     if (!player) return;
-    if (wanted) this._start(player);
-    else if (
+    if (wanted) {
+      // HD for the tile alone is spare; in full screen (or picture-in-picture) it is not.
+      const spare = !full && this._pip !== "hd";
+      // Back from full screen, its HD held a slot as any other: ask again, spare,
+      // so it never keeps a slot another stream needs.
+      if (player.running && spare && !player.ref.spare) player.stop();
+      if (!player.running) {
+        if (spare) player.ref.spare = true;
+        else delete player.ref.spare;
+      }
+      this._start(player);
+    } else if (
       player.running &&
       (!this._full || !this._pageVisible || this.suspended || !this._wanted || !this._hdWanted)
     ) {
@@ -496,18 +547,42 @@ export class RvLiveTile extends LitElement {
     const video = this.renderRoot.querySelector<HTMLVideoElement>("video.hd");
     const connection = this.connection;
     if (!this.hass || !stream || !video || !connection) return undefined;
+    const ref: LiveRef = { connectionId: connection.connection_id, stream };
     this._hdPlayer = new LivePlayer(
       this.hass,
       video,
-      { connectionId: connection.connection_id, stream },
+      ref,
       { warm: connection.streams[stream]?.warm === true, iceServers: [] },
       (state) => {
         if (changedState(this._hdState, state)) this._playerChanged("HD", stream, state);
         this._hdState = state;
+        if (state.kind === "playing") this._tileHdError = undefined;
+        if (state.kind !== "waiting") return;
+        // Watched full screen: it tries again as any stream does, no longer spare.
+        if (this._full || this._pip === "hd") delete ref.spare;
+        else if (ref.spare) {
+          const error = state.error;
+          queueMicrotask(() => {
+            this._holdTileHd(error);
+          });
+        }
       },
     );
     this._hdPlayer.onCount = this._count;
     return this._hdPlayer;
+  }
+
+  /** HD in the tile refused, or its slot taken back: SD for a while, then ask again. */
+  private _holdTileHd(error: string): void {
+    if (this._full || this._pip === "hd") return;
+    this._hdPlayer?.stop();
+    this._tileHdError = error;
+    this._tileHdUntil = Date.now() + TILE_HD_RETRY_MS;
+    clearTimeout(this._tileHdTimer);
+    this._tileHdTimer = setTimeout(() => {
+      this.requestUpdate();
+    }, TILE_HD_RETRY_MS);
+    this.requestUpdate();
   }
 
   private _activate(): void {
@@ -583,7 +658,7 @@ export class RvLiveTile extends LitElement {
                 ${this.connection?.is_battery ? "Tap to wake it and watch" : "Tap to watch live"}
               </span>`}
         </div>
-        ${this.hdShown ? nothing : this._renderStatus(state)}
+        ${this.hdShown && this._full ? nothing : this._renderStatus(this.hdShown ? this._hdState : state)}
         ${this._renderHd()}
       </div>
       ${this._debug
@@ -655,9 +730,23 @@ export class RvLiveTile extends LitElement {
       connection: this.connection,
       players,
       hd: this._hd?.reason,
+      tile: this._tileDebug(),
       webRtcFirstUntil: pageCuts.preferWebRtc() ? pageCuts.until : undefined,
       mseFirstUntil: pageWebRtc.preferMse() ? pageWebRtc.until : undefined,
     };
+  }
+
+  /** A Wall tile's HD in its debug view: what the Wall chose, and what happened. */
+  private _tileDebug(): string[] | undefined {
+    const tile = this.tileHd;
+    if (!tile) return undefined;
+    const lines = [tile.reason];
+    if (!tile.hd) return lines;
+    if (!this._tileLink.hd) lines.push(`but SD here: ${this._tileLink.why}`);
+    if (this._tileHdError && Date.now() < this._tileHdUntil) {
+      lines.push(`HD not given: ${this._tileHdError}; asks again at ${formatClock(this._tileHdUntil, this.hass?.config?.time_zone, true)}`);
+    }
+    return lines;
   }
 
   /** Full screen: SD or HD, a button to switch where there is an HD stream, and why. */
@@ -721,7 +810,8 @@ export class RvLiveTile extends LitElement {
     if (!this.connection?.streams[this.stream]) return stateChip(`No ${this.stream} stream`);
     switch (state.kind) {
       case "playing":
-        return stateChip("Live", html`<i class="dot"></i>`);
+        // A large Wall tile playing HD in place says so.
+        return this.hdShown ? stateChip("Live HD", html`<i class="dot"></i>`) : stateChip("Live", html`<i class="dot"></i>`);
       case "starting":
         return stateChip("Starting");
       case "waiting": {
@@ -768,7 +858,8 @@ export class RvLiveTile extends LitElement {
       }
       /* On the board, never in full screen: there the whole picture shows, SD too. */
       :host([fill][fit="cover"]:not([full])) .poster,
-      :host([fill][fit="cover"]:not([full])) video.sub {
+      :host([fill][fit="cover"]:not([full])) video.sub,
+      :host([fill][fit="cover"]:not([full])) video.hd {
         object-fit: cover;
       }
       /* Full screen: the browser's, or filling the window (the iPhone). The

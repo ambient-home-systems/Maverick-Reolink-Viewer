@@ -1,8 +1,8 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
-import { B as i, E as a, G as o, H as s, J as c, K as l, Mt as u, Nt as d, R as f, S as p, T as m, U as h, V as g, W as _, X as v, Y as y, b, ft as x, h as S, it as C, j as w, jt as T, kt as E, lt as D, n as O, ot as k, p as A, pt as j, q as ee, ut as te, x as ne } from "./live-BgF9G32W.js";
-import { $ as re, G as ie } from "./home-RRbdT2A4.js";
-import { c as ae, o as oe, r as se, s as ce } from "./check-C0HTlEV9.js";
-import { a as M, i as N, n as P, o as F, r as I, t as L } from "./findings-CW2rJv52.js";
+import { B as i, E as a, G as o, H as s, J as c, K as l, Mt as u, Nt as d, R as f, S as p, T as m, U as h, V as g, W as _, X as v, Y as y, b, ft as x, h as S, it as C, j as w, jt as T, kt as E, lt as D, n as O, ot as k, p as A, pt as j, q as ee, ut as te, x as ne } from "./live-Ck1mNv_c.js";
+import { $ as re, G as ie } from "./home-CN7hty8A.js";
+import { c as ae, o as oe, r as se, s as ce } from "./check-CLHrGIsd.js";
+import { a as M, i as N, n as P, o as F, r as I, t as L } from "./findings-7-phfTLU.js";
 //#region src/live/check.ts
 var R = [
 	"Desktop Chrome, LAN",
@@ -93,7 +93,7 @@ var R = [
 		let r = await k(this._hass).catch(() => []);
 		this._ice = ee(r), this._log(`ICE servers (Home Assistant's): ${h(r)}`);
 		let i = this.options;
-		this._log(`Streams: ${i.streams.join(", ")} · warm: ${i.warm && e ? "yes" : e ? "no" : "no (not an admin)"} · Home Assistant's view: ${i.stock ? "yes" : "no"} · capacity test: ${i.capacity && e ? "yes" : "no"}`);
+		this._log(`Streams: ${i.streams.join(", ")} · warm: ${i.warm && e ? "yes" : e ? "no" : "no (not an admin)"} · Home Assistant's view: ${i.stock ? "yes" : "no"} · capacity test: ${i.capacity && e ? `yes${(i.capacityMains ?? 1) > 1 ? ` (${String(i.capacityMains)} mains)` : ""}` : "no"}`);
 		let a = performance.now(), s = (await j(this._hass)).go2rtc;
 		this._log(`go2rtc: ${s.state}${s.version ? ` ${s.version}` : ""}${s.binary ? ` (${s.binary === "system" ? "Home Assistant's binary" : "downloaded, checksum verified"})` : ""}${s.error ? ` · error: ${s.error}` : ""} · restarts ${s.restarts} · WebRTC port ${s.webrtc_port} · status in ${Math.round(performance.now() - a)} ms`);
 	}
@@ -283,20 +283,22 @@ var R = [
 		for (let t of e.hosts) {
 			this._checkStopped();
 			let e = t.name ?? t.id;
-			this._log(""), this._log(`Capacity test: ${e} (sub streams one by one, then a main, then a recording download)`), this._status(`capacity test: ${e}`);
-			let n = await this._capacity_(t.id, (t) => {
+			this._log("");
+			let n = this.options.capacityMains ?? 1;
+			this._log(`Capacity test: ${e} (sub streams one by one, then ${n > 1 ? `${String(n)} mains` : "a main"}, then a recording download)`), this._status(`capacity test: ${e}`);
+			let r = await this._capacity_(t.id, (t) => {
 				this._status(`capacity test: ${e}: ${t}`);
 			});
-			if ("message" in n) this._log(`  failed: ${n.message}${n.advice ? ` ${n.advice}` : ""}`), this._capacityFailed.push({
+			if ("message" in r) this._log(`  failed: ${r.message}${r.advice ? ` ${r.advice}` : ""}`), this._capacityFailed.push({
 				host: e,
-				...n
+				...r
 			});
 			else {
 				this._capacity.push({
 					host: e,
-					report: n
+					report: r
 				});
-				for (let e of s(n)) this._log(e);
+				for (let e of s(r)) this._log(e);
 			}
 		}
 	}
@@ -304,13 +306,13 @@ var R = [
 		return new Promise((n) => {
 			let r, i = !1, a = (e) => {
 				i || (i = !0, r?.().catch(() => void 0), n(e));
-			};
+			}, o = this.options.capacityMains ?? 1;
 			T(this._hass, e, (e) => {
 				e.type === "progress" ? t(e.message) : e.type === "result" ? a(e.report) : a(e.advice ? {
 					message: e.message,
 					advice: e.advice
 				} : { message: e.message });
-			}).then((e) => {
+			}, o > 1 ? { mains: o } : {}).then((e) => {
 				r = e, i && e().catch(() => void 0);
 			}).catch((e) => {
 				a({ message: d(e).message });
@@ -514,6 +516,7 @@ var $ = class extends r {
 		_warm: { state: !0 },
 		_stock: { state: !0 },
 		_capacity: { state: !0 },
+		_mains: { state: !0 },
 		_camera: { state: !0 },
 		_check: { state: !0 },
 		_checkText: { state: !0 },
@@ -525,7 +528,7 @@ var $ = class extends r {
 	};
 	_loaded = !1;
 	constructor() {
-		super(), this._setup = ge(), this._streams = [...Y], this._warm = !0, this._stock = !0, this._capacity = !0, this._camera = "", this._checkText = "", this._checkStatus = "";
+		super(), this._setup = ge(), this._streams = [...Y], this._warm = !0, this._stock = !0, this._capacity = !0, this._mains = 1, this._camera = "", this._checkText = "", this._checkStatus = "";
 	}
 	disconnectedCallback() {
 		super.disconnectedCallback(), this._check?.stop();
@@ -566,6 +569,7 @@ var $ = class extends r {
 			warm: e.warm ?? this._warm,
 			stock: e.stock ?? this._stock,
 			capacity: e.capacity ?? (this._capacity && Q(e.setup)),
+			capacityMains: e.capacityMains ?? this._mains,
 			cameraIds: e.cameraIds ?? (this._camera ? [this._camera] : [])
 		}, n, () => {
 			this._checkText = r.text, this._checkStatus = r.plainStatus;
@@ -667,7 +671,21 @@ var $ = class extends r {
 			this._capacity = e.target.checked;
 		}}
                   />NVR capacity test: how many streams each NVR serves at once (at home only)</label
-                >` : t}
+                >
+                ${this._capacity ? n`<label class="option nested"
+                      >Full-resolution streams in it
+                      <select
+                        .value=${String(this._mains)}
+                        ?disabled=${e}
+                        @change=${(e) => {
+			this._mains = Number(e.target.value);
+		}}
+                      >
+                        <option value="1">1 (full screen)</option>
+                        <option value="2">2</option>
+                        <option value="3">3 (HD in the Wall's tiles)</option>
+                      </select></label
+                    >` : t}` : t}
         </div>
       </div>
       ${ae(this._setup, navigator.userAgent) ? n`<div class="banner warning" role="alert">

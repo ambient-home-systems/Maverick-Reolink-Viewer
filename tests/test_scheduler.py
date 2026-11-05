@@ -34,7 +34,12 @@ class Gate:
         return self.result
 
 
-IDLE_STREAMS = {"stream_limit": 2, "streams": 0, "streams_waiting": 0}
+IDLE_STREAMS = {
+    "stream_limit": 2,
+    "streams": 0,
+    "streams_waiting": 0,
+    "streams_spare": 0,
+}
 
 
 async def _settle() -> None:
@@ -334,7 +339,12 @@ async def test_stream_budget_limit_and_priority() -> None:
     await _settle()
     assert not later.granted
     assert not urgent.granted
-    assert budget.stats() == {"stream_limit": 2, "streams": 2, "streams_waiting": 2}
+    assert budget.stats() == {
+        "stream_limit": 2,
+        "streams": 2,
+        "streams_waiting": 2,
+        "streams_spare": 0,
+    }
     a.release()
     await urgent.wait()
     assert not later.granted
@@ -382,7 +392,12 @@ async def test_stream_ticket_raise_priority_and_cancel() -> None:
         await waiter
     assert other.released
     slow.release()
-    assert budget.stats() == {"stream_limit": 1, "streams": 0, "streams_waiting": 0}
+    assert budget.stats() == {
+        "stream_limit": 1,
+        "streams": 0,
+        "streams_waiting": 0,
+        "streams_spare": 0,
+    }
 
 
 async def test_a_waiting_ticket_defers_to_those_queued_since() -> None:

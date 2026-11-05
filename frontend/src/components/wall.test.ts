@@ -56,7 +56,7 @@ const CAMERAS: LiveCamera[] = [
   camera("garage", "Garage"),
 ];
 
-function fakeHass(layouts: WallLayout[]) {
+function fakeHass(layouts: WallLayout[], cameras: LiveCamera[] = CAMERAS) {
   const sent: Record<string, unknown>[] = [];
   const hass = {
     user: { is_admin: false },
@@ -65,7 +65,7 @@ function fakeHass(layouts: WallLayout[]) {
     callService: vi.fn(() => Promise.resolve(undefined)),
     callWS: vi.fn((message: Record<string, unknown>) => {
       sent.push(message);
-      if (message.type === "reolink_viewer/live/cameras") return Promise.resolve({ cameras: CAMERAS });
+      if (message.type === "reolink_viewer/live/cameras") return Promise.resolve({ cameras });
       if (message.type === "web_rtc/ice_servers") return Promise.resolve([]);
       if (message.type === "reolink_viewer/wall/layouts") return Promise.resolve({ layouts: [...layouts] });
       if (message.type === "reolink_viewer/wall/layouts/save") {
@@ -238,6 +238,37 @@ describe("rv-wall", () => {
     four.button("Back to the layout")?.click();
     await four.el.updateComplete;
     expect(four.tiles()).toHaveLength(3);
+  });
+
+  it("plays the large slot in HD; the others on the same NVR stay in SD, and say why", async () => {
+    // On the NVR, each with an HD stream; the NVR plays one HD tile at once.
+    const main = { encoding: { ...encoding, width: 2560, height: 1440 }, entity_id: null };
+    const onNvr = CAMERAS.map((c) => ({
+      ...c,
+      connections: c.connections.map((x) => ({ ...x, entry_title: "RLN36", host: "nvr", hd_tiles: 1, streams: { ...x.streams, main } })),
+    }));
+    const { hass } = fakeHass([{ ...FRONT, cameras: ["garage", "yard", "door"] }], onNvr);
+    const { el, tiles } = await mount(hass, "front");
+    const size = (width: number, height: number) => {
+      (el as unknown as { _size: { width: number; height: number } })._size = { width, height };
+    };
+    // A 1500 × 860 window: the small cells are smaller than the 896 × 512 sub streams.
+    size(1500, 860);
+    await el.updateComplete;
+    const [garage, yard, door] = tiles();
+    expect(garage.tileHd).toEqual({ hd: true, reason: "HD: the large slot" });
+    expect(yard.tileHd).toEqual({ hd: false, reason: "SD: the tile is no larger than its sub stream (896×512)" });
+    // A 4K screen: larger, but the NVR's one HD tile is the large slot's.
+    size(3840, 2100);
+    await el.updateComplete;
+    expect(yard.tileHd).toEqual({ hd: false, reason: "SD: RLN36 plays 1 HD tile at once, and Garage has it" });
+    expect(door.tileHd?.hd).toBe(false);
+    // A double tap moves the yard into the large slot: the HD tile is its now.
+    yard.closest(".cell")?.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+    await el.updateComplete;
+    expect(tiles()[0]?.camera?.id).toBe("yard");
+    expect(tiles()[0]?.tileHd).toEqual({ hd: true, reason: "HD: the large slot" });
+    expect(tiles()[1]?.tileHd?.reason).toBe("SD: RLN36 plays 1 HD tile at once, and Front Yard has it");
   });
 
   it("swaps two tiles dragged one onto the other", async () => {

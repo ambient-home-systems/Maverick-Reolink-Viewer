@@ -17,11 +17,12 @@ from custom_components.reolink_viewer.live import relay as relay_module
 from custom_components.reolink_viewer.live.h26x import init_config, limit_reorder
 from custom_components.reolink_viewer.live.relay import MseRelay, Viewer
 from custom_components.reolink_viewer.live.streams import (
+    YIELDED,
     LiveError,
     LiveStream,
     StreamRegistry,
 )
-from custom_components.reolink_viewer.scheduler import Scheduler
+from custom_components.reolink_viewer.scheduler import Priority, Scheduler
 from homeassistant.core import HomeAssistant
 
 from .conftest import TEST_PASSWORD
@@ -221,6 +222,43 @@ async def test_a_viewer_starts_at_the_cached_key_frame(
     await settle()
     assert socket.closed  # the last viewer left: the feed closed
     assert relay.state(SUB) is None
+    assert slots(scheduler) == 0
+
+
+async def test_a_spare_feed_gives_its_slot_back(
+    setup: tuple[MseRelay, FakeServer, Scheduler],
+) -> None:
+    """HD in a Wall tile: a feed on a free slot, ended when the slot is needed."""
+    relay, _server, scheduler = setup
+    main, ext = LiveStream(SOURCE, "main"), LiveStream(SOURCE, "ext")
+    sub = await relay.async_attach(SUB, CHROME)
+    hd = await relay.async_attach(main, CHROME, spare=True)
+    assert slots(scheduler) == 2
+    with pytest.raises(LiveError, match="every stream slot"):
+        await relay.async_attach(ext, CHROME, spare=True)
+    # Another stream needs a slot: the spare feed ends, saying why.
+    other = await relay.async_attach(ext, CHROME)
+    await settle()
+    assert hd.closed
+    assert hd.error == YIELDED
+    assert relay.state(main) is None
+    # A feed that someone else joins without being spare keeps its slot.
+    other.detach()
+    await settle()
+    hd = await relay.async_attach(main, CHROME, spare=True)
+    full = await relay.async_attach(main, CHROME)
+    waiting = scheduler.host("entry1").streams.request(Priority.PLAYBACK)
+    await settle()
+    assert not hd.closed
+    assert not waiting.granted
+    # That viewer leaves: only the spare one is left, and the slot is asked back.
+    full.detach()
+    await settle()
+    assert (hd.closed, hd.error) == (True, YIELDED)
+    await asyncio.wait_for(waiting.wait(), 1)
+    waiting.release()
+    sub.detach()
+    await settle()
     assert slots(scheduler) == 0
 
 

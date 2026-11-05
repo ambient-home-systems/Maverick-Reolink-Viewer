@@ -121,6 +121,7 @@ Each camera's tile on the live board says in a word, top right, what it is doing
 | Word | What it means |
 | --- | --- |
 | **Live** | Live video is playing. |
+| **Live HD** | A large tile on the Wall plays the camera's full-quality (HD) stream in place. Others stay in SD: an NVR plays one HD tile at a time, and gives its HD back whenever another stream needs it. |
 | **Starting** | The video is on its way. Meanwhile, the tile shows the camera's last picture. |
 | **Retrying** | The video stopped, or could not start. The tile says why, and tries again by itself. **Retry now** tries at once. |
 | **Offline** | Home Assistant cannot reach the camera, since the time shown ("Offline since 21:40"). See below. |

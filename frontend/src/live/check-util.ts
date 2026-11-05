@@ -160,6 +160,9 @@ export function capacityLines(report: CapacityReport): string[] {
   for (const { camera, why } of report.main_left_out ?? []) {
     lines.push(`  main left out: ${camera} main (${why}, on its own)`);
   }
+  if (report.mains) {
+    lines.push(`  mains: ${String(report.mains.playing)} of the ${String(report.mains.asked)} asked for, one more per level`);
+  }
   for (const level of report.levels) {
     const first = level.first_frame_s != null ? `, first frame ${level.first_frame_s} s` : "";
     const fillPart = level.fill

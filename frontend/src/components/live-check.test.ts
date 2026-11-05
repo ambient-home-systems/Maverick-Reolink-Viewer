@@ -196,6 +196,7 @@ describe("rv-live-check", () => {
       warm: true,
       stock: true,
       capacity: false, // remote: no recording download over the link
+      capacityMains: 1,
       cameraIds: ["cam2"],
     });
     expect(runs[0]?.stage.classList.contains("stage")).toBe(true);

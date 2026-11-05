@@ -68,7 +68,7 @@ from .h26x import (
     replace_nals,
     sample_sets,
 )
-from .streams import Hold, LiveError, LiveStream, StreamRegistry
+from .streams import YIELDED, Hold, LiveError, LiveStream, StreamRegistry
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -98,6 +98,8 @@ class Viewer:
         self._wake = asyncio.Event()
         self.started = False
         self.closed = False
+        # HD in a Wall tile: it would give the feed's slot back.
+        self.spare = False
         self.error: str | None = None
 
     @property
@@ -165,6 +167,9 @@ class Feed:
         self._closing = False
         self._task: asyncio.Task[None] | None = None
         self._hold: Hold | None = None
+        # Opened for a spare hold (HD in a Wall tile): ended when its slot is asked back.
+        self.spare = False
+        self._reason: str | None = None
         self._buffer = bytearray()
         self._head = b""
         self._moof: bytes | None = None
@@ -187,13 +192,19 @@ class Feed:
         """Return the codec families in the feed (avc1, hvc1, mp4a…)."""
         return _families(_mime_codecs(self.mime))
 
-    async def async_open(self) -> None:
-        """Start go2rtc, take a stream slot, and wait for go2rtc's answer."""
+    async def async_open(self, *, spare: bool = False) -> None:
+        """Start go2rtc, take a stream slot, and wait for go2rtc's answer.
+
+        ``spare``: only on a slot free now, given back when asked (give_back).
+        """
         try:
             server = await self._relay.async_server()
         except Go2rtcError as err:
             raise LiveError(str(err)) from err
-        self._hold = await self._relay.registry.async_hold(self.stream)
+        self._hold = await self._relay.registry.async_hold(
+            self.stream, on_yield=self.give_back if spare else None
+        )
+        self.spare = spare
         opened: asyncio.Future[None] = asyncio.get_running_loop().create_future()
         self._task = self._relay.hass.async_create_background_task(
             self._run(server, opened), f"reolink_viewer live feed {self.stream.kind}"
@@ -213,9 +224,10 @@ class Feed:
             return False
         return bool(self._gop)
 
-    def attach(self) -> Viewer:
+    def attach(self, *, spare: bool = False) -> Viewer:
         """Add a viewer; it is sent the cached key frame onwards at once."""
         viewer = Viewer(self)
+        viewer.spare = spare
         self.viewers.add(viewer)
         if self._gop and self.init is not None:
             viewer.started = True
@@ -227,6 +239,22 @@ class Feed:
         self.viewers.discard(viewer)
         if not self.viewers and not self.warm:
             self.close()
+        elif not self.spare and not self.warm and all(v.spare for v in self.viewers):
+            # Only spare viewers left (the full screen closed): spare again.
+            self.spare = True
+            if self._hold is not None:
+                self._relay.registry.lend(self.stream, self._hold, self.give_back)
+
+    def keep(self) -> None:
+        """Hold the slot as any other from now on (a viewer that is not spare joined)."""
+        if self.spare:
+            self.spare = False
+            self._relay.registry.keep(self.stream, self._hold)
+
+    def give_back(self) -> None:
+        """End a spare feed whose slot is asked back, telling its viewers why."""
+        self._reason = YIELDED
+        self.close()
 
     def close(self) -> None:
         """Stop: disconnect from go2rtc and give the stream slot back."""
@@ -441,7 +469,7 @@ class Feed:
         if self.ended:
             return
         self.ended = True
-        reason = redact(error) if error else "the stream ended"
+        reason = redact(error) if error else (self._reason or "the stream ended")
         for viewer in list(self.viewers):
             viewer.close(reason)
         self.viewers.clear()
@@ -480,8 +508,14 @@ class MseRelay:
         self._aside: dict[str, int] = {}
         self._stopped = False
 
-    async def async_attach(self, stream: LiveStream, codecs: str) -> Viewer:
-        """Join (or open) a feed of the stream that the browser can play."""
+    async def async_attach(
+        self, stream: LiveStream, codecs: str, *, spare: bool = False
+    ) -> Viewer:
+        """Join (or open) a feed of the stream that the browser can play.
+
+        ``spare`` (HD in a Wall tile): a feed opened for it only takes a free
+        slot, and ends when the slot is asked back; joining a feed takes none.
+        """
         families = _families(codecs)
         async with self._lock(stream):
             feed = next(
@@ -493,8 +527,10 @@ class MseRelay:
                 None,
             )
             if feed is None:
-                feed = await self._open(stream, codecs)
-            return feed.attach()
+                feed = await self._open(stream, codecs, spare=spare)
+            elif not spare:
+                feed.keep()
+            return feed.attach(spare=spare)
 
     async def async_keep_warm(
         self,
@@ -647,11 +683,13 @@ class MseRelay:
     def _lock(self, stream: LiveStream) -> asyncio.Lock:
         return self._locks.setdefault(stream.name, asyncio.Lock())
 
-    async def _open(self, stream: LiveStream, codecs: str) -> Feed:
+    async def _open(
+        self, stream: LiveStream, codecs: str, *, spare: bool = False
+    ) -> Feed:
         if self._stopped:
             raise LiveError("live view is stopping")
         feed = Feed(self, stream, codecs)
-        await feed.async_open()
+        await feed.async_open(spare=spare)
         if feed.ended:
             raise LiveError("the stream ended")
         self._feeds.setdefault(stream.name, []).append(feed)
@@ -662,6 +700,7 @@ class MseRelay:
             feed = next((f for f in self._feeds.get(stream.name, []) if f.usable), None)
             if feed is None:
                 feed = await self._open(stream, WARM_CODECS)
+            feed.keep()
             feed.warm = True
             return feed
 

@@ -42,6 +42,7 @@ export class RvLiveCheck extends LitElement {
     _warm: { state: true },
     _stock: { state: true },
     _capacity: { state: true },
+    _mains: { state: true },
     _camera: { state: true },
     _check: { state: true },
     _checkText: { state: true },
@@ -60,6 +61,8 @@ export class RvLiveCheck extends LitElement {
   declare _warm: boolean;
   declare _stock: boolean;
   declare _capacity: boolean;
+  /** Main streams the capacity test opens at once (Phase 9 step 3). */
+  declare _mains: number;
   declare _camera: string;
   declare _check: LiveCheck | undefined;
   declare _checkText: string;
@@ -79,6 +82,7 @@ export class RvLiveCheck extends LitElement {
     this._warm = true;
     this._stock = true;
     this._capacity = true;
+    this._mains = 1;
     this._camera = "";
     this._checkText = "";
     this._checkStatus = "";
@@ -137,6 +141,7 @@ export class RvLiveCheck extends LitElement {
         warm: options.warm ?? this._warm,
         stock: options.stock ?? this._stock,
         capacity: options.capacity ?? (this._capacity && capacityByDefault(options.setup)),
+        capacityMains: options.capacityMains ?? this._mains,
         cameraIds: options.cameraIds ?? (this._camera ? [this._camera] : []),
       },
       stage,
@@ -261,7 +266,23 @@ export class RvLiveCheck extends LitElement {
                       this._capacity = (e.target as HTMLInputElement).checked;
                     }}
                   />NVR capacity test: how many streams each NVR serves at once (at home only)</label
-                >`
+                >
+                ${this._capacity
+                  ? html`<label class="option nested"
+                      >Full-resolution streams in it
+                      <select
+                        .value=${String(this._mains)}
+                        ?disabled=${running}
+                        @change=${(e: Event) => {
+                          this._mains = Number((e.target as HTMLSelectElement).value);
+                        }}
+                      >
+                        <option value="1">1 (full screen)</option>
+                        <option value="2">2</option>
+                        <option value="3">3 (HD in the Wall's tiles)</option>
+                      </select></label
+                    >`
+                  : nothing}`
             : nothing}
         </div>
       </div>

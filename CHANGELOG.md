@@ -3,6 +3,23 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.54.0
+
+HD in the Wall's large tiles.
+
+- **The large tile plays in HD:** the large slot of 1 + 5 and 1 + 7, a camera alone on
+  the screen, and any tile shown larger than its camera's SD picture. It says **Live
+  HD**; the SD video plays until the HD video's first picture, as in full screen.
+- **One at a time per NVR**, the large slot first; the other tiles stay in SD, and
+  their ⓘ says why.
+- **It gives way:** HD in a tile takes a stream only when the NVR has one free, and
+  gives it back as soon as another screen, full screen or a recording needs it (SD
+  for a minute, then it tries again). Away from home the tiles stay in SD, unless you
+  chose HD on that device.
+- **The capacity test** can open 2 or 3 full-resolution streams at once (**Full-
+  resolution streams in it**, in the live check), to see whether an NVR could play more
+  than one HD tile.
+
 ## 0.53.0
 
 Arranging the Wall.
