@@ -141,7 +141,7 @@ describe("rv-wall", () => {
     // (one for a camera that is gone).
     expect(cells()).toHaveLength(6);
     expect(tiles().map((t) => t.camera?.id)).toEqual(["door", "yard"]);
-    expect(tiles()[0]?.getAttribute("style")).toContain("grid-column: 1 / span 2; grid-row: 1 / span 2");
+    expect(cells()[0]?.getAttribute("style")).toContain("grid-column: 1 / span 2; grid-row: 1 / span 2");
     // Numbered as on the board (the doorbell first: it is tall).
     expect(tiles().map((t) => t.number)).toEqual([1, 2]);
     expect(el.shadowRoot?.querySelector("select")?.value).toBe("front");
@@ -160,13 +160,117 @@ describe("rv-wall", () => {
     expect(wallCameras(ALL_CAMERAS, CAMERAS).map((c) => c?.id)).toEqual(["door", "yard", "garage"]);
   });
 
-  it("says when there are more cameras than cells", async () => {
-    const { hass } = fakeHass([{ ...FRONT, grid: "1", cameras: [] }]);
-    const { tiles, text } = await mount(hass, "front");
-    expect(tiles()).toHaveLength(1);
-    expect(text()).toContain("2 more cameras than cells");
+  it("pages through more cameras than cells, by hand and on a tour", async () => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+    try {
+      const { hass } = fakeHass([{ ...FRONT, grid: "1", cameras: [], tour_s: 10 }]);
+      const { el, tiles, button, text } = await mount(hass, "front");
+      expect(tiles().map((t) => t.camera?.id)).toEqual(["door"]);
+      expect(text()).toContain("1 / 3");
+      el.shadowRoot?.querySelector<HTMLButtonElement>('button[aria-label="Next page"]')?.click();
+      await el.updateComplete;
+      expect(tiles().map((t) => t.camera?.id)).toEqual(["yard"]);
+      expect(el.shadowRoot?.querySelector(".said")?.textContent).toBe("Page 2 of 3.");
+      // The tour turns the page every 10 s, round to the first.
+      vi.advanceTimersByTime(10_000);
+      await el.updateComplete;
+      expect(tiles().map((t) => t.camera?.id)).toEqual(["garage"]);
+      vi.advanceTimersByTime(10_000);
+      await el.updateComplete;
+      expect(tiles().map((t) => t.camera?.id)).toEqual(["door"]);
+      // Not while arranging.
+      button("Arrange")?.click();
+      await el.updateComplete;
+      vi.advanceTimersByTime(30_000);
+      await el.updateComplete;
+      expect(tiles().map((t) => t.camera?.id)).toEqual(["door"]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
+  it("moves between cells from the keyboard, and moves a camera with Shift, kept in the layout", async () => {
+    const { hass, sent } = fakeHass([{ ...FRONT, grid: "2x2", cameras: [] }]);
+    const { el, tiles, cells } = await mount(hass, "front");
+    const focusable = () => cells().map((c) => c.getAttribute("tabindex"));
+    expect(focusable()).toEqual(["0", "-1", "-1", "-1"]);
+    expect(cells()[0]?.getAttribute("aria-label")).toBe("Doorbell, cell 1 of 4");
+    const key = (cell: Element | undefined, k: string, shiftKey = false) => {
+      cell?.dispatchEvent(new KeyboardEvent("keydown", { key: k, shiftKey, bubbles: true, cancelable: true }));
+    };
+    key(cells()[0], "ArrowRight");
+    await el.updateComplete;
+    expect(focusable()).toEqual(["-1", "0", "-1", "-1"]);
+    // Shift: the yard goes down, to the empty cell, and the focus with it.
+    key(cells()[1], "ArrowDown", true);
+    await el.updateComplete;
+    await flush();
+    expect(tiles().map((t) => t.camera?.id)).toEqual(["door", "garage", "yard"]);
+    expect(focusable()).toEqual(["-1", "-1", "-1", "0"]);
+    expect(el.shadowRoot?.querySelector(".said")?.textContent).toBe("Front Yard swapped with an empty cell.");
+    expect(sent.filter((m) => m.type === "reolink_viewer/wall/layouts/save").at(-1)).toMatchObject({
+      layout_id: "front",
+      cameras: ["door", null, "garage", "yard"],
+    });
+  });
+
+  it("puts a camera in the large slot, or alone on the screen and back", async () => {
+    const { hass } = fakeHass([FRONT, { ...FRONT, id: "four", name: "Four", grid: "2x2", cameras: [] }]);
+    const large = await mount(hass, "front");
+    // Enter on the yard (cell 3): into the large slot.
+    large.cells()[2]?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    await large.el.updateComplete;
+    expect(large.tiles().map((t) => t.camera?.id)).toEqual(["yard", "door"]);
+    expect(large.el.shadowRoot?.querySelector(".said")?.textContent).toBe("Front Yard in the large slot.");
+    document.body.innerHTML = "";
+    const four = await mount(hass, "four");
+    four.cells()[1]?.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+    await four.el.updateComplete;
+    expect(four.tiles().map((t) => t.camera?.id)).toEqual(["yard"]);
+    expect(four.cells()[0]?.getAttribute("aria-label")).toBe("Front Yard, alone on the screen");
+    four.cells()[0]?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    await four.el.updateComplete;
+    expect(four.tiles()).toHaveLength(3);
+    // And back by its button, for a touch screen.
+    four.cells()[2]?.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+    await four.el.updateComplete;
+    expect(four.tiles()).toHaveLength(1);
+    four.button("Back to the layout")?.click();
+    await four.el.updateComplete;
+    expect(four.tiles()).toHaveLength(3);
+  });
+
+  it("swaps two tiles dragged one onto the other", async () => {
+    const { hass } = fakeHass([{ ...FRONT, grid: "2x2", cameras: [] }]);
+    const { el, tiles, cells } = await mount(hass, "front");
+    const data = new DataTransfer();
+    cells()[0]?.dispatchEvent(new DragEvent("dragstart", { dataTransfer: data, bubbles: true }));
+    cells()[2]?.dispatchEvent(new DragEvent("dragover", { dataTransfer: data, bubbles: true, cancelable: true }));
+    await el.updateComplete;
+    expect(cells()[2]?.classList.contains("over")).toBe(true);
+    cells()[2]?.dispatchEvent(new DragEvent("drop", { dataTransfer: data, bubbles: true, cancelable: true }));
+    await el.updateComplete;
+    expect(tiles().map((t) => t.camera?.id)).toEqual(["garage", "yard", "door"]);
+    expect(cells()[2]?.classList.contains("over")).toBe(false);
+  });
+
+  it("arranges by tapping a camera, then where it goes; All cameras says to save it", async () => {
+    const { hass, sent } = fakeHass([]);
+    const { el, tiles, button, text } = await mount(hass);
+    button("Arrange")?.click();
+    await el.updateComplete;
+    const picks = () => [...(el.shadowRoot?.querySelectorAll<HTMLButtonElement>("button.pick") ?? [])];
+    expect(picks().map((b) => b.getAttribute("aria-label"))).toEqual(["Move Doorbell", "Move Front Yard", "Move Garage"]);
+    picks()[0]?.click();
+    await el.updateComplete;
+    expect(picks()[0]?.getAttribute("aria-pressed")).toBe("true");
+    picks()[2]?.click();
+    await el.updateComplete;
+    expect(tiles().map((t) => t.camera?.id)).toEqual(["garage", "yard", "door"]);
+    // Not a saved layout: shown, not kept.
+    expect(sent.filter((m) => m.type === "reolink_viewer/wall/layouts/save")).toEqual([]);
+    expect(text()).toContain("Save it as a layout to keep this order");
+  });
   it("saves a new layout and opens it; saves as new, and deletes", async () => {
     const layouts: WallLayout[] = [];
     const { hass, sent } = fakeHass(layouts);

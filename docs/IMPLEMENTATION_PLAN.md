@@ -25,7 +25,7 @@ put on it:
 | 6 | The Doorbell's events: a camera that records but cannot be played lists its events | Standard / High | 0.5–1 wk | **Done** (2026-11-02, v0.43.0). **Step 1 done** (v0.41.0–v0.41.1): run 2 found the Doorbell's event and day searches working, its zone Home Assistant's, and its pictures refused by reolink-aio (a `1002` header). **Step 2 built** (v0.42.0): the Doorbell's events in the feed, the Events view and the calendar, on wired power. **Step 3 built** (v0.43.0): its pictures read here, and its Playback tab shows each event as pictures. **The owner's check** (2026-11-02): the Doorbell's events show and open as pictures, and a press of the doorbell is listed as a "Doorbell" event at the right time, so step 4 (the fallback) was not needed. Phase 7 started meanwhile, at the owner's request. See "Phase 6" |
 | 7 | Live video on dashboards: a Reolink Viewer camera card | Standard | 1–1.5 wk | **Done** (2026-11-03, v0.45.2), closed on daily use by the owner. **Step 1 done** (v0.44.0): the Reolink camera card, `custom:reolink-viewer-camera`, with its editor, on any dashboard and for any user. The owner's check (2026-11-02): on the wall tablet (Galaxy Tab A9+, Fully Kiosk, a sections view) and the iPhone app's dashboard, the Doorbell's and the front-yard camera's cards show their picture at once and their video quickly, kept warm or not, and go full screen in HD and back. **Step 2 built** (v0.45.0): what the cards see is logged per device (Devices → Dashboard cards), they sleep while Fully Kiosk's screen is off or its screensaver on, and a doorbell's card can wake the screen and go full screen when it rings. **Step 2 done** (2026-11-03, v0.45.2): on the owner's tablet the cards sleep under Fully's screensaver (no frames decoded) and a ring wakes the screen and shows the Doorbell full screen, playing in 0.6 s (v0.45.1 fills the window from the top layer). Step 3 stays gated. Not measured: a warm camera's wake time and 8 visible hours; the wall page's cards are the owner's choice. See "Phase 7" |
 | 8 | Unusual events: learning what is normal | High | 2–3 wk, then a week of learning | **Started** (2026-11-03). **Step 1 built** (v0.46.0): the detection journal, opt-in ("Learn what is normal"), with a 10-day head start from Home Assistant's recorder; on at the owner's since 2026-11-02, all 7 cameras. v0.46.1 keeps motion as bursts and a year of history (the owner's choices, from the first 10 days' sizes). **Step 2 built** (v0.47.0): Stamina's model, ported with its tests (MIT, in `THIRD_PARTY.md`), with a daily cap for a busy property; the Devices page shows each camera's state and the week's marks with their sentences. The owner's check: 3.6 marks a day at Balanced (243 a week without the cap). v0.47.1, the owner's choices: motion never marked, time counted once, one mark per incident across cameras; 5.1 a day, the journal 1.1 MB (about 2.8 MB a month). v0.47.2: only long stands out, a kind seen 10 times is known, only detections fire first; 5.3 a day. v0.47.3: an incident's later events take what fired before it; a mark always says why; the model saved between restarts; 5.3 a day, 39 without the cap. v0.47.4: anything seen 10 times is known, only "nothing fired first" raises; 1.4 a day, all rare by count. v0.47.5: Balanced aims at a few a day (floor 0, at most 3 a day), More knows a value after 20. **Step 3 built** (v0.48.0–v0.49.0), the owner's choice: marks on the timetable's rows with why, and an Unusual filter on Events (v0.48.0; the owner's check: 2.6 a day at Balanced); "What it has learned" on each camera's Overview, and a mark's count as a total (v0.49.0). **House-wide signals built** (v0.50.0): chosen in the options, kept beside the detections, learned and said. **Step 4 built** (v0.51.0): each detection scored as it begins and ends; `reolink_viewer_unusual`, an "unusual activity" sensor per camera, and a device trigger per camera, on Reolink Viewer's own device. See "Phase 8" |
-| 9 | The Wall: the Live page as a security monitor, with layouts, arranging, HD large tiles and the detection strip | Standard / High | 2–3 wk | **Started** (2026-11-05). **Step 1 built** (v0.52.0): the Wall, its layouts (Auto by shape, 1, 2×2, 3×3, 4×4, 1+5, 1+7), saved per user on the server, `#wall/<id>`, each device remembering board or Wall. See "Phase 9" |
+| 9 | The Wall: the Live page as a security monitor, with layouts, arranging, HD large tiles and the detection strip | Standard / High | 2–3 wk | **Started** (2026-11-05). **Step 1 built** (v0.52.0): the Wall, its layouts (Auto by shape, 1, 2×2, 3×3, 4×4, 1+5, 1+7), saved per user on the server, `#wall/<id>`, each device remembering board or Wall; the owner's check: it works, nothing to scroll. **Step 2 built** (v0.53.0): swapping (drag, or Arrange and two taps), the large slot or alone by a double tap or Enter, the keyboard, pages and tours. See "Phase 9" |
 | 10 | Scrubbing that shows the picture while dragging | Very high | 2–4 wk | Planned. See "Phase 10" |
 | 11 | Playback and settings extras: zoom, event clips, filters, copying settings | Standard | 1–2 wk | Planned. See "Phase 11" |
 | 12 | Optional R&D: the Doorbell's recordings and talk | Very high | 3–5 wk, gated | Planned. See "Phase 12" |
@@ -6480,6 +6480,19 @@ a day, and any mark that names a signal.
   automation on it run by the camera's event only; unavailable with
   learning off.
 
+**The owner's check (2026-11-05, v0.52.0, Devices → Learning what is
+normal):** 2.6 marks a day at Balanced, steady (18 in 7 days, of 15,004
+events; the cap cut none, its line "the floor, 0" as 0.49.0 words it); six of
+seven cameras mark (Laundry Room: 62 detections, 139 short, about four weeks
+at its rate); by kind animal 6, vehicle 5, person 4, package 3; what stood out
+most: how long 9, the time of day 5, what it was 3, the light 1. Learned at
+the update's restart: 14.47 s, 4.94 s computing (each update relearns: a
+model saved by another version is not taken, so the nightly line shows only
+on a day without an update). The file 2.1 MB with its write-ahead log (1.5 MB
+an hour before; the log is folded back in at its checkpoint). No
+notifications yet: none is sent without an automation, which the owner had
+not made; the user guide's example is the way.
+
 **Hardware checklist (the owner, v0.51.0):** Settings → Devices → Reolink
 Viewer: a "… unusual activity" sensor per camera; an automation from the
 user guide's example (a notification on "Something unusual seen on …");
@@ -6519,7 +6532,7 @@ large, arranged by the owner (PLAN.md §6.3). The owner named it "Wall" on
 | Step | Status |
 | --- | --- |
 | 1. The Wall, its layouts, saved | Built (v0.52.0) |
-| 2. Arranging, pages and tours | Not started |
+| 2. Arranging, pages and tours | Built (v0.53.0) |
 | 3. HD in large tiles | Not started |
 | 4. The detection strip and instant highlights | Not started |
 | 5. Kiosk touches, and the Wall as a dashboard card | Not started; the card after Phase 7 |
@@ -6587,6 +6600,10 @@ on the wall tablet (signed in as the same user): the layout is listed, and
 `#wall/<id>` as Fully Kiosk's start page opens it; the board and the Wall each
 remembered after a reload.
 
+**The owner's check (2026-11-05, v0.52.0):** "Wall view works and looks good,
+nothing to scroll." The rest of the checklist (a saved layout on the wall
+tablet, `#wall/<id>` as Fully's start page) not yet reported.
+
 #### Step 9.2: arranging, pages and tours
 
 - **Swapping:** drag a tile onto another to swap the two.
@@ -6600,6 +6617,48 @@ remembered after a reload.
 - **A tour per layout:** the next page every N seconds. While a tour runs,
   warm cameras keep playing; a cold camera shows its picture until its video
   starts.
+
+**As built (v0.53.0):**
+
+- **The order:** a layout's cameras in order, by id, `null` for an empty
+  cell (`wall/arrange.ts`); none is every camera in the board's order, made
+  explicit at the first move. A move on a saved layout is saved at once
+  (`wall/layouts/save` with its id); on All cameras it holds until the page
+  is left, and the bar says to save it as a layout to keep it. Saving a new
+  layout keeps the order arranged.
+- **Swapping:** drag a tile onto another (HTML drag and drop; the dragged
+  cell is kept too, for a WebView that drops the data), or **Arrange** in the
+  bar and tap a camera, then where it goes (a tap target over each cell, the
+  picked one ringed): the way on a touch screen. A camera goes into an empty
+  cell as well.
+- **The large slot:** a double tap or Enter puts a camera in 1+N's large
+  slot (it swaps with the one there); in any other grid, alone on the screen,
+  and back by a double tap, Escape or **Back to the layout** in the bar.
+- **Keyboard:** each cell is a group (`role="group"`, "Wall cell", named
+  "Doorbell, cell 1 of 4"), one in the tab order at a time; the arrows move
+  to the next cell that way (`neighbour`: the nearest overlapping one, so a
+  large slot's neighbours are the cells beside and below it), Shift with an
+  arrow moves the camera there, Enter enlarges, Escape returns, Page Down and
+  Page Up turn pages. A tile's own buttons keep their keys. Each move is said
+  in a polite live region ("Front Yard swapped with Garage.", "Page 2 of
+  3.").
+- **Pages:** a fixed grid shows its cells' worth a page (Auto fits every
+  camera on one); the bar's ‹ 1 / 2 › turns them.
+- **Tours:** "Tour" in the layout's editor: off, or the next page every 10 s,
+  20 s, 30 s, 1 or 2 minutes, round to the first; paused while arranging,
+  editing, one camera alone or full screen. Tiles are the board's, so a warm
+  camera plays at once and a cold one shows its picture until its video
+  starts.
+- **Checks:** the order, swaps into empty cells, the cell beside another
+  (the large slot's too); the Wall: pages by hand and on a tour (paused while
+  arranging), the keyboard's moves and a Shift move saved with the layout,
+  Enter into the large slot, alone and back three ways, a drag, Arrange's
+  taps (All cameras not saved); the accessibility check on Arrange too.
+
+**Hardware checklist (the owner, v0.53.0):** on the desktop, drag a tile onto
+another; on the wall tablet, Arrange and tap two; a double tap in 1+5 and in
+3×3; a layout of more cameras than cells, with a tour, left running an hour
+(no empty tile); the order the same on the other device after a reload.
 
 #### Step 9.3: HD in large tiles
 

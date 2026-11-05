@@ -6,6 +6,7 @@ import { LiveData, isWarm, liveConnection } from "../live/data";
 import { formatClock } from "../playback/time";
 import { sharedStyles } from "../styles";
 import type { HomeAssistant, LiveCamera, WallGrid, WallLayout } from "../types";
+import { ARROWS, neighbour, pageCount, swapCells, wallOrder } from "../wall/arrange";
 import { WALL_GAP, WALL_GRIDS, slotSize, wallFit, wallPlan, type WallPlan } from "../wall/geometry";
 import { rememberLayout, rememberMode, rememberedLayout } from "../wall/remember";
 import { boardOrder, tileShape } from "./live-grid";
@@ -36,6 +37,13 @@ function pictureRatio(camera: LiveCamera): number | undefined {
  * screen like an NVR's monitor, in a saved layout (per Home Assistant user,
  * on the server; each device remembers which it shows). A thin bar holds the
  * layout, the clock, full screen and the way back to the board.
+ *
+ * Arranging (step 2): drag a tile onto another, or Arrange and tap two, to
+ * swap them; a double tap (or Enter) puts a camera in the large slot, or
+ * alone on the screen and back. From the keyboard, the arrows move between
+ * cells and Shift with an arrow moves the camera, each move said to a screen
+ * reader. A saved layout keeps its order. More cameras than cells make pages,
+ * and a layout's tour turns them.
  */
 export class RvWall extends LitElement {
   static override properties = {
@@ -49,6 +57,14 @@ export class RvWall extends LitElement {
     _full: { state: true },
     _wallFull: { state: true },
     _now: { state: true },
+    _order: { state: true },
+    _page: { state: true },
+    _alone: { state: true },
+    _arranging: { state: true },
+    _picked: { state: true },
+    _focus: { state: true },
+    _said: { state: true },
+    _over: { state: true },
   };
 
   declare hass: HomeAssistant | undefined;
@@ -56,23 +72,49 @@ export class RvWall extends LitElement {
   declare layoutId: string | undefined;
   declare _layouts: WallLayout[] | undefined;
   declare _editing: boolean;
-  declare _draft: { name: string; grid: WallGrid };
+  declare _draft: { name: string; grid: WallGrid; tour_s: number | null };
   declare _error: string | undefined;
   declare _size: { width: number; height: number };
   /** The camera full screen, if any (the others pause). */
   declare _full: string | undefined;
   declare _wallFull: boolean;
   declare _now: number;
+  /** The order arranged here, not yet in a saved layout (All cameras) or saving. */
+  declare _order: (string | null)[] | undefined;
+  declare _page: number;
+  /** A camera shown alone on the screen (a double tap), until the next. */
+  declare _alone: string | undefined;
+  /** Arrange: a tap picks a cell, a tap on another swaps them. */
+  declare _arranging: boolean;
+  declare _picked: number | undefined;
+  /** The cell the keyboard is on, on this page. */
+  declare _focus: number;
+  /** What a screen reader is told of the last move. */
+  declare _said: string;
+  /** The cell a dragged tile is over. */
+  declare _over: number | undefined;
 
   private readonly _data = new LiveData(this);
   private _resize: ResizeObserver | undefined;
   private _clock: ReturnType<typeof setTimeout> | undefined;
+  private _tour: ReturnType<typeof setInterval> | undefined;
+  private _tourEvery = 0;
   private _asked = false;
+  /** The layout the arrangement is of (another one starts afresh). */
+  private _arranged: string | undefined;
+  /** Focus follows the keyboard's move once rendered. */
+  private _refocus = false;
+  /** The cell being dragged (its index across pages). */
+  private _dragged: number | undefined;
 
   constructor() {
     super();
     this._editing = false;
-    this._draft = { name: "", grid: "auto" };
+    this._draft = { name: "", grid: "auto", tour_s: null };
+    this._page = 0;
+    this._arranging = false;
+    this._focus = 0;
+    this._said = "";
     this._size = { width: 0, height: 0 };
     this._wallFull = false;
     this._now = Date.now();
@@ -91,6 +133,7 @@ export class RvWall extends LitElement {
     this._resize?.disconnect();
     this._resize = undefined;
     clearTimeout(this._clock);
+    this._stopTour();
   }
 
   private readonly _onFullscreen = (): void => {
@@ -114,6 +157,16 @@ export class RvWall extends LitElement {
       this._asked = true;
       void this._loadLayouts(this.hass);
     }
+    // Another layout: its own order, from its first page.
+    const shown = this._layout.id;
+    if (shown !== this._arranged) {
+      this._arranged = shown;
+      this._order = undefined;
+      this._page = 0;
+      this._alone = undefined;
+      this._picked = undefined;
+      this._focus = 0;
+    }
   }
 
   protected override updated(): void {
@@ -130,6 +183,11 @@ export class RvWall extends LitElement {
     }
     const layout = this._layout;
     if (this._layouts !== undefined) rememberLayout(layout.id || undefined);
+    this._syncTour();
+    if (this._refocus) {
+      this._refocus = false;
+      this.shadowRoot?.querySelector<HTMLElement>(`.cell[data-slot="${String(this._focus)}"]`)?.focus();
+    }
   }
 
   private async _loadLayouts(hass: HomeAssistant): Promise<void> {
@@ -160,7 +218,7 @@ export class RvWall extends LitElement {
 
   private _edit(): void {
     const layout = this._layout;
-    this._draft = { name: layout.id ? layout.name : "", grid: layout.grid };
+    this._draft = { name: layout.id ? layout.name : "", grid: layout.grid, tour_s: layout.tour_s };
     this._error = undefined;
     this._editing = true;
   }
@@ -179,8 +237,8 @@ export class RvWall extends LitElement {
         ...(layout.id && !asNew ? { id: layout.id } : {}),
         name,
         grid: this._draft.grid,
-        cameras: layout.cameras,
-        tour_s: layout.tour_s,
+        cameras: this._order ?? layout.cameras,
+        tour_s: this._draft.tour_s,
       });
       await this._loadLayouts(hass);
       this._editing = false;
@@ -205,19 +263,167 @@ export class RvWall extends LitElement {
     }
   }
 
-  protected override render(): TemplateResult {
+  /** What is on the screen: the order, its pages, this page's cameras and their cells. */
+  private get _view(): {
+    order: (string | null)[];
+    perPage: number;
+    pages: number;
+    page: number;
+    shown: (LiveCamera | undefined)[];
+    plan: WallPlan;
+  } {
     const layout = this._layout;
     const grid = this._editing ? this._draft.grid : layout.grid;
-    const cameras = this._data.cameras;
-    const shown = cameras ? wallCameras(layout, cameras) : [];
+    const cameras = this._data.cameras ?? [];
+    const byId = new Map(cameras.map((c) => [c.id, c]));
+    const order = this._order ?? wallOrder(layout, boardOrder([...cameras]).map((c) => c.id));
     const { width, height } = this._size;
-    const plan = wallPlan(
-      grid,
-      shown.map((camera) => (camera ? tileShape(liveConnection(camera)) : undefined)),
-      width,
-      height,
-    );
-    const hidden = Math.max(0, shown.filter(Boolean).length - plan.slots.length);
+    const shapes = (list: (LiveCamera | undefined)[]) =>
+      list.map((camera) => (camera ? tileShape(liveConnection(camera)) : undefined));
+    if (this._alone && byId.has(this._alone)) {
+      return { order, perPage: 1, pages: 1, page: 0, shown: [byId.get(this._alone)], plan: wallPlan("1", [], width, height) };
+    }
+    // Auto fits every camera on one page; a fixed grid has its cells per page.
+    const perPage = grid === "auto" ? Math.max(1, order.length) : wallPlan(grid, [], width, height).slots.length;
+    const pages = pageCount(order.length, perPage);
+    const page = Math.min(this._page, pages - 1);
+    const shown = order.slice(page * perPage, (page + 1) * perPage).map((id) => (id ? byId.get(id) : undefined));
+    return { order, perPage, pages, page, shown, plan: wallPlan(grid, shapes(shown), width, height) };
+  }
+
+  private _name(id: string | null | undefined): string {
+    return this._data.cameras?.find((c) => c.id === id)?.name ?? "An empty cell";
+  }
+
+  /** Swap two cells of the order (indices across pages); a saved layout keeps it. */
+  private _swap(a: number, b: number): void {
+    const { order } = this._view;
+    if (a === b) return;
+    const next = swapCells(order, a, b);
+    this._order = next;
+    this._said = `${this._name(order[a])} swapped with ${this._name(order[b]).toLowerCase() === "an empty cell" ? "an empty cell" : this._name(order[b])}.`;
+    void this._keep(next);
+  }
+
+  /** Keep a saved layout's new order on the server (All cameras keeps it on the screen). */
+  private async _keep(order: (string | null)[]): Promise<void> {
+    const hass = this.hass;
+    const layout = this._layout;
+    if (!hass || !layout.id) return;
+    try {
+      const { layout: saved } = await saveWallLayout(hass, { ...layout, cameras: order });
+      this._layouts = (this._layouts ?? []).map((l) => (l.id === saved.id ? saved : l));
+    } catch (err) {
+      this._error = `Could not keep the new order: ${toError(err).message}`;
+    }
+  }
+
+  /** A double tap or Enter: into the large slot (1+5, 1+7), else alone on the screen and back. */
+  private _enlarge(slot: number): void {
+    const view = this._view;
+    if (this._alone) {
+      this._said = `${this._name(this._alone)} back in its cell.`;
+      this._alone = undefined;
+      return;
+    }
+    const index = view.page * view.perPage + slot;
+    const id = view.order[index];
+    if (!id) return;
+    const grid = this._layout.grid;
+    if (grid === "1+5" || grid === "1+7") {
+      const large = view.page * view.perPage;
+      if (index !== large) {
+        this._swap(index, large);
+        this._said = `${this._name(id)} in the large slot.`;
+      }
+      this._focus = 0;
+      return;
+    }
+    this._alone = id;
+    this._said = `${this._name(id)} alone on the screen. Escape, or a double tap, to go back.`;
+  }
+
+  private _goPage(page: number): void {
+    const { pages } = this._view;
+    this._page = ((page % pages) + pages) % pages;
+    this._focus = 0;
+    this._picked = undefined;
+    this._said = `Page ${String(this._page + 1)} of ${String(pages)}.`;
+  }
+
+  private _onKey(e: KeyboardEvent, slot: number): void {
+    // Only the cell's own keys: a tile's buttons keep theirs.
+    if (e.target !== e.currentTarget) return;
+    const view = this._view;
+    const direction = ARROWS[e.key];
+    if (direction) {
+      e.preventDefault();
+      const next = neighbour(view.plan, slot, direction);
+      if (next === undefined) return;
+      if (e.shiftKey && !this._alone) {
+        const base = view.page * view.perPage;
+        this._swap(base + slot, base + next);
+      }
+      this._focus = next;
+      this._refocus = true;
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      this._enlarge(slot);
+      this._refocus = true;
+    } else if (e.key === "Escape" && this._alone) {
+      e.preventDefault();
+      this._enlarge(slot);
+      this._refocus = true;
+    } else if (e.key === "PageDown" || e.key === "PageUp") {
+      e.preventDefault();
+      this._goPage(view.page + (e.key === "PageDown" ? 1 : -1));
+      this._refocus = true;
+    }
+  }
+
+  /** Arrange: the first tap picks a cell, the next swaps it with another. */
+  private _tap(slot: number): void {
+    const view = this._view;
+    const index = view.page * view.perPage + slot;
+    if (this._picked === undefined) {
+      this._picked = index;
+      this._said = `${this._name(view.order[index])} picked: tap where it goes.`;
+    } else {
+      if (this._picked !== index) this._swap(this._picked, index);
+      else this._said = "Put back.";
+      this._picked = undefined;
+    }
+  }
+
+  /** The next page every tour_s seconds, while nothing else is going on. */
+  private _syncTour(): void {
+    const view = this._view;
+    const every = this._layout.tour_s ?? 0;
+    const touring = every > 0 && view.pages > 1 && !this._arranging && !this._editing && !this._alone && !this._full;
+    if (!touring) {
+      this._stopTour();
+      return;
+    }
+    if (this._tour !== undefined && this._tourEvery === every) return;
+    this._stopTour();
+    this._tourEvery = every;
+    this._tour = setInterval(() => {
+      const { pages, page } = this._view;
+      this._page = (page + 1) % pages;
+    }, every * 1000);
+  }
+
+  private _stopTour(): void {
+    clearInterval(this._tour);
+    this._tour = undefined;
+    this._tourEvery = 0;
+  }
+
+  protected override render(): TemplateResult {
+    const layout = this._layout;
+    const cameras = this._data.cameras;
+    const view = this._view;
+    const { width, height } = this._size;
     const missing = this.layoutId !== undefined && this._layouts !== undefined && layout.id !== this.layoutId;
     const canFull = document.fullscreenEnabled && typeof this.requestFullscreen === "function";
     return html`<div class="bar">
@@ -233,11 +439,53 @@ export class RvWall extends LitElement {
             (l) => html`<option value=${l.id} ?selected=${l.id === layout.id}>${l.name}</option>`,
           )}
         </select>
-        ${hidden
-          ? html`<span class="note">${hidden} more ${hidden === 1 ? "camera" : "cameras"} than cells</span>`
+        ${view.pages > 1
+          ? html`<span class="pages" role="group" aria-label="Pages">
+              <button
+                class="text icon-only"
+                aria-label="Previous page"
+                @click=${() => {
+                  this._goPage(view.page - 1);
+                }}
+              >
+                ${icon("chevronBack")}
+              </button>
+              <span>${view.page + 1} / ${view.pages}</span>
+              <button
+                class="text icon-only"
+                aria-label="Next page"
+                @click=${() => {
+                  this._goPage(view.page + 1);
+                }}
+              >
+                ${icon("chevron")}
+              </button>
+            </span>`
           : nothing}
+        ${this._alone
+          ? html`<button
+              class="text with-icon"
+              @click=${() => {
+                this._enlarge(0);
+              }}
+            >
+              ${icon("chevronBack")}Back to the layout
+            </button>`
+          : nothing}
+        ${this._order && !layout.id ? html`<span class="note">Save it as a layout to keep this order</span>` : nothing}
         ${missing ? html`<span class="note">No layout “${this.layoutId}”: every camera instead</span>` : nothing}
         <time class="clock" aria-label="Time">${formatClock(this._now, this.hass?.config?.time_zone)}</time>
+        <button
+          class="text"
+          aria-pressed=${this._arranging ? "true" : "false"}
+          @click=${() => {
+            this._arranging = !this._arranging;
+            this._picked = undefined;
+            this._said = this._arranging ? "Arrange: tap a camera, then where it goes." : "";
+          }}
+        >
+          Arrange
+        </button>
         <button
           class="text with-icon"
           aria-expanded=${this._editing ? "true" : "false"}
@@ -271,7 +519,8 @@ export class RvWall extends LitElement {
       ${this._editing ? this._renderEditor(layout) : this._error ? html`<p class="error" role="alert">${this._error}</p>` : nothing}
       ${cameras === undefined
         ? html`<p class="note pad">${this._data.error ? `Live view could not load: ${this._data.error}` : "Loading…"}</p>`
-        : this._renderCells(plan, shown, width, height)}`;
+        : this._renderCells(view.plan, view.shown, width, height)}
+      <p class="said" role="status" aria-live="polite">${this._said}</p>`;
   }
 
   private _renderCells(
@@ -292,21 +541,81 @@ export class RvWall extends LitElement {
       ${plan.slots.map((slot, i) => {
         const place = `grid-column: ${String(slot.col + 1)} / span ${String(slot.cols)}; grid-row: ${String(slot.row + 1)} / span ${String(slot.rows)}`;
         const camera = shown[i];
-        if (!camera) return html`<div class="empty" style=${place} aria-hidden="true"></div>`;
-        return html`<rv-live-tile
+        const view = this._view;
+        const index = view.page * view.perPage + i;
+        const name = camera?.name ?? "Empty cell";
+        const where = this._alone ? "alone on the screen" : `cell ${String(i + 1)} of ${String(plan.slots.length)}`;
+        return html`<div
+          class="cell ${this._picked === index ? "picked" : ""} ${this._over === i ? "over" : ""}"
           style=${place}
-          fill
-          .fit=${wallFit(pictureRatio(camera), slotSize(plan, slot, width, height))}
-          .number=${numbers.get(camera.id)}
-          .hass=${this.hass}
-          .camera=${camera}
-          .connection=${liveConnection(camera)}
-          .image=${this._data.images[camera.id]}
-          .iceServers=${this._data.iceServers}
-          .warm=${isWarm(this.hass, camera)}
-          .suspended=${this._full !== undefined && this._full !== camera.id}
-          .controls=${camera.controls}
-        ></rv-live-tile>`;
+          data-slot=${i}
+          tabindex=${this._focus === i ? "0" : "-1"}
+          aria-label=${`${name}, ${where}`}
+          role="group"
+          aria-roledescription="Wall cell"
+          draggable=${this._alone ? "false" : "true"}
+          @keydown=${(e: KeyboardEvent) => {
+            this._onKey(e, i);
+          }}
+          @focus=${() => {
+            this._focus = i;
+          }}
+          @dblclick=${() => {
+            this._focus = i;
+            this._enlarge(i);
+          }}
+          @dragstart=${(e: DragEvent) => {
+            this._dragged = index;
+            e.dataTransfer?.setData("text/plain", String(index));
+            if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
+          }}
+          @dragend=${() => {
+            this._dragged = undefined;
+            this._over = undefined;
+          }}
+          @dragover=${(e: DragEvent) => {
+            e.preventDefault();
+            this._over = i;
+          }}
+          @dragleave=${() => {
+            if (this._over === i) this._over = undefined;
+          }}
+          @drop=${(e: DragEvent) => {
+            e.preventDefault();
+            this._over = undefined;
+            // Ours, or one a browser carried in its data (a WebView may not).
+            const carried = e.dataTransfer?.getData("text/plain");
+            const from = carried ? Number(carried) : this._dragged;
+            this._dragged = undefined;
+            if (from !== undefined && Number.isInteger(from)) this._swap(from, index);
+          }}
+        >
+          ${camera
+            ? html`<rv-live-tile
+                fill
+                .fit=${wallFit(pictureRatio(camera), slotSize(plan, slot, width, height))}
+                .number=${numbers.get(camera.id)}
+                .hass=${this.hass}
+                .camera=${camera}
+                .connection=${liveConnection(camera)}
+                .image=${this._data.images[camera.id]}
+                .iceServers=${this._data.iceServers}
+                .warm=${isWarm(this.hass, camera)}
+                .suspended=${this._full !== undefined && this._full !== camera.id}
+                .controls=${camera.controls}
+              ></rv-live-tile>`
+            : html`<div class="empty"></div>`}
+          ${this._arranging
+            ? html`<button
+                class="pick"
+                aria-pressed=${this._picked === index ? "true" : "false"}
+                aria-label=${camera ? `Move ${camera.name}` : `Empty cell ${String(i + 1)}`}
+                @click=${() => {
+                  this._tap(i);
+                }}
+              ></button>`
+            : nothing}
+        </div>`;
       })}
     </div>`;
   }
@@ -348,6 +657,21 @@ export class RvWall extends LitElement {
             </label>`,
         )}
       </fieldset>
+      <label class="name">
+        <span>Tour</span>
+        <select
+          .value=${String(this._draft.tour_s ?? "")}
+          @change=${(e: Event) => {
+            const value = (e.target as HTMLSelectElement).value;
+            this._draft = { ...this._draft, tour_s: value ? Number(value) : null };
+          }}
+        >
+          ${TOURS.map(
+            ([seconds, label]) =>
+              html`<option value=${String(seconds ?? "")} ?selected=${this._draft.tour_s === seconds}>${label}</option>`,
+          )}
+        </select>
+      </label>
       <div class="actions">
         <button type="submit">${layout.id ? "Save" : "Save layout"}</button>
         ${layout.id
@@ -460,12 +784,80 @@ export class RvWall extends LitElement {
         gap: ${WALL_GAP}px;
         padding: 0 ${WALL_GAP}px ${WALL_GAP}px;
       }
-      .cells > * {
+      .cell {
+        position: relative;
+        display: grid;
         min-width: 0;
         min-height: 0;
       }
+      .cell > rv-live-tile,
+      .cell > .empty {
+        min-width: 0;
+        min-height: 0;
+      }
+      .cell:focus-visible {
+        outline: 3px solid var(--rv-on-board);
+        outline-offset: -3px;
+        z-index: 1;
+      }
+      .cell.over {
+        outline: 3px dashed var(--rv-on-board);
+        outline-offset: -3px;
+      }
       .empty {
         background: color-mix(in srgb, var(--rv-on-board) 4%, transparent);
+      }
+      /* Arrange: a tap target over each cell, the picked one ringed. */
+      .pick {
+        position: absolute;
+        inset: 0;
+        border: 2px dashed color-mix(in srgb, var(--rv-on-board) 50%, transparent);
+        border-radius: 0;
+        background: color-mix(in srgb, var(--rv-board) 25%, transparent);
+        cursor: pointer;
+      }
+      .pick[aria-pressed="true"] {
+        border: 4px solid var(--rv-on-board);
+        background: color-mix(in srgb, var(--rv-on-board) 15%, transparent);
+      }
+      .pick:focus-visible {
+        outline: 3px solid var(--rv-on-board);
+        outline-offset: -6px;
+      }
+      .pages {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        font-variant-numeric: tabular-nums;
+      }
+      .pages button svg {
+        width: 20px;
+        height: 20px;
+      }
+      .bar button[aria-pressed="true"] {
+        text-decoration: underline;
+        text-underline-offset: 4px;
+      }
+      .editor select {
+        min-height: 34px;
+        padding: 0 8px;
+        border: 1px solid var(--rv-on-board-muted);
+        border-radius: 0;
+        background: transparent;
+        color: var(--rv-on-board);
+        font: inherit;
+      }
+      .editor select option {
+        color: var(--rv-text);
+        background: var(--rv-ground);
+      }
+      .said {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
       }
       .editor {
         flex: none;
@@ -565,6 +957,16 @@ export class RvWall extends LitElement {
     `,
   ];
 }
+
+/** A tour's choices: the next page every so many seconds, or none. */
+const TOURS: readonly [number | null, string][] = [
+  [null, "Off"],
+  [10, "Every 10 s"],
+  [20, "Every 20 s"],
+  [30, "Every 30 s"],
+  [60, "Every minute"],
+  [120, "Every 2 minutes"],
+];
 
 /** A grid as a small picture of its cells, for the grid choices. */
 function miniature(grid: WallGrid): TemplateResult {
