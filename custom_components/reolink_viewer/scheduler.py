@@ -14,6 +14,11 @@ Each Reolink host (camera, NVR or Home Hub) gets a :class:`HostScheduler` with:
 - a separate **stream budget** for long-lived video streams (recording
   downloads), so a stream never holds a request slot: streams wait for a stream
   slot by priority, and prefetch streams have their own, smaller cap.
+
+A **spare** stream (Phase 9 step 3: HD in a Wall tile, a nicety over the sub
+stream already shown) takes a slot only when one is free and nobody waits,
+and gives it back as soon as a live or playback stream waits for one: its
+holder is asked to end it (``on_yield``), newest first.
 """
 
 import asyncio
@@ -83,11 +88,33 @@ class StreamTicket:
         self.future: asyncio.Future[None] = asyncio.get_running_loop().create_future()
         self.future.add_done_callback(_consume)
         self.released = False
+        # A spare slot (StreamBudget.request_spare): given back when asked.
+        self.spare = False
+        self.on_yield: Callable[[], None] | None = None
+        self.yielding = False
 
     @property
     def granted(self) -> bool:
         """Return True once the slot is held."""
         return self.granted_priority is not None and not self.released
+
+    def keep(self) -> None:
+        """Hold a spare slot as any other from now on (someone else needs it too)."""
+        if self.spare:
+            self.spare = False
+            self.on_yield = None
+            self.yielding = False
+            # A stream that was waiting for this one may take another spare.
+            self._budget.dispatch()
+
+    def lend(self, on_yield: Callable[[], None]) -> None:
+        """Hold a slot as spare from now on (only spare holders are left)."""
+        if self.granted and not self.spare:
+            self.spare = True
+            self.on_yield = on_yield
+            self.yielding = False
+            # A stream that waits may ask for it back at once.
+            self._budget.dispatch()
 
     def raise_priority(self, priority: Priority) -> None:
         """Move a waiting ticket up the queue."""
@@ -144,6 +171,27 @@ class StreamBudget:
         self.dispatch()
         return ticket
 
+    def request_spare(
+        self, priority: Priority, on_yield: Callable[[], None]
+    ) -> StreamTicket | None:
+        """Take a free slot now, to give back when asked; None if none is free.
+
+        It is free when no stream waits and the budget is not full. Once
+        another (not prefetch) stream waits for a slot, ``on_yield`` is called
+        (soon, not from here): the holder ends the stream and releases it.
+        """
+        if self._closed:
+            raise SchedulerClosedError(self.name)
+        if self._waiting or len(self._active) >= self.limit:
+            return None
+        ticket = StreamTicket(self, priority, self.next_seq())
+        ticket.spare = True
+        ticket.on_yield = on_yield
+        self._active.add(ticket)
+        ticket.granted_priority = priority
+        ticket.future.set_result(None)
+        return ticket
+
     @asynccontextmanager
     async def slot(self, priority: Priority) -> AsyncIterator[StreamTicket]:
         """Hold a stream slot for the duration of the block."""
@@ -162,7 +210,7 @@ class StreamBudget:
         self._waiting.sort(key=lambda t: (t.priority, t.seq))
         for ticket in list(self._waiting):
             if len(self._active) >= self.limit:
-                return
+                break
             if (
                 ticket.priority is Priority.PREFETCH
                 and self._prefetch_active() >= self.prefetch_limit
@@ -172,6 +220,24 @@ class StreamBudget:
             self._active.add(ticket)
             ticket.granted_priority = ticket.priority
             ticket.future.set_result(None)
+        self._reclaim()
+
+    def _reclaim(self) -> None:
+        """Ask spare streams back, newest first, one for each stream that waits."""
+        # What still waits is held back by the limit (prefetch: by its own cap).
+        wanting = sum(1 for t in self._waiting if t.priority is not Priority.PREFETCH)
+        asked = sum(1 for t in self._active if t.spare and t.yielding)
+        if wanting <= asked:
+            return
+        spares = sorted(
+            (t for t in self._active if t.spare and not t.yielding),
+            key=lambda t: t.seq,
+            reverse=True,
+        )
+        for ticket in spares[: wanting - asked]:
+            ticket.yielding = True
+            if ticket.on_yield is not None:
+                asyncio.get_running_loop().call_soon(_yield, self.name, ticket.on_yield)
 
     def done(self, ticket: StreamTicket) -> None:
         """Forget a ticket (released or abandoned) and grant its slot."""
@@ -189,6 +255,7 @@ class StreamBudget:
             "stream_limit": self.limit,
             "streams": len(self._active),
             "streams_waiting": len(self._waiting),
+            "streams_spare": sum(1 for t in self._active if t.spare),
         }
 
     def close(self) -> None:
@@ -390,6 +457,14 @@ def _valid(seq: int, job: _Job) -> bool:
 def _consume(future: asyncio.Future[Any]) -> None:
     if not future.cancelled():
         future.exception()
+
+
+def _yield(name: str, on_yield: Callable[[], None]) -> None:
+    """Ask a spare stream's holder to end it (its error is only logged)."""
+    try:
+        on_yield()
+    except Exception:
+        _LOGGER.exception("Error giving a spare stream slot of %s back", name)
 
 
 class Scheduler:

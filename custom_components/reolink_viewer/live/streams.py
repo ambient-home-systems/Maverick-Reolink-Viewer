@@ -13,11 +13,17 @@ host's stream budget at live priority, and the last one gives it back. A
 stream is registered again each time it starts from idle, so a reloaded
 Reolink entry (new address or password) is picked up, and when go2rtc has
 restarted since (it forgets its streams).
+
+A **spare** hold (HD in a Wall tile, Phase 9 step 3) starts a stream only on
+a slot free now (the scheduler's ``request_spare``), and is ended through its
+``on_yield`` when the slot is asked back; once anyone holds the stream
+otherwise, it keeps its slot as any other.
 """
 
 import asyncio
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from functools import partial
 import logging
 
 from custom_components.reolink_viewer import bridge
@@ -37,6 +43,13 @@ SLOT_TIMEOUT = 15.0
 
 class LiveError(Exception):
     """A live stream cannot be started."""
+
+
+# Said to the browser (live/explain.ts reads "every stream slot" as busy).
+SPARE_REFUSED = (
+    "every stream slot of this host is in use (HD in a tile waits for a free one)"
+)
+YIELDED = "gave its stream slot back: every stream slot of this host is needed"
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,6 +78,8 @@ class _Running:
     # go2rtc's generation the stream was registered in.
     generation: int = -1
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    # The spare holds' way to end the stream, by hold.
+    yielders: dict[int, Callable[[], None]] = field(default_factory=dict)
 
 
 class Hold:
@@ -80,7 +95,7 @@ class Hold:
         """Give the claim up."""
         if not self.released:
             self.released = True
-            self._registry.release(self.stream)
+            self._registry.release(self.stream, self)
 
 
 class StreamRegistry:
@@ -98,46 +113,123 @@ class StreamRegistry:
         self.on_start: Callable[[LiveStream], None] | None = None
 
     async def async_hold(
-        self, stream: LiveStream, *, slot_timeout: float = SLOT_TIMEOUT
+        self,
+        stream: LiveStream,
+        *,
+        slot_timeout: float = SLOT_TIMEOUT,
+        on_yield: Callable[[], None] | None = None,
     ) -> Hold:
-        """Claim a stream: registered, and holding a stream slot while held."""
+        """Claim a stream: registered, and holding a stream slot while held.
+
+        Given ``on_yield``, the hold is spare: a stream not running yet starts
+        only on a free slot (else LiveError at once, before asking the camera
+        anything), and ``on_yield`` is called to end it when the slot is asked
+        back.
+        """
         await self._server.async_ready()
         state = self._running.setdefault(stream.name, _Running())
         state.stream = stream
         async with state.lock:
-            if state.holds == 0 or state.generation != self._server.generation:
-                await self._register(stream)
-                state.generation = self._server.generation
-            if state.holds == 0:
-                ticket = self._scheduler.host(stream.source.entry_id).streams.request(
-                    Priority.LIVE
-                )
-                try:
-                    async with asyncio.timeout(slot_timeout):
-                        await ticket.wait()
-                except TimeoutError:
-                    ticket.release()
-                    raise LiveError(
-                        "every stream slot of this host is in use"
-                    ) from None
-                state.ticket = ticket
-                if self.on_start is not None:
-                    try:
-                        self.on_start(stream)
-                    except Exception:  # a side job: the stream starts anyway
-                        _LOGGER.exception("Error when %s started", stream.name)
+            if state.holds == 0 and on_yield is not None:
+                await self._start_spare(state, stream)
+            else:
+                if state.holds == 0 or state.generation != self._server.generation:
+                    await self._register(stream)
+                    state.generation = self._server.generation
+                if state.holds == 0:
+                    await self._take_slot(state, stream, slot_timeout)
+                elif on_yield is None and state.ticket is not None:
+                    # Held as any other from now on: never asked back.
+                    state.ticket.keep()
             state.holds += 1
-        return Hold(self, stream)
+            hold = Hold(self, stream)
+            if on_yield is not None:
+                state.yielders[id(hold)] = on_yield
+        return hold
 
-    def release(self, stream: LiveStream) -> None:
+    async def _take_slot(
+        self, state: _Running, stream: LiveStream, slot_timeout: float
+    ) -> None:
+        ticket = self._scheduler.host(stream.source.entry_id).streams.request(
+            Priority.LIVE
+        )
+        try:
+            async with asyncio.timeout(slot_timeout):
+                await ticket.wait()
+        except TimeoutError:
+            ticket.release()
+            raise LiveError("every stream slot of this host is in use") from None
+        state.ticket = ticket
+        self._started(stream)
+
+    async def _start_spare(self, state: _Running, stream: LiveStream) -> None:
+        ticket = self._scheduler.host(stream.source.entry_id).streams.request_spare(
+            Priority.LIVE, partial(self._yield, stream.name)
+        )
+        if ticket is None:
+            raise LiveError(SPARE_REFUSED)
+        try:
+            await self._register(stream)
+        except BaseException:
+            ticket.release()
+            raise
+        state.generation = self._server.generation
+        state.ticket = ticket
+        self._started(stream)
+
+    def _started(self, stream: LiveStream) -> None:
+        if self.on_start is not None:
+            try:
+                self.on_start(stream)
+            except Exception:  # a side job: the stream starts anyway
+                _LOGGER.exception("Error when %s started", stream.name)
+
+    def _yield(self, name: str) -> None:
+        """End a spare stream whose slot is asked back (its holders end it)."""
+        state = self._running.get(name)
+        if state is None or state.ticket is None or not state.ticket.spare:
+            return  # ended, or held as any other since
+        _LOGGER.debug("%s gives its stream slot back", name)
+        for on_yield in list(state.yielders.values()):
+            try:
+                on_yield()
+            except Exception:
+                _LOGGER.exception("Error ending %s for its slot", name)
+
+    def release(self, stream: LiveStream, hold: Hold | None = None) -> None:
         """Give a hold up (use Hold.release)."""
         state = self._running.get(stream.name)
         if state is None or state.holds == 0:
             return
+        if hold is not None:
+            state.yielders.pop(id(hold), None)
         state.holds -= 1
         if state.holds == 0 and state.ticket is not None:
             state.ticket.release()
             state.ticket = None
+            state.yielders.clear()
+        else:
+            self._lend_if_spare(stream, state)
+
+    def lend(
+        self, stream: LiveStream, hold: Hold, on_yield: Callable[[], None]
+    ) -> None:
+        """Make a hold spare again (``on_yield`` ends it); the slot too, if all are."""
+        state = self._running.get(stream.name)
+        if state is None or hold.released:
+            return
+        state.yielders[id(hold)] = on_yield
+        self._lend_if_spare(stream, state)
+
+    def _lend_if_spare(self, stream: LiveStream, state: _Running) -> None:
+        if (
+            state.ticket is not None
+            and not state.ticket.spare
+            and state.yielders
+            and len(state.yielders) == state.holds
+        ):
+            # Only spare holds are left: its slot can be asked back again.
+            state.ticket.lend(partial(self._yield, stream.name))
 
     async def _register(self, stream: LiveStream) -> None:
         source = stream.source
@@ -168,6 +260,16 @@ class StreamRegistry:
         except Go2rtcError as err:
             raise LiveError(str(err)) from err
 
+    def keep(self, stream: LiveStream, hold: Hold | None = None) -> None:
+        """Hold a running stream's slot as any other (``hold`` is no longer spare)."""
+        state = self._running.get(stream.name)
+        if state is None:
+            return
+        if hold is not None:
+            state.yielders.pop(id(hold), None)
+        if state.ticket is not None:
+            state.ticket.keep()
+
     def running(self) -> dict[str, int]:
         """Return the holds of each running stream (by go2rtc name)."""
         return {name: s.holds for name, s in self._running.items() if s.holds}
@@ -184,6 +286,7 @@ class StreamRegistry:
         """Release every hold (go2rtc is stopping)."""
         for state in self._running.values():
             state.holds = 0
+            state.yielders.clear()
             if state.ticket is not None:
                 state.ticket.release()
                 state.ticket = None

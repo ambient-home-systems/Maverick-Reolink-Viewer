@@ -11,7 +11,10 @@ adding one at a time and keeping the earlier ones open:
    (full screen), of those that play on their own: each is tried alone first,
    up to ``MAIN_TRIES``, and one that sends no video is left out, and said so
    (run 20: the Duo 3's 16 MP main sent none, to Home Assistant's own view
-   too, so its "no frame" at level 7 said nothing about the NVR);
+   too, so its "no frame" at level 7 said nothing about the NVR). Asked for
+   2 or 3 (``mains``, Phase 9 step 3: HD in the Wall's large tiles, whether
+   the budget can hold more than one), the next heaviest that play, one more
+   per level;
 3. then a recording download at full speed (a playback fill).
 
 Before the streams, the download runs alone for a baseline. At each level it
@@ -53,8 +56,11 @@ from .streams import LiveStream
 _LOGGER = logging.getLogger(__name__)
 
 FIRST_FRAME_TIMEOUT = 15.0
-# Mains tried alone, heaviest first, for the main level.
+# Mains tried alone, heaviest first, for the main level (and one more per
+# main asked for beyond the first).
 MAIN_TRIES = 3
+# The most mains a test opens at once (Phase 9 step 3 asks for 2-3).
+MAX_MAINS = 3
 MEASURE_S = 6.0
 FILL_ALONE_S = 4.0
 FPS_SHARE = 0.85
@@ -230,11 +236,15 @@ class CapacityTest:
         *,
         include_main: bool = True,
         include_fill: bool = True,
+        mains: int = 1,
         progress: Callable[[str], None] = lambda _message: None,
     ) -> None:
         """Initialize; ``sources`` are the host's channels (one per camera)."""
         if not sources:
             raise CapacityError("no cameras on this host")
+        if not 1 <= mains <= MAX_MAINS:
+            raise CapacityError(f"a test opens 1 to {MAX_MAINS} main streams")
+        self._mains = mains
         self._hass = hass
         self._scheduler = scheduler
         self._server = server
@@ -291,11 +301,12 @@ class CapacityTest:
                 report["fill_alone_mbit_s"] = alone.get("mbit_s")
             plan = [(s, "sub") for s in self._sources]
             if self._include_main:
-                main, left_out = await self._playing_main(host)
+                mains, left_out = await self._playing_mains(host)
                 if left_out:
                     report["main_left_out"] = left_out
-                if main is not None:
-                    plan.append((main, "main"))
+                if self._mains > 1:
+                    report["mains"] = {"asked": self._mains, "playing": len(mains)}
+                plan.extend((main, "main") for main in mains)
             for number, (source, kind) in enumerate(plan, 1):
                 self._progress(f"level {number}: + {source.name} {kind}")
                 report["levels"].append(await self._add(host, number, source, kind))
@@ -347,15 +358,18 @@ class CapacityTest:
         )
         return reader, asyncio.create_task(reader.run(self._server))
 
-    async def _playing_main(
+    async def _playing_mains(
         self, host: bridge.ReolinkHostHandle
-    ) -> tuple[LiveSource | None, list[dict[str, str]]]:
-        """Return the heaviest main that plays on its own, and those that did not."""
+    ) -> tuple[list[LiveSource], list[dict[str, str]]]:
+        """Return the heaviest mains that play on their own, and those that did not."""
+        playing: list[LiveSource] = []
         left_out: list[dict[str, str]] = []
         heaviest = sorted(
             self._sources, key=lambda s: _bitrate(host, s, "main"), reverse=True
         )
-        for source in heaviest[:MAIN_TRIES]:
+        for source in heaviest[: MAIN_TRIES + self._mains - 1]:
+            if len(playing) >= self._mains:
+                break
             self._progress(f"{source.name} main on its own")
             opened = await self._open(host, source, "main")
             if opened is None:
@@ -368,10 +382,11 @@ class CapacityTest:
                 task.cancel()
                 await asyncio.gather(task, return_exceptions=True)
             if reader.first_frame is not None:
-                return source, left_out
+                playing.append(source)
+                continue
             why = reader.error or f"no frame in {round(FIRST_FRAME_TIMEOUT)} s"
             left_out.append({"camera": source.name, "why": why})
-        return None, left_out
+        return playing, left_out
 
     async def _with_fill(
         self, host: bridge.ReolinkHostHandle, number: int, channel: int, file: VodFile

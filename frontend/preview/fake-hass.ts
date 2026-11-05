@@ -575,6 +575,8 @@ function liveCamera(cam: Cam): LiveCamera {
     connection_id: `${cam.id}-${via}`,
     via,
     entry_title: via === "nvr" ? "NVR" : cam.name,
+    host: via === "nvr" ? "nvr" : cam.id,
+    hd_tiles: 1,
     is_battery: false,
     status_entity: `camera.${cam.media.replace(/-/g, "_")}_fluent`,
     streams: {

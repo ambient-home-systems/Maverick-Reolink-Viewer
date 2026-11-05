@@ -448,6 +448,10 @@ export interface LiveConnection {
   connection_id: string;
   via: "nvr" | "direct";
   entry_title: string;
+  /** Its host's stream budget (the NVR, or the camera itself), as a key that names nothing. */
+  host?: string;
+  /** How many of the Wall's tiles its host plays in HD at once (Phase 9 step 3). */
+  hd_tiles?: number;
   is_battery: boolean;
   /** An entity of the camera: "unavailable" while Home Assistant cannot reach it. */
   status_entity?: string | null;
@@ -835,6 +839,8 @@ export interface CapacityReport {
   warm_set_aside?: number;
   /** Mains left out of the main level: they sent no video on their own. */
   main_left_out?: { camera: string; why: string }[];
+  /** Asked for more than one main (Phase 9 step 3): how many, and how many played on their own. */
+  mains?: { asked: number; playing: number };
 }
 
 export type CapacityEvent =

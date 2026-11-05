@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { PlayerOptions, PlayerState } from "../live/player";
+import { rememberFullScreenHd } from "../network";
 import { formatClock } from "../playback/time";
 import { fakePip } from "../test-fixtures";
 import type { HomeAssistant, LiveCamera, LiveImagesEvent } from "../types";
@@ -10,7 +11,7 @@ import { routeFromHash, routeToHash, type Route } from "./navigation";
 const players = vi.hoisted(
   () =>
     [] as {
-      ref: { connectionId: string; stream: string };
+      ref: { connectionId: string; stream: string; spare?: boolean };
       options: PlayerOptions;
       onCount(kind: "plays" | "drops" | "failures"): void;
       running: boolean;
@@ -59,7 +60,7 @@ vi.mock("../live/player", async () => {
 });
 
 const { boardOrder, playingCount, tileFit, tileShape } = await import("./live-grid");
-const { OFFSCREEN_GRACE_MS } = await import("./live-tile");
+const { OFFSCREEN_GRACE_MS, TILE_HD_RETRY_MS } = await import("./live-tile");
 
 const encoding = { codec: "h264", frame_rate: 15, bit_rate: 512 };
 const CAMERAS: LiveCamera[] = [
@@ -1028,5 +1029,119 @@ describe("routes", () => {
     expect(routeFromHash("#live")).toEqual({ view: "live" });
     expect(routeToHash({ view: "live" })).toBe("");
     expect(routeFromHash("#device/x/live")).toEqual({ view: "device", id: "x", tab: "live" });
+  });
+});
+
+describe("a large Wall tile in HD (Phase 9 step 3)", () => {
+  type RvLiveTile = HTMLElementTagNameMap["rv-live-tile"];
+  const settle = async (tile: RvLiveTile) => {
+    await flush();
+    await tile.updateComplete;
+    await flush();
+    await tile.updateComplete;
+  };
+  const sub = () => players.find((p) => p.ref.connectionId === "nvr1" && p.ref.stream === "sub");
+  const hd = () => players.find((p) => p.ref.connectionId === "nvr1" && p.ref.stream === "main");
+  const debug = async (tile: RvLiveTile) => {
+    tile.shadowRoot?.querySelector<HTMLButtonElement>(".corner-button.info")?.click();
+    await settle(tile);
+    const view = tile.shadowRoot?.querySelector("rv-live-debug");
+    await view?.updateComplete;
+    return (view?.shadowRoot?.querySelector("pre")?.textContent ?? "").replace(/[ \t]+/g, " ");
+  };
+
+  async function mountTile(tileHd: { hd: boolean; reason: string }) {
+    const { hass } = fakeHass();
+    const camera = CAMERAS[0];
+    const tile = document.createElement("rv-live-tile");
+    tile.hass = hass;
+    tile.camera = camera;
+    tile.connection = camera.connections[1];
+    tile.iceServers = [];
+    tile.fill = true;
+    tile.tileHd = tileHd;
+    document.body.appendChild(tile);
+    await settle(tile);
+    return tile;
+  }
+
+  it("plays HD in place on a spare slot, swapped in on its first frame", async () => {
+    const tile = await mountTile({ hd: true, reason: "HD: the large slot" });
+    expect(sub()?.running).toBe(true);
+    expect(hd()?.running).toBe(true);
+    expect(hd()?.ref).toEqual({ connectionId: "nvr1", stream: "main", spare: true });
+    expect(tile.hdShown).toBe(false);
+    hd()?.setState({ kind: "playing", transport: "WebRTC", result: { ok: true, steps: {} } });
+    await settle(tile);
+    expect(tile.hdShown).toBe(true);
+    expect(tileBox(tile).classList.contains("hd-on")).toBe(true);
+    expect(sub()?.running).toBe(false);
+    expect(tile.shadowRoot?.querySelector(".state")?.textContent).toContain("Live HD");
+    // Not full screen: no HD button over the picture.
+    expect(tile.shadowRoot?.querySelector(".hd-status")).toBeNull();
+    // Smaller again (the page turned, a camera moved): SD, the sub stream back.
+    tile.tileHd = { hd: false, reason: "SD: the tile is no larger than its sub stream (640×360)" };
+    await settle(tile);
+    expect(hd()?.running).toBe(false);
+    expect(sub()?.running).toBe(true);
+    expect(await debug(tile)).toContain("Wall tile: SD: the tile is no larger than its sub stream (640×360)");
+  });
+
+  it("refused or given back, stays in SD a minute and says why, then asks again", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    const tile = await mountTile({ hd: true, reason: "HD: the large slot" });
+    const refused = "MSE: every stream slot of this host is in use (HD in a tile waits for a free one)";
+    hd()?.setState({ kind: "waiting", error: refused, retryAt: Date.now() + 1000 });
+    await settle(tile);
+    expect(hd()?.running).toBe(false);
+    expect(sub()?.running).toBe(true);
+    const text = await debug(tile);
+    expect(text).toContain("Wall tile: HD: the large slot");
+    expect(text).toContain(`HD not given: ${refused}; asks again at`);
+    const starts = hd()?.starts ?? 0;
+    // A minute on (its timer asks for an update then): it asks again, spare.
+    vi.setSystemTime(Date.now() + TILE_HD_RETRY_MS + 10);
+    tile.requestUpdate();
+    await settle(tile);
+    expect(hd()?.running).toBe(true);
+    expect(hd()?.starts).toBe(starts + 1);
+    expect(hd()?.ref.spare).toBe(true);
+  });
+
+  it("full screen keeps its HD, no longer spare; SD here when chosen on this device", async () => {
+    const tile = await mountTile({ hd: true, reason: "HD: the large slot" });
+    hd()?.setState({ kind: "playing", transport: "WebRTC", result: { ok: true, steps: {} } });
+    await settle(tile);
+    tile.enterFull();
+    await settle(tile);
+    expect(tile.hdShown).toBe(true);
+    // Its slot taken back while full screen: it tries again as any stream does.
+    hd()?.setState({ kind: "waiting", error: "MSE: gave its stream slot back", retryAt: Date.now() + 1000 });
+    await settle(tile);
+    expect(hd()?.running).toBe(true);
+    expect(hd()?.ref.spare).toBeUndefined();
+    // SD chosen in full screen: SD, whatever the Wall asks of the tile.
+    tile.shadowRoot?.querySelector<HTMLButtonElement>(".hd-toggle")?.click();
+    await settle(tile);
+    expect(hd()?.running).toBe(false);
+    tile.shadowRoot?.querySelector<HTMLButtonElement>(".hd-toggle")?.click();
+    await settle(tile);
+    expect(hd()?.running).toBe(true);
+    expect(hd()?.ref.spare).toBeUndefined();
+    // Back in the tile: asked for again, spare, so it never keeps a slot as any other.
+    const starts = hd()?.starts ?? 0;
+    tile.exitFull();
+    await settle(tile);
+    expect(hd()?.running).toBe(true);
+    expect(hd()?.starts).toBe(starts + 1);
+    expect(hd()?.ref.spare).toBe(true);
+    tile.remove();
+    players.length = 0;
+    rememberFullScreenHd("home", false);
+    const sd = await mountTile({ hd: true, reason: "HD: the large slot" });
+    expect(hd()?.running ?? false).toBe(false);
+    expect(sub()?.running).toBe(true);
+    expect(await debug(sd)).toContain("but SD here: SD, as chosen on this device");
+    window.localStorage.clear();
   });
 });

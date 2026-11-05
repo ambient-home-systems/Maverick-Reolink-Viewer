@@ -47,12 +47,18 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.util.ssl import SSLCipherList
 
-from .capacity import CapacityError, CapacityTest, SlotsBusyError, busy_reason
+from .capacity import (
+    MAX_MAINS,
+    CapacityError,
+    CapacityTest,
+    SlotsBusyError,
+    busy_reason,
+)
 from .go2rtc import Go2rtcError, redact
 from .images import CameraImage
 from .service import MAX_EARLY_CANDIDATES, LiveService, WebRtcSession
 from .soak import KEEP, MAX_CAMERAS, SAMPLE_S, WARMUP_S
-from .streams import LiveError, LiveStream
+from .streams import YIELDED, LiveError, LiveStream
 from .views import LIVE_FRAME_PATH, LIVE_IMAGE_PATH, LIVE_MSE_PATH
 from .warm import keep_warm_unique_id
 
@@ -123,6 +129,11 @@ _STREAM_SCHEMA: dict[probatio.Marker | str, Any] = {
     probatio.Required("connection_id"): str,
     probatio.Required("stream"): STREAM,
 }
+# HD in a Wall tile (Phase 9 step 3): a stream not running yet starts only on a
+# free stream slot, and ends when another stream needs the slot.
+_SPARE: dict[probatio.Marker | str, Any] = {
+    probatio.Optional("spare", default=False): bool,
+}
 
 
 @callback
@@ -165,6 +176,7 @@ def ws_live_cameras(
     {
         probatio.Required("type"): f"{DOMAIN}/live/webrtc",
         **_STREAM_SCHEMA,
+        **_SPARE,
         probatio.Required("offer"): str,
     }
 )
@@ -192,9 +204,20 @@ async def ws_live_webrtc(
             return round((asyncio.get_running_loop().time() - began) * 1000, 1)
 
         hold = None
+        yielded = False
+
+        def give_back() -> None:
+            # The spare slot is asked back: close go2rtc's session, saying why.
+            nonlocal yielded
+            yielded = True
+            if session.ws is not None:
+                hass.async_create_task(session.ws.close())
+
         try:
             server = await live.async_server()
-            hold = await live.registry.async_hold(stream)
+            hold = await live.registry.async_hold(
+                stream, on_yield=give_back if msg["spare"] else None
+            )
             timing = {"hold_ms": elapsed()}
             async with server.ws(stream.name) as ws:
                 await ws.send_json(
@@ -213,7 +236,7 @@ async def ws_live_webrtc(
                     await ws.send_json({"type": "webrtc/candidate", "value": candidate})
                 session.ws = ws
                 async for message in ws:
-                    if message.type is not WSMsgType.TEXT:
+                    if message.type is not WSMsgType.TEXT or yielded:
                         break
                     event = _relay(message.data, timing, elapsed)
                     if event is not None:
@@ -223,7 +246,9 @@ async def ws_live_webrtc(
                             break
                 # Over: no more candidates for it, while the socket closes.
                 live.sessions.pop(session.session_id, None)
-            send({"type": "closed"})
+            send(
+                {"type": "error", "message": YIELDED} if yielded else {"type": "closed"}
+            )
         except (LiveError, Go2rtcError) as err:
             send({"type": "error", "message": redact(str(err))})
         finally:
@@ -309,14 +334,18 @@ def _signed(
     live_entry: ReolinkViewerConfigEntry,
     base: str,
     stream: LiveStream,
+    *,
+    spare: bool = False,
 ) -> str:
-    token = live_entry.runtime_data.grants.issue(LiveGrant(stream), LIVE_URL_TTL)
+    token = live_entry.runtime_data.grants.issue(
+        LiveGrant(stream, spare=spare), LIVE_URL_TTL
+    )
     return sign(hass, base, token, LIVE_URL_TTL)
 
 
 @callback
 @websocket_api.websocket_command(
-    {probatio.Required("type"): f"{DOMAIN}/live/mse", **_STREAM_SCHEMA}
+    {probatio.Required("type"): f"{DOMAIN}/live/mse", **_STREAM_SCHEMA, **_SPARE}
 )
 def ws_live_mse(
     hass: HomeAssistant,
@@ -329,7 +358,8 @@ def ws_live_mse(
     if (stream := _stream(hass, connection, msg)) is None:
         return
     connection.send_result(
-        msg["id"], {"path": _signed(hass, resolved[0], LIVE_MSE_PATH, stream)}
+        msg["id"],
+        {"path": _signed(hass, resolved[0], LIVE_MSE_PATH, stream, spare=msg["spare"])},
     )
 
 
@@ -651,6 +681,9 @@ async def ws_live_preload(
         probatio.Required("host_id"): str,
         probatio.Optional("include_main", default=True): bool,
         probatio.Optional("include_fill", default=True): bool,
+        probatio.Optional("mains", default=1): probatio.All(
+            int, probatio.Range(min=1, max=MAX_MAINS)
+        ),
     }
 )
 @websocket_api.require_admin
@@ -698,6 +731,7 @@ async def ws_live_capacity(
                 sources,
                 include_main=msg["include_main"],
                 include_fill=msg["include_fill"],
+                mains=msg["mains"],
                 progress=lambda text: send({"type": "progress", "message": text}),
             )
             # The cameras kept warm hold most of the host's slots: set aside.

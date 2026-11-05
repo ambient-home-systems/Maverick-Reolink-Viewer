@@ -27,7 +27,7 @@ from homeassistant.helpers import device_registry as dr, entity_registry as er
 from . import bridge
 from .bridge import DeviceRef, DeviceRole, ReolinkHostHandle
 from .catalog import Catalog, catalog_key
-from .const import REOLINK_DOMAIN
+from .const import REOLINK_DOMAIN, TILE_HD_STREAMS
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -788,6 +788,10 @@ def async_live_cameras(
                     "connection_id": source.connection_id,
                     "via": source.via,
                     "entry_title": conn.entry_title,
+                    # Its host's stream budget (an NVR, or itself), as a key that
+                    # reveals no identifier, and the Wall's HD tiles it allows.
+                    "host": bridge.opaque_key(conn.entry_id, None),
+                    "hd_tiles": TILE_HD_STREAMS,
                     "is_battery": source.is_battery,
                     "status_entity": status_entity,
                     "streams": {

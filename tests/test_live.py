@@ -2,6 +2,7 @@
 
 import asyncio
 from collections.abc import AsyncGenerator, Generator
+import contextlib
 import hashlib
 import json
 from pathlib import Path
@@ -26,11 +27,13 @@ from custom_components.reolink_viewer.live import binary, capacity, go2rtc
 from custom_components.reolink_viewer.live.binary import Binary, BinaryError
 from custom_components.reolink_viewer.live.go2rtc import Go2rtcError, Go2rtcServer
 from custom_components.reolink_viewer.live.streams import (
+    SPARE_REFUSED,
+    YIELDED,
     LiveError,
     LiveStream,
     StreamRegistry,
 )
-from custom_components.reolink_viewer.scheduler import Priority, Scheduler
+from custom_components.reolink_viewer.scheduler import Priority, Scheduler, StreamBudget
 from homeassistant.core import HomeAssistant
 
 from .conftest import TEST_PASSWORD
@@ -502,6 +505,91 @@ async def test_priority_of_live_slots(
         ticket.release()
 
 
+async def test_a_spare_stream_takes_a_free_slot_and_gives_it_back(
+    registry: tuple[StreamRegistry, FakeServer, FakeHost, Scheduler],
+) -> None:
+    """HD in a Wall tile: only a free slot, refused at once, ended when needed."""
+    reg, _server, host, scheduler = registry
+    budget = scheduler.host("entry1").streams
+    sub, main = LiveStream(SOURCE, "sub"), LiveStream(SOURCE, "main")
+    ended: list[str] = []
+
+    def end_main() -> None:
+        ended.append("main")
+        spare.release()
+
+    held = await reg.async_hold(sub)
+    spare = await reg.async_hold(main, on_yield=end_main)
+    assert budget.stats() == {
+        "stream_limit": 2,
+        "streams": 2,
+        "streams_waiting": 0,
+        "streams_spare": 1,
+    }
+    # Full: another spare is refused at once, before the camera is asked.
+    asked = len(host.calls)
+    other = LiveStream(SOURCE, "ext")
+    with pytest.raises(LiveError, match="every stream slot"):
+        await reg.async_hold(other, on_yield=lambda: None)
+    assert len(host.calls) == asked
+    # Someone else's stream waits: the spare ends, and it gets the slot.
+    hold = await reg.async_hold(other, slot_timeout=1.0)
+    assert ended == ["main"]
+    assert budget.stats()["streams_spare"] == 0
+    # A spare joining a stream already held takes no slot; once held as any
+    # other, nothing asks it back.
+    joined = await reg.async_hold(other, on_yield=lambda: ended.append("joined"))
+    assert budget.stats()["streams"] == 2
+    for each in (joined, hold):
+        each.release()
+    spare = await reg.async_hold(main, on_yield=end_main)
+    kept = await reg.async_hold(main)
+    waiting = budget.request(Priority.PLAYBACK)
+    await asyncio.sleep(0.01)
+    assert ended == ["main"]
+    assert not waiting.granted
+    # Only the spare hold left: spare again, and asked back.
+    kept.release()
+    await asyncio.wait_for(waiting.wait(), 1)
+    assert ended == ["main", "main"]
+    waiting.release()
+    held.release()
+    assert budget.stats()["streams"] == 0
+
+
+async def test_spare_slots_in_the_budget() -> None:
+    """Only free slots, given back newest first, one per stream waiting; not to prefetch."""
+    budget = StreamBudget("h", 3, prefetch_limit=1)
+    asked: list[str] = []
+    fill = budget.request(Priority.PLAYBACK)
+    await fill.wait()
+    first = budget.request_spare(Priority.LIVE, lambda: asked.append("first"))
+    second = budget.request_spare(Priority.LIVE, lambda: asked.append("second"))
+    assert first is not None
+    assert second is not None
+    assert budget.request_spare(Priority.LIVE, lambda: None) is None  # full
+    prefetch = budget.request(Priority.PREFETCH)
+    await asyncio.sleep(0)
+    assert asked == []  # a prefetch waits without taking one back
+    live = budget.request(Priority.LIVE)
+    await asyncio.sleep(0)
+    assert asked == ["second"]  # the newest
+    budget.dispatch()  # asked once only
+    await asyncio.sleep(0)
+    assert asked == ["second"]
+    # Kept (a viewer who is not spare joined): another is asked instead.
+    second.keep()
+    await asyncio.sleep(0)
+    assert asked == ["second", "first"]
+    first.release()
+    await live.wait()
+    for ticket in (second, live, fill):
+        ticket.release()
+    await prefetch.wait()
+    prefetch.release()
+    assert budget.stats()["streams"] == 0
+
+
 # ---- The live commands, without a go2rtc to run ----
 
 
@@ -604,6 +692,104 @@ async def test_live_commands_when_go2rtc_cannot_run(
     await hass.config_entries.async_unload(viewer_entry.entry_id)
     msg = await _ws(client, {"type": "reolink_viewer/live/status"})
     assert msg["error"]["code"] == "not_loaded"
+
+
+class _SessionSocket:
+    """go2rtc's websocket for a WebRTC session: open until it is closed."""
+
+    def __init__(self) -> None:
+        self.sent: list[Any] = []
+        self._closed = asyncio.Event()
+
+    async def send_json(self, data: Any) -> None:
+        self.sent.append(data)
+
+    async def close(self) -> None:
+        self._closed.set()
+
+    def __aiter__(self) -> _SessionSocket:
+        return self
+
+    async def __anext__(self) -> Any:
+        await self._closed.wait()
+        raise StopAsyncIteration
+
+
+class _SessionServer(FakeServer):
+    def __init__(self) -> None:
+        super().__init__()
+        self.sockets: list[_SessionSocket] = []
+        self.opened = asyncio.Event()
+
+    @contextlib.asynccontextmanager
+    async def ws(self, name: str) -> AsyncGenerator[_SessionSocket]:
+        socket = _SessionSocket()
+        self.sockets.append(socket)
+        self.opened.set()
+        yield socket
+
+
+async def test_hd_in_a_tile_over_webrtc_gives_its_slot_back(
+    hass: HomeAssistant,
+    hass_ws_client: WebSocketGenerator,
+    loaded_with_entities: MockConfigEntry,
+    viewer_entry: MockConfigEntry,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A spare session: refused when the host is full, ended when a slot is needed."""
+    service = viewer_entry.runtime_data.live
+    assert service is not None
+    server = _SessionServer()
+
+    async def get_server() -> Any:
+        return server
+
+    monkeypatch.setattr(service, "async_server", get_server)
+    monkeypatch.setattr(service.registry, "_server", server)
+    client = await hass_ws_client(hass)
+    msg = await _ws(client, {"type": "reolink_viewer/live/cameras"})
+    connection = msg["result"]["cameras"][0]["connections"][0]
+    # Its host, by a key that reveals no identifier, and its HD tiles.
+    assert connection["hd_tiles"] == 1
+    assert len(connection["host"]) == 16
+    assert loaded_with_entities.entry_id not in connection["host"]
+    ref = {"connection_id": connection["connection_id"], "stream": "main"}
+    budget = service.scheduler.host(loaded_with_entities.entry_id).streams
+    held = [budget.request(Priority.LIVE) for _ in range(budget.limit)]
+
+    async def session() -> dict[str, Any]:
+        await client.send_json_auto_id(
+            {"type": "reolink_viewer/live/webrtc", **ref, "spare": True, "offer": "v=0"}
+        )
+        assert (await client.receive_json())["success"]
+        event: dict[str, Any] = (await client.receive_json())["event"]
+        assert event["type"] == "session"
+        return event
+
+    # Full: refused at once.
+    await session()
+    event = (await client.receive_json())["event"]
+    assert event == {"type": "error", "message": SPARE_REFUSED}
+    # A free slot: it plays, until another stream needs the slot.
+    held.pop().release()
+    await session()
+    await asyncio.wait_for(server.opened.wait(), 5)
+    assert budget.stats()["streams_spare"] == 1
+    needed = budget.request(Priority.LIVE)
+    event = (await client.receive_json())["event"]
+    assert event == {"type": "error", "message": YIELDED}
+    await needed.wait()
+    for ticket in (*held, needed):
+        ticket.release()
+    assert budget.stats()["streams"] == 0
+    # The capacity test opens 1 to 3 mains.
+    devices = await _ws(client, {"type": "reolink_viewer/devices"})
+    host_id = devices["result"]["hosts"][0]["id"]
+    msg = await _ws(
+        client,
+        {"type": "reolink_viewer/live/capacity", "host_id": host_id, "mains": 4},
+    )
+    assert msg["error"]["code"] == "invalid_format"
 
 
 async def test_live_images(

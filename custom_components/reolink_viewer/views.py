@@ -100,6 +100,8 @@ class LiveGrant:
     """Permission to watch one live stream (MSE, a frame) through live/views."""
 
     stream: LiveStream
+    # HD in a Wall tile: only on a free stream slot, given back when asked.
+    spare: bool = False
 
 
 @dataclass(frozen=True, slots=True)

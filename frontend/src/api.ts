@@ -329,13 +329,20 @@ export const fetchLiveCameras = (hass: HomeAssistant): Promise<{ cameras: LiveCa
 export interface LiveRef {
   connectionId: string;
   stream: LiveStreamKind;
+  /**
+   * HD in a Wall tile (Phase 9 step 3): a stream not running yet starts only
+   * on a free stream slot of its host, and ends when another stream needs it.
+   */
+  spare?: boolean;
 }
 
 const liveRef = (ref: LiveRef) => ({ connection_id: ref.connectionId, stream: ref.stream });
+/** What starts a stream (MSE, WebRTC) also says whether it is spare. */
+const startRef = (ref: LiveRef) => ({ ...liveRef(ref), ...(ref.spare ? { spare: true } : {}) });
 
 /** The signed path of a stream's MSE websocket (open it within 2 minutes). */
 export const fetchLiveMsePath = (hass: HomeAssistant, ref: LiveRef): Promise<{ path: string }> =>
-  hass.callWS<{ path: string }>({ type: "reolink_viewer/live/mse", ...liveRef(ref) });
+  hass.callWS<{ path: string }>({ type: "reolink_viewer/live/mse", ...startRef(ref) });
 
 /** The signed path of a JPEG from a stream (from go2rtc). */
 export const fetchLiveFramePath = (hass: HomeAssistant, ref: LiveRef): Promise<{ path: string }> =>
@@ -392,7 +399,7 @@ export const subscribeLiveWebRtc = (
 ): Promise<() => Promise<void>> =>
   hass.connection.subscribeMessage<LiveSignal>(onSignal, {
     type: "reolink_viewer/live/webrtc",
-    ...liveRef(ref),
+    ...startRef(ref),
     offer,
   });
 
@@ -419,7 +426,8 @@ export const subscribeCapacity = (
   hass: HomeAssistant,
   hostId: string,
   onEvent: (event: CapacityEvent) => void,
-  options: { include_main?: boolean; include_fill?: boolean } = {},
+  /** `mains`: 1 to 3 main streams at once (Phase 9 step 3 asks whether more than one fits). */
+  options: { include_main?: boolean; include_fill?: boolean; mains?: number } = {},
 ): Promise<() => Promise<void>> =>
   hass.connection.subscribeMessage<CapacityEvent>(onEvent, {
     type: "reolink_viewer/live/capacity",

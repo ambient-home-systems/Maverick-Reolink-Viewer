@@ -81,6 +81,8 @@ export interface LiveCheckOptions {
   stock: boolean;
   /** The NVRs' capacity test (admin). */
   capacity: boolean;
+  /** Main streams the capacity test opens at once, 1 to 3 (Phase 9 step 3: HD in the Wall's tiles). */
+  capacityMains?: number;
   /** Only these cameras (ids); all when empty. */
   cameraIds?: string[];
 }
@@ -252,7 +254,7 @@ export class LiveCheck {
     const options = this.options;
     this._log(
       `Streams: ${options.streams.join(", ")} · warm: ${options.warm && admin ? "yes" : admin ? "no" : "no (not an admin)"}` +
-        ` · Home Assistant's view: ${options.stock ? "yes" : "no"} · capacity test: ${options.capacity && admin ? "yes" : "no"}`,
+        ` · Home Assistant's view: ${options.stock ? "yes" : "no"} · capacity test: ${options.capacity && admin ? `yes${(options.capacityMains ?? 1) > 1 ? ` (${String(options.capacityMains)} mains)` : ""}` : "no"}`,
     );
     const began = performance.now();
     const status = await fetchLiveStatus(this._hass);
@@ -518,7 +520,10 @@ export class LiveCheck {
       this._checkStopped();
       const name = host.name ?? host.id;
       this._log("");
-      this._log(`Capacity test: ${name} (sub streams one by one, then a main, then a recording download)`);
+      const mains = this.options.capacityMains ?? 1;
+      this._log(
+        `Capacity test: ${name} (sub streams one by one, then ${mains > 1 ? `${String(mains)} mains` : "a main"}, then a recording download)`,
+      );
       this._status(`capacity test: ${name}`);
       const report = await this._capacity_(host.id, (message) => {
         this._status(`capacity test: ${name}: ${message}`);
@@ -546,11 +551,17 @@ export class LiveCheck {
         void unsubscribe?.().catch(() => undefined);
         resolve(value);
       };
-      subscribeCapacity(this._hass, hostId, (event) => {
-        if (event.type === "progress") progress(event.message);
-        else if (event.type === "result") finish(event.report);
-        else finish(event.advice ? { message: event.message, advice: event.advice } : { message: event.message });
-      })
+      const mains = this.options.capacityMains ?? 1;
+      subscribeCapacity(
+        this._hass,
+        hostId,
+        (event) => {
+          if (event.type === "progress") progress(event.message);
+          else if (event.type === "result") finish(event.report);
+          else finish(event.advice ? { message: event.message, advice: event.advice } : { message: event.message });
+        },
+        mains > 1 ? { mains } : {},
+      )
         .then((unsub) => {
           unsubscribe = unsub;
           if (settled) void unsub().catch(() => undefined);

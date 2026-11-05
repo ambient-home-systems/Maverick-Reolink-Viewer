@@ -18,6 +18,8 @@ export interface TileDebug {
   players: DebugPlayer[];
   /** Why full screen plays what it plays (once chosen). */
   hd?: string | undefined;
+  /** A Wall tile: whether it plays HD in place and why, and what happened (Phase 9 step 3). */
+  tile?: string[] | undefined;
   /** This page starts over WebRTC first until then (epoch ms): its network cut MSE. */
   webRtcFirstUntil?: number | undefined;
   /** MSE goes first until then (epoch ms): WebRTC does not connect from this device. */
@@ -46,6 +48,10 @@ export function debugText(info: TileDebug, states: DebugStates, now: number = Da
     lines.push(`  server: ${serverLine(states[player.label])}`);
   }
   if (info.hd) lines.push(`HD choice: ${info.hd}`);
+  if (info.tile?.length) {
+    lines.push(`Wall tile: ${info.tile[0] ?? ""}`);
+    for (const line of info.tile.slice(1)) lines.push(`  ${line}`);
+  }
   if (info.webRtcFirstUntil !== undefined && info.webRtcFirstUntil > now) {
     lines.push(`Network: it cut MSE's connections twice, so WebRTC goes first until ${clock(info.webRtcFirstUntil)}`);
   }

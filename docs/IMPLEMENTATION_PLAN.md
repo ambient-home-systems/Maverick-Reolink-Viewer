@@ -6532,8 +6532,8 @@ large, arranged by the owner (PLAN.md §6.3). The owner named it "Wall" on
 | Step | Status |
 | --- | --- |
 | 1. The Wall, its layouts, saved | Built (v0.52.0) |
-| 2. Arranging, pages and tours | Built (v0.53.0) |
-| 3. HD in large tiles | Not started |
+| 2. Arranging, pages and tours | Built (v0.53.0); the owner's check passed (2026-11-05) |
+| 3. HD in large tiles | Built (v0.54.0); the capacity test with 2–3 mains to run |
 | 4. The detection strip and instant highlights | Not started |
 | 5. Kiosk touches, and the Wall as a dashboard card | Not started; the card after Phase 7 |
 
@@ -6660,6 +6660,9 @@ another; on the wall tablet, Arrange and tap two; a double tap in 1+5 and in
 3×3; a layout of more cameras than cells, with a tour, left running an hour
 (no empty tile); the order the same on the other device after a reload.
 
+**The owner's check (2026-11-05, v0.53.0):** "approved and validated", the
+checklist above, then the go-ahead for step 3.
+
 #### Step 9.3: HD in large tiles
 
 - **Which tiles:** a tile larger than its sub stream's own size, or the large
@@ -6673,6 +6676,71 @@ another; on the wall tablet, Arrange and tap two; a double tap in 1+5 and in
   - A tile denied HD stays on SD and says so in its debug view.
 - **The per-device choice (v0.33.0)** applies: SD away from home, unless chosen
   otherwise on that device.
+
+**As built (v0.54.0), the owner's go-ahead ("approved and validated, proceed"):**
+
+- **Which tiles** (`wall/hd.ts`, `tilesInHd`): the large slot of 1+5 and 1+7, a
+  camera alone on the screen, and a tile that draws its sub stream larger than
+  its own size in the screen's pixels (`subScale`: the cell over the sub
+  stream's configured size, times the device pixel ratio; filling the cell, the
+  larger of the two; whole, the smaller). Not a camera without a main or ext
+  stream, nor one on its battery (it plays when tapped). The large slot first,
+  then the most enlarged, then the cells' order.
+- **Within each host's budget:** live/cameras gives each connection its host (a
+  key that names nothing: `opaque_key(entry_id, None)`) and `hd_tiles`, the HD
+  tiles that host plays at once (`TILE_HD_STREAMS`, 1: the NVR's 7 are six subs
+  and one main). The rest stay on SD; each tile's ⓘ view says why ("Wall tile:
+  SD: RLN36 plays 1 HD tile at once, and Garage has it", "SD: the tile is no
+  larger than its sub stream (640×360)").
+- **How:** the tile (`tileHd`) plays HD through full screen's swap, the sub
+  stream until HD's first frame, and says **Live HD**. Away from home (the
+  per-device choice, as full screen's) it stays on SD and says so.
+- **Spare slots** (ours): HD in a tile is a nicety over the sub stream already
+  shown, so it never makes another stream wait. `live/webrtc` and `live/mse`
+  take `spare`; the scheduler's `request_spare` grants a slot only when one is
+  free and nobody waits, and the moment a live or playback stream waits for a
+  slot (not prefetch) it asks the newest spare stream back (`on_yield`): the
+  registry ends its holders (the MSE feed, the WebRTC session), which tell the
+  browser "gave its stream slot back". A refused spare is refused at once,
+  before the camera is asked for its address. A stream also held otherwise
+  (full screen of the same camera, keep warm) keeps its slot, until only spare
+  holders are left (the registry's holds, and a feed's viewers): then it is
+  spare again (`lend`). Refused or given back, the tile stays on SD for a minute
+  (`TILE_HD_RETRY_MS`), then asks again; in full screen it retries as any stream
+  does, no longer spare, and back in the tile it asks again, spare. So the
+  Wall's HD can never stall a recording, a full screen or another screen's
+  tiles.
+- **The capacity test** takes `mains` (1–3): the heaviest mains that play on
+  their own, one more per level (`report.mains`: asked, playing); the live check
+  offers it ("Full-resolution streams in it").
+- **Checks:** spare slots in the budget (only free ones, newest asked back
+  first, one per stream waiting, never for prefetch, kept when held otherwise);
+  in the registry (refused before the camera is asked, ended when needed, a
+  spare joining a running stream takes none); a spare MSE feed (ended with the
+  reason; kept once a viewer who is not spare joins); a spare WebRTC session
+  (refused when full, given back when a slot is needed); spare again once the
+  holder that was not spare leaves (a hold, a feed's viewer); live/cameras' host and
+  `hd_tiles`; the capacity test with 2 mains (and the schema's 1–3); which
+  tiles get HD (scale, the large slot first, per host, none without an HD
+  stream or on a battery); the tile (HD in place on a spare slot, swapped in,
+  Live HD; back to SD when smaller; refused, SD for a minute with why, then
+  again; full screen keeps it, no longer spare, and its SD button holds; back
+  in the tile, asked for again, spare; SD when chosen on the device);
+  the Wall (the large slot in HD, the others' reasons, a 4K screen, the large
+  slot after a double tap).
+
+**Hardware checklist (the owner, v0.54.0):**
+
+1. The capacity test with 2 and then 3 mains (Devices → Live check, the NVR
+   capacity test ticked, "Full-resolution streams in it": 2, then 3), at home:
+   send the report. If every level keeps up with 3, `TILE_HD_STREAMS` can rise.
+2. On the desktop, a 1+5 layout: the large tile says **Live HD** (its ⓘ:
+   "Wall tile: HD: the large slot"), the others SD with why.
+3. With it showing, open a recording on the Events page (or full screen on
+   another screen): it plays at once, and the large tile drops to SD for a
+   minute (its ⓘ: "HD not given: … gave its stream slot back").
+4. The tiles' first pictures stay quick (Phase 3's 0.02 s) with the large tile
+   in HD.
 
 #### Step 9.4: the detection strip and instant highlights
 

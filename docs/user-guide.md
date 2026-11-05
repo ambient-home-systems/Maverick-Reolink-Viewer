@@ -126,6 +126,21 @@ From the keyboard: **Tab** reaches the cells, the **arrow keys** move between th
 **Shift** with an arrow moves the camera, **Enter** makes it larger, **Esc** brings it
 back, and **Page Down** and **Page Up** turn pages. A screen reader is told each move.
 
+HD in large tiles:
+
+- **The large tile plays in HD:** the large slot of **1 + 5** and **1 + 7**, a camera
+  alone on the screen, and any tile shown larger than the camera's lighter SD
+  picture. Its tile says **Live HD**. As in full screen, the SD video plays until the
+  HD video has its first picture, so nothing goes blank.
+- **One at a time per NVR:** an NVR plays one HD tile at once (a camera added
+  directly, one of its own), the large slot first. The other tiles stay in SD; their
+  **ⓘ** says why.
+- **It gives way:** HD in a tile takes a stream from the NVR only when one is free,
+  and gives it back as soon as anything else needs it (another screen, full screen, a
+  recording): the tile goes back to SD for a minute, then tries again.
+- **Away from home**, the tiles stay in SD, as full screen does, unless you chose HD
+  on this device.
+
 ### A camera full screen
 
 Each tile has small buttons, bottom right:
@@ -563,7 +578,8 @@ on this network.
 Run it on each device you use, at home and away, and compare. Each run is saved
 (**Saved reports**), so you can read it later on any device. Administrators can add
 the **NVR capacity test**, which finds how many videos each NVR serves at once (at
-home only).
+home only). **Full-resolution streams in it** opens 2 or 3 HD videos at once instead
+of 1: whether an NVR could play more than one HD tile on the Wall.
 
 ### The playback check
 

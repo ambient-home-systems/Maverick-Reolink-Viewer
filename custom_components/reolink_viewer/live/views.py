@@ -72,7 +72,9 @@ class LiveMseView(HomeAssistantView):
         try:
             codecs = await _mse_request(browser)
             if codecs is not None:
-                viewer = await live.relay.async_attach(grant.stream, codecs)
+                viewer = await live.relay.async_attach(
+                    grant.stream, codecs, spare=grant.spare
+                )
                 await browser.send_json({"type": "mse", "value": viewer.mime})
                 await _feed(browser, viewer)
         except (LiveError, Go2rtcError) as err:

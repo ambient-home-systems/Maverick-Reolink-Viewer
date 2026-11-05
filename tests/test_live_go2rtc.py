@@ -598,6 +598,36 @@ async def test_capacity_test(
     assert msg["error"]["code"] == "not_found"
 
 
+async def test_capacity_test_with_more_mains(
+    hass: HomeAssistant,
+    hass_ws_client: WebSocketGenerator,
+    live: MockConfigEntry,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Phase 9 step 3: 2-3 mains, one more per level, as many as play."""
+    monkeypatch.setattr(capacity, "MEASURE_S", 1.0)
+    client = await hass_ws_client(hass)
+    msg = await _ws(client, {"type": "reolink_viewer/devices"})
+    host_id = msg["result"]["hosts"][0]["id"]
+    await client.send_json_auto_id(
+        {
+            "type": "reolink_viewer/live/capacity",
+            "host_id": host_id,
+            "mains": 2,
+            "include_fill": False,
+        }
+    )
+    events = await _events(client, "result", timeout=60)
+    report = events[-1]["report"]
+    added = [level["added"] for level in report["levels"]]
+    subs = [a for a in added if a.endswith(" sub")]
+    mains = [a for a in added if a.endswith(" main")]
+    assert added == subs + mains
+    assert report["mains"] == {"asked": 2, "playing": len(mains)}
+    assert 1 <= len(mains) <= min(2, len(subs))
+    assert len(set(mains)) == len(mains)
+
+
 async def test_capacity_test_leaves_out_a_main_that_plays_no_video(
     hass: HomeAssistant,
     hass_ws_client: WebSocketGenerator,
