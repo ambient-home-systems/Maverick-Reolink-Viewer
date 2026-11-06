@@ -331,6 +331,25 @@ def test_verdict() -> None:
         "first_failing_level": None,
         "reasons": [],
     }
+    # The owner's 2026-11-06 run: a main sent nothing at its level, but the main
+    # added after it played at its rate: the camera's, not the host's limit.
+    duo = [stream, {**stream, "stream": "duo main", "fps": 0}]
+    silent = {"level": 2, "added": "duo main", "streams": duo}
+    later = {
+        "level": 3,
+        "added": "garage main",
+        "first_frame_s": 0.82,
+        "streams": [*duo, {**stream, "stream": "garage main"}],
+    }
+    levels = {"levels": [ok, silent, later]}
+    assert capacity.silent_streams(levels) == ["duo main"]
+    assert capacity.verdict(levels, None) == {
+        "first_failing_level": None,
+        "reasons": [],
+    }
+    # Nothing played after it: the host's limit, as before.
+    assert capacity.silent_streams({"levels": [ok, silent]}) == []
+    assert capacity.verdict({"levels": [ok, silent]}, None)["first_failing_level"] == 2
 
 
 def test_busy_slots_are_explained() -> None:
@@ -749,8 +768,9 @@ async def test_hd_in_a_tile_over_webrtc_gives_its_slot_back(
     client = await hass_ws_client(hass)
     msg = await _ws(client, {"type": "reolink_viewer/live/cameras"})
     connection = msg["result"]["cameras"][0]["connections"][0]
-    # Its host, by a key that reveals no identifier, and its HD tiles.
-    assert connection["hd_tiles"] == 1
+    # Its host, by a key that reveals no identifier, and its HD tiles (an NVR's two).
+    assert connection["via"] == "nvr"
+    assert connection["hd_tiles"] == 2
     assert len(connection["host"]) == 16
     assert loaded_with_entities.entry_id not in connection["host"]
     ref = {"connection_id": connection["connection_id"], "stream": "main"}

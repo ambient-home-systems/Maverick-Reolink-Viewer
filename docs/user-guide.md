@@ -132,7 +132,7 @@ HD in large tiles:
   alone on the screen, and any tile shown larger than the camera's lighter SD
   picture. Its tile says **Live HD**. As in full screen, the SD video plays until the
   HD video has its first picture, so nothing goes blank.
-- **One at a time per NVR:** an NVR plays one HD tile at once (a camera added
+- **Two at a time per NVR:** an NVR plays two HD tiles at once (a camera added
   directly, one of its own), the large slot first. The other tiles stay in SD; their
   **ⓘ** says why.
 - **It gives way:** HD in a tile takes a stream from the NVR only when one is free,

@@ -22,7 +22,10 @@ records the new stream's time to its first frame, the frames every stream
 delivered per second against the camera's setting, the download's speed, and
 how many clients the device lists as logged in (GetOnline), when it says.
 
-A level **fails** when a stream delivers no frame. It **slows down** when a
+A level **fails** when a stream delivers no frame, unless a stream added
+after it played (``silent_streams``: the camera's, not the host's limit; the
+owner's 2026-11-06 run, the Duo 3's 16 MP main again, which had sent a first
+frame on its own). It **slows down** when a
 stream falls below ``FPS_SHARE`` of its frame rate, the new stream's first
 frame takes longer than a key-frame wait can explain (``KEY_INTERVAL_S``, the
 longest these cameras use, and ``TTFF_MARGIN_S`` more), or the download falls
@@ -321,6 +324,8 @@ class CapacityTest:
             await asyncio.gather(*self._tasks, return_exceptions=True)
         users, why = await host.async_online_users()
         report["online_users_after"] = users if users is not None else f"n/a ({why})"
+        if silent := silent_streams(report):
+            report["no_video"] = silent
         report["verdict"] = verdict(report, report.get("fill_alone_mbit_s"))
         return report
 
@@ -474,11 +479,42 @@ async def _first_frame(reader: Reader) -> None:
         await asyncio.sleep(0.05)
 
 
+def silent_streams(report: dict[str, Any]) -> list[str]:
+    """Return the streams that sent no video at their own level, while one added after played.
+
+    A host at its limit refuses the stream added and anything after it; one
+    that serves a later stream had room, so the silent one is the camera's.
+    """
+    levels = report["levels"]
+
+    def played(level: dict[str, Any]) -> bool:
+        own = [s for s in level.get("streams", []) if s["stream"] == level.get("added")]
+        return level.get("first_frame_s") is not None and any(s["fps"] > 0 for s in own)
+
+    silent: list[str] = []
+    for index, level in enumerate(levels):
+        own = [s for s in level.get("streams", []) if s["stream"] == level.get("added")]
+        if (
+            own
+            and all(s["fps"] == 0 for s in own)
+            and any(played(later) for later in levels[index + 1 :])
+        ):
+            silent.append(str(level["added"]))
+    return silent
+
+
 def verdict(report: dict[str, Any], fill_alone: float | None) -> dict[str, Any]:
-    """Return the first level that fails or slows down, and why."""
+    """Return the first level that fails or slows down, and why.
+
+    A stream that sent no video while one added after it played is left out
+    (``silent_streams``): the report says so apart.
+    """
+    silent = set(silent_streams(report))
     for level in report["levels"]:
         reasons: list[str] = []
         for stream in level.get("streams", []):
+            if stream["stream"] in silent:
+                continue
             if stream["fps"] == 0:
                 reasons.append(f"{stream['stream']} delivered no frame")
             elif stream.get("expected_fps") and stream["fps"] < (
@@ -495,7 +531,7 @@ def verdict(report: dict[str, Any], fill_alone: float | None) -> dict[str, Any]:
                     f"first frame {first} s (past a {KEY_INTERVAL_S} s"
                     f" key-frame wait and {TTFF_MARGIN_S} s)"
                 )
-        elif "first_frame_s" in level:
+        elif "first_frame_s" in level and level.get("added") not in silent:
             reasons.append(f"{level['added']}: no first frame")
         fill = level.get("fill")
         speed = fill.get("mbit_s") if isinstance(fill, dict) else None

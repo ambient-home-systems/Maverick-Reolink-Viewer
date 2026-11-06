@@ -3,7 +3,7 @@ import { a as i, i as a, n as o, o as s, r as c, t as l } from "./config-D80frQM
 //#region src/card/index.ts
 var u;
 function d() {
-	return u ??= import("./camera-card-Cg_aG30t.js").catch((e) => {
+	return u ??= import("./camera-card-BIZfIVXQ.js").catch((e) => {
 		throw u = void 0, e;
 	}), u;
 }
@@ -23,7 +23,7 @@ var f = class extends r {
 		return a;
 	}
 	static async getConfigElement() {
-		return await import("./editor-KjAV6JyE.js"), document.createElement(c);
+		return await import("./editor-CBrVIxth.js"), document.createElement(c);
 	}
 	static async getStubConfig(e) {
 		try {

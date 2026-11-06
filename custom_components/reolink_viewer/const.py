@@ -29,15 +29,16 @@ DEFAULT_HOST_CONCURRENCY: Final = 2
 NVR_HOST_CONCURRENCY: Final = 6
 CAMERA_HOST_CONCURRENCY: Final = 3
 # Phase 3 step 1: the NVR kept up with six subs, a main and a download at once
-# (the capacity test, runs 5-10); one fewer for headroom.
-NVR_STREAM_BUDGET: Final = 7
+# (the capacity test, runs 5-10). Phase 9 step 3 (2026-11-06): six subs, three
+# mains and a download at once, every level kept up; one fewer for headroom.
+NVR_STREAM_BUDGET: Final = 9
 DEFAULT_STREAM_BUDGET: Final = 2
 PREFETCH_STREAM_BUDGET: Final = 1
-# Phase 9 step 3: the Wall's tiles in HD at once, per host (an NVR, or a camera
-# added directly): one, as the NVR's budget is six subs and one main. HD in a
-# tile only takes a free stream slot and gives it back when one is needed; the
-# capacity test with 2-3 mains says whether this can rise.
-TILE_HD_STREAMS: Final = 1
+# Phase 9 step 3: the Wall's tiles in HD at once through an NVR: two of the
+# three slots beyond its six subs, one left for a full screen or a recording
+# (the owner's choice, 2026-11-06). HD in a tile only takes a free stream slot
+# and gives it back when one is needed. A camera added directly plays its own.
+NVR_TILE_HD_STREAMS: Final = 2
 
 # Probe safety limits.
 PROBE_DEFAULT_MAX_STREAMS: Final = 4

@@ -3,6 +3,17 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.54.1
+
+From the capacity test with 2 and 3 full-resolution streams.
+
+- **Two HD tiles per NVR:** the NVR played six SD streams, three full-resolution ones
+  and a recording at once without slowing, so it now serves up to 9 streams (was 7),
+  and the Wall plays two tiles in HD on it at once (was one).
+- **The capacity test no longer blames the NVR** for a camera whose full-resolution
+  stream sends nothing while a stream added after it plays: it says that is the
+  camera's (the Duo 3's 16 MP stream), and counts the streams that did play.
+
 ## 0.54.0
 
 HD in the Wall's large tiles.
