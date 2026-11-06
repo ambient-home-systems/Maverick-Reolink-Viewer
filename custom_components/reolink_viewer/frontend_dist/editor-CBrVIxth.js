@@ -1,5 +1,5 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
-import { L as i, Nt as a, R as o, lt as s } from "./live-Ck1mNv_c.js";
+import { L as i, Nt as a, R as o, lt as s } from "./live-Cc-EfYb9.js";
 import { a as c, c as l, r as u } from "./config-D80frQMF.js";
 //#region src/card/editor.ts
 var d = "config-changed", f = class extends r {

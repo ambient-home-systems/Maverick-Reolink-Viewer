@@ -666,8 +666,10 @@ export class LiveCheck {
 
     for (const { host, report } of this._capacity) {
       const failing = report.verdict.first_failing_level;
+      // A stream that sent no video while a later one played is the camera's: not counted.
+      const silent = new Set(report.no_video ?? []);
       if (failing === null) {
-        const most = Math.max(0, ...report.levels.map((l) => l.streams.length));
+        const most = Math.max(0, ...report.levels.map((l) => l.streams.filter((s) => !silent.has(s.stream)).length));
         findings.push({ grade: "good", text: `${host} kept up with ${count(most, "video stream")} at once.` });
       } else {
         const at = report.levels.find((l) => l.level === failing)?.streams.length;
@@ -675,6 +677,15 @@ export class LiveCheck {
           grade: "slow",
           text: `${host} struggled with ${at === undefined ? "several streams" : count(at, "video stream")} at once.`,
           advice: "Keep fewer of its cameras warm, or watch fewer of them in full screen at the same time.",
+        });
+      }
+      for (const stream of silent) {
+        const [, camera = stream, kind] = /^(.*) (main|ext|sub)$/.exec(stream) ?? [];
+        const which = kind === "main" ? "full-resolution stream" : kind === "sub" ? "lighter stream" : "stream";
+        findings.push({
+          grade: "note",
+          text: `${camera}'s ${which} sent no video in ${host}'s capacity test, while a stream added after it played: the camera's, not ${host}'s limit.`,
+          advice: "If its picture does not play in the Reolink app either, restart the camera.",
         });
       }
       const left = (report.main_left_out ?? []).map((m) => m.camera);

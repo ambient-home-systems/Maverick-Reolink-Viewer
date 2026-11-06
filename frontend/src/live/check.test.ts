@@ -389,6 +389,42 @@ describe("LiveCheck", () => {
     );
   });
 
+  it("says a main that sent nothing while a later one played is the camera's, not the host's limit", async () => {
+    // The owner's 2026-11-06 run: Back Yard's main silent at its level, Garage's main after it at its rate.
+    const sub = { stream: "Garage sub", fps: 15, expected_fps: 15, longest_gap_s: 0.1 };
+    const duo = { stream: "Back Yard main", fps: 0, expected_fps: 20, longest_gap_s: 6 };
+    const garage = { stream: "Garage main", fps: 30, expected_fps: 30, longest_gap_s: 0.1 };
+    const { hass } = fakeHass(true, {
+      type: "result",
+      report: {
+        online_users_before: 2,
+        online_users_after: 2,
+        fill: "no recording in the last 24 h",
+        levels: [
+          { level: 1, added: "Garage sub", first_frame_s: 0.8, streams: [sub], online_users: 2 },
+          { level: 2, added: "Back Yard main", streams: [sub, duo], online_users: 2 },
+          { level: 3, added: "Garage main", first_frame_s: 0.82, streams: [sub, duo, garage], online_users: 2 },
+        ],
+        no_video: ["Back Yard main"],
+        verdict: { first_failing_level: null, reasons: [] },
+      },
+    });
+    const check = new LiveCheck(
+      hass,
+      { setup: "Other", streams: ["sub"], warm: false, stock: false, capacity: true, cameraIds: ["cam1"] },
+      document.createElement("div"),
+    );
+    const text = await check.run();
+    // Two streams kept up: the silent one is not counted.
+    expect(text).toContain("- Good: RLN36 kept up with 2 video streams at once.");
+    expect(text).toContain(
+      "- Note: Back Yard's full-resolution stream sent no video in RLN36's capacity test, while a stream added after it played: " +
+        "the camera's, not RLN36's limit. What to do: If its picture does not play in the Reolink app either, restart the camera.",
+    );
+    expect(text).toContain("  no video: Back Yard main, at its level, while a stream added after it played (the camera's, not the NVR's)");
+    expect(text).not.toContain("struggled");
+  });
+
   it("leaves out what a non-admin cannot run, and stops when asked", async () => {
     const { hass, calls } = fakeHass(false);
     const check = new LiveCheck(

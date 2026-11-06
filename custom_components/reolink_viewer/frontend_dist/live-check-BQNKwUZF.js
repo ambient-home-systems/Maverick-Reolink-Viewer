@@ -1,8 +1,8 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
-import { B as i, E as a, G as o, H as s, J as c, K as l, Mt as u, Nt as d, R as f, S as p, T as m, U as h, V as g, W as _, X as v, Y as y, b, ft as x, h as S, it as C, j as w, jt as T, kt as E, lt as D, n as O, ot as k, p as A, pt as j, q as ee, ut as te, x as ne } from "./live-Ck1mNv_c.js";
-import { $ as re, G as ie } from "./home-CN7hty8A.js";
-import { c as ae, o as oe, r as se, s as ce } from "./check-CLHrGIsd.js";
-import { a as M, i as N, n as P, o as F, r as I, t as L } from "./findings-7-phfTLU.js";
+import { B as i, E as a, G as o, H as s, J as c, K as l, Mt as u, Nt as d, R as f, S as p, T as m, U as h, V as g, W as _, X as v, Y as y, b, ft as x, h as S, it as C, j as w, jt as T, kt as E, lt as D, n as O, ot as k, p as A, pt as j, q as ee, ut as te, x as ne } from "./live-Cc-EfYb9.js";
+import { $ as re, G as ie } from "./home-DwvOEeee.js";
+import { c as ae, o as oe, r as se, s as ce } from "./check-DvFkWPQs.js";
+import { a as M, i as N, n as P, o as F, r as I, t as L } from "./findings-A4YvX0_J.js";
 //#region src/live/check.ts
 var R = [
 	"Desktop Chrome, LAN",
@@ -372,9 +372,9 @@ var R = [
 			text: "WebRTC could not connect from this device, so live video used the viewer's other way of streaming (MSE), which worked."
 		});
 		for (let { host: e, report: n } of this._capacity) {
-			let r = n.verdict.first_failing_level;
+			let r = n.verdict.first_failing_level, i = new Set(n.no_video ?? []);
 			if (r === null) {
-				let r = Math.max(0, ...n.levels.map((e) => e.streams.length));
+				let r = Math.max(0, ...n.levels.map((e) => e.streams.filter((e) => !i.has(e.stream)).length));
 				t.push({
 					grade: "good",
 					text: `${e} kept up with ${L(r, "video stream")} at once.`
@@ -387,11 +387,19 @@ var R = [
 					advice: "Keep fewer of its cameras warm, or watch fewer of them in full screen at the same time."
 				});
 			}
-			let i = (n.main_left_out ?? []).map((e) => e.camera);
-			i.length && t.push({
+			for (let n of i) {
+				let [, r = n, i] = /^(.*) (main|ext|sub)$/.exec(n) ?? [], a = i === "main" ? "full-resolution stream" : i === "sub" ? "lighter stream" : "stream";
+				t.push({
+					grade: "note",
+					text: `${r}'s ${a} sent no video in ${e}'s capacity test, while a stream added after it played: the camera's, not ${e}'s limit.`,
+					advice: "If its picture does not play in the Reolink app either, restart the camera."
+				});
+			}
+			let a = (n.main_left_out ?? []).map((e) => e.camera);
+			a.length && t.push({
 				grade: "note",
-				text: i.length === 1 ? `${e}'s capacity test left out ${i.join("")}'s full-resolution stream: it sent no video, even on its own.` : `${e}'s capacity test left out the full-resolution streams of ${pe(i)}: they sent no video, even on their own.`,
-				advice: `If ${i.length === 1 ? "its full picture does" : "their full pictures do"} not play in the Reolink app either, restart ${i.length === 1 ? "the camera" : "those cameras"}.`
+				text: a.length === 1 ? `${e}'s capacity test left out ${a.join("")}'s full-resolution stream: it sent no video, even on its own.` : `${e}'s capacity test left out the full-resolution streams of ${pe(a)}: they sent no video, even on their own.`,
+				advice: `If ${a.length === 1 ? "its full picture does" : "their full pictures do"} not play in the Reolink app either, restart ${a.length === 1 ? "the camera" : "those cameras"}.`
 			});
 		}
 		for (let { host: e, message: n, advice: r } of this._capacityFailed) t.push({

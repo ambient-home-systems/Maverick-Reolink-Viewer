@@ -160,6 +160,9 @@ export function capacityLines(report: CapacityReport): string[] {
   for (const { camera, why } of report.main_left_out ?? []) {
     lines.push(`  main left out: ${camera} main (${why}, on its own)`);
   }
+  for (const stream of report.no_video ?? []) {
+    lines.push(`  no video: ${stream}, at its level, while a stream added after it played (the camera's, not the NVR's)`);
+  }
   if (report.mains) {
     lines.push(`  mains: ${String(report.mains.playing)} of the ${String(report.mains.asked)} asked for, one more per level`);
   }

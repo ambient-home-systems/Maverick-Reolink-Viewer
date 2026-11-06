@@ -6533,7 +6533,7 @@ large, arranged by the owner (PLAN.md §6.3). The owner named it "Wall" on
 | --- | --- |
 | 1. The Wall, its layouts, saved | Built (v0.52.0) |
 | 2. Arranging, pages and tours | Built (v0.53.0); the owner's check passed (2026-11-05) |
-| 3. HD in large tiles | Built (v0.54.0); the capacity test with 2–3 mains to run |
+| 3. HD in large tiles | Built (v0.54.0); the capacity test run (2026-11-06): 9 streams, 2 HD tiles per NVR (v0.54.1) |
 | 4. The detection strip and instant highlights | Not started |
 | 5. Kiosk touches, and the Wall as a dashboard card | Not started; the card after Phase 7 |
 
@@ -6688,10 +6688,11 @@ checklist above, then the go-ahead for step 3.
   then the most enlarged, then the cells' order.
 - **Within each host's budget:** live/cameras gives each connection its host (a
   key that names nothing: `opaque_key(entry_id, None)`) and `hd_tiles`, the HD
-  tiles that host plays at once (`TILE_HD_STREAMS`, 1: the NVR's 7 are six subs
-  and one main). The rest stay on SD; each tile's ⓘ view says why ("Wall tile:
-  SD: RLN36 plays 1 HD tile at once, and Garage has it", "SD: the tile is no
-  larger than its sub stream (640×360)").
+  tiles that host plays at once (v0.54.0: 1, the NVR's 7 being six subs and
+  one main; v0.54.1: `NVR_TILE_HD_STREAMS`, 2, after the capacity test, and 1
+  for a camera added directly). The rest stay on SD; each tile's ⓘ view says
+  why ("Wall tile: SD: RLN36 plays 2 HD tiles at once, and Garage, Dogs have
+  it", "SD: the tile is no larger than its sub stream (640×360)").
 - **How:** the tile (`tileHd`) plays HD through full screen's swap, the sub
   stream until HD's first frame, and says **Live HD**. Away from home (the
   per-device choice, as full screen's) it stays on SD and says so.
@@ -6733,7 +6734,7 @@ checklist above, then the go-ahead for step 3.
 
 1. The capacity test with 2 and then 3 mains (Devices → Live check, the NVR
    capacity test ticked, "Full-resolution streams in it": 2, then 3), at home:
-   send the report. If every level keeps up with 3, `TILE_HD_STREAMS` can rise.
+   send the report. If every level keeps up with 3, the HD tiles can rise.
 2. On the desktop, a 1+5 layout: the large tile says **Live HD** (its ⓘ:
    "Wall tile: HD: the large slot"), the others SD with why.
 3. With it showing, open a recording on the Events page (or full screen on
@@ -6741,6 +6742,25 @@ checklist above, then the go-ahead for step 3.
    minute (its ⓘ: "HD not given: … gave its stream slot back").
 4. The tiles' first pictures stay quick (Phase 3's 0.02 s) with the large tile
    in HD.
+
+**The owner's capacity test (2026-11-06, v0.54.0, the desktop on the LAN):**
+
+| Run | Mains asked | Levels | Verdict |
+| --- | --- | --- | --- |
+| 1 | 2 | 6 subs; Back Yard main (0 of 20 fps, no first frame); Garage main (30/30 fps, first frame 0.82 s); a download (310 Mbit/s, 267 alone) | "level 7 fails": wrong, see below |
+| 2 | 3 | Back Yard main left out (no frame in 15 s on its own); 6 subs; Garage, Dogs and Front Yard Left mains (6 Mbit/s each, every one at its rate); a download (368 Mbit/s, 309 alone) | every level kept up: 10 streams at once |
+
+- **Run 1's verdict was the camera's, not the NVR's:** the Duo 3's 16 MP main
+  (run 20's) sent a first frame on its own, then nothing at its level, while
+  Garage's main, added after it, played at 30 of 30 fps: the NVR had room.
+  v0.54.1: a stream that sent no video while one added after it played is left
+  out of the verdict (`silent_streams`, `report.no_video`) and said apart ("…
+  the camera's, not RLN36's limit"); "kept up with N" leaves it out.
+- **The budget rises:** six subs, three mains and a download kept up (10), so
+  by Phase 3's rule (one fewer for headroom) `NVR_STREAM_BUDGET` is 9. **The
+  owner's choice:** two HD tiles per NVR (`NVR_TILE_HD_STREAMS`), keeping the
+  third slot beyond the six subs for a full screen or a recording without
+  taking an HD tile back. One run of three mains, so the next ones confirm it.
 
 #### Step 9.4: the detection strip and instant highlights
 

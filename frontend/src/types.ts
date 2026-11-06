@@ -841,6 +841,8 @@ export interface CapacityReport {
   main_left_out?: { camera: string; why: string }[];
   /** Asked for more than one main (Phase 9 step 3): how many, and how many played on their own. */
   mains?: { asked: number; playing: number };
+  /** Streams that sent no video at their level while one added after played: the camera's, left out of the verdict. */
+  no_video?: string[];
 }
 
 export type CapacityEvent =
