@@ -1,6 +1,6 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
-import { X as i, at as a, c as o, j as s, u as c } from "./live-Cc-EfYb9.js";
-import { D as l, H as u, O as d, P as f, b as p, h as m, u as h, x as g } from "./home-DwvOEeee.js";
+import { X as i, at as a, c as o, j as s, u as c } from "./live-BIaa-XON.js";
+import { A as l, C as u, I as d, S as f, W as p, _ as m, k as h, u as g } from "./home-DAZFKJ7M.js";
 //#region src/playback/calendar.ts
 var _ = [
 	0,
@@ -69,7 +69,7 @@ var _ = [
 		}, s ? this._move(s) : this._focus = Math.min(a.getUTCDate(), i);
 	}
 	get _shown() {
-		return p(this.year, this.month, 1).slice(0, 7);
+		return f(this.year, this.month, 1).slice(0, 7);
 	}
 	willUpdate(e) {
 		(e.has("month") || e.has("year")) && (this._focus = this._focusAfter?.month === this._shown ? this._focusAfter.day : void 0);
@@ -89,7 +89,7 @@ var _ = [
 		})), a = _.map((e) => (e + this.firstDay) % 7).map((e) => new Date(Date.UTC(2023, 0, 1 + e)).toLocaleDateString(void 0, {
 			weekday: "long",
 			timeZone: "UTC"
-		})), o = this._stop(new Date(Date.UTC(this.year, this.month, 0)).getUTCDate()), [s, c] = m(this.year, this.month, 1), l = this.today !== void 0 && p(s, c, 1) > this.today;
+		})), o = this._stop(new Date(Date.UTC(this.year, this.month, 0)).getUTCDate()), [s, c] = m(this.year, this.month, 1), l = this.today !== void 0 && f(s, c, 1) > this.today;
 		return n`<div class="head">
         <button class="text" aria-label="Previous month" @click=${() => {
 			this._move(-1);
@@ -103,10 +103,10 @@ var _ = [
         <div class="week" role="row">
           ${r.map((e, t) => n`<span class="dow" role="columnheader" aria-label=${a[t] ?? e}>${e}</span>`)}
         </div>
-        ${g(this.year, this.month, this.firstDay).map((e) => n`<div class="week" role="row">
+        ${u(this.year, this.month, this.firstDay).map((e) => n`<div class="week" role="row">
             ${e.map((e) => {
 			if (e === null) return n`<span role="gridcell"></span>`;
-			let r = p(this.year, this.month, e), i = this.today !== void 0 && r > this.today, a = this.days.has(e), s = new Date(Date.UTC(this.year, this.month - 1, e)).toLocaleDateString(void 0, {
+			let r = f(this.year, this.month, e), i = this.today !== void 0 && r > this.today, a = this.days.has(e), s = new Date(Date.UTC(this.year, this.month - 1, e)).toLocaleDateString(void 0, {
 				weekday: "long",
 				month: "long",
 				day: "numeric",
@@ -247,7 +247,7 @@ var b = class extends r {
 		}
 	}
 	_go(e) {
-		this._calendar = !1, u(this, e >= this._today ? { view: "events" } : {
+		this._calendar = !1, p(this, e >= this._today ? { view: "events" } : {
 			view: "events",
 			date: e
 		});
@@ -345,7 +345,7 @@ var b = class extends r {
     </div>`;
 	}
 	_renderFilters() {
-		let e = this._feed?.events ?? [], r = new Set(e.map((e) => e.camera_id)), a = this.cameras.filter((e) => r.has(e.id) || this._cameraFilter.has(e.id)), o = [.../* @__PURE__ */ new Set([...e.flatMap((e) => l(e.types)), ...this._typeFilter])], s = this._marks?.enabled ? this._marks : void 0;
+		let e = this._feed?.events ?? [], r = new Set(e.map((e) => e.camera_id)), a = this.cameras.filter((e) => r.has(e.id) || this._cameraFilter.has(e.id)), o = [.../* @__PURE__ */ new Set([...e.flatMap((e) => h(e.types)), ...this._typeFilter])], s = this._marks?.enabled ? this._marks : void 0;
 		if (!a.length && !o.length && !s) return t;
 		let c = this._cameraFilter.size > 0 || this._typeFilter.size > 0 || this._unusualOnly;
 		return n`<div class="filters">
@@ -364,14 +364,14 @@ var b = class extends r {
           </div>` : t}
       ${o.length ? n`<div class="group" role="group" aria-label="What was detected">
             <span class="label">Detected</span>
-            ${d(o).map((e) => n`<button
+            ${l(o).map((e) => n`<button
                   class="chip"
                   aria-pressed=${this._typeFilter.has(e) ? "true" : "false"}
                   @click=${() => {
 			this._typeFilter = this._toggle(this._typeFilter, e);
 		}}
                 >
-                  ${i(h([e]))}${f(e)}
+                  ${i(g([e]))}${d(e)}
                 </button>`)}
           </div>` : t}
       ${s ? this._renderUnusual(s) : t}

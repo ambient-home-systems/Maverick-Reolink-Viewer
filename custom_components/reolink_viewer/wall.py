@@ -1,8 +1,10 @@
 """The Wall's saved layouts (Phase 9 step 1), per Home Assistant user.
 
 A layout is what the Wall shows: its name, its grid (GRIDS), the camera in
-each cell in order (``None`` for a cell left empty), and a tour's seconds per
-page (step 2; ``None`` for none). Kept on the server, so a layout made on the
+each cell in order (``None`` for a cell left empty), a tour's seconds per
+page (step 2; ``None`` for none), and (step 4) whether its feeds show their
+floodlight and siren buttons and the strip of latest detections shows (all
+of them by default, so a layout kept before reads as it did). Kept on the server, so a layout made on the
 desktop shows on the wall tablet signed in as the same user; each device
 remembers which one it shows (in the browser). Ids are slugs of the name, so
 a kiosk's start page can be ``#wall/<id>``.
@@ -25,6 +27,9 @@ MAX_LAYOUTS = 50
 MAX_NAME = 60
 MAX_CAMERAS = 64
 MAX_TOUR_S = 3600
+# What a layout may leave out (step 4), each shown unless said: the feeds'
+# floodlight and siren buttons (the owner's ask), and the strip.
+SHOWN = ("floodlight", "siren", "strip")
 
 
 class LayoutError(ValueError):
@@ -53,12 +58,19 @@ def layout_of(raw: dict[str, Any]) -> dict[str, Any]:
     tour = raw.get("tour_s")
     if tour is not None and not (isinstance(tour, int) and 5 <= tour <= MAX_TOUR_S):
         raise LayoutError(f"A tour's page lasts 5 to {MAX_TOUR_S} seconds")
+    shown = {}
+    for key in SHOWN:
+        value = raw.get(key, True)
+        if not isinstance(value, bool):
+            raise LayoutError(f"{key} is shown or not (true or false)")
+        shown[key] = value
     return {
         "id": str(raw.get("id") or ""),
         "name": name,
         "grid": grid,
         "cameras": [None if c is None else str(c) for c in cameras],
         "tour_s": tour,
+        **shown,
     }
 
 

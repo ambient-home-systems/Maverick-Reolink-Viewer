@@ -39,6 +39,7 @@ import probatio
 from custom_components.reolink_viewer import devices
 from custom_components.reolink_viewer.const import DOMAIN
 from custom_components.reolink_viewer.models import ReolinkViewerConfigEntry
+from custom_components.reolink_viewer.unusual.events import SUBJECTS
 from custom_components.reolink_viewer.views import LiveGrant, LiveImageGrant, sign
 from homeassistant.components import websocket_api
 from homeassistant.components.web_rtc import async_get_ice_servers
@@ -165,11 +166,24 @@ def ws_live_cameras(
         hass, warm=lambda source, kind: LiveStream(source, kind).name in warm
     )
     entities = er.async_get(hass)
+    # Phase 9 step 4: each camera's detection sensors, by entity id, with the
+    # event type each stands for, so a Wall tile lights up while one is on.
+    detection: dict[str, dict[str, str]] = {}
+    for sensor in devices.async_detection_sensors(hass).values():
+        detection.setdefault(sensor.camera_id, {})[sensor.entity_id] = event_type(
+            sensor.kind
+        )
     for camera in cameras:
         camera["keep_warm_entity"] = entities.async_get_entity_id(
             "switch", DOMAIN, keep_warm_unique_id(camera["id"])
         )
+        camera["detection"] = detection.get(camera["id"], {})
     connection.send_result(msg["id"], {"cameras": cameras})
+
+
+def event_type(kind: str) -> str:
+    """Return the event type a detection sensor's kind stands for (PERSON, ...)."""
+    return SUBJECTS.get(kind, kind).upper()
 
 
 @websocket_api.websocket_command(

@@ -1,5 +1,8 @@
 """A day's events across cameras, for the home view's and Events view's timetables.
 
+And each camera's newest event, for the Wall's strip (``async_latest``, Phase
+9 step 4): today's, else the newest it saw on a day kept here.
+
 Every camera that records gives that day (by default its camera-local today)
 from the timeline service (cached, and searched through the scheduler like
 any other day), and the events are merged newest first. That includes a camera
@@ -23,7 +26,7 @@ from homeassistant.helpers.storage import Store
 from . import bridge, devices
 from .scheduler import Priority
 from .timeconv import epoch_ms, local_now
-from .timeline import TimelineService
+from .timeline import Day, TimelineService
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -179,6 +182,91 @@ async def async_recent(
         "since": since,
         "now": now,
     }
+
+
+async def async_latest(
+    hass: HomeAssistant,
+    timeline: TimelineService,
+    seen: SeenStore,
+    user_id: str,
+    *,
+    max_age: float = 0,
+    priority: Priority = Priority.PLAYBACK,
+) -> dict[str, Any]:
+    """Return each recording camera's newest event, newest first (the Wall's strip).
+
+    Today's, searched as ``async_recent`` does; else, when its today has none
+    (or cannot be searched), the newest it saw on a day kept here, without a
+    search. A camera whose today's search fails is listed under ``failed``.
+    """
+    now = now_ms()
+    since, opened = seen.marks(user_id, now)
+    sources = devices.async_event_sources(hass)
+    todays = {
+        s.key: local_now(bridge.async_get_host(hass, s.entry_id).timezone()).date()
+        for s in sources
+    }
+    days = await asyncio.gather(
+        *(
+            timeline.async_day(s, todays[s.key], "sub", priority, max_age=max_age)
+            for s in sources
+        ),
+        return_exceptions=True,
+    )
+    latest: list[CameraEvent] = []
+    failed: list[dict[str, Any]] = []
+    quiet: list[devices.PlaybackSource] = []
+    for source, found in zip(sources, days, strict=True):
+        if isinstance(found, BaseException):
+            _LOGGER.debug("Latest event of %s: %s", source.name, found)
+            failed.append(
+                {
+                    "camera_id": source.camera_id,
+                    "error": str(found) or type(found).__name__,
+                }
+            )
+            quiet.append(source)
+            continue
+        day, _timing = found
+        if day.events_error is not None:
+            failed.append({"camera_id": source.camera_id, "error": day.events_error})
+        if day.events:
+            latest.append(_camera_event(source, day, since, opened))
+        else:
+            quiet.append(source)
+    older = await asyncio.gather(
+        *(timeline.async_newest_cached(s, todays[s.key]) for s in quiet),
+        return_exceptions=True,
+    )
+    for source, kept in zip(quiet, older, strict=True):
+        if isinstance(kept, BaseException):
+            _LOGGER.debug("Kept days of %s: %s", source.name, kept)
+        elif kept is not None:
+            latest.append(_camera_event(source, kept, since, opened))
+    latest.sort(key=lambda e: e.start, reverse=True)
+    return {
+        "events": [e.public() for e in latest],
+        "cameras": len(sources),
+        "failed": failed,
+        "since": since,
+        "now": now,
+    }
+
+
+def _camera_event(
+    source: devices.PlaybackSource, day: Day, since: int, opened: set[str]
+) -> CameraEvent:
+    """Return a day's newest event of a camera, as the browser gets it."""
+    event = max(day.events, key=lambda e: e.start)
+    return CameraEvent(
+        camera_id=source.camera_id,
+        start=event.start,
+        end=event.end,
+        types=event.types,
+        segment=str(event.segment) if event.segment is not None else None,
+        new=event.start > since
+        and event_key(source.camera_id, event.start) not in opened,
+    )
 
 
 async def async_days(

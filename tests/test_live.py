@@ -768,6 +768,10 @@ async def test_hd_in_a_tile_over_webrtc_gives_its_slot_back(
     client = await hass_ws_client(hass)
     msg = await _ws(client, {"type": "reolink_viewer/live/cameras"})
     connection = msg["result"]["cameras"][0]["connections"][0]
+    # Phase 9 step 4: its detection sensors, with the event type of each.
+    detection = msg["result"]["cameras"][0]["detection"]
+    assert all(e.startswith("binary_sensor.") for e in detection)
+    assert {"MOTION", "PERSON"} <= set(detection.values())
     # Its host, by a key that reveals no identifier, and its HD tiles (an NVR's two).
     assert connection["via"] == "nvr"
     assert connection["hd_tiles"] == 2

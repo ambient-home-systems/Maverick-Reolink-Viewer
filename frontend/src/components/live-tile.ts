@@ -1,6 +1,6 @@
 import { LitElement, css, html, nothing, type PropertyValues, type TemplateResult } from "lit";
 
-import { icon } from "../icons";
+import { icon, type IconName } from "../icons";
 import type { LiveRef } from "../api";
 import type { DebugPlayer, TileDebug } from "../live/debug";
 import { offlineSince } from "../live/data";
@@ -106,6 +106,7 @@ export class RvLiveTile extends LitElement {
     suspended: { attribute: false },
     controls: { attribute: false },
     tileHd: { attribute: false },
+    detecting: { attribute: false },
     _state: { state: true },
     _onScreen: { state: true },
     _pageVisible: { state: true },
@@ -149,6 +150,8 @@ export class RvLiveTile extends LitElement {
   declare controls: LiveControls | undefined;
   /** A Wall tile: whether it plays HD in place, and why (its debug view says). */
   declare tileHd: TileHd | undefined;
+  /** A Wall tile whose camera detects something now (its sensors, Phase 9 step 4): what, said over it. */
+  declare detecting: { label: string; icon: IconName } | undefined;
   declare _state: PlayerState;
   declare _onScreen: boolean;
   declare _pageVisible: boolean;
@@ -433,6 +436,7 @@ export class RvLiveTile extends LitElement {
       this._tileLink = { hd: choice.hd, why: choice.chosen ? `${choice.hd ? "HD" : "SD"}, as chosen on this device` : link.why };
     }
     this.toggleAttribute("full", this._full);
+    this.toggleAttribute("detecting", this.detecting !== undefined);
   }
 
   protected override updated(): void {
@@ -651,6 +655,9 @@ export class RvLiveTile extends LitElement {
           ? html`<span class="num" aria-hidden="true">${this.number}</span>`
           : nothing}
         <div class="label">
+          ${this.detecting
+            ? html`<span class="detecting">${icon(this.detecting.icon)}${this.detecting.label}</span>`
+            : nothing}
           ${this.hideName ? nothing : html`<span class="name">${name}</span>`}
           ${this._wanted
             ? nothing
@@ -1040,6 +1047,32 @@ export class RvLiveTile extends LitElement {
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+      }
+      /* A detection now (a Wall tile, Phase 9 step 4): red, as now is. */
+      :host([detecting]:not([full])) .tile::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border: 3px solid var(--rv-on-board-red);
+        pointer-events: none;
+        z-index: 2;
+      }
+      .detecting {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        align-self: flex-start;
+        margin-bottom: 4px;
+        padding: 0 6px;
+        background: var(--rv-on-board-red);
+        color: #111418;
+        font-size: 14px;
+        font-weight: 600;
+        line-height: 22px;
+      }
+      .detecting svg {
+        width: 16px;
+        height: 16px;
       }
       .hint {
         font-size: 13px;

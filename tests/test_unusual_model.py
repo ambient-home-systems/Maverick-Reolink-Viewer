@@ -9,11 +9,13 @@ from collections.abc import AsyncGenerator, Iterable
 import datetime as dt
 from pathlib import Path
 import sqlite3
+import sys
 import threading
 import time
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
+from freezegun.api import FrozenDateTimeFactory
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from pytest_homeassistant_custom_component.typing import WebSocketGenerator
@@ -374,9 +376,20 @@ def test_one_kind_on_several_cameras_within_a_minute_is_one_incident() -> None:
 
 
 async def test_a_busy_property_is_kept_to_its_daily_marks(
-    hass: HomeAssistant, path: Path
+    hass: HomeAssistant,
+    path: Path,
+    freezer: FrozenDateTimeFactory,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Many odd events a day: about the sensitivity's number are marked, no more."""
+    # On a day it was written for: the history is laid out from today, and on
+    # some days of the week the seven small-hours persons all score the same,
+    # so the cap (marks only above it) leaves none (2026-11-09: 0 marks; it
+    # passed from the 3rd to the 8th only).
+    freezer.move_to("2026-11-04T12:00:00Z")
+    monkeypatch.setattr(
+        sys.modules[__name__], "_NOW", float(int(time.time() // _DAY) * _DAY)
+    )
     rows = _busy(days=60, hours=(7, 8, 9, 12, 17, 18, 19, 20))
     # A person in the small hours, every night of the last 7 (fewer than 10: seen
     # 10 times, it would be known there, and nothing to mark).

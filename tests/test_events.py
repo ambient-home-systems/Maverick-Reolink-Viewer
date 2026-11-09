@@ -246,3 +246,69 @@ async def test_a_camera_whose_recordings_cannot_be_played(
             )
         assert msg["result"]["cameras"] == 0
         assert msg["result"]["events"] == []
+
+
+async def test_each_cameras_latest_event(
+    hass: HomeAssistant,
+    hass_ws_client: WebSocketGenerator,
+    reolink_host: MagicMock,
+    loaded_with_entities: MockConfigEntry,
+    viewer_entry: MockConfigEntry,
+    today: None,
+) -> None:
+    """The Wall's strip: today's newest event, else the newest of a day kept here."""
+    client = await hass_ws_client(hass)
+    camera = (await _ws(client, {"type": "reolink_viewer/devices"}))["result"][
+        "cameras"
+    ][0]["id"]
+    search_type = reolink_host.baichuan.search_vod_type
+    vod_files = reolink_host.request_vod_files
+    # Yesterday read once (the Events view), so it is kept here; the user's
+    # first look is before it, so it is new.
+    morning = datetime(2026, 10, 16, 9)
+    reolink_host.request_vod_files = AsyncMock(
+        return_value=([], [make_vod_file(morning)])
+    )
+    reolink_host.baichuan.search_vod_type = AsyncMock(
+        return_value=({}, {VOD_trigger.PERSON: [make_vod_file(morning)]})
+    )
+    with patch.object(events, "now_ms", return_value=0):
+        msg = await _ws(
+            client, {"type": "reolink_viewer/events/recent", "date": "2026-10-16"}
+        )
+    [yesterday] = msg["result"]["events"]
+    # Today cannot be searched: named, and yesterday's newest shows instead,
+    # with no search of past days.
+    reolink_host.baichuan.search_vod_type = AsyncMock(side_effect=TimeoutError)
+    reolink_host.request_vod_files = AsyncMock(side_effect=TimeoutError)
+    with patch.object(events, "now_ms", return_value=0):
+        msg = await _ws(client, {"type": "reolink_viewer/events/latest"})
+    result = msg["result"]
+    assert result["cameras"] == 1
+    assert len(result["failed"]) == 1
+    [latest] = result["events"]
+    assert (latest["camera_id"], latest["start"]) == (camera, yesterday["start"])
+    assert "PERSON" in latest["types"]
+    assert latest["new"] is True
+    assert reolink_host.request_vod_files.await_count == 1  # today's only
+
+    # Today answers again: its newest event.
+    reolink_host.baichuan.search_vod_type = search_type
+    reolink_host.request_vod_files = vod_files
+    msg = await _ws(
+        client, {"type": "reolink_viewer/events/latest", "background": True}
+    )
+    [latest] = msg["result"]["events"]
+    assert latest["start"] > yesterday["start"]
+    assert msg["result"]["failed"] == []
+
+    with patch.object(
+        bridge,
+        "async_check_compat",
+        return_value=bridge.CompatReport(ok=False, errors=("x",)),
+    ):
+        msg = await _ws(client, {"type": "reolink_viewer/events/latest"})
+    assert msg["error"]["code"] == "incompatible"
+    await hass.config_entries.async_unload(viewer_entry.entry_id)
+    msg = await _ws(client, {"type": "reolink_viewer/events/latest"})
+    assert msg["error"]["code"] == "not_loaded"

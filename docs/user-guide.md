@@ -100,6 +100,10 @@ time, **Full screen** and **Board** (back to the board).
   **1 + 7**). A camera's picture is never cropped at its sides.
 - **Layout ⌄** names a layout and picks its grid; the screen shows it as you choose.
   **Save** keeps it; **Save as new** keeps a copy; **Delete** removes it.
+- **Show**, in **Layout ⌄**: untick **Floodlight buttons** or **Siren buttons** to
+  leave those buttons off every feed of the layout (a wall tablet nobody should set
+  the siren off from), and **Latest detections** to leave out the strip. The camera's
+  other controls stay. **All cameras** shows them all.
 - **Layouts are yours:** saved on this Home Assistant for your user, so the wall
   tablet signed in as you shows the ones made on your desktop.
 - **Each device remembers** whether it shows the board or the Wall, and which layout:
@@ -140,6 +144,20 @@ HD in large tiles:
   recording): the tile goes back to SD for a minute, then tries again.
 - **Away from home**, the tiles stay in SD, as full screen does, unless you chose HD
   on this device.
+
+The latest detections:
+
+- **A tile lights up** with a red frame and what its camera sees (**Person**,
+  **Vehicle**…) the moment one of its detection sensors turns on in Home Assistant,
+  until it turns off.
+- **The strip along the bottom** holds each camera's newest detection, newest first:
+  a picture from the recording, what and when, the camera, **New** in red until you
+  open it, and **Unusual** when it stood out (see
+  [Learning what is normal](#learning-what-is-normal)). Today's, or the newest the
+  camera saw on an earlier day. Tap one to open its recording.
+- **A detection going on** comes first as **Now**, with the camera's latest picture;
+  tap it to see the camera large. Once it ends, the strip asks the camera again, and
+  its recording takes the card's place.
 
 ### A camera full screen
 

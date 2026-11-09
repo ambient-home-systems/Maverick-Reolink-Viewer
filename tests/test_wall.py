@@ -36,13 +36,21 @@ def test_a_layout_is_checked_and_its_name_is_its_address() -> None:
         "grid": "1+5",
         "cameras": ["a", None],
         "tour_s": None,
+        # Step 4: the feeds' floodlight and siren buttons and the strip, shown
+        # unless said (a layout kept before reads as it did).
+        "floodlight": True,
+        "siren": True,
+        "strip": True,
     }
+    quiet = layout_of({"name": "Kiosk", "floodlight": False, "siren": False})
+    assert (quiet["floodlight"], quiet["siren"], quiet["strip"]) == (False, False, True)
     for bad, said in (
         ({"name": ""}, "needs a name"),
         ({"name": "x" * 61}, "at most 60"),
         ({"name": "x", "grid": "5x5"}, "Unknown grid"),
         ({"name": "x", "tour_s": 2}, "5 to 3600"),
         ({"name": "x", "cameras": ["c"] * 65}, "At most 64"),
+        ({"name": "x", "siren": "off"}, "siren is shown or not"),
     ):
         with pytest.raises(LayoutError, match=said):
             layout_of(bad)
@@ -114,12 +122,14 @@ async def test_layouts_are_saved_listed_and_deleted_per_user(
             "grid": "1+7",
             "cameras": ["cam-a", None, "cam-b"],
             "tour_s": 20,
+            "siren": False,
         }
     )
     reply = await owner.receive_json()
     assert reply["success"], reply
     saved = reply["result"]["layout"]
     assert saved["id"] == "night-watch"
+    assert (saved["floodlight"], saved["siren"], saved["strip"]) == (True, False, True)
     await owner.send_json_auto_id(
         {
             "type": "reolink_viewer/wall/layouts/save",
@@ -138,6 +148,9 @@ async def test_layouts_are_saved_listed_and_deleted_per_user(
         "grid": "1+7",
         "cameras": [],
         "tour_s": None,
+        "floodlight": True,
+        "siren": True,
+        "strip": True,
     }
 
     other = await hass_ws_client(hass, hass_read_only_access_token)
