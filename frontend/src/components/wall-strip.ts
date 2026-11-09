@@ -278,7 +278,7 @@ export class RvWallStrip extends LitElement {
         background: color-mix(in srgb, var(--rv-on-board) 6%, transparent);
         color: var(--rv-on-board);
         text-align: left;
-        cursor: pointer;
+        cursor: var(--rv-pointer, pointer);
       }
       .card:hover {
         background: color-mix(in srgb, var(--rv-on-board) 12%, transparent);

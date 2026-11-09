@@ -610,7 +610,7 @@ var x = e`
     border: 1px solid var(--rv-rule-strong);
     background: transparent;
     color: var(--rv-text);
-    cursor: pointer;
+    cursor: var(--rv-pointer, pointer);
   }
   button:hover:not(:disabled) {
     background: var(--rv-ground-2);
@@ -734,7 +734,7 @@ var x = e`
     font-size: 13px;
   }
   .problem summary {
-    cursor: pointer;
+    cursor: var(--rv-pointer, pointer);
     font-weight: 500;
   }
   .problem .technical {
@@ -842,7 +842,7 @@ var x = e`
     align-items: center;
     gap: 6px;
     min-height: 32px;
-    cursor: pointer;
+    cursor: var(--rv-pointer, pointer);
     list-style: none;
     font-weight: 500;
   }
@@ -3026,7 +3026,7 @@ var dn = 3e3, fn = 6e4, pn = "rv-live-open", mn = "rv-live-full", hn = "rv-live-
         color: #f4f4f1;
       }
       .tile.interactive {
-        cursor: pointer;
+        cursor: var(--rv-pointer, pointer);
       }
       /* Over the picture, under what the tile says: the tile as a button. */
       .open {
@@ -3039,7 +3039,7 @@ var dn = 3e3, fn = 6e4, pn = "rv-live-open", mn = "rv-live-full", hn = "rv-live-
         border: none;
         border-radius: 0;
         background: transparent;
-        cursor: pointer;
+        cursor: var(--rv-pointer, pointer);
       }
       .open:hover:not(:disabled) {
         background: transparent;

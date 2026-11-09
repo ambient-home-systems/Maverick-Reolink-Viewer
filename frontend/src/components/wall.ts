@@ -9,6 +9,7 @@ import type { HomeAssistant, LiveCamera, LiveControls, WallGrid, WallLayout } fr
 import { ARROWS, neighbour, pageCount, swapCells, wallOrder } from "../wall/arrange";
 import { WALL_GAP, WALL_GRIDS, slotSize, wallFit, wallPlan, type WallPlan } from "../wall/geometry";
 import { tilesInHd, type WallCell } from "../wall/hd";
+import { tablet } from "../card/tablet";
 import { rememberLayout, rememberMode, rememberedLayout } from "../wall/remember";
 import { boardOrder, tileShape } from "./live-grid";
 import "./live-tile";
@@ -36,6 +37,9 @@ function pictureRatio(camera: LiveCamera): number | undefined {
   return encoding?.width && encoding.height ? encoding.width / encoding.height : undefined;
 }
 
+/** Still this long, the pointer hides over the Wall (step 5's kiosk). */
+export const IDLE_CURSOR_MS = 3000;
+
 /**
  * The Wall (Phase 9 step 1): the cameras' feeds only, large, fitted to the
  * screen like an NVR's monitor, in a saved layout (per Home Assistant user,
@@ -54,11 +58,22 @@ function pictureRatio(camera: LiveCamera): number | undefined {
  * once), and a strip along the bottom holds each camera's newest detection,
  * asked again when one ends. A layout may leave out the feeds' floodlight
  * and siren buttons (the owner's ask) and the strip.
+ *
+ * As a kiosk (step 5): the pointer hides after IDLE_CURSOR_MS still; the
+ * screen is kept awake while the Wall shows (the browser's wake lock, where it
+ * has one; under Fully Kiosk, Fully's own settings do it); and under Fully
+ * with its JavaScript interface, the tiles sleep while its screen is off or
+ * its screensaver on, as the dashboard cards do. As a dashboard card
+ * (`card`, custom:reolink-viewer-wall): the layout it is given, nothing
+ * remembered on the device, and a short bar or none.
  */
 export class RvWall extends LitElement {
   static override properties = {
     hass: { attribute: false },
     layoutId: { attribute: false },
+    card: { type: Boolean, reflect: true },
+    showBar: { attribute: false },
+    _asleep: { state: true },
     _layouts: { state: true },
     _editing: { state: true },
     _draft: { state: true },
@@ -78,8 +93,14 @@ export class RvWall extends LitElement {
   };
 
   declare hass: HomeAssistant | undefined;
-  /** The saved layout asked for (#wall/<id>); none: the one this device showed last. */
+  /** The saved layout asked for (#wall/<id>); none: the one this device showed last (a card: every camera). */
   declare layoutId: string | undefined;
+  /** A dashboard card: the layout it is given, nothing remembered, a short bar (or none), no editing. */
+  declare card: boolean;
+  /** A card's bar: the layout's name, pages, the time and full screen. */
+  declare showBar: boolean;
+  /** Fully Kiosk's screen is off or its screensaver on: the tiles sleep. */
+  declare _asleep: boolean;
   declare _layouts: WallLayout[] | undefined;
   declare _editing: boolean;
   declare _draft: { name: string; grid: WallGrid; tour_s: number | null } & Shown;
@@ -118,6 +139,10 @@ export class RvWall extends LitElement {
   private _dragged: number | undefined;
   /** The cameras whose sensors detected something at the last look. */
   private _wasDetecting = new Set<string>();
+  private _idleTimer: ReturnType<typeof setTimeout> | undefined;
+  private _wake: WakeLockSentinel | undefined;
+  private _waking = false;
+  private _unsleep: (() => void) | undefined;
 
   constructor() {
     super();
@@ -130,22 +155,82 @@ export class RvWall extends LitElement {
     this._size = { width: 0, height: 0 };
     this._wallFull = false;
     this._now = Date.now();
+    this.card = false;
+    this.showBar = true;
+    this._asleep = false;
   }
 
   override connectedCallback(): void {
     super.connectedCallback();
-    rememberMode("wall");
+    if (!this.card) rememberMode("wall");
     document.addEventListener("fullscreenchange", this._onFullscreen);
+    document.addEventListener("visibilitychange", this._onVisibility);
+    this.addEventListener("pointermove", this._onPointer);
+    this.addEventListener("pointerdown", this._onPointer);
+    this._onPointer();
+    void this._keepAwake();
+    // Under Fully Kiosk: asleep while its screen is off or its screensaver on.
+    tablet.listenToFully();
+    this._asleep = tablet.asleep;
+    this._unsleep = tablet.onSleep(() => {
+      this._asleep = tablet.asleep;
+    });
     this._tick();
   }
 
   override disconnectedCallback(): void {
     super.disconnectedCallback();
     document.removeEventListener("fullscreenchange", this._onFullscreen);
+    document.removeEventListener("visibilitychange", this._onVisibility);
+    this.removeEventListener("pointermove", this._onPointer);
+    this.removeEventListener("pointerdown", this._onPointer);
+    clearTimeout(this._idleTimer);
+    this.removeAttribute("idle");
+    void this._wake?.release().catch(() => undefined);
+    this._wake = undefined;
+    this._unsleep?.();
+    this._unsleep = undefined;
     this._resize?.disconnect();
     this._resize = undefined;
     clearTimeout(this._clock);
     this._stopTour();
+  }
+
+  /** The pointer moved: shown, and hidden again after IDLE_CURSOR_MS still. */
+  private readonly _onPointer = (): void => {
+    this.removeAttribute("idle");
+    clearTimeout(this._idleTimer);
+    this._idleTimer = setTimeout(() => {
+      this.setAttribute("idle", "");
+    }, IDLE_CURSOR_MS);
+  };
+
+  /** The page shown again: the browser let the wake lock go when it was hidden. */
+  private readonly _onVisibility = (): void => {
+    if (document.visibilityState === "visible") void this._keepAwake();
+  };
+
+  /** Keep the screen awake while the Wall shows, where the browser can; under Fully, Fully's settings do. */
+  private async _keepAwake(): Promise<void> {
+    // Where the browser has one: not Android's WebView, nor a page over plain http.
+    const lock = (navigator as Partial<Navigator>).wakeLock;
+    if (!lock || tablet.fully || this._wake || this._waking || document.visibilityState !== "visible") return;
+    this._waking = true;
+    try {
+      const sentinel = await lock.request("screen");
+      if (!this.isConnected) {
+        await sentinel.release();
+        return;
+      }
+      this._wake = sentinel;
+      sentinel.addEventListener("release", () => {
+        if (this._wake === sentinel) this._wake = undefined;
+      });
+    } catch {
+      // Refused (a battery saver, the page not in front): the screen sleeps as set.
+    } finally {
+      this._waking = false;
+    }
   }
 
   private readonly _onFullscreen = (): void => {
@@ -178,6 +263,7 @@ export class RvWall extends LitElement {
     }
     // Another layout: its own order, from its first page.
     const shown = this._layout.id;
+    if (changed.has("card") && this.card) this._editing = false;
     if (shown !== this._arranged) {
       this._arranged = shown;
       this._order = undefined;
@@ -201,7 +287,7 @@ export class RvWall extends LitElement {
       this._resize.observe(cells);
     }
     const layout = this._layout;
-    if (this._layouts !== undefined) rememberLayout(layout.id || undefined);
+    if (this._layouts !== undefined && !this.card) rememberLayout(layout.id || undefined);
     this._syncTour();
     if (this._refocus) {
       this._refocus = false;
@@ -221,7 +307,7 @@ export class RvWall extends LitElement {
   /** The layout shown: the one asked for, else the one this device showed last, else every camera. */
   private get _layout(): WallLayout {
     const layouts = this._layouts ?? [];
-    const id = this.layoutId ?? rememberedLayout();
+    const id = this.layoutId ?? (this.card ? undefined : rememberedLayout());
     return layouts.find((l) => l.id === id) ?? ALL_CAMERAS;
   }
 
@@ -501,6 +587,33 @@ export class RvWall extends LitElement {
     const canFull = document.fullscreenEnabled && typeof this.requestFullscreen === "function";
     const detecting = this._detecting();
     const numbers = new Map(boardOrder([...(cameras ?? [])]).map((c, i) => [c.id, i + 1]));
+    return html`${this.card ? this._renderCardBar(layout, view, missing, canFull) : this._renderBar(layout, view, missing, canFull)}
+      ${this._editing ? this._renderEditor(layout) : this._error ? html`<p class="error" role="alert">${this._error}</p>` : nothing}
+      ${cameras === undefined
+        ? html`<p class="note pad">${this._data.error ? `Live view could not load: ${this._data.error}` : "Loading…"}</p>`
+        : this._renderCells(view.plan, view.shown, width, height, detecting, numbers)}
+      ${cameras && this._shown.strip
+        ? html`<rv-wall-strip
+            .hass=${this.hass}
+            .cameras=${boardOrder([...cameras])}
+            .numbers=${numbers}
+            .now=${detecting}
+            .pictures=${this._data.images}
+            @rv-strip-live=${(e: CustomEvent<{ cameraId: string }>) => {
+              this._showLarge(e.detail.cameraId);
+            }}
+          ></rv-wall-strip>`
+        : nothing}
+      <p class="said" role="status" aria-live="polite">${this._said}</p>`;
+  }
+
+  /** The panel's bar: the layout to show, pages, Arrange, the editor, full screen, the way back to the board. */
+  private _renderBar(
+    layout: WallLayout,
+    view: { pages: number; page: number },
+    missing: boolean,
+    canFull: boolean,
+  ): TemplateResult {
     return html`<div class="bar">
         <select
           aria-label="Layout"
@@ -514,29 +627,7 @@ export class RvWall extends LitElement {
             (l) => html`<option value=${l.id} ?selected=${l.id === layout.id}>${l.name}</option>`,
           )}
         </select>
-        ${view.pages > 1
-          ? html`<span class="pages" role="group" aria-label="Pages">
-              <button
-                class="text icon-only"
-                aria-label="Previous page"
-                @click=${() => {
-                  this._goPage(view.page - 1);
-                }}
-              >
-                ${icon("chevronBack")}
-              </button>
-              <span>${view.page + 1} / ${view.pages}</span>
-              <button
-                class="text icon-only"
-                aria-label="Next page"
-                @click=${() => {
-                  this._goPage(view.page + 1);
-                }}
-              >
-                ${icon("chevron")}
-              </button>
-            </span>`
-          : nothing}
+        ${view.pages > 1 ? this._renderPages(view) : nothing}
         ${this._alone
           ? html`<button
               class="text with-icon"
@@ -571,16 +662,7 @@ export class RvWall extends LitElement {
         >
           Layout${icon("chevronDown")}
         </button>
-        ${canFull
-          ? html`<button
-              class="text with-icon"
-              @click=${() => {
-                this._toggleFull();
-              }}
-            >
-              ${icon(this._wallFull ? "exitFull" : "enterFull")}${this._wallFull ? "Exit full screen" : "Full screen"}
-            </button>`
-          : nothing}
+        ${canFull ? this._renderFullButton() : nothing}
         <button
           class="text with-icon"
           @click=${() => {
@@ -590,24 +672,59 @@ export class RvWall extends LitElement {
         >
           ${icon("close")}Board
         </button>
-      </div>
-      ${this._editing ? this._renderEditor(layout) : this._error ? html`<p class="error" role="alert">${this._error}</p>` : nothing}
-      ${cameras === undefined
-        ? html`<p class="note pad">${this._data.error ? `Live view could not load: ${this._data.error}` : "Loading…"}</p>`
-        : this._renderCells(view.plan, view.shown, width, height, detecting, numbers)}
-      ${cameras && this._shown.strip
-        ? html`<rv-wall-strip
-            .hass=${this.hass}
-            .cameras=${boardOrder([...cameras])}
-            .numbers=${numbers}
-            .now=${detecting}
-            .pictures=${this._data.images}
-            @rv-strip-live=${(e: CustomEvent<{ cameraId: string }>) => {
-              this._showLarge(e.detail.cameraId);
-            }}
-          ></rv-wall-strip>`
-        : nothing}
-      <p class="said" role="status" aria-live="polite">${this._said}</p>`;
+      </div>`;
+  }
+
+  private _renderPages(view: { pages: number; page: number }): TemplateResult {
+    return html`<span class="pages" role="group" aria-label="Pages">
+      <button
+        class="text icon-only"
+        aria-label="Previous page"
+        @click=${() => {
+          this._goPage(view.page - 1);
+        }}
+      >
+        ${icon("chevronBack")}
+      </button>
+      <span>${view.page + 1} / ${view.pages}</span>
+      <button
+        class="text icon-only"
+        aria-label="Next page"
+        @click=${() => {
+          this._goPage(view.page + 1);
+        }}
+      >
+        ${icon("chevron")}
+      </button>
+    </span>`;
+  }
+
+  private _renderFullButton(): TemplateResult {
+    return html`<button
+      class="text with-icon"
+      @click=${() => {
+        this._toggleFull();
+      }}
+    >
+      ${icon(this._wallFull ? "exitFull" : "enterFull")}${this._wallFull ? "Exit full screen" : "Full screen"}
+    </button>`;
+  }
+
+  /** A dashboard card's bar (or none): its layout's name, pages, the time and full screen. */
+  private _renderCardBar(
+    layout: WallLayout,
+    view: { pages: number; page: number },
+    missing: boolean,
+    canFull: boolean,
+  ): TemplateResult | typeof nothing {
+    if (!this.showBar) return nothing;
+    return html`<div class="bar">
+      <span class="name">${layout.name}</span>
+      ${view.pages > 1 ? this._renderPages(view) : nothing}
+      ${missing ? html`<span class="note">No layout “${this.layoutId ?? ""}” of yours: every camera instead</span>` : nothing}
+      <time class="clock" aria-label="Time">${formatClock(this._now, this.hass?.config?.time_zone)}</time>
+      ${canFull ? this._renderFullButton() : nothing}
+    </div>`;
   }
 
   private _renderCells(
@@ -701,7 +818,7 @@ export class RvWall extends LitElement {
                 .image=${this._data.images[camera.id]}
                 .iceServers=${this._data.iceServers}
                 .warm=${isWarm(this.hass, camera)}
-                .suspended=${this._full !== undefined && this._full !== camera.id}
+                .suspended=${(this._full !== undefined && this._full !== camera.id) || this._asleep}
                 .controls=${this._controls(camera)}
                 .detecting=${now ? { label: eventLabel(now.types), icon: pictogram(now.types) } : undefined}
               ></rv-live-tile>`
@@ -840,6 +957,19 @@ export class RvWall extends LitElement {
         color: var(--rv-on-board);
         background: var(--rv-board);
       }
+      /* A dashboard card: as tall as the dashboard makes it. */
+      :host([card]) {
+        height: 100%;
+      }
+      /* Still for IDLE_CURSOR_MS: no pointer over the feeds (step 5's kiosk). */
+      :host([idle]) {
+        cursor: none;
+        --rv-pointer: none;
+      }
+      .bar .name {
+        font-size: 15px;
+        font-weight: 500;
+      }
       .bar {
         flex: none;
         display: flex;
@@ -930,7 +1060,7 @@ export class RvWall extends LitElement {
         border: 2px dashed color-mix(in srgb, var(--rv-on-board) 50%, transparent);
         border-radius: 0;
         background: color-mix(in srgb, var(--rv-board) 25%, transparent);
-        cursor: pointer;
+        cursor: var(--rv-pointer, pointer);
       }
       .pick[aria-pressed="true"] {
         border: 4px solid var(--rv-on-board);
@@ -1021,7 +1151,7 @@ export class RvWall extends LitElement {
         padding: 4px 6px;
         border: 1px solid color-mix(in srgb, var(--rv-on-board) 30%, transparent);
         font-size: 13px;
-        cursor: pointer;
+        cursor: var(--rv-pointer, pointer);
       }
       .grid-choice:has(input:checked) {
         border-color: var(--rv-on-board);

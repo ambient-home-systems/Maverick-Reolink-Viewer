@@ -6535,7 +6535,7 @@ large, arranged by the owner (PLAN.md §6.3). The owner named it "Wall" on
 | 2. Arranging, pages and tours | Built (v0.53.0); the owner's check passed (2026-11-05) |
 | 3. HD in large tiles | Built (v0.54.0); the capacity test run (2026-11-06): 9 streams, 2 HD tiles per NVR (v0.54.1); the owner's check passed (2026-11-09) |
 | 4. The detection strip and instant highlights | Built (v0.55.0), with the owner's ask: a layout may leave out the feeds' floodlight and siren buttons |
-| 5. Kiosk touches, and the Wall as a dashboard card | Not started; the card after Phase 7 |
+| 5. Kiosk touches, and the Wall as a dashboard card | Built (v0.56.0) |
 
 #### Step 9.1: the Wall, its layouts, saved
 
@@ -6835,6 +6835,51 @@ feeds lose those buttons (on the tablet too after a reload), the PTZ pad stays.
 - **The Wall as a dashboard card:** `custom:reolink-viewer-wall` shows a saved
   layout. It is built on Phase 7's card.
 
+**As built (v0.56.0), the owner's go-ahead ("Proceed with step 5"):**
+
+- **The pointer** hides after `IDLE_CURSOR_MS` (3 s) without moving, over the
+  Wall and everything on it (the Wall sets `--rv-pointer: none`, which every
+  `cursor: pointer` reads, through the tiles' shadow roots), and shows again on
+  the next move.
+- **Keep the screen awake:** the browser's Screen Wake Lock while the Wall
+  shows, taken again when the page is shown again (the browser lets it go when
+  hidden) and let go when the Wall goes. Where the browser has none (Android's
+  WebView, a page over plain http) nothing; under Fully Kiosk, Fully's own
+  settings, as Phase 7 decided.
+- **Under Fully Kiosk** (its JavaScript interface on): the Wall's tiles sleep
+  while Fully's screen is off or its screensaver on, as the cards do
+  (`tablet.listenToFully`: Fully's events without the cards' log).
+- **The clock in the bar** was built in step 1.
+- **`custom:reolink-viewer-wall`** ("Reolink Wall" in the card picker), in the
+  cards' module beside the camera card (9.1 KB on every page, was 8.2; budget
+  12): a saved layout's id (`layout`; none: All cameras) and `show_bar`. Its
+  body (`card/wall-card.ts`, fetched when a Wall card is first shown: 65.4 KB
+  with the home view's files it shares, `npm run budget` holds it under 100
+  KB) is the panel's Wall in card mode (`card`): the layout it is given and no
+  memory on the device, a short bar (the layout's name, pages, the clock, full
+  screen) or none, no arranging or editing (done in the panel); what a tap
+  opens (a detection's recording) opens in the panel (`card/panel.ts`, shared
+  with the camera card). 16:9 in a masonry view, the dashboard's width and
+  eight rows in a sections view. Its editor (`card/wall-editor.ts`): the
+  user's layouts, and the bar; a layout id not the user's is kept and said.
+- **Checks:** the card's settings (defaults, kept, refused in plain words), the
+  card picker, its size; card mode (the layout's tiles, the short bar, nothing
+  remembered, every camera without a layout, one not the user's said, no bar),
+  a tap opening the panel; the editor (layouts, the bar, a layout not the
+  user's, YAML only); the pointer hidden after 3 s and shown on a move; the
+  wake lock taken and let go, not under Fully; the tiles asleep while Fully's
+  screen is off; the dashboard in the design preview, with a Wall card and its
+  editor, under axe and the keyboard.
+
+**Hardware checklist (the owner, v0.56.0):** on the desktop, the Wall: the
+pointer goes after 3 s still (over the feeds too) and comes back on a move;
+with the page open over https (Nabu Casa), the screen does not sleep while the
+Wall shows. On the wall tablet, `#wall/<id>` as Fully's start page: with Fully's
+JavaScript interface on, the video stops under the 11 pm clock and starts
+again in the morning (Devices → Dashboard cards shows Fully's screen events).
+A dashboard: Reolink Wall in the card picker, a layout chosen, the card shows
+it; a tap on a detection opens its recording in the panel.
+
 **Exit criteria (the owner's desktop and the wall tablet):**
 
 - A 3×3 of every camera fits the screen with no scroll.
@@ -6845,6 +6890,15 @@ feeds lose those buttons (on the tablet too after a reload), the PTZ pad stays.
 - A one-hour tour over warm cameras never shows an empty tile.
 - The strip shows a new detection within 2 s of its sensor.
 - Everything works from the keyboard, and axe passes.
+
+**Where they stand (v0.56.0):** a screen of every camera with nothing to
+scroll (the owner, 2026-11-05); layouts and swaps across a reload and a second
+device, and the hour's tour (the owner's v0.53.0 check, "approved and
+validated"); the budget (the capacity test of 2026-11-06: 10 streams kept up,
+the budget 9 with two HD tiles) and the first pictures (that day's live check:
+0.02 s median); the keyboard and axe (CI, every view). The strip's 2 s is met
+by design (a Now card from the sensor, at once) and waits for the owner's
+v0.55.0 check, with step 5's checklist above; then Phase 9 closes.
 
 ---
 

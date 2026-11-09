@@ -75,7 +75,11 @@ class FakeHaCard extends HTMLElement {
   }
 }
 
-/** A dashboard's two columns: the Doorbell and the front yard, a card with no camera, and the editor. */
+/**
+ * A dashboard's two columns: the Doorbell and the front yard, a card with no
+ * camera, and the editor; under them, a Wall card of the "front" layout
+ * (Phase 9 step 5) and its editor.
+ */
 function dashboard(): void {
   customElements.define("ha-card", FakeHaCard);
   const page = document.createElement("main");
@@ -119,6 +123,26 @@ function dashboard(): void {
     box.append(heading, editor);
   });
   left.append(box);
+  // The Wall as a card, the width of the dashboard, and its settings.
+  const wall = document.createElement("reolink-viewer-wall");
+  wall.setConfig({ type: "custom:reolink-viewer-wall", layout: "front" });
+  wall.hass = hass;
+  wall.style.cssText = "grid-column:1/-1;display:block";
+  page.append(wall);
+  const wallBox = document.createElement("ha-card");
+  wallBox.style.padding = "16px";
+  const wallHeading = document.createElement("h2");
+  wallHeading.textContent = "Wall card settings";
+  wallHeading.style.cssText = "margin:0 0 12px;font-size:16px;font-weight:500";
+  void customElements.whenDefined("reolink-viewer-wall").then(async () => {
+    const editor = await (
+      customElements.get("reolink-viewer-wall") as unknown as { getConfigElement(): Promise<HTMLElement> }
+    ).getConfigElement();
+    (editor as HTMLElement & { setConfig(c: unknown): void }).setConfig({ type: "custom:reolink-viewer-wall", layout: "front" });
+    (editor as HTMLElement & { hass: unknown }).hass = hass;
+    wallBox.append(wallHeading, editor);
+  });
+  page.append(wallBox);
   document.body.append(page);
 }
 

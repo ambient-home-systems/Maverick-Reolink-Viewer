@@ -31,7 +31,7 @@ vi.mock("../live/player", async () => {
   return { ...actual, LivePlayer: FakePlayer };
 });
 
-const { ALL_CAMERAS, wallCameras } = await import("./wall");
+const { ALL_CAMERAS, IDLE_CURSOR_MS, wallCameras } = await import("./wall");
 
 const encoding = { codec: "h264", frame_rate: 15, bit_rate: 512, width: 896, height: 512 };
 const camera = (id: string, name: string, size = encoding): LiveCamera => ({
@@ -507,6 +507,59 @@ describe("the latest detections, and what a layout shows (step 4)", () => {
     await settle(all.el);
     expect(all.tiles()[0]?.controls).toEqual({ siren: "siren.door", floodlight: "light.door", preset: "select.door_preset" });
     expect(strip(all.el)).not.toBeNull();
+  });
+});
+
+describe("the Wall as a kiosk (step 5)", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    Reflect.deleteProperty(window, "fully");
+  });
+
+  it("hides the pointer after a few seconds still, and shows it when it moves", async () => {
+    const { hass } = fakeHass([]);
+    const { el } = await mount(hass);
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    el.dispatchEvent(new PointerEvent("pointermove"));
+    expect(el.hasAttribute("idle")).toBe(false);
+    vi.advanceTimersByTime(IDLE_CURSOR_MS - 10);
+    expect(el.hasAttribute("idle")).toBe(false);
+    vi.advanceTimersByTime(20);
+    expect(el.hasAttribute("idle")).toBe(true);
+    el.dispatchEvent(new PointerEvent("pointermove"));
+    expect(el.hasAttribute("idle")).toBe(false);
+  });
+
+  it("keeps the screen awake while it shows, where the browser can, and lets go after", async () => {
+    const release = vi.fn(() => Promise.resolve());
+    const request = vi.fn(() => Promise.resolve({ release, addEventListener: vi.fn() }));
+    vi.stubGlobal("navigator", Object.assign(Object.create(navigator) as Navigator, { wakeLock: { request } }));
+    const { hass } = fakeHass([]);
+    const { el } = await mount(hass);
+    expect(request).toHaveBeenCalledWith("screen");
+    el.remove();
+    expect(release).toHaveBeenCalled();
+  });
+
+  it("under Fully Kiosk, leaves the screen to Fully, and its tiles sleep while its screen is off", async () => {
+    const request = vi.fn();
+    vi.stubGlobal("navigator", Object.assign(Object.create(navigator) as Navigator, { wakeLock: { request } }));
+    const bind = vi.fn();
+    Object.assign(window, { fully: { bind } });
+    const { hass } = fakeHass([]);
+    const { el, tiles } = await mount(hass);
+    expect(request).not.toHaveBeenCalled();
+    expect(bind).toHaveBeenCalledWith("screenOff", expect.stringContaining("__reolinkViewerFully"));
+    const fully = (event: string) => {
+      window.__reolinkViewerFully?.(event);
+    };
+    fully("screenOff");
+    await el.updateComplete;
+    expect(tiles().every((t) => t.suspended)).toBe(true);
+    fully("screenOn");
+    await el.updateComplete;
+    expect(tiles().some((t) => t.suspended)).toBe(false);
   });
 });
 

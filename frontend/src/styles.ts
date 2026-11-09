@@ -145,7 +145,7 @@ export const sharedStyles = css`
     border: 1px solid var(--rv-rule-strong);
     background: transparent;
     color: var(--rv-text);
-    cursor: pointer;
+    cursor: var(--rv-pointer, pointer);
   }
   button:hover:not(:disabled) {
     background: var(--rv-ground-2);
@@ -269,7 +269,7 @@ export const sharedStyles = css`
     font-size: 13px;
   }
   .problem summary {
-    cursor: pointer;
+    cursor: var(--rv-pointer, pointer);
     font-weight: 500;
   }
   .problem .technical {
@@ -377,7 +377,7 @@ export const sharedStyles = css`
     align-items: center;
     gap: 6px;
     min-height: 32px;
-    cursor: pointer;
+    cursor: var(--rv-pointer, pointer);
     list-style: none;
     font-weight: 500;
   }

@@ -50,6 +50,7 @@ export class TabletLog {
   private _sending = false;
   private _screenOff = false;
   private _screensaver = false;
+  private _fullyBound = false;
   private readonly _sleepers = new Set<() => void>();
   private readonly _watched = new Set<Watched>();
   private readonly _frames = new Map<Watched, number>();
@@ -127,6 +128,14 @@ export class TabletLog {
     };
   }
 
+  /**
+   * Fully Kiosk's screen and screensaver, without the log (the Wall, Phase 9
+   * step 5: its tiles sleep too). Once per page, as start() binds them.
+   */
+  listenToFully(): void {
+    this._bindFully();
+  }
+
   /** Called when the cards should sleep or wake (Fully Kiosk's screen). */
   onSleep(callback: () => void): () => void {
     this._sleepers.add(callback);
@@ -179,7 +188,8 @@ export class TabletLog {
 
   private _bindFully(): void {
     const fully = this.fully;
-    if (!fully?.bind) return;
+    if (!fully?.bind || this._fullyBound) return;
+    this._fullyBound = true;
     this._win.__reolinkViewerFully = (event) => {
       this._fullyEvent(event);
     };
