@@ -199,6 +199,21 @@ export const fetchRecentEvents = (
     ...(options.background ? { background: true } : {}),
   });
 
+/**
+ * Each recording camera's newest event, newest first (the Wall's strip):
+ * today's, else the newest of a day kept on the server. As fetchRecentEvents
+ * for `maxAge` and `background`.
+ */
+export const fetchLatestEvents = (
+  hass: HomeAssistant,
+  options: { maxAge?: number; background?: boolean } = {},
+): Promise<RecentEvents> =>
+  hass.callWS<RecentEvents>({
+    type: "reolink_viewer/events/latest",
+    ...(options.maxAge ? { max_age: options.maxAge } : {}),
+    ...(options.background ? { background: true } : {}),
+  });
+
 /** The days of a month with recordings on any camera. */
 export const fetchEventDays = (
   hass: HomeAssistant,

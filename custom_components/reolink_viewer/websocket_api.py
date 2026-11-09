@@ -73,6 +73,7 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_timeline_day)
     websocket_api.async_register_command(hass, ws_timeline_warm)
     websocket_api.async_register_command(hass, ws_events_recent)
+    websocket_api.async_register_command(hass, ws_events_latest)
     websocket_api.async_register_command(hass, ws_events_days)
     websocket_api.async_register_command(hass, ws_events_seen)
     websocket_api.async_register_command(hass, ws_playback_url)
@@ -548,6 +549,44 @@ async def ws_events_recent(
         data.seen,
         _user_id(connection),
         day=msg.get("date"),
+        max_age=msg["max_age"],
+        priority=Priority.PREFETCH if msg["background"] else Priority.PLAYBACK,
+    )
+    connection.send_result(msg["id"], result)
+
+
+@websocket_api.websocket_command(
+    {
+        probatio.Required("type"): f"{DOMAIN}/events/latest",
+        probatio.Optional("max_age", default=0): probatio.All(
+            int, probatio.Range(min=0, max=86400)
+        ),
+        probatio.Optional("background", default=False): bool,
+    }
+)
+@websocket_api.async_response
+async def ws_events_latest(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Return each recording camera's newest event (the Wall's strip, Phase 9.4)."""
+    if (entry := _loaded_entry(hass)) is None:
+        connection.send_error(msg["id"], ERR_NOT_LOADED, "Reolink Viewer is not loaded")
+        return
+    if not (compat := bridge.async_check_compat(hass)).ok:
+        connection.send_error(
+            msg["id"],
+            ERR_INCOMPATIBLE,
+            "Reolink integration internals changed: " + "; ".join(compat.errors),
+        )
+        return
+    data = entry.runtime_data
+    result = await events.async_latest(
+        hass,
+        data.timeline,
+        data.seen,
+        _user_id(connection),
         max_age=msg["max_age"],
         priority=Priority.PREFETCH if msg["background"] else Priority.PLAYBACK,
     )
@@ -1244,6 +1283,10 @@ def ws_wall_layouts(
         probatio.Required("grid"): probatio.In(GRIDS),
         probatio.Optional("cameras", default=[]): [probatio.Any(str, None)],
         probatio.Optional("tour_s"): probatio.Any(int, None),
+        # Phase 9 step 4: the feeds' floodlight and siren buttons, the strip.
+        probatio.Optional("floodlight"): bool,
+        probatio.Optional("siren"): bool,
+        probatio.Optional("strip"): bool,
     }
 )
 def ws_wall_layout_save(

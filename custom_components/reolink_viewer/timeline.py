@@ -417,6 +417,33 @@ class TimelineService:
             timing["warm"] = warm.describe(iso)
         return result, timing
 
+    async def async_newest_cached(
+        self, source: PlaybackSource, before: date, stream: str = "sub"
+    ) -> Day | None:
+        """Return the newest day before ``before`` kept here with events, or None.
+
+        No search: what the memory and the store hold. What a camera saw last
+        when its today is quiet (the Wall's strip, Phase 9 step 4).
+        """
+        limit = before.isoformat()
+        data = await self._data(source.key)
+        kept = {iso for iso in data[stream] if iso < limit}
+        kept.update(
+            iso
+            for key, kind, iso in self._memory
+            if key == source.key and kind == stream and iso < limit
+        )
+        for iso in sorted(kept, reverse=True):
+            day = self._memory.get((source.key, stream, iso))
+            if day is None:
+                try:
+                    day = Day.from_dict(data[stream][iso])
+                except KeyError, TypeError:
+                    continue
+            if day.events:
+                return day
+        return None
+
     async def _fetch_day(
         self,
         source: PlaybackSource,

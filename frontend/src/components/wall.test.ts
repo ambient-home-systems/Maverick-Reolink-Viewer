@@ -56,7 +56,7 @@ const CAMERAS: LiveCamera[] = [
   camera("garage", "Garage"),
 ];
 
-function fakeHass(layouts: WallLayout[], cameras: LiveCamera[] = CAMERAS) {
+function fakeHass(layouts: WallLayout[], cameras: LiveCamera[] = CAMERAS, answers: Record<string, unknown> = {}) {
   const sent: Record<string, unknown>[] = [];
   const hass = {
     user: { is_admin: false },
@@ -66,6 +66,7 @@ function fakeHass(layouts: WallLayout[], cameras: LiveCamera[] = CAMERAS) {
     callWS: vi.fn((message: Record<string, unknown>) => {
       sent.push(message);
       if (message.type === "reolink_viewer/live/cameras") return Promise.resolve({ cameras });
+      if (typeof message.type === "string" && message.type in answers) return Promise.resolve(answers[message.type]);
       if (message.type === "web_rtc/ice_servers") return Promise.resolve([]);
       if (message.type === "reolink_viewer/wall/layouts") return Promise.resolve({ layouts: [...layouts] });
       if (message.type === "reolink_viewer/wall/layouts/save") {
@@ -75,6 +76,7 @@ function fakeHass(layouts: WallLayout[], cameras: LiveCamera[] = CAMERAS) {
           grid: message.grid as WallLayout["grid"],
           cameras: message.cameras as string[],
           tour_s: null,
+          ...(message.siren === false ? { siren: false } : {}),
         };
         const at = layouts.findIndex((l) => l.id === layout.id);
         if (at >= 0) layouts[at] = layout;
@@ -324,10 +326,27 @@ describe("rv-wall", () => {
     await el.updateComplete;
     // The grid shows the choice at once.
     expect(cells()).toHaveLength(4);
+    // Step 4: the wall tablet's layout leaves out the feeds' siren buttons.
+    const siren = [...(form?.querySelectorAll<HTMLLabelElement>(".shows label") ?? [])].find((l) =>
+      l.textContent.includes("Siren buttons"),
+    );
+    const sirenBox = siren?.querySelector("input");
+    if (!sirenBox) throw new Error("no siren switch");
+    sirenBox.checked = false;
+    sirenBox.dispatchEvent(new Event("change"));
     form?.dispatchEvent(new Event("submit", { cancelable: true }));
     await flush();
     expect(sent.filter((m) => m.type === "reolink_viewer/wall/layouts/save")).toEqual([
-      { type: "reolink_viewer/wall/layouts/save", name: "Porch", grid: "2x2", cameras: [], tour_s: null },
+      {
+        type: "reolink_viewer/wall/layouts/save",
+        name: "Porch",
+        grid: "2x2",
+        cameras: [],
+        tour_s: null,
+        floodlight: true,
+        siren: false,
+        strip: true,
+      },
     ]);
     expect(routes.at(-1)).toEqual({ view: "wall", layout: "porch" });
 
@@ -364,6 +383,130 @@ describe("rv-wall", () => {
     button("Board")?.click();
     expect(routes.at(-1)).toEqual({ view: "live" });
     expect(rememberedMode()).toBe("board");
+  });
+});
+
+describe("the latest detections, and what a layout shows (step 4)", () => {
+  const NOW = Date.parse("2026-11-09T15:00:00Z");
+  const sensored = CAMERAS.map((c) => ({
+    ...c,
+    detection: { [`binary_sensor.${c.id}_person`]: "PERSON", [`binary_sensor.${c.id}_motion`]: "MOTION" },
+    controls: { siren: `siren.${c.id}`, floodlight: `light.${c.id}`, preset: `select.${c.id}_preset` },
+  }));
+  const latest = {
+    events: [
+      { camera_id: "yard", start: NOW - 60_000, end: NOW - 30_000, types: ["MOTION", "PERSON"], segment: "1", new: true },
+      { camera_id: "garage", start: NOW - 7_200_000, end: NOW - 7_180_000, types: ["VEHICLE"], segment: "2", new: false },
+    ],
+    cameras: 3,
+    failed: [],
+    since: 0,
+    now: NOW,
+  };
+  const marks = {
+    enabled: true,
+    built: true,
+    marks: [
+      {
+        camera: "garage",
+        kind: "vehicle",
+        start: NOW - 7_200_000,
+        end: NOW - 7_180_000,
+        score: 3,
+        line: 1,
+        unusual: true,
+        reason: "Vehicle at night.",
+        terms: [],
+      },
+    ],
+    cameras: {},
+  };
+  const answers = {
+    "reolink_viewer/events/latest": latest,
+    "reolink_viewer/unusual/marks": marks,
+    "reolink_viewer/thumbnail/urls": { urls: [{ time: 0, url: "/thumb.jpg" }] },
+    "reolink_viewer/events/seen": {},
+  };
+  const strip = (el: HTMLElement) => el.shadowRoot?.querySelector("rv-wall-strip");
+  const cards = (el: HTMLElement) => [...(strip(el)?.shadowRoot?.querySelectorAll<HTMLButtonElement>("button.card") ?? [])];
+  /** A card's words, as its visible text (its name) reads, the board's number aside. */
+  const words = (card: HTMLElement | undefined) => {
+    const copy = card?.cloneNode(true) as HTMLElement | undefined;
+    copy?.querySelector(".num")?.remove();
+    return (copy?.textContent ?? "").replace(/\s+/g, " ").trim();
+  };
+  const settle = async (el: HTMLElement & { updateComplete: Promise<boolean> }) => {
+    await flush();
+    await el.updateComplete;
+    const s = strip(el);
+    await s?.updateComplete;
+    await flush();
+    await s?.updateComplete;
+  };
+
+  it("shows each camera's newest detection, New and Unusual, and opens its recording", async () => {
+    const { hass, sent } = fakeHass([], sensored, answers);
+    const { el, routes } = await mount(hass);
+    await settle(el);
+    // Newest first: the yard's person (new), then the garage's vehicle (marked unusual).
+    expect(cards(el).map(words)).toEqual(["Person New Front Yard 14:59", "Vehicle Unusual Garage 13:00"]);
+    expect(cards(el)[0]?.title).toBe("Open the recording");
+    expect(cards(el)[0]?.querySelector(".tag")?.textContent).toBe("New");
+    expect(cards(el)[1]?.querySelector(".badge.unusual")?.textContent).toBe("Unusual");
+    expect(cards(el)[0]?.querySelector(".num")?.textContent).toBe("2");
+    expect(cards(el)[0]?.querySelector("img")?.getAttribute("src")).toBe("/thumb.jpg");
+    expect(sent.some((m) => m.type === "reolink_viewer/unusual/marks")).toBe(true);
+    // A tap opens the recording, and it is new no more.
+    cards(el)[0]?.click();
+    await settle(el);
+    expect(sent).toContainEqual({ type: "reolink_viewer/events/seen", camera_id: "yard", start: NOW - 60_000 });
+    expect(routes.at(-1)).toEqual({ view: "device", id: "yard", tab: "playback", at: NOW - 60_000 });
+    expect(cards(el)[0]?.textContent).not.toContain("New");
+  });
+
+  it("lights a tile while its camera detects, says so first on the strip, and asks again when it ends", async () => {
+    const { hass, sent } = fakeHass([], sensored, answers);
+    const { el, tiles } = await mount(hass);
+    await settle(el);
+    const asked = () => sent.filter((m) => m.type === "reolink_viewer/events/latest").length;
+    const before = asked();
+    // The garage's person sensor turns on: its tile at once, and a Now card first.
+    el.hass = {
+      ...hass,
+      states: { "binary_sensor.garage_person": { state: "on", last_changed: new Date(NOW).toISOString() } },
+    } as unknown as HomeAssistant;
+    await settle(el);
+    const garage = tiles().find((t) => t.camera?.id === "garage");
+    expect(garage?.detecting).toEqual({ label: "Person", icon: "person" });
+    expect(garage?.hasAttribute("detecting")).toBe(true);
+    expect(garage?.closest(".cell")?.getAttribute("aria-label")).toContain("now: Person");
+    expect(words(cards(el)[0])).toBe("Person Now Garage 15:00");
+    expect(cards(el)[0]?.title).toBe("Show it large");
+    expect(cards(el)[0]?.querySelector(".tag")?.textContent).toBe("Now");
+    // A tap on it shows the camera large.
+    cards(el)[0]?.click();
+    await settle(el);
+    expect(garage?.full).toBe(true);
+    garage?.exitFull();
+    // It ends: the tile goes dark and the strip asks again.
+    el.hass = { ...hass, states: { "binary_sensor.garage_person": { state: "off", last_changed: "" } } } as unknown as HomeAssistant;
+    await settle(el);
+    expect(garage?.detecting).toBeUndefined();
+    expect(asked()).toBeGreaterThan(before);
+  });
+
+  it("leaves out the feeds' floodlight and siren buttons, and the strip, as the layout says", async () => {
+    const quiet: WallLayout = { id: "kiosk", name: "Kiosk", grid: "2x2", cameras: [], tour_s: null, floodlight: false, siren: false, strip: false };
+    const { hass } = fakeHass([quiet], sensored, answers);
+    const { el, tiles } = await mount(hass, "kiosk");
+    await settle(el);
+    expect(tiles()[0]?.controls).toEqual({ preset: "select.door_preset" });
+    expect(strip(el)).toBeNull();
+    // All cameras shows them all.
+    const all = await mount(fakeHass([], sensored, answers).hass);
+    await settle(all.el);
+    expect(all.tiles()[0]?.controls).toEqual({ siren: "siren.door", floodlight: "light.door", preset: "select.door_preset" });
+    expect(strip(all.el)).not.toBeNull();
   });
 });
 

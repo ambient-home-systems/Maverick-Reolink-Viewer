@@ -5,7 +5,7 @@ import { icon } from "../icons";
 import { LiveData, isWarm, liveConnection } from "../live/data";
 import { formatClock } from "../playback/time";
 import { sharedStyles } from "../styles";
-import type { HomeAssistant, LiveCamera, WallGrid, WallLayout } from "../types";
+import type { HomeAssistant, LiveCamera, LiveControls, WallGrid, WallLayout } from "../types";
 import { ARROWS, neighbour, pageCount, swapCells, wallOrder } from "../wall/arrange";
 import { WALL_GAP, WALL_GRIDS, slotSize, wallFit, wallPlan, type WallPlan } from "../wall/geometry";
 import { tilesInHd, type WallCell } from "../wall/hd";
@@ -13,6 +13,9 @@ import { rememberLayout, rememberMode, rememberedLayout } from "../wall/remember
 import { boardOrder, tileShape } from "./live-grid";
 import "./live-tile";
 import { navigate } from "./navigation";
+import { eventLabel, pictogram } from "./timetable";
+import type { DetectingNow } from "./wall-strip";
+import "./wall-strip";
 
 /** Every camera, in the board's order, packed by Auto: what the Wall shows without a layout. */
 export const ALL_CAMERAS: WallLayout = { id: "", name: "All cameras", grid: "auto", cameras: [], tour_s: null };
@@ -45,6 +48,12 @@ function pictureRatio(camera: LiveCamera): number | undefined {
  * cells and Shift with an arrow moves the camera, each move said to a screen
  * reader. A saved layout keeps its order. More cameras than cells make pages,
  * and a layout's tour turns them.
+ *
+ * The latest detections (step 4): a tile lights up red with what its camera
+ * detects while one of its sensors is on (from Home Assistant's states, at
+ * once), and a strip along the bottom holds each camera's newest detection,
+ * asked again when one ends. A layout may leave out the feeds' floodlight
+ * and siren buttons (the owner's ask) and the strip.
  */
 export class RvWall extends LitElement {
   static override properties = {
@@ -73,7 +82,7 @@ export class RvWall extends LitElement {
   declare layoutId: string | undefined;
   declare _layouts: WallLayout[] | undefined;
   declare _editing: boolean;
-  declare _draft: { name: string; grid: WallGrid; tour_s: number | null };
+  declare _draft: { name: string; grid: WallGrid; tour_s: number | null } & Shown;
   declare _error: string | undefined;
   declare _size: { width: number; height: number };
   /** The camera full screen, if any (the others pause). */
@@ -107,11 +116,13 @@ export class RvWall extends LitElement {
   private _refocus = false;
   /** The cell being dragged (its index across pages). */
   private _dragged: number | undefined;
+  /** The cameras whose sensors detected something at the last look. */
+  private _wasDetecting = new Set<string>();
 
   constructor() {
     super();
     this._editing = false;
-    this._draft = { name: "", grid: "auto", tour_s: null };
+    this._draft = { name: "", grid: "auto", tour_s: null, ...SHOW_ALL };
     this._page = 0;
     this._arranging = false;
     this._focus = 0;
@@ -154,6 +165,13 @@ export class RvWall extends LitElement {
 
   protected override willUpdate(changed: PropertyValues<this>): void {
     this._data.hass = this.hass;
+    if (changed.has("hass")) {
+      // A detection that ended is listed by the camera soon: the strip asks again.
+      const on = new Set(this._detecting().keys());
+      const ended = [...this._wasDetecting].some((id) => !on.has(id));
+      this._wasDetecting = on;
+      if (ended) this.shadowRoot?.querySelector("rv-wall-strip")?.refreshSoon();
+    }
     if (changed.has("hass") && this.hass && !this._asked) {
       this._asked = true;
       void this._loadLayouts(this.hass);
@@ -207,6 +225,57 @@ export class RvWall extends LitElement {
     return layouts.find((l) => l.id === id) ?? ALL_CAMERAS;
   }
 
+  /** What the layout shows (the editor's choice while editing): the feeds' buttons, the strip. */
+  private get _shown(): Shown {
+    if (this._editing) {
+      const { floodlight, siren, strip } = this._draft;
+      return { floodlight, siren, strip };
+    }
+    return shownBy(this._layout);
+  }
+
+  /** A camera's controls on this layout's feeds: its floodlight and siren buttons only if shown. */
+  private _controls(camera: LiveCamera): LiveControls | undefined {
+    const controls = camera.controls;
+    if (!controls) return undefined;
+    const { floodlight, siren, ...rest } = controls;
+    const shown = this._shown;
+    return {
+      ...rest,
+      ...(shown.floodlight && floodlight ? { floodlight } : {}),
+      ...(shown.siren && siren ? { siren } : {}),
+    };
+  }
+
+  /** What each camera's sensors detect now (Phase 9 step 4), by camera id. */
+  private _detecting(): Map<string, DetectingNow> {
+    const states = this.hass?.states ?? {};
+    const found = new Map<string, DetectingNow>();
+    for (const camera of this._data.cameras ?? []) {
+      const types: string[] = [];
+      let since = Number.POSITIVE_INFINITY;
+      for (const [entity, type] of Object.entries(camera.detection ?? {})) {
+        const state = states[entity];
+        if (state?.state !== "on") continue;
+        if (!types.includes(type)) types.push(type);
+        since = Math.min(since, Date.parse(state.last_changed));
+      }
+      if (types.length) found.set(camera.id, { types, since: Number.isFinite(since) ? since : Date.now() });
+    }
+    return found;
+  }
+
+  /** A detection going on, from the strip: that camera large (full screen, or alone if not on this page). */
+  private _showLarge(id: string): void {
+    const tile = [...(this.shadowRoot?.querySelectorAll("rv-live-tile") ?? [])].find((t) => t.camera?.id === id);
+    if (tile) {
+      tile.enterFull();
+      return;
+    }
+    this._alone = id;
+    this._said = `${this._name(id)} alone on the screen. Escape, or a double tap, to go back.`;
+  }
+
   private _toggleFull(): void {
     if (document.fullscreenElement === this) void document.exitFullscreen().catch(() => undefined);
     else void this.requestFullscreen().catch(() => undefined);
@@ -219,7 +288,7 @@ export class RvWall extends LitElement {
 
   private _edit(): void {
     const layout = this._layout;
-    this._draft = { name: layout.id ? layout.name : "", grid: layout.grid, tour_s: layout.tour_s };
+    this._draft = { name: layout.id ? layout.name : "", grid: layout.grid, tour_s: layout.tour_s, ...shownBy(layout) };
     this._error = undefined;
     this._editing = true;
   }
@@ -240,6 +309,9 @@ export class RvWall extends LitElement {
         grid: this._draft.grid,
         cameras: this._order ?? layout.cameras,
         tour_s: this._draft.tour_s,
+        floodlight: this._draft.floodlight,
+        siren: this._draft.siren,
+        strip: this._draft.strip,
       });
       await this._loadLayouts(hass);
       this._editing = false;
@@ -427,6 +499,8 @@ export class RvWall extends LitElement {
     const { width, height } = this._size;
     const missing = this.layoutId !== undefined && this._layouts !== undefined && layout.id !== this.layoutId;
     const canFull = document.fullscreenEnabled && typeof this.requestFullscreen === "function";
+    const detecting = this._detecting();
+    const numbers = new Map(boardOrder([...(cameras ?? [])]).map((c, i) => [c.id, i + 1]));
     return html`<div class="bar">
         <select
           aria-label="Layout"
@@ -520,7 +594,19 @@ export class RvWall extends LitElement {
       ${this._editing ? this._renderEditor(layout) : this._error ? html`<p class="error" role="alert">${this._error}</p>` : nothing}
       ${cameras === undefined
         ? html`<p class="note pad">${this._data.error ? `Live view could not load: ${this._data.error}` : "Loading…"}</p>`
-        : this._renderCells(view.plan, view.shown, width, height)}
+        : this._renderCells(view.plan, view.shown, width, height, detecting, numbers)}
+      ${cameras && this._shown.strip
+        ? html`<rv-wall-strip
+            .hass=${this.hass}
+            .cameras=${boardOrder([...cameras])}
+            .numbers=${numbers}
+            .now=${detecting}
+            .pictures=${this._data.images}
+            @rv-strip-live=${(e: CustomEvent<{ cameraId: string }>) => {
+              this._showLarge(e.detail.cameraId);
+            }}
+          ></rv-wall-strip>`
+        : nothing}
       <p class="said" role="status" aria-live="polite">${this._said}</p>`;
   }
 
@@ -529,8 +615,9 @@ export class RvWall extends LitElement {
     shown: (LiveCamera | undefined)[],
     width: number,
     height: number,
+    detecting: ReadonlyMap<string, DetectingNow>,
+    numbers: ReadonlyMap<string, number>,
   ): TemplateResult {
-    const numbers = new Map(boardOrder([...(this._data.cameras ?? [])]).map((c, i) => [c.id, i + 1]));
     // HD in the tiles drawn larger than their sub stream, the large slot first.
     const grid = this._editing ? this._draft.grid : this._layout.grid;
     const cells = plan.slots.map((slot, i): WallCell | undefined => {
@@ -555,13 +642,14 @@ export class RvWall extends LitElement {
         const view = this._view;
         const index = view.page * view.perPage + i;
         const name = camera?.name ?? "Empty cell";
+        const now = camera ? detecting.get(camera.id) : undefined;
         const where = this._alone ? "alone on the screen" : `cell ${String(i + 1)} of ${String(plan.slots.length)}`;
         return html`<div
           class="cell ${this._picked === index ? "picked" : ""} ${this._over === i ? "over" : ""}"
           style=${place}
           data-slot=${i}
           tabindex=${this._focus === i ? "0" : "-1"}
-          aria-label=${`${name}, ${where}`}
+          aria-label=${`${name}, ${where}${now ? `, now: ${eventLabel(now.types)}` : ""}`}
           role="group"
           aria-roledescription="Wall cell"
           draggable=${this._alone ? "false" : "true"}
@@ -614,7 +702,8 @@ export class RvWall extends LitElement {
                 .iceServers=${this._data.iceServers}
                 .warm=${isWarm(this.hass, camera)}
                 .suspended=${this._full !== undefined && this._full !== camera.id}
-                .controls=${camera.controls}
+                .controls=${this._controls(camera)}
+                .detecting=${now ? { label: eventLabel(now.types), icon: pictogram(now.types) } : undefined}
               ></rv-live-tile>`
             : html`<div class="empty"></div>`}
           ${this._arranging
@@ -684,6 +773,21 @@ export class RvWall extends LitElement {
           )}
         </select>
       </label>
+      <fieldset class="shows">
+        <legend>Show</legend>
+        ${SHOWN_CHOICES.map(
+          ([key, label]) =>
+            html`<label class="check">
+              <input
+                type="checkbox"
+                .checked=${this._draft[key]}
+                @change=${(e: Event) => {
+                  this._draft = { ...this._draft, [key]: (e.target as HTMLInputElement).checked };
+                }}
+              />${label}
+            </label>`,
+        )}
+      </fieldset>
       <div class="actions">
         <button type="submit">${layout.id ? "Save" : "Save layout"}</button>
         ${layout.id
@@ -963,11 +1067,50 @@ export class RvWall extends LitElement {
       .editor .note {
         flex-basis: 100%;
       }
+      .shows {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px 14px;
+        margin: 0;
+        padding: 0;
+        border: none;
+        font-size: 14px;
+      }
+      .shows legend {
+        padding: 0 0 4px;
+      }
+      .shows .check {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        min-height: 32px;
+      }
       .editor code {
         font-family: var(--rv-mono);
       }
     `,
   ];
+}
+
+/** What a layout may leave out (step 4): the feeds' floodlight and siren buttons, the strip. */
+interface Shown {
+  floodlight: boolean;
+  siren: boolean;
+  strip: boolean;
+}
+
+const SHOW_ALL: Shown = { floodlight: true, siren: true, strip: true };
+
+/** The editor's switches, as said there. */
+const SHOWN_CHOICES: readonly [keyof Shown, string][] = [
+  ["floodlight", "Floodlight buttons"],
+  ["siren", "Siren buttons"],
+  ["strip", "Latest detections"],
+];
+
+/** What a layout shows: everything it does not leave out (a layout kept before shows all). */
+export function shownBy(layout: WallLayout): Shown {
+  return { floodlight: layout.floodlight !== false, siren: layout.siren !== false, strip: layout.strip !== false };
 }
 
 /** A tour's choices: the next page every so many seconds, or none. */

@@ -638,6 +638,8 @@ export interface LiveCamera {
   controls?: LiveControls;
   /** A doorbell's visitor sensor: on while it rings. */
   visitor_entity?: string | null;
+  /** Its detection sensors (Phase 9 step 4), by entity id, with the event type each stands for. */
+  detection?: Record<string, string>;
 }
 
 /** A PTZ move: a press of its button starts it, PTZ stop ends it. */
@@ -863,4 +865,8 @@ export interface WallLayout {
   cameras: (string | null)[];
   /** A tour's seconds per page (step 2); null for none. */
   tour_s: number | null;
+  /** Step 4: the feeds' floodlight and siren buttons, and the strip of latest detections (shown unless false). */
+  floodlight?: boolean;
+  siren?: boolean;
+  strip?: boolean;
 }

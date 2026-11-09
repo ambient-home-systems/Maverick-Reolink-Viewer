@@ -18,6 +18,8 @@ export const rvTokens = css`
     --rv-board: #111418;
     --rv-on-board: #f4f4f1;
     --rv-on-board-muted: #a9b0c4;
+    /* Red on the board's ink (always dark): now, a detection going on. */
+    --rv-on-board-red: #ff4a3d;
     --rv-ground: #f4f4f1;
     --rv-ground-2: #e9e9e4;
     --rv-text: #111418;

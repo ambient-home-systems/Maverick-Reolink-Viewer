@@ -3,6 +3,18 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.55.0
+
+The latest detections on the Wall.
+
+- **A tile lights up** with a red frame and what its camera sees (Person, Vehicle…)
+  the moment one of its detection sensors turns on in Home Assistant.
+- **A strip along the bottom** holds each camera's newest detection: a picture, what
+  and when, **New** until you open it, **Unusual** when it stood out. A tap opens the
+  recording. A detection going on leads it as **Now**; tap it to see the camera large.
+- **Layouts can leave out the floodlight and siren buttons** on their feeds (Layout ⌄
+  → Show), and the strip too. The cameras' other controls stay.
+
 ## 0.54.1
 
 From the capacity test with 2 and 3 full-resolution streams.

@@ -410,6 +410,18 @@ function states(offline: readonly string[] = []): HassEntities {
           last_changed: "",
           last_updated: "",
         };
+    for (const kind of ["person", "motion"]) {
+      const id = `binary_sensor.${prefix}_${kind}`;
+      // The front yard sees a person now: its Wall tile lights up (Phase 9 step 4).
+      const on = cam.id === "cam-fyl";
+      out[id] = {
+        entity_id: id,
+        state: on ? "on" : "off",
+        attributes: {},
+        last_changed: on ? new Date(Date.now() - 8_000).toISOString() : "",
+        last_updated: "",
+      };
+    }
     if (cam.warm || cam.channel !== null) {
       const id = `switch.${prefix}_keep_live_view_warm`;
       out[id] = {
@@ -628,6 +640,11 @@ function liveCamera(cam: Cam): LiveCamera {
           }
         : {},
     visitor_entity: cam.doorbell ? `binary_sensor.${prefix}_visitor` : null,
+    // Phase 9 step 4: its detection sensors (the front yard's person is on).
+    detection: {
+      [`binary_sensor.${prefix}_person`]: "PERSON",
+      [`binary_sensor.${prefix}_motion`]: "MOTION",
+    },
   };
 }
 
@@ -1178,6 +1195,19 @@ export function fakeHass(options: {
     },
     "reolink_viewer/events/recent": (m) =>
       recent(typeof m.date === "string" ? m.date : undefined),
+    // Each camera's newest event (the Wall's strip).
+    "reolink_viewer/events/latest": () => {
+      const day = recent();
+      const shown = new Set<string>();
+      return {
+        ...day,
+        events: day.events.filter((e) => {
+          if (shown.has(e.camera_id)) return false;
+          shown.add(e.camera_id);
+          return true;
+        }),
+      };
+    },
     "reolink_viewer/events/days": () => ({
       days: [21, 22, 23, 24, 25, 26, 27],
       failed: [],

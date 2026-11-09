@@ -6533,8 +6533,8 @@ large, arranged by the owner (PLAN.md §6.3). The owner named it "Wall" on
 | --- | --- |
 | 1. The Wall, its layouts, saved | Built (v0.52.0) |
 | 2. Arranging, pages and tours | Built (v0.53.0); the owner's check passed (2026-11-05) |
-| 3. HD in large tiles | Built (v0.54.0); the capacity test run (2026-11-06): 9 streams, 2 HD tiles per NVR (v0.54.1) |
-| 4. The detection strip and instant highlights | Not started |
+| 3. HD in large tiles | Built (v0.54.0); the capacity test run (2026-11-06): 9 streams, 2 HD tiles per NVR (v0.54.1); the owner's check passed (2026-11-09) |
+| 4. The detection strip and instant highlights | Built (v0.55.0), with the owner's ask: a layout may leave out the feeds' floodlight and siren buttons |
 | 5. Kiosk touches, and the Wall as a dashboard card | Not started; the card after Phase 7 |
 
 #### Step 9.1: the Wall, its layouts, saved
@@ -6762,6 +6762,10 @@ checklist above, then the go-ahead for step 3.
   third slot beyond the six subs for a full screen or a recording without
   taking an HD tile back. One run of three mains, so the next ones confirm it.
 
+**The owner's check (2026-11-09, v0.54.1):** "Validated both bullets function as
+intended": two tiles say Live HD and the others' ⓘ says why; a recording opened
+while they show plays at once.
+
 #### Step 9.4: the detection strip and instant highlights
 
 - **The strip:** along the bottom, one card per camera with its latest
@@ -6774,6 +6778,54 @@ checklist above, then the go-ahead for step 3.
     sensor is on, read from `hass`, so at once;
   - the strip is asked again when a sensor turns off, not only every 2
     minutes.
+
+**As built (v0.55.0), the owner's go-ahead ("Proceed with step 4"), with their
+ask: options to leave out the floodlight and siren buttons on the Wall's feeds
+(per layout, the owner's choice of four):**
+
+- **`events/latest`** (`events.async_latest`): each recording camera's newest
+  event, newest first, with `new` as `events/recent` has it: today's, searched as
+  the timetable's is (`max_age`, `background`); else, when today has none or
+  cannot be searched (listed under `failed`), the newest of a day kept here
+  (`TimelineService.async_newest_cached`: the memory and the store, no search).
+- **The strip** (`rv-wall-strip`): along the Wall's bottom, a card per camera
+  with something to show, newest first: the recording's thumbnail, the
+  pictogram and type, the camera's number and name, the time (a date too for
+  another day), **New** in red until opened (a tap marks it, as the timetable
+  does), and **Unusual** when `unusual/marks` (over the cards' window, 7 days at
+  most) marks it. A tap opens the recording at its start. Asked every 2 minutes,
+  and on a detection's end at once and 20 s later (the camera lists it once it
+  ends). It scrolls sideways when the cameras outnumber the screen; the cells
+  above fit what is left.
+- **Instant highlights:** `live/cameras` gives each camera its detection sensors
+  (`detection`: entity id → the event type each stands for, from Stamina's
+  subjects: PERSON, VEHICLE, ANIMAL, …). While one is on in `hass` (no request),
+  the camera's Wall tile has a red frame and says what (`detecting`), the cell's
+  name says "now: Person", and the strip's first card is **Now** with the
+  camera's latest picture; a tap shows that camera large (full screen, or alone
+  if not on the page). That is the exit criterion's "within 2 s of its sensor":
+  at once. When it turns off, the strip asks again.
+- **What a layout shows** (the owner's ask): `floodlight`, `siren` and `strip`,
+  kept with the layout (true unless said, so a layout kept before shows all), as
+  **Show** in **Layout ⌄** (Floodlight buttons, Siren buttons, Latest
+  detections), previewed while editing. A feed without them keeps its other
+  controls (PTZ, presets, zoom); in full screen from the Wall too. **All
+  cameras** shows all.
+- **Checks:** the newest event (today's; a kept day's when today fails, with no
+  search of past days; refused when incompatible or not loaded); the detection
+  sensors in `live/cameras`; the layout's three switches (kept, checked, saved);
+  the strip (New and Unusual, the thumbnail, a tap opening the recording and
+  marking it seen); a sensor on lighting its tile, the cell's name and a Now card
+  first, a tap on it going full screen, its end asking again; a layout without
+  the buttons or the strip; the accessibility check on the Wall with a lit tile
+  and the strip.
+
+**Hardware checklist (the owner, v0.55.0):** on the wall tablet, the Wall's
+strip shows each camera's newest detection; walk in front of a camera: its tile
+lights up at once with what it sees, a Now card leads the strip, and within a
+minute of leaving its recording takes the card's place; tap a card: its
+recording opens; in Layout ⌄, untick Floodlight and Siren buttons, Save: the
+feeds lose those buttons (on the tablet too after a reload), the PTZ pad stays.
 
 #### Step 9.5: kiosk touches, and the Wall as a dashboard card
 

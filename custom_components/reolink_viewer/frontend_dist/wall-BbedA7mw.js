@@ -1,20 +1,20 @@
 import { a as e, i as t, n, r, t as i } from "./lit-DdRjbP0M.js";
-import { F as a, L as o, Nt as s, Ot as c, Q as l, R as u, St as d, X as f, d as p, j as m } from "./live-Cc-EfYb9.js";
-import { H as h, J as g, K as _, R as v, q as y, z as b } from "./home-DwvOEeee.js";
+import { Ct as a, F as o, L as s, Pt as c, Q as l, R as u, St as d, Tt as f, X as p, c as m, ct as h, d as g, j as _, kt as v, p as y, yt as b } from "./live-BIaa-XON.js";
+import { B as x, J as S, V as C, W as w, X as ee, Y as T, c as E, f as D, p as O, u as k } from "./home-DAZFKJ7M.js";
 //#region src/wall/arrange.ts
-function x(e, t) {
+function te(e, t) {
 	return e.cameras.length ? [...e.cameras] : [...t];
 }
-function S(e, t) {
+function ne(e, t) {
 	return Math.max(1, Math.ceil(e / Math.max(1, t)));
 }
-function C(e, t, n) {
+function A(e, t, n) {
 	let r = [...e];
 	for (; r.length <= Math.max(t, n);) r.push(null);
 	for ([r[t], r[n]] = [r[n] ?? null, r[t] ?? null]; r.length && r.at(-1) === null;) r.pop();
 	return r;
 }
-function w(e, t, n) {
+function j(e, t, n) {
 	if (t < 0 || t >= e.slots.length) return;
 	let r = e.slots[t], i = (e, t, n, r) => e < n + r && n < e + t, a;
 	return e.slots.forEach((e, o) => {
@@ -34,12 +34,12 @@ function w(e, t, n) {
 		});
 	}), a?.index;
 }
-var T = {
+var M = {
 	ArrowLeft: "left",
 	ArrowRight: "right",
 	ArrowUp: "up",
 	ArrowDown: "down"
-}, E = [
+}, N = [
 	{
 		grid: "auto",
 		label: "Auto"
@@ -68,7 +68,7 @@ var T = {
 		grid: "1+7",
 		label: "1 + 7"
 	}
-], D = (e) => ({
+], P = (e) => ({
 	cols: e,
 	rows: e,
 	slots: Array.from({ length: e * e }, (t, n) => ({
@@ -77,7 +77,7 @@ var T = {
 		cols: 1,
 		rows: 1
 	}))
-}), O = (e) => {
+}), F = (e) => {
 	let t = [{
 		col: 0,
 		row: 0,
@@ -102,7 +102,7 @@ var T = {
 		slots: t
 	};
 };
-function k(e, t) {
+function I(e, t) {
 	let n = [], r = (e, t) => !n[e]?.[t], i = [], a = 0;
 	for (let o of e) {
 		let e = o === "wide" && t >= 2 ? 2 : 1, s = o === "tall" ? 2 : 1, c;
@@ -127,10 +127,10 @@ function k(e, t) {
 		rows: Math.max(1, a)
 	};
 }
-function A(e, t, n) {
+function L(e, t, n) {
 	let r = e.length ? e : [void 0], i = r.reduce((e, t) => e + (t ? 2 : 1), 0), a;
 	for (let e = 1; e <= i; e += 1) {
-		let { slots: i, rows: o } = k(r, e), s = (t - (e - 1) * 4) / e, c = (n - (o - 1) * 4) / o, l = Math.min(s, c * 16 / 9);
+		let { slots: i, rows: o } = I(r, e), s = (t - (e - 1) * 4) / e, c = (n - (o - 1) * 4) / o, l = Math.min(s, c * 16 / 9);
 		(!a || l > a.size + .5 || Math.abs(l - a.size) <= .5 && e * o < a.cols * a.rows) && (a = {
 			cols: e,
 			rows: o,
@@ -149,35 +149,35 @@ function A(e, t, n) {
 		slots: e.length ? c : []
 	};
 }
-function j(e, t, n, r) {
+function R(e, t, n, r) {
 	switch (e) {
-		case "1": return D(1);
-		case "2x2": return D(2);
-		case "3x3": return D(3);
-		case "4x4": return D(4);
-		case "1+5": return O(3);
-		case "1+7": return O(4);
-		case "auto": return A(t, n, r);
+		case "1": return P(1);
+		case "2x2": return P(2);
+		case "3x3": return P(3);
+		case "4x4": return P(4);
+		case "1+5": return F(3);
+		case "1+7": return F(4);
+		case "auto": return L(t, n, r);
 	}
 }
-function M(e, t, n, r) {
+function z(e, t, n, r) {
 	let i = (n - (e.cols - 1) * 4) / e.cols, a = (r - (e.rows - 1) * 4) / e.rows;
 	return {
 		width: i * t.cols + (t.cols - 1) * 4,
 		height: a * t.rows + (t.rows - 1) * 4
 	};
 }
-function N(e, t) {
+function B(e, t) {
 	return !e || !t.width || !t.height ? "cover" : e > t.width / t.height * 1.02 ? "contain" : "cover";
 }
-function P(e, t, n = 1) {
+function V(e, t, n = 1) {
 	let r = e?.streams.sub?.encoding;
 	if (!r?.width || !r.height || !t.width || !t.height) return;
 	let i = t.width * n / r.width, a = t.height * n / r.height;
 	return t.fit === "cover" ? Math.max(i, a) : Math.min(i, a);
 }
-var F = (e, t) => `${String(e)} ${t}${e === 1 ? "" : "s"}`;
-function I(e, t = 1) {
+var H = (e, t) => `${String(e)} ${t}${e === 1 ? "" : "s"}`;
+function U(e, t = 1) {
 	let n = /* @__PURE__ */ new Map(), r = [];
 	e.forEach((e, i) => {
 		if (!e) return;
@@ -198,7 +198,7 @@ function I(e, t = 1) {
 			});
 			return;
 		}
-		let c = P(a, e, t);
+		let c = V(a, e, t);
 		if (e.large) r.push({
 			cell: e,
 			connection: a,
@@ -229,30 +229,293 @@ function I(e, t = 1) {
 			reason: `HD: ${a}`
 		})) : n.set(e.camera.id, {
 			hd: !1,
-			reason: `SD: ${t.entry_title} plays ${F(o, "HD tile")} at once, and ${s.join(", ")} ${s.length === 1 ? "has" : "have"} it`
+			reason: `SD: ${t.entry_title} plays ${H(o, "HD tile")} at once, and ${s.join(", ")} ${s.length === 1 ? "has" : "have"} it`
 		});
 	}
 	return n;
 }
 //#endregion
+//#region src/components/wall-strip.ts
+var W = 12e4, G = 2e4, K = 120, q = 10, J = 60474e4, Y = "rv-strip-live", X = class extends i {
+	static properties = {
+		hass: { attribute: !1 },
+		cameras: { attribute: !1 },
+		numbers: { attribute: !1 },
+		now: { attribute: !1 },
+		pictures: { attribute: !1 },
+		_feed: { state: !0 },
+		_thumbs: { state: !0 },
+		_marked: { state: !0 }
+	};
+	_timer;
+	_again;
+	_asked = /* @__PURE__ */ new Set();
+	_seq = 0;
+	_started = !1;
+	constructor() {
+		super(), this.cameras = [], this.numbers = /* @__PURE__ */ new Map(), this.now = /* @__PURE__ */ new Map(), this.pictures = {}, this._thumbs = /* @__PURE__ */ new Map(), this._marked = /* @__PURE__ */ new Set();
+	}
+	connectedCallback() {
+		super.connectedCallback(), this._timer = setInterval(() => {
+			this._load(!0);
+		}, W);
+	}
+	disconnectedCallback() {
+		super.disconnectedCallback(), clearInterval(this._timer), clearTimeout(this._again), this._started = !1;
+	}
+	updated() {
+		this.hass && !this._started && (this._started = !0, this._load(!1));
+	}
+	refreshSoon() {
+		this._load(!0), clearTimeout(this._again), this._again = setTimeout(() => {
+			this._load(!0);
+		}, G);
+	}
+	async _load(e) {
+		let t = this.hass;
+		if (!t) return;
+		let n = ++this._seq;
+		try {
+			let r = await h(t, e ? { background: e } : { maxAge: K });
+			if (n !== this._seq) return;
+			this._feed = r, this._loadThumbs(t, r.events), this._loadMarks(t, r, n);
+		} catch {}
+	}
+	async _loadThumbs(e, t) {
+		let n = t.filter((e) => !this._asked.has(O(e)));
+		for (let e of n) this._asked.add(O(e));
+		await Promise.all(n.map(async (t) => {
+			try {
+				let { urls: n } = await b(e, t.camera_id, [t.start], q), r = n[0]?.url;
+				r && (this._thumbs = new Map(this._thumbs).set(O(t), r));
+			} catch {}
+		}));
+	}
+	async _loadMarks(e, t, n) {
+		if (!t.events.length) return;
+		let r = t.now, i = Math.max(Math.min(...t.events.map((e) => e.start)), r - J);
+		try {
+			let { marks: a } = await d(e, i, r);
+			if (n !== this._seq) return;
+			this._marked = new Set(D(t.events, a, i, r).marks.keys());
+		} catch {}
+	}
+	get _cards() {
+		let e = new Map((this._feed?.events ?? []).map((e) => [e.camera_id, e])), t = [];
+		for (let n of this.cameras) {
+			let r = this.now.get(n.id), i = e.get(n.id);
+			(r || i) && t.push({
+				camera: n,
+				...r ? { now: r } : {},
+				...i ? { event: i } : {}
+			});
+		}
+		let n = (e) => e.now?.since ?? e.event?.start ?? 0;
+		return t.sort((e, t) => Number(!!t.now) - Number(!!e.now) || n(t) - n(e));
+	}
+	_open(e) {
+		if (e.now) {
+			this.dispatchEvent(new CustomEvent(Y, {
+				detail: { cameraId: e.camera.id },
+				bubbles: !0,
+				composed: !0
+			}));
+			return;
+		}
+		let t = e.event, n = this.hass;
+		if (t) {
+			if (n && t.new) {
+				f(n, t.camera_id, t.start).catch(() => void 0);
+				let e = this._feed;
+				e && (this._feed = {
+					...e,
+					events: e.events.map((e) => e === t ? {
+						...e,
+						new: !1
+					} : e)
+				});
+			}
+			w(this, {
+				view: "device",
+				id: t.camera_id,
+				tab: "playback",
+				at: t.start
+			});
+		}
+	}
+	render() {
+		let e = this._cards, t = this.hass?.config?.time_zone, n = this._feed ? m(this._feed.now, t) : void 0;
+		return r`<ul class="strip" aria-label="Latest detections">
+      ${e.length ? e.map((e) => this._renderCard(e, t, n)) : r`<li class="none">${this._feed ? "No detections yet" : "Loading the latest detections…"}</li>`}
+    </ul>`;
+	}
+	_renderCard(e, t, i) {
+		let { camera: a, now: o, event: s } = e, c = o ? o.types : s?.types ?? [], l = o ? o.since : s?.start ?? 0, u = E(c), d = o || i === void 0 || m(l, t) === i ? g(l, t) : y(l, t), f = o ? this.pictures[a.id]?.url : s ? this._thumbs.get(O(s)) : void 0, h = !o && s !== void 0 && this._marked.has(O(s)), _ = o ? "Now" : s?.new ? "New" : void 0, v = this.numbers.get(a.id);
+		return r`<li>
+      <button
+        class="card ${o ? "now" : ""}"
+        title=${o ? "Show it large" : "Open the recording"}
+        @click=${() => {
+			this._open(e);
+		}}
+      >
+        <span class="thumb">${f ? r`<img src=${f} alt="" loading="lazy" />` : n}</span>
+        <span class="text">
+          <span class="what">
+            ${p(k(c))} <span class="label">${u}</span>
+            ${_ ? r`<span class="tag">${_}</span>` : n}
+            ${h ? r`<span class="badge unusual">Unusual</span>` : n}
+          </span>
+          <span class="where">
+            ${v === void 0 ? n : r`<span class="num" aria-hidden="true">${v}</span>`}
+            <span class="name">${a.name}</span> <span class="time">${d}</span>
+          </span>
+        </span>
+      </button>
+    </li>`;
+	}
+	static styles = [_, e`
+      :host {
+        display: block;
+        flex: none;
+        color: var(--rv-on-board);
+      }
+      .strip {
+        display: flex;
+        gap: 6px;
+        margin: 0;
+        padding: 0 6px 6px;
+        list-style: none;
+        overflow-x: auto;
+        scrollbar-width: thin;
+      }
+      .strip > li {
+        flex: none;
+      }
+      .none {
+        padding: 6px 6px 2px;
+        color: var(--rv-on-board-muted);
+        font-size: 14px;
+      }
+      .card {
+        display: flex;
+        align-items: stretch;
+        gap: 8px;
+        width: 264px;
+        height: 64px;
+        min-height: 0;
+        padding: 0 8px 0 0;
+        border: 1px solid color-mix(in srgb, var(--rv-on-board) 18%, transparent);
+        border-radius: 0;
+        background: color-mix(in srgb, var(--rv-on-board) 6%, transparent);
+        color: var(--rv-on-board);
+        text-align: left;
+        cursor: pointer;
+      }
+      .card:hover {
+        background: color-mix(in srgb, var(--rv-on-board) 12%, transparent);
+      }
+      .card:focus-visible {
+        outline: 2px solid var(--rv-on-board);
+        outline-offset: 2px;
+      }
+      .card.now {
+        border-color: var(--rv-on-board-red);
+      }
+      .thumb {
+        flex: none;
+        width: 112px;
+        background: #000;
+      }
+      .thumb img {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+      .text {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 2px;
+        min-width: 0;
+      }
+      .what {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        min-width: 0;
+        font-size: 15px;
+        font-weight: 600;
+      }
+      .what svg {
+        flex: none;
+        width: 18px;
+        height: 18px;
+      }
+      .label {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .tag {
+        flex: none;
+        color: var(--rv-on-board-red);
+        font-size: 13px;
+      }
+      .badge.unusual {
+        flex: none;
+        border-color: var(--rv-on-board-muted);
+        color: var(--rv-on-board);
+        font-size: 12px;
+        line-height: 18px;
+        padding: 0 5px;
+      }
+      .where {
+        display: flex;
+        align-items: baseline;
+        gap: 6px;
+        min-width: 0;
+        color: var(--rv-on-board-muted);
+        font-size: 13px;
+      }
+      .num {
+        flex: none;
+        font-family: var(--rv-font-cond);
+        font-weight: 600;
+      }
+      .name {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .time {
+        flex: none;
+        margin-left: auto;
+        font-variant-numeric: tabular-nums;
+      }
+    `];
+};
+customElements.get("rv-wall-strip") || customElements.define("rv-wall-strip", X);
+//#endregion
 //#region src/components/wall.ts
-var L = {
+var Z = {
 	id: "",
 	name: "All cameras",
 	grid: "auto",
 	cameras: [],
 	tour_s: null
 };
-function R(e, t) {
-	if (!e.cameras.length) return v([...t]);
+function re(e, t) {
+	if (!e.cameras.length) return x([...t]);
 	let n = new Map(t.map((e) => [e.id, e]));
 	return e.cameras.map((e) => e ? n.get(e) : void 0);
 }
-function z(e) {
+function ie(e) {
 	let t = u(e)?.streams.sub?.encoding;
 	return t?.width && t.height ? t.width / t.height : void 0;
 }
-var B = class extends i {
+var Q = class extends i {
 	static properties = {
 		hass: { attribute: !1 },
 		layoutId: { attribute: !1 },
@@ -273,7 +536,7 @@ var B = class extends i {
 		_said: { state: !0 },
 		_over: { state: !0 }
 	};
-	_data = new a(this);
+	_data = new o(this);
 	_resize;
 	_clock;
 	_tour;
@@ -282,18 +545,20 @@ var B = class extends i {
 	_arranged;
 	_refocus = !1;
 	_dragged;
+	_wasDetecting = /* @__PURE__ */ new Set();
 	constructor() {
 		super(), this._editing = !1, this._draft = {
 			name: "",
 			grid: "auto",
-			tour_s: null
+			tour_s: null,
+			...ae
 		}, this._page = 0, this._arranging = !1, this._focus = 0, this._said = "", this._size = {
 			width: 0,
 			height: 0
 		}, this._wallFull = !1, this._now = Date.now();
 	}
 	connectedCallback() {
-		super.connectedCallback(), y("wall"), document.addEventListener("fullscreenchange", this._onFullscreen), this._tick();
+		super.connectedCallback(), T("wall"), document.addEventListener("fullscreenchange", this._onFullscreen), this._tick();
 	}
 	disconnectedCallback() {
 		super.disconnectedCallback(), document.removeEventListener("fullscreenchange", this._onFullscreen), this._resize?.disconnect(), this._resize = void 0, clearTimeout(this._clock), this._stopTour();
@@ -307,7 +572,11 @@ var B = class extends i {
 		}, 6e4 - this._now % 6e4 + 50);
 	}
 	willUpdate(e) {
-		this._data.hass = this.hass, e.has("hass") && this.hass && !this._asked && (this._asked = !0, this._loadLayouts(this.hass));
+		if (this._data.hass = this.hass, e.has("hass")) {
+			let e = new Set(this._detecting().keys()), t = [...this._wasDetecting].some((t) => !e.has(t));
+			this._wasDetecting = e, t && this.shadowRoot?.querySelector("rv-wall-strip")?.refreshSoon();
+		}
+		e.has("hass") && this.hass && !this._asked && (this._asked = !0, this._loadLayouts(this.hass));
 		let t = this._layout.id;
 		t !== this._arranged && (this._arranged = t, this._order = void 0, this._page = 0, this._alone = void 0, this._picked = void 0, this._focus = 0);
 	}
@@ -321,24 +590,64 @@ var B = class extends i {
 			});
 		}), this._resize.observe(e));
 		let t = this._layout;
-		this._layouts !== void 0 && _(t.id || void 0), this._syncTour(), this._refocus && (this._refocus = !1, this.shadowRoot?.querySelector(`.cell[data-slot="${String(this._focus)}"]`)?.focus());
+		this._layouts !== void 0 && S(t.id || void 0), this._syncTour(), this._refocus && (this._refocus = !1, this.shadowRoot?.querySelector(`.cell[data-slot="${String(this._focus)}"]`)?.focus());
 	}
 	async _loadLayouts(e) {
 		try {
-			this._layouts = (await d(e)).layouts;
+			this._layouts = (await a(e)).layouts;
 		} catch (e) {
-			this._layouts = [], this._error = `The saved layouts could not be read: ${s(e).message}`;
+			this._layouts = [], this._error = `The saved layouts could not be read: ${c(e).message}`;
 		}
 	}
 	get _layout() {
-		let e = this._layouts ?? [], t = this.layoutId ?? g();
-		return e.find((e) => e.id === t) ?? L;
+		let e = this._layouts ?? [], t = this.layoutId ?? ee();
+		return e.find((e) => e.id === t) ?? Z;
+	}
+	get _shown() {
+		if (this._editing) {
+			let { floodlight: e, siren: t, strip: n } = this._draft;
+			return {
+				floodlight: e,
+				siren: t,
+				strip: n
+			};
+		}
+		return $(this._layout);
+	}
+	_controls(e) {
+		let t = e.controls;
+		if (!t) return;
+		let { floodlight: n, siren: r, ...i } = t, a = this._shown;
+		return {
+			...i,
+			...a.floodlight && n ? { floodlight: n } : {},
+			...a.siren && r ? { siren: r } : {}
+		};
+	}
+	_detecting() {
+		let e = this.hass?.states ?? {}, t = /* @__PURE__ */ new Map();
+		for (let n of this._data.cameras ?? []) {
+			let r = [], i = Infinity;
+			for (let [t, a] of Object.entries(n.detection ?? {})) {
+				let n = e[t];
+				n?.state === "on" && (r.includes(a) || r.push(a), i = Math.min(i, Date.parse(n.last_changed)));
+			}
+			r.length && t.set(n.id, {
+				types: r,
+				since: Number.isFinite(i) ? i : Date.now()
+			});
+		}
+		return t;
+	}
+	_showLarge(e) {
+		let t = [...this.shadowRoot?.querySelectorAll("rv-live-tile") ?? []].find((t) => t.camera?.id === e);
+		t ? t.enterFull() : (this._alone = e, this._said = `${this._name(e)} alone on the screen. Escape, or a double tap, to go back.`);
 	}
 	_toggleFull() {
 		document.fullscreenElement === this ? document.exitFullscreen().catch(() => void 0) : this.requestFullscreen().catch(() => void 0);
 	}
 	_show(e) {
-		e || _(void 0), h(this, e ? {
+		e || S(void 0), w(this, e ? {
 			view: "wall",
 			layout: e
 		} : { view: "wall" });
@@ -348,7 +657,8 @@ var B = class extends i {
 		this._draft = {
 			name: e.id ? e.name : "",
 			grid: e.grid,
-			tour_s: e.tour_s
+			tour_s: e.tour_s,
+			...$(e)
 		}, this._error = void 0, this._editing = !0;
 	}
 	async _save(e) {
@@ -357,19 +667,22 @@ var B = class extends i {
 		let n = this._layout, r = this._draft.name.trim();
 		if (!r) this._error = "Give the layout a name.";
 		else try {
-			let { layout: i } = await c(t, {
+			let { layout: i } = await v(t, {
 				...n.id && !e ? { id: n.id } : {},
 				name: r,
 				grid: this._draft.grid,
 				cameras: this._order ?? n.cameras,
-				tour_s: this._draft.tour_s
+				tour_s: this._draft.tour_s,
+				floodlight: this._draft.floodlight,
+				siren: this._draft.siren,
+				strip: this._draft.strip
 			});
-			await this._loadLayouts(t), this._editing = !1, this._error = void 0, h(this, {
+			await this._loadLayouts(t), this._editing = !1, this._error = void 0, w(this, {
 				view: "wall",
 				layout: i.id
 			});
 		} catch (e) {
-			this._error = `Could not save it: ${s(e).message}`;
+			this._error = `Could not save it: ${c(e).message}`;
 		}
 	}
 	async _delete() {
@@ -377,27 +690,27 @@ var B = class extends i {
 		if (e && t.id) try {
 			await l(e, t.id), await this._loadLayouts(e), this._editing = !1, this._show("");
 		} catch (e) {
-			this._error = `Could not delete it: ${s(e).message}`;
+			this._error = `Could not delete it: ${c(e).message}`;
 		}
 	}
 	get _view() {
-		let e = this._layout, t = this._editing ? this._draft.grid : e.grid, n = this._data.cameras ?? [], r = new Map(n.map((e) => [e.id, e])), i = this._order ?? x(e, v([...n]).map((e) => e.id)), { width: a, height: o } = this._size, s = (e) => e.map((e) => e ? b(u(e)) : void 0);
+		let e = this._layout, t = this._editing ? this._draft.grid : e.grid, n = this._data.cameras ?? [], r = new Map(n.map((e) => [e.id, e])), i = this._order ?? te(e, x([...n]).map((e) => e.id)), { width: a, height: o } = this._size, s = (e) => e.map((e) => e ? C(u(e)) : void 0);
 		if (this._alone && r.has(this._alone)) return {
 			order: i,
 			perPage: 1,
 			pages: 1,
 			page: 0,
 			shown: [r.get(this._alone)],
-			plan: j("1", [], a, o)
+			plan: R("1", [], a, o)
 		};
-		let c = t === "auto" ? Math.max(1, i.length) : j(t, [], a, o).slots.length, l = S(i.length, c), d = Math.min(this._page, l - 1), f = i.slice(d * c, (d + 1) * c).map((e) => e ? r.get(e) : void 0);
+		let c = t === "auto" ? Math.max(1, i.length) : R(t, [], a, o).slots.length, l = ne(i.length, c), d = Math.min(this._page, l - 1), f = i.slice(d * c, (d + 1) * c).map((e) => e ? r.get(e) : void 0);
 		return {
 			order: i,
 			perPage: c,
 			pages: l,
 			page: d,
 			shown: f,
-			plan: j(t, s(f), a, o)
+			plan: R(t, s(f), a, o)
 		};
 	}
 	_name(e) {
@@ -406,19 +719,19 @@ var B = class extends i {
 	_swap(e, t) {
 		let { order: n } = this._view;
 		if (e === t) return;
-		let r = C(n, e, t);
+		let r = A(n, e, t);
 		this._order = r, this._said = `${this._name(n[e])} swapped with ${this._name(n[t]).toLowerCase() === "an empty cell" ? "an empty cell" : this._name(n[t])}.`, this._keep(r);
 	}
 	async _keep(e) {
 		let t = this.hass, n = this._layout;
 		if (t && n.id) try {
-			let { layout: r } = await c(t, {
+			let { layout: r } = await v(t, {
 				...n,
 				cameras: e
 			});
 			this._layouts = (this._layouts ?? []).map((e) => e.id === r.id ? r : e);
 		} catch (e) {
-			this._error = `Could not keep the new order: ${s(e).message}`;
+			this._error = `Could not keep the new order: ${c(e).message}`;
 		}
 	}
 	_enlarge(e) {
@@ -441,10 +754,10 @@ var B = class extends i {
 	}
 	_onKey(e, t) {
 		if (e.target !== e.currentTarget) return;
-		let n = this._view, r = T[e.key];
+		let n = this._view, r = M[e.key];
 		if (r) {
 			e.preventDefault();
-			let i = w(n.plan, t, r);
+			let i = j(n.plan, t, r);
 			if (i === void 0) return;
 			if (e.shiftKey && !this._alone) {
 				let e = n.page * n.perPage;
@@ -468,7 +781,7 @@ var B = class extends i {
 		clearInterval(this._tour), this._tour = void 0, this._tourEvery = 0;
 	}
 	render() {
-		let e = this._layout, t = this._data.cameras, i = this._view, { width: a, height: o } = this._size, s = this.layoutId !== void 0 && this._layouts !== void 0 && e.id !== this.layoutId, c = document.fullscreenEnabled && typeof this.requestFullscreen == "function";
+		let e = this._layout, t = this._data.cameras, i = this._view, { width: a, height: o } = this._size, s = this.layoutId !== void 0 && this._layouts !== void 0 && e.id !== this.layoutId, c = document.fullscreenEnabled && typeof this.requestFullscreen == "function", l = this._detecting(), u = new Map(x([...t ?? []]).map((e, t) => [e.id, t + 1]));
 		return r`<div class="bar">
         <select
           aria-label="Layout"
@@ -488,7 +801,7 @@ var B = class extends i {
 			this._goPage(i.page - 1);
 		}}
               >
-                ${f("chevronBack")}
+                ${p("chevronBack")}
               </button>
               <span>${i.page + 1} / ${i.pages}</span>
               <button
@@ -498,7 +811,7 @@ var B = class extends i {
 			this._goPage(i.page + 1);
 		}}
               >
-                ${f("chevron")}
+                ${p("chevron")}
               </button>
             </span>` : n}
         ${this._alone ? r`<button
@@ -507,11 +820,11 @@ var B = class extends i {
 			this._enlarge(0);
 		}}
             >
-              ${f("chevronBack")}Back to the layout
+              ${p("chevronBack")}Back to the layout
             </button>` : n}
         ${this._order && !e.id ? r`<span class="note">Save it as a layout to keep this order</span>` : n}
         ${s ? r`<span class="note">No layout “${this.layoutId}”: every camera instead</span>` : n}
-        <time class="clock" aria-label="Time">${p(this._now, this.hass?.config?.time_zone)}</time>
+        <time class="clock" aria-label="Time">${g(this._now, this.hass?.config?.time_zone)}</time>
         <button
           class="text"
           aria-pressed=${this._arranging ? "true" : "false"}
@@ -528,7 +841,7 @@ var B = class extends i {
 			this._editing ? this._editing = !1 : this._edit();
 		}}
         >
-          Layout${f("chevronDown")}
+          Layout${p("chevronDown")}
         </button>
         ${c ? r`<button
               class="text with-icon"
@@ -536,33 +849,43 @@ var B = class extends i {
 			this._toggleFull();
 		}}
             >
-              ${f(this._wallFull ? "exitFull" : "enterFull")}${this._wallFull ? "Exit full screen" : "Full screen"}
+              ${p(this._wallFull ? "exitFull" : "enterFull")}${this._wallFull ? "Exit full screen" : "Full screen"}
             </button>` : n}
         <button
           class="text with-icon"
           @click=${() => {
-			y("board"), h(this, { view: "live" });
+			T("board"), w(this, { view: "live" });
 		}}
         >
-          ${f("close")}Board
+          ${p("close")}Board
         </button>
       </div>
       ${this._editing ? this._renderEditor(e) : this._error ? r`<p class="error" role="alert">${this._error}</p>` : n}
-      ${t === void 0 ? r`<p class="note pad">${this._data.error ? `Live view could not load: ${this._data.error}` : "Loading…"}</p>` : this._renderCells(i.plan, i.shown, a, o)}
+      ${t === void 0 ? r`<p class="note pad">${this._data.error ? `Live view could not load: ${this._data.error}` : "Loading…"}</p>` : this._renderCells(i.plan, i.shown, a, o, l, u)}
+      ${t && this._shown.strip ? r`<rv-wall-strip
+            .hass=${this.hass}
+            .cameras=${x([...t])}
+            .numbers=${u}
+            .now=${l}
+            .pictures=${this._data.images}
+            @rv-strip-live=${(e) => {
+			this._showLarge(e.detail.cameraId);
+		}}
+          ></rv-wall-strip>` : n}
       <p class="said" role="status" aria-live="polite">${this._said}</p>`;
 	}
-	_renderCells(e, t, i, a) {
-		let s = new Map(v([...this._data.cameras ?? []]).map((e, t) => [e.id, t + 1])), c = this._editing ? this._draft.grid : this._layout.grid, l = e.slots.map((n, r) => {
+	_renderCells(e, t, i, a, o, c) {
+		let l = this._editing ? this._draft.grid : this._layout.grid, d = e.slots.map((n, r) => {
 			let o = t[r];
 			if (!o) return;
-			let s = M(e, n, i, a), l = this._alone ? "alone on the screen" : (c === "1+5" || c === "1+7") && r === 0 ? "the large slot" : void 0;
+			let s = z(e, n, i, a), c = this._alone ? "alone on the screen" : (l === "1+5" || l === "1+7") && r === 0 ? "the large slot" : void 0;
 			return {
 				camera: o,
 				...s,
-				fit: N(z(o), s),
-				...l ? { large: l } : {}
+				fit: B(ie(o), s),
+				...c ? { large: c } : {}
 			};
-		}), d = I(l, globalThis.devicePixelRatio || 1);
+		}), f = U(d, globalThis.devicePixelRatio || 1);
 		return r`<div
       class="cells"
       style=${`grid-template-columns: repeat(${String(e.cols)}, minmax(0, 1fr)); grid-template-rows: repeat(${String(e.rows)}, minmax(0, 1fr))`}
@@ -571,13 +894,13 @@ var B = class extends i {
 		}}
     >
       ${e.slots.map((i, a) => {
-			let c = `grid-column: ${String(i.col + 1)} / span ${String(i.cols)}; grid-row: ${String(i.row + 1)} / span ${String(i.rows)}`, f = t[a], p = this._view, m = p.page * p.perPage + a, h = f?.name ?? "Empty cell", g = this._alone ? "alone on the screen" : `cell ${String(a + 1)} of ${String(e.slots.length)}`;
+			let l = `grid-column: ${String(i.col + 1)} / span ${String(i.cols)}; grid-row: ${String(i.row + 1)} / span ${String(i.rows)}`, p = t[a], m = this._view, h = m.page * m.perPage + a, g = p?.name ?? "Empty cell", _ = p ? o.get(p.id) : void 0, v = this._alone ? "alone on the screen" : `cell ${String(a + 1)} of ${String(e.slots.length)}`;
 			return r`<div
-          class="cell ${this._picked === m ? "picked" : ""} ${this._over === a ? "over" : ""}"
-          style=${c}
+          class="cell ${this._picked === h ? "picked" : ""} ${this._over === a ? "over" : ""}"
+          style=${l}
           data-slot=${a}
           tabindex=${this._focus === a ? "0" : "-1"}
-          aria-label=${`${h}, ${g}`}
+          aria-label=${`${g}, ${v}${_ ? `, now: ${E(_.types)}` : ""}`}
           role="group"
           aria-roledescription="Wall cell"
           draggable=${this._alone ? "false" : "true"}
@@ -591,7 +914,7 @@ var B = class extends i {
 				this._focus = a, this._enlarge(a);
 			}}
           @dragstart=${(e) => {
-				this._dragged = m, e.dataTransfer?.setData("text/plain", String(m)), e.dataTransfer && (e.dataTransfer.effectAllowed = "move");
+				this._dragged = h, e.dataTransfer?.setData("text/plain", String(h)), e.dataTransfer && (e.dataTransfer.effectAllowed = "move");
 			}}
           @dragend=${() => {
 				this._dragged = void 0, this._over = void 0;
@@ -605,27 +928,31 @@ var B = class extends i {
           @drop=${(e) => {
 				e.preventDefault(), this._over = void 0;
 				let t = e.dataTransfer?.getData("text/plain"), n = t ? Number(t) : this._dragged;
-				this._dragged = void 0, n !== void 0 && Number.isInteger(n) && this._swap(n, m);
+				this._dragged = void 0, n !== void 0 && Number.isInteger(n) && this._swap(n, h);
 			}}
         >
-          ${f ? r`<rv-live-tile
+          ${p ? r`<rv-live-tile
                 fill
-                .fit=${l[a]?.fit ?? "cover"}
-                .tileHd=${d.get(f.id)}
-                .number=${s.get(f.id)}
+                .fit=${d[a]?.fit ?? "cover"}
+                .tileHd=${f.get(p.id)}
+                .number=${c.get(p.id)}
                 .hass=${this.hass}
-                .camera=${f}
-                .connection=${u(f)}
-                .image=${this._data.images[f.id]}
+                .camera=${p}
+                .connection=${u(p)}
+                .image=${this._data.images[p.id]}
                 .iceServers=${this._data.iceServers}
-                .warm=${o(this.hass, f)}
-                .suspended=${this._full !== void 0 && this._full !== f.id}
-                .controls=${f.controls}
+                .warm=${s(this.hass, p)}
+                .suspended=${this._full !== void 0 && this._full !== p.id}
+                .controls=${this._controls(p)}
+                .detecting=${_ ? {
+				label: E(_.types),
+				icon: k(_.types)
+			} : void 0}
               ></rv-live-tile>` : r`<div class="empty"></div>`}
           ${this._arranging ? r`<button
                 class="pick"
-                aria-pressed=${this._picked === m ? "true" : "false"}
-                aria-label=${f ? `Move ${f.name}` : `Empty cell ${String(a + 1)}`}
+                aria-pressed=${this._picked === h ? "true" : "false"}
+                aria-label=${p ? `Move ${p.name}` : `Empty cell ${String(a + 1)}`}
                 @click=${() => {
 				this._tap(a);
 			}}
@@ -658,7 +985,7 @@ var B = class extends i {
       </label>
       <fieldset class="grids">
         <legend>Grid</legend>
-        ${E.map(({ grid: e, label: t }) => r`<label class="grid-choice">
+        ${N.map(({ grid: e, label: t }) => r`<label class="grid-choice">
               <input
                 type="radio"
                 name="grid"
@@ -670,7 +997,7 @@ var B = class extends i {
 				grid: e
 			};
 		}}
-              />${H(e)}<span>${t}</span>
+              />${ce(e)}<span>${t}</span>
             </label>`)}
       </fieldset>
       <label class="name">
@@ -685,9 +1012,24 @@ var B = class extends i {
 			};
 		}}
         >
-          ${V.map(([e, t]) => r`<option value=${String(e ?? "")} ?selected=${this._draft.tour_s === e}>${t}</option>`)}
+          ${se.map(([e, t]) => r`<option value=${String(e ?? "")} ?selected=${this._draft.tour_s === e}>${t}</option>`)}
         </select>
       </label>
+      <fieldset class="shows">
+        <legend>Show</legend>
+        ${oe.map(([e, t]) => r`<label class="check">
+              <input
+                type="checkbox"
+                .checked=${this._draft[e]}
+                @change=${(t) => {
+			this._draft = {
+				...this._draft,
+				[e]: t.target.checked
+			};
+		}}
+              />${t}
+            </label>`)}
+      </fieldset>
       <div class="actions">
         <button type="submit">${e.id ? "Save" : "Save layout"}</button>
         ${e.id ? r`<button
@@ -724,7 +1066,7 @@ var B = class extends i {
       </p>
     </form>`;
 	}
-	static styles = [m, e`
+	static styles = [_, e`
       :host {
         display: flex;
         flex-direction: column;
@@ -961,11 +1303,45 @@ var B = class extends i {
       .editor .note {
         flex-basis: 100%;
       }
+      .shows {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px 14px;
+        margin: 0;
+        padding: 0;
+        border: none;
+        font-size: 14px;
+      }
+      .shows legend {
+        padding: 0 0 4px;
+      }
+      .shows .check {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        min-height: 32px;
+      }
       .editor code {
         font-family: var(--rv-mono);
       }
     `];
-}, V = [
+}, ae = {
+	floodlight: !0,
+	siren: !0,
+	strip: !0
+}, oe = [
+	["floodlight", "Floodlight buttons"],
+	["siren", "Siren buttons"],
+	["strip", "Latest detections"]
+];
+function $(e) {
+	return {
+		floodlight: e.floodlight !== !1,
+		siren: e.siren !== !1,
+		strip: e.strip !== !1
+	};
+}
+var se = [
 	[null, "Off"],
 	[10, "Every 10 s"],
 	[20, "Every 20 s"],
@@ -973,8 +1349,8 @@ var B = class extends i {
 	[60, "Every minute"],
 	[120, "Every 2 minutes"]
 ];
-function H(e) {
-	let n = j(e, Array.from({ length: 6 }, () => void 0), 160, 90), i = 32 / n.cols, a = 20 / n.rows;
+function ce(e) {
+	let n = R(e, Array.from({ length: 6 }, () => void 0), 160, 90), i = 32 / n.cols, a = 20 / n.rows;
 	return r`<svg viewBox="0 0 32 20" aria-hidden="true">
     ${n.slots.map((e) => t`<rect
           x=${(e.col * i + .5).toFixed(2)}
@@ -984,6 +1360,6 @@ function H(e) {
         ></rect>`)}
   </svg>`;
 }
-customElements.get("rv-wall") || customElements.define("rv-wall", B);
+customElements.get("rv-wall") || customElements.define("rv-wall", Q);
 //#endregion
-export { L as ALL_CAMERAS, B as RvWall, R as wallCameras };
+export { Z as ALL_CAMERAS, Q as RvWall, $ as shownBy, re as wallCameras };

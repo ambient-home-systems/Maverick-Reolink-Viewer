@@ -1,6 +1,6 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
-import { Dt as i, Ft as a, M as o, Nt as s, X as c, _ as l, d as u, g as d, it as f, j as p, lt as m, nt as h, t as g, v as _, y as v } from "./live-Cc-EfYb9.js";
-import { $ as y, B as b, J as x, L as S, Q as C, U as w, V as T, W as E, X as D, Y as O, Z as k, et as A, o as j, s as M, t as N, tt as P } from "./home-DwvOEeee.js";
+import { It as i, M as a, Ot as o, Pt as s, X as c, _ as l, d as u, g as d, it as f, j as p, nt as m, t as h, ut as g, v as _, y as v } from "./live-BIaa-XON.js";
+import { $ as y, G as b, H as x, K as S, Q as C, U as w, X as T, Z as E, et as D, nt as O, o as k, rt as A, s as j, t as M, tt as N, z as P } from "./home-DAZFKJ7M.js";
 //#region src/reolink-viewer-panel.ts
 var F = {
 	live: "Live",
@@ -50,17 +50,17 @@ var F = {
 	_toastTimer;
 	_clockTimer;
 	_onHashChange = () => {
-		this._route = w(window.location.hash);
+		this._route = b(window.location.hash);
 	};
 	constructor() {
-		super(), this.narrow = !1, this._now = Date.now(), this._board = [], this._probe = { status: "idle" }, this._includeBattery = !1, this._concurrency = !1, this._maxStreams = 4, this._playback = !1, this._playbackOnly = !1, this._playbackConcurrency = !1, this._playbackStreams = 4, this._baichuan = !1, this._baichuanOnly = !0, this._baichuanMain = !1, this._baichuanDownload = !0, this._baichuanSession = !1, this._baichuanCameras = "", this._baichuanHold = 5, this._events = !1, this._eventsOnly = !0, this._copied = !1, this._route = { view: "live" }, this.addEventListener(b, (e) => {
+		super(), this.narrow = !1, this._now = Date.now(), this._board = [], this._probe = { status: "idle" }, this._includeBattery = !1, this._concurrency = !1, this._maxStreams = 4, this._playback = !1, this._playbackOnly = !1, this._playbackConcurrency = !1, this._playbackStreams = 4, this._baichuan = !1, this._baichuanOnly = !0, this._baichuanMain = !1, this._baichuanDownload = !0, this._baichuanSession = !1, this._baichuanCameras = "", this._baichuanHold = 5, this._events = !1, this._eventsOnly = !0, this._copied = !1, this._route = { view: "live" }, this.addEventListener(x, (e) => {
 			this.navigate(e.detail);
-		}), this.addEventListener(T, (e) => {
+		}), this.addEventListener(w, (e) => {
 			this.showToast(e.detail);
 		});
 	}
 	connectedCallback() {
-		super.connectedCallback(), g(import.meta.url), this._route = this._start(w(window.location.hash)), window.addEventListener("hashchange", this._onHashChange), this._tick();
+		super.connectedCallback(), h(import.meta.url), this._route = this._start(b(window.location.hash)), window.addEventListener("hashchange", this._onHashChange), this._tick();
 	}
 	disconnectedCallback() {
 		super.disconnectedCallback(), window.removeEventListener("hashchange", this._onHashChange), clearTimeout(this._toastTimer), clearTimeout(this._clockTimer), this._run?.cancel(), this._run = void 0;
@@ -73,27 +73,27 @@ var F = {
 	willUpdate(e) {
 		if (this.toggleAttribute("dark", this.hass?.themes?.darkMode === !0), e.has("_route")) {
 			let e = this._route.view;
-			this._viewError = void 0, N(e).catch((t) => {
+			this._viewError = void 0, M(e).catch((t) => {
 				this._route.view === e && (this._viewError = s(t).message);
 			});
 		}
 	}
 	updated(e) {
-		if (e.has("hass") && this.hass && !this._devices && !this._loading && (this._load(), h(this.hass).catch(() => void 0)), e.get("_route") !== void 0 && !this.shadowRoot?.activeElement) {
+		if (e.has("hass") && this.hass && !this._devices && !this._loading && (this._load(), m(this.hass).catch(() => void 0)), e.get("_route") !== void 0 && !this.shadowRoot?.activeElement) {
 			let e = document.activeElement;
 			(!e || e === document.body) && this.shadowRoot?.querySelector("main")?.focus({ preventScroll: !0 });
 		}
 	}
 	_start(e) {
-		if (e.view !== "live" || O() !== "wall") return e;
-		let t = x(), n = t ? {
+		if (e.view !== "live" || E() !== "wall") return e;
+		let t = T(), n = t ? {
 			view: "wall",
 			layout: t
-		} : { view: "wall" }, r = E(n);
+		} : { view: "wall" }, r = S(n);
 		return window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}${r}`), n;
 	}
 	navigate(e) {
-		let t = this._start(e), n = E(t);
+		let t = this._start(e), n = S(t);
 		if (window.location.hash !== n) {
 			let e = `${window.location.pathname}${window.location.search}${n}`;
 			window.history.pushState(null, "", e);
@@ -109,9 +109,9 @@ var F = {
 		if (this.hass) {
 			this._loading = !0;
 			try {
-				this._devices = await f(this.hass), this._loadError = void 0, !this._board.length && !this._devices.degraded && m(this.hass).then(({ cameras: e }) => {
-					this._board.length || (this._board = S(e));
-				}).catch(() => void 0), !this._warmed && !this._devices.degraded && (this._warmed = !0, a(this.hass).catch(() => void 0));
+				this._devices = await f(this.hass), this._loadError = void 0, !this._board.length && !this._devices.degraded && g(this.hass).then(({ cameras: e }) => {
+					this._board.length || (this._board = P(e));
+				}).catch(() => void 0), !this._warmed && !this._devices.degraded && (this._warmed = !0, i(this.hass).catch(() => void 0));
 			} catch (e) {
 				this._loadError = s(e).message;
 			} finally {
@@ -167,7 +167,7 @@ var F = {
         Could not load this page: ${this._viewError}. Check the connection to Home Assistant, then
         <button
           @click=${() => {
-			this._viewError = void 0, N(e.view).catch((e) => {
+			this._viewError = void 0, M(e.view).catch((e) => {
 				this._viewError = s(e).message;
 			});
 		}}
@@ -175,7 +175,7 @@ var F = {
           Try again
         </button>
       </div>`;
-		let r = P(this._devices), i = r ? this._renderIntegration(r) : t;
+		let r = A(this._devices), i = r ? this._renderIntegration(r) : t;
 		switch (e.view) {
 			case "live": return r ? n`<div class="wide-note">${i}</div>` : n`<rv-live-grid
             .hass=${this.hass}
@@ -228,11 +228,11 @@ var F = {
     </div>`;
 	}
 	_renderBanner() {
-		if (this._loadError) return k(A(this._loadError, "Your devices"), this._loadError, {
+		if (this._loadError) return y(O(this._loadError, "Your devices"), this._loadError, {
 			action: n`<button @click=${() => void this._load()} ?disabled=${this._loading}>Try again</button>`,
 			help: "loading"
 		});
-		let e = P(this._devices);
+		let e = A(this._devices);
 		return !e || e.kind === "none" ? t : this._renderIntegration(e);
 	}
 	_renderIntegration(e) {
@@ -245,7 +245,7 @@ var F = {
         <button class="check" @click=${() => void this._load()} ?disabled=${this._loading}>
           ${c("refresh")}${this._loading ? "Checking…" : "Check again"}
         </button>
-        ${D(e.kind)}
+        ${C(e.kind)}
       </div>
       ${e.technical ? n`<details>
             <summary>Details</summary>
@@ -325,14 +325,14 @@ var F = {
 	}
 	_renderHelp() {
 		let e = (e, t, r) => n`<li>
-      <a class="row" href=${C(r)} target="_blank" rel="noopener noreferrer">
+      <a class="row" href=${D(r)} target="_blank" rel="noopener noreferrer">
         <span class="what"><span class="name">${e}</span><span class="muted">${t}</span></span>
         ${c("external")}
       </a>
     </li>`;
 		return n`<section class="card">
       <h2>Help</h2>
-      <p class="muted">The guides to this version of Reolink Viewer (${y}). They open in a new tab.</p>
+      <p class="muted">The guides to this version of Reolink Viewer (${N}). They open in a new tab.</p>
       <ul class="checks">
         ${e("User guide", "What each part of the panel does, and how to use it.", "guide")}
         ${e("Troubleshooting", "What a message means, and what to do about it.", "troubleshooting")}
@@ -611,7 +611,7 @@ var F = {
           </p>
           <div class="actions">
             <button @click=${() => {
-				M(e.report, e.filename);
+				j(e.report, e.filename);
 			}}>
               Download again
             </button>
@@ -634,7 +634,7 @@ var F = {
 			started: Date.now(),
 			log: e
 		};
-		let t = i(this.hass, {
+		let t = o(this.hass, {
 			include_battery: this._includeBattery,
 			concurrency_test: this._concurrency,
 			max_streams: this._maxStreams,
@@ -661,12 +661,12 @@ var F = {
 		this._run = t, t.result.then((e) => {
 			if (this._run !== t) return;
 			this._run = void 0;
-			let n = j(/* @__PURE__ */ new Date());
+			let n = k(/* @__PURE__ */ new Date());
 			this._probe = {
 				status: "done",
 				report: e,
 				filename: n
-			}, M(e, n);
+			}, j(e, n);
 		}, (e) => {
 			this._run === t && (this._run = void 0, this._probe = {
 				status: "error",
@@ -686,7 +686,7 @@ var F = {
 		}
 	}
 	static styles = [
-		o,
+		a,
 		p,
 		e`
       :host {
@@ -999,4 +999,4 @@ var F = {
 };
 customElements.get("reolink-viewer-panel") || customElements.define("reolink-viewer-panel", L);
 //#endregion
-export { L as ReolinkViewerPanel, N as loadView };
+export { L as ReolinkViewerPanel, M as loadView };
