@@ -3,6 +3,20 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.56.0
+
+The Wall as a kiosk, and on a dashboard.
+
+- **The pointer hides** after 3 seconds still over the Wall, and comes back when it
+  moves.
+- **The screen stays awake** while the Wall shows, where the browser can (over
+  https); in Fully Kiosk, Fully's own settings do it, and with its JavaScript
+  interface on, the Wall's video stops while Fully's screen is off or its
+  screensaver shows.
+- **Reolink Wall**, a dashboard card: one of your saved layouts on a dashboard, as
+  the Wall shows it, with or without its bar. Choose the layout in its settings; a
+  tap on a detection opens its recording in the panel.
+
 ## 0.55.0
 
 The latest detections on the Wall.

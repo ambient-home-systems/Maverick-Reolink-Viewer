@@ -18,8 +18,9 @@ import {
   type CameraCardConfig,
 } from "./config";
 
-/** Fired with the new settings: Home Assistant's editor event. */
-export const CONFIG_CHANGED = "config-changed";
+import { CONFIG_CHANGED } from "./editor-event";
+
+export { CONFIG_CHANGED };
 
 export class ReolinkViewerCameraEditor extends LitElement {
   static override properties = {

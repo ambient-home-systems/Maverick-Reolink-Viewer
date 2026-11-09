@@ -1,20 +1,21 @@
 import { a as e, i as t, n, r, t as i } from "./lit-DdRjbP0M.js";
-import { Ct as a, F as o, L as s, Pt as c, Q as l, R as u, St as d, Tt as f, X as p, c as m, ct as h, d as g, j as _, kt as v, p as y, yt as b } from "./live-BIaa-XON.js";
-import { B as x, J as S, V as C, W as w, X as ee, Y as T, c as E, f as D, p as O, u as k } from "./home-DAZFKJ7M.js";
+import { Ct as a, F as o, L as s, Pt as c, Q as l, R as u, St as d, Tt as f, X as p, c as m, ct as h, d as g, j as _, kt as v, p as y, yt as ee } from "./live-BazhJ5O3.js";
+import { B as b, J as x, V as S, W as C, X as te, Y as w, c as T, f as E, p as D, u as O } from "./home-mL2889V7.js";
+import { t as k } from "./tablet-DTFJf-Qd.js";
 //#region src/wall/arrange.ts
-function te(e, t) {
+function ne(e, t) {
 	return e.cameras.length ? [...e.cameras] : [...t];
 }
-function ne(e, t) {
+function re(e, t) {
 	return Math.max(1, Math.ceil(e / Math.max(1, t)));
 }
-function A(e, t, n) {
+function ie(e, t, n) {
 	let r = [...e];
 	for (; r.length <= Math.max(t, n);) r.push(null);
 	for ([r[t], r[n]] = [r[n] ?? null, r[t] ?? null]; r.length && r.at(-1) === null;) r.pop();
 	return r;
 }
-function j(e, t, n) {
+function A(e, t, n) {
 	if (t < 0 || t >= e.slots.length) return;
 	let r = e.slots[t], i = (e, t, n, r) => e < n + r && n < e + t, a;
 	return e.slots.forEach((e, o) => {
@@ -34,12 +35,12 @@ function j(e, t, n) {
 		});
 	}), a?.index;
 }
-var M = {
+var j = {
 	ArrowLeft: "left",
 	ArrowRight: "right",
 	ArrowUp: "up",
 	ArrowDown: "down"
-}, N = [
+}, M = [
 	{
 		grid: "auto",
 		label: "Auto"
@@ -68,7 +69,7 @@ var M = {
 		grid: "1+7",
 		label: "1 + 7"
 	}
-], P = (e) => ({
+], N = (e) => ({
 	cols: e,
 	rows: e,
 	slots: Array.from({ length: e * e }, (t, n) => ({
@@ -77,7 +78,7 @@ var M = {
 		cols: 1,
 		rows: 1
 	}))
-}), F = (e) => {
+}), P = (e) => {
 	let t = [{
 		col: 0,
 		row: 0,
@@ -102,7 +103,7 @@ var M = {
 		slots: t
 	};
 };
-function I(e, t) {
+function F(e, t) {
 	let n = [], r = (e, t) => !n[e]?.[t], i = [], a = 0;
 	for (let o of e) {
 		let e = o === "wide" && t >= 2 ? 2 : 1, s = o === "tall" ? 2 : 1, c;
@@ -127,10 +128,10 @@ function I(e, t) {
 		rows: Math.max(1, a)
 	};
 }
-function L(e, t, n) {
+function I(e, t, n) {
 	let r = e.length ? e : [void 0], i = r.reduce((e, t) => e + (t ? 2 : 1), 0), a;
 	for (let e = 1; e <= i; e += 1) {
-		let { slots: i, rows: o } = I(r, e), s = (t - (e - 1) * 4) / e, c = (n - (o - 1) * 4) / o, l = Math.min(s, c * 16 / 9);
+		let { slots: i, rows: o } = F(r, e), s = (t - (e - 1) * 4) / e, c = (n - (o - 1) * 4) / o, l = Math.min(s, c * 16 / 9);
 		(!a || l > a.size + .5 || Math.abs(l - a.size) <= .5 && e * o < a.cols * a.rows) && (a = {
 			cols: e,
 			rows: o,
@@ -149,35 +150,35 @@ function L(e, t, n) {
 		slots: e.length ? c : []
 	};
 }
-function R(e, t, n, r) {
+function L(e, t, n, r) {
 	switch (e) {
-		case "1": return P(1);
-		case "2x2": return P(2);
-		case "3x3": return P(3);
-		case "4x4": return P(4);
-		case "1+5": return F(3);
-		case "1+7": return F(4);
-		case "auto": return L(t, n, r);
+		case "1": return N(1);
+		case "2x2": return N(2);
+		case "3x3": return N(3);
+		case "4x4": return N(4);
+		case "1+5": return P(3);
+		case "1+7": return P(4);
+		case "auto": return I(t, n, r);
 	}
 }
-function z(e, t, n, r) {
+function R(e, t, n, r) {
 	let i = (n - (e.cols - 1) * 4) / e.cols, a = (r - (e.rows - 1) * 4) / e.rows;
 	return {
 		width: i * t.cols + (t.cols - 1) * 4,
 		height: a * t.rows + (t.rows - 1) * 4
 	};
 }
-function B(e, t) {
+function z(e, t) {
 	return !e || !t.width || !t.height ? "cover" : e > t.width / t.height * 1.02 ? "contain" : "cover";
 }
-function V(e, t, n = 1) {
+function B(e, t, n = 1) {
 	let r = e?.streams.sub?.encoding;
 	if (!r?.width || !r.height || !t.width || !t.height) return;
 	let i = t.width * n / r.width, a = t.height * n / r.height;
 	return t.fit === "cover" ? Math.max(i, a) : Math.min(i, a);
 }
-var H = (e, t) => `${String(e)} ${t}${e === 1 ? "" : "s"}`;
-function U(e, t = 1) {
+var V = (e, t) => `${String(e)} ${t}${e === 1 ? "" : "s"}`;
+function H(e, t = 1) {
 	let n = /* @__PURE__ */ new Map(), r = [];
 	e.forEach((e, i) => {
 		if (!e) return;
@@ -198,7 +199,7 @@ function U(e, t = 1) {
 			});
 			return;
 		}
-		let c = V(a, e, t);
+		let c = B(a, e, t);
 		if (e.large) r.push({
 			cell: e,
 			connection: a,
@@ -229,14 +230,14 @@ function U(e, t = 1) {
 			reason: `HD: ${a}`
 		})) : n.set(e.camera.id, {
 			hd: !1,
-			reason: `SD: ${t.entry_title} plays ${H(o, "HD tile")} at once, and ${s.join(", ")} ${s.length === 1 ? "has" : "have"} it`
+			reason: `SD: ${t.entry_title} plays ${V(o, "HD tile")} at once, and ${s.join(", ")} ${s.length === 1 ? "has" : "have"} it`
 		});
 	}
 	return n;
 }
 //#endregion
 //#region src/components/wall-strip.ts
-var W = 12e4, G = 2e4, K = 120, q = 10, J = 60474e4, Y = "rv-strip-live", X = class extends i {
+var U = 12e4, W = 2e4, G = 120, K = 10, q = 60474e4, J = "rv-strip-live", ae = class extends i {
 	static properties = {
 		hass: { attribute: !1 },
 		cameras: { attribute: !1 },
@@ -258,7 +259,7 @@ var W = 12e4, G = 2e4, K = 120, q = 10, J = 60474e4, Y = "rv-strip-live", X = cl
 	connectedCallback() {
 		super.connectedCallback(), this._timer = setInterval(() => {
 			this._load(!0);
-		}, W);
+		}, U);
 	}
 	disconnectedCallback() {
 		super.disconnectedCallback(), clearInterval(this._timer), clearTimeout(this._again), this._started = !1;
@@ -269,35 +270,35 @@ var W = 12e4, G = 2e4, K = 120, q = 10, J = 60474e4, Y = "rv-strip-live", X = cl
 	refreshSoon() {
 		this._load(!0), clearTimeout(this._again), this._again = setTimeout(() => {
 			this._load(!0);
-		}, G);
+		}, W);
 	}
 	async _load(e) {
 		let t = this.hass;
 		if (!t) return;
 		let n = ++this._seq;
 		try {
-			let r = await h(t, e ? { background: e } : { maxAge: K });
+			let r = await h(t, e ? { background: e } : { maxAge: G });
 			if (n !== this._seq) return;
 			this._feed = r, this._loadThumbs(t, r.events), this._loadMarks(t, r, n);
 		} catch {}
 	}
 	async _loadThumbs(e, t) {
-		let n = t.filter((e) => !this._asked.has(O(e)));
-		for (let e of n) this._asked.add(O(e));
+		let n = t.filter((e) => !this._asked.has(D(e)));
+		for (let e of n) this._asked.add(D(e));
 		await Promise.all(n.map(async (t) => {
 			try {
-				let { urls: n } = await b(e, t.camera_id, [t.start], q), r = n[0]?.url;
-				r && (this._thumbs = new Map(this._thumbs).set(O(t), r));
+				let { urls: n } = await ee(e, t.camera_id, [t.start], K), r = n[0]?.url;
+				r && (this._thumbs = new Map(this._thumbs).set(D(t), r));
 			} catch {}
 		}));
 	}
 	async _loadMarks(e, t, n) {
 		if (!t.events.length) return;
-		let r = t.now, i = Math.max(Math.min(...t.events.map((e) => e.start)), r - J);
+		let r = t.now, i = Math.max(Math.min(...t.events.map((e) => e.start)), r - q);
 		try {
 			let { marks: a } = await d(e, i, r);
 			if (n !== this._seq) return;
-			this._marked = new Set(D(t.events, a, i, r).marks.keys());
+			this._marked = new Set(E(t.events, a, i, r).marks.keys());
 		} catch {}
 	}
 	get _cards() {
@@ -315,7 +316,7 @@ var W = 12e4, G = 2e4, K = 120, q = 10, J = 60474e4, Y = "rv-strip-live", X = cl
 	}
 	_open(e) {
 		if (e.now) {
-			this.dispatchEvent(new CustomEvent(Y, {
+			this.dispatchEvent(new CustomEvent(J, {
 				detail: { cameraId: e.camera.id },
 				bubbles: !0,
 				composed: !0
@@ -335,7 +336,7 @@ var W = 12e4, G = 2e4, K = 120, q = 10, J = 60474e4, Y = "rv-strip-live", X = cl
 					} : e)
 				});
 			}
-			w(this, {
+			C(this, {
 				view: "device",
 				id: t.camera_id,
 				tab: "playback",
@@ -350,7 +351,7 @@ var W = 12e4, G = 2e4, K = 120, q = 10, J = 60474e4, Y = "rv-strip-live", X = cl
     </ul>`;
 	}
 	_renderCard(e, t, i) {
-		let { camera: a, now: o, event: s } = e, c = o ? o.types : s?.types ?? [], l = o ? o.since : s?.start ?? 0, u = E(c), d = o || i === void 0 || m(l, t) === i ? g(l, t) : y(l, t), f = o ? this.pictures[a.id]?.url : s ? this._thumbs.get(O(s)) : void 0, h = !o && s !== void 0 && this._marked.has(O(s)), _ = o ? "Now" : s?.new ? "New" : void 0, v = this.numbers.get(a.id);
+		let { camera: a, now: o, event: s } = e, c = o ? o.types : s?.types ?? [], l = o ? o.since : s?.start ?? 0, u = T(c), d = o || i === void 0 || m(l, t) === i ? g(l, t) : y(l, t), f = o ? this.pictures[a.id]?.url : s ? this._thumbs.get(D(s)) : void 0, h = !o && s !== void 0 && this._marked.has(D(s)), _ = o ? "Now" : s?.new ? "New" : void 0, v = this.numbers.get(a.id);
 		return r`<li>
       <button
         class="card ${o ? "now" : ""}"
@@ -362,7 +363,7 @@ var W = 12e4, G = 2e4, K = 120, q = 10, J = 60474e4, Y = "rv-strip-live", X = cl
         <span class="thumb">${f ? r`<img src=${f} alt="" loading="lazy" />` : n}</span>
         <span class="text">
           <span class="what">
-            ${p(k(c))} <span class="label">${u}</span>
+            ${p(O(c))} <span class="label">${u}</span>
             ${_ ? r`<span class="tag">${_}</span>` : n}
             ${h ? r`<span class="badge unusual">Unusual</span>` : n}
           </span>
@@ -410,7 +411,7 @@ var W = 12e4, G = 2e4, K = 120, q = 10, J = 60474e4, Y = "rv-strip-live", X = cl
         background: color-mix(in srgb, var(--rv-on-board) 6%, transparent);
         color: var(--rv-on-board);
         text-align: left;
-        cursor: pointer;
+        cursor: var(--rv-pointer, pointer);
       }
       .card:hover {
         background: color-mix(in srgb, var(--rv-on-board) 12%, transparent);
@@ -496,29 +497,35 @@ var W = 12e4, G = 2e4, K = 120, q = 10, J = 60474e4, Y = "rv-strip-live", X = cl
       }
     `];
 };
-customElements.get("rv-wall-strip") || customElements.define("rv-wall-strip", X);
+customElements.get("rv-wall-strip") || customElements.define("rv-wall-strip", ae);
 //#endregion
 //#region src/components/wall.ts
-var Z = {
+var Y = {
 	id: "",
 	name: "All cameras",
 	grid: "auto",
 	cameras: [],
 	tour_s: null
 };
-function re(e, t) {
-	if (!e.cameras.length) return x([...t]);
+function oe(e, t) {
+	if (!e.cameras.length) return b([...t]);
 	let n = new Map(t.map((e) => [e.id, e]));
 	return e.cameras.map((e) => e ? n.get(e) : void 0);
 }
-function ie(e) {
+function se(e) {
 	let t = u(e)?.streams.sub?.encoding;
 	return t?.width && t.height ? t.width / t.height : void 0;
 }
-var Q = class extends i {
+var X = 3e3, Z = class extends i {
 	static properties = {
 		hass: { attribute: !1 },
 		layoutId: { attribute: !1 },
+		card: {
+			type: Boolean,
+			reflect: !0
+		},
+		showBar: { attribute: !1 },
+		_asleep: { state: !0 },
 		_layouts: { state: !0 },
 		_editing: { state: !0 },
 		_draft: { state: !0 },
@@ -546,22 +553,54 @@ var Q = class extends i {
 	_refocus = !1;
 	_dragged;
 	_wasDetecting = /* @__PURE__ */ new Set();
+	_idleTimer;
+	_wake;
+	_waking = !1;
+	_unsleep;
 	constructor() {
 		super(), this._editing = !1, this._draft = {
 			name: "",
 			grid: "auto",
 			tour_s: null,
-			...ae
+			...Q
 		}, this._page = 0, this._arranging = !1, this._focus = 0, this._said = "", this._size = {
 			width: 0,
 			height: 0
-		}, this._wallFull = !1, this._now = Date.now();
+		}, this._wallFull = !1, this._now = Date.now(), this.card = !1, this.showBar = !0, this._asleep = !1;
 	}
 	connectedCallback() {
-		super.connectedCallback(), T("wall"), document.addEventListener("fullscreenchange", this._onFullscreen), this._tick();
+		super.connectedCallback(), this.card || w("wall"), document.addEventListener("fullscreenchange", this._onFullscreen), document.addEventListener("visibilitychange", this._onVisibility), this.addEventListener("pointermove", this._onPointer), this.addEventListener("pointerdown", this._onPointer), this._onPointer(), this._keepAwake(), k.listenToFully(), this._asleep = k.asleep, this._unsleep = k.onSleep(() => {
+			this._asleep = k.asleep;
+		}), this._tick();
 	}
 	disconnectedCallback() {
-		super.disconnectedCallback(), document.removeEventListener("fullscreenchange", this._onFullscreen), this._resize?.disconnect(), this._resize = void 0, clearTimeout(this._clock), this._stopTour();
+		super.disconnectedCallback(), document.removeEventListener("fullscreenchange", this._onFullscreen), document.removeEventListener("visibilitychange", this._onVisibility), this.removeEventListener("pointermove", this._onPointer), this.removeEventListener("pointerdown", this._onPointer), clearTimeout(this._idleTimer), this.removeAttribute("idle"), this._wake?.release().catch(() => void 0), this._wake = void 0, this._unsleep?.(), this._unsleep = void 0, this._resize?.disconnect(), this._resize = void 0, clearTimeout(this._clock), this._stopTour();
+	}
+	_onPointer = () => {
+		this.removeAttribute("idle"), clearTimeout(this._idleTimer), this._idleTimer = setTimeout(() => {
+			this.setAttribute("idle", "");
+		}, X);
+	};
+	_onVisibility = () => {
+		document.visibilityState === "visible" && this._keepAwake();
+	};
+	async _keepAwake() {
+		let e = navigator.wakeLock;
+		if (!(!e || k.fully || this._wake || this._waking || document.visibilityState !== "visible")) {
+			this._waking = !0;
+			try {
+				let t = await e.request("screen");
+				if (!this.isConnected) {
+					await t.release();
+					return;
+				}
+				this._wake = t, t.addEventListener("release", () => {
+					this._wake === t && (this._wake = void 0);
+				});
+			} catch {} finally {
+				this._waking = !1;
+			}
+		}
 	}
 	_onFullscreen = () => {
 		this._wallFull = document.fullscreenElement === this;
@@ -578,7 +617,7 @@ var Q = class extends i {
 		}
 		e.has("hass") && this.hass && !this._asked && (this._asked = !0, this._loadLayouts(this.hass));
 		let t = this._layout.id;
-		t !== this._arranged && (this._arranged = t, this._order = void 0, this._page = 0, this._alone = void 0, this._picked = void 0, this._focus = 0);
+		e.has("card") && this.card && (this._editing = !1), t !== this._arranged && (this._arranged = t, this._order = void 0, this._page = 0, this._alone = void 0, this._picked = void 0, this._focus = 0);
 	}
 	updated() {
 		let e = this.shadowRoot?.querySelector(".cells");
@@ -590,7 +629,7 @@ var Q = class extends i {
 			});
 		}), this._resize.observe(e));
 		let t = this._layout;
-		this._layouts !== void 0 && S(t.id || void 0), this._syncTour(), this._refocus && (this._refocus = !1, this.shadowRoot?.querySelector(`.cell[data-slot="${String(this._focus)}"]`)?.focus());
+		this._layouts !== void 0 && !this.card && x(t.id || void 0), this._syncTour(), this._refocus && (this._refocus = !1, this.shadowRoot?.querySelector(`.cell[data-slot="${String(this._focus)}"]`)?.focus());
 	}
 	async _loadLayouts(e) {
 		try {
@@ -600,8 +639,8 @@ var Q = class extends i {
 		}
 	}
 	get _layout() {
-		let e = this._layouts ?? [], t = this.layoutId ?? ee();
-		return e.find((e) => e.id === t) ?? Z;
+		let e = this._layouts ?? [], t = this.layoutId ?? (this.card ? void 0 : te());
+		return e.find((e) => e.id === t) ?? Y;
 	}
 	get _shown() {
 		if (this._editing) {
@@ -647,7 +686,7 @@ var Q = class extends i {
 		document.fullscreenElement === this ? document.exitFullscreen().catch(() => void 0) : this.requestFullscreen().catch(() => void 0);
 	}
 	_show(e) {
-		e || S(void 0), w(this, e ? {
+		e || x(void 0), C(this, e ? {
 			view: "wall",
 			layout: e
 		} : { view: "wall" });
@@ -677,7 +716,7 @@ var Q = class extends i {
 				siren: this._draft.siren,
 				strip: this._draft.strip
 			});
-			await this._loadLayouts(t), this._editing = !1, this._error = void 0, w(this, {
+			await this._loadLayouts(t), this._editing = !1, this._error = void 0, C(this, {
 				view: "wall",
 				layout: i.id
 			});
@@ -694,23 +733,23 @@ var Q = class extends i {
 		}
 	}
 	get _view() {
-		let e = this._layout, t = this._editing ? this._draft.grid : e.grid, n = this._data.cameras ?? [], r = new Map(n.map((e) => [e.id, e])), i = this._order ?? te(e, x([...n]).map((e) => e.id)), { width: a, height: o } = this._size, s = (e) => e.map((e) => e ? C(u(e)) : void 0);
+		let e = this._layout, t = this._editing ? this._draft.grid : e.grid, n = this._data.cameras ?? [], r = new Map(n.map((e) => [e.id, e])), i = this._order ?? ne(e, b([...n]).map((e) => e.id)), { width: a, height: o } = this._size, s = (e) => e.map((e) => e ? S(u(e)) : void 0);
 		if (this._alone && r.has(this._alone)) return {
 			order: i,
 			perPage: 1,
 			pages: 1,
 			page: 0,
 			shown: [r.get(this._alone)],
-			plan: R("1", [], a, o)
+			plan: L("1", [], a, o)
 		};
-		let c = t === "auto" ? Math.max(1, i.length) : R(t, [], a, o).slots.length, l = ne(i.length, c), d = Math.min(this._page, l - 1), f = i.slice(d * c, (d + 1) * c).map((e) => e ? r.get(e) : void 0);
+		let c = t === "auto" ? Math.max(1, i.length) : L(t, [], a, o).slots.length, l = re(i.length, c), d = Math.min(this._page, l - 1), f = i.slice(d * c, (d + 1) * c).map((e) => e ? r.get(e) : void 0);
 		return {
 			order: i,
 			perPage: c,
 			pages: l,
 			page: d,
 			shown: f,
-			plan: R(t, s(f), a, o)
+			plan: L(t, s(f), a, o)
 		};
 	}
 	_name(e) {
@@ -719,7 +758,7 @@ var Q = class extends i {
 	_swap(e, t) {
 		let { order: n } = this._view;
 		if (e === t) return;
-		let r = A(n, e, t);
+		let r = ie(n, e, t);
 		this._order = r, this._said = `${this._name(n[e])} swapped with ${this._name(n[t]).toLowerCase() === "an empty cell" ? "an empty cell" : this._name(n[t])}.`, this._keep(r);
 	}
 	async _keep(e) {
@@ -754,10 +793,10 @@ var Q = class extends i {
 	}
 	_onKey(e, t) {
 		if (e.target !== e.currentTarget) return;
-		let n = this._view, r = M[e.key];
+		let n = this._view, r = j[e.key];
 		if (r) {
 			e.preventDefault();
-			let i = j(n.plan, t, r);
+			let i = A(n.plan, t, r);
 			if (i === void 0) return;
 			if (e.shiftKey && !this._alone) {
 				let e = n.page * n.perPage;
@@ -781,7 +820,23 @@ var Q = class extends i {
 		clearInterval(this._tour), this._tour = void 0, this._tourEvery = 0;
 	}
 	render() {
-		let e = this._layout, t = this._data.cameras, i = this._view, { width: a, height: o } = this._size, s = this.layoutId !== void 0 && this._layouts !== void 0 && e.id !== this.layoutId, c = document.fullscreenEnabled && typeof this.requestFullscreen == "function", l = this._detecting(), u = new Map(x([...t ?? []]).map((e, t) => [e.id, t + 1]));
+		let e = this._layout, t = this._data.cameras, i = this._view, { width: a, height: o } = this._size, s = this.layoutId !== void 0 && this._layouts !== void 0 && e.id !== this.layoutId, c = document.fullscreenEnabled && typeof this.requestFullscreen == "function", l = this._detecting(), u = new Map(b([...t ?? []]).map((e, t) => [e.id, t + 1]));
+		return r`${this.card ? this._renderCardBar(e, i, s, c) : this._renderBar(e, i, s, c)}
+      ${this._editing ? this._renderEditor(e) : this._error ? r`<p class="error" role="alert">${this._error}</p>` : n}
+      ${t === void 0 ? r`<p class="note pad">${this._data.error ? `Live view could not load: ${this._data.error}` : "Loading…"}</p>` : this._renderCells(i.plan, i.shown, a, o, l, u)}
+      ${t && this._shown.strip ? r`<rv-wall-strip
+            .hass=${this.hass}
+            .cameras=${b([...t])}
+            .numbers=${u}
+            .now=${l}
+            .pictures=${this._data.images}
+            @rv-strip-live=${(e) => {
+			this._showLarge(e.detail.cameraId);
+		}}
+          ></rv-wall-strip>` : n}
+      <p class="said" role="status" aria-live="polite">${this._said}</p>`;
+	}
+	_renderBar(e, t, i, a) {
 		return r`<div class="bar">
         <select
           aria-label="Layout"
@@ -793,27 +848,7 @@ var Q = class extends i {
           <option value="" ?selected=${!e.id}>All cameras</option>
           ${(this._layouts ?? []).map((t) => r`<option value=${t.id} ?selected=${t.id === e.id}>${t.name}</option>`)}
         </select>
-        ${i.pages > 1 ? r`<span class="pages" role="group" aria-label="Pages">
-              <button
-                class="text icon-only"
-                aria-label="Previous page"
-                @click=${() => {
-			this._goPage(i.page - 1);
-		}}
-              >
-                ${p("chevronBack")}
-              </button>
-              <span>${i.page + 1} / ${i.pages}</span>
-              <button
-                class="text icon-only"
-                aria-label="Next page"
-                @click=${() => {
-			this._goPage(i.page + 1);
-		}}
-              >
-                ${p("chevron")}
-              </button>
-            </span>` : n}
+        ${t.pages > 1 ? this._renderPages(t) : n}
         ${this._alone ? r`<button
               class="text with-icon"
               @click=${() => {
@@ -823,7 +858,7 @@ var Q = class extends i {
               ${p("chevronBack")}Back to the layout
             </button>` : n}
         ${this._order && !e.id ? r`<span class="note">Save it as a layout to keep this order</span>` : n}
-        ${s ? r`<span class="note">No layout “${this.layoutId}”: every camera instead</span>` : n}
+        ${i ? r`<span class="note">No layout “${this.layoutId}”: every camera instead</span>` : n}
         <time class="clock" aria-label="Time">${g(this._now, this.hass?.config?.time_zone)}</time>
         <button
           class="text"
@@ -843,49 +878,71 @@ var Q = class extends i {
         >
           Layout${p("chevronDown")}
         </button>
-        ${c ? r`<button
-              class="text with-icon"
-              @click=${() => {
-			this._toggleFull();
-		}}
-            >
-              ${p(this._wallFull ? "exitFull" : "enterFull")}${this._wallFull ? "Exit full screen" : "Full screen"}
-            </button>` : n}
+        ${a ? this._renderFullButton() : n}
         <button
           class="text with-icon"
           @click=${() => {
-			T("board"), w(this, { view: "live" });
+			w("board"), C(this, { view: "live" });
 		}}
         >
           ${p("close")}Board
         </button>
-      </div>
-      ${this._editing ? this._renderEditor(e) : this._error ? r`<p class="error" role="alert">${this._error}</p>` : n}
-      ${t === void 0 ? r`<p class="note pad">${this._data.error ? `Live view could not load: ${this._data.error}` : "Loading…"}</p>` : this._renderCells(i.plan, i.shown, a, o, l, u)}
-      ${t && this._shown.strip ? r`<rv-wall-strip
-            .hass=${this.hass}
-            .cameras=${x([...t])}
-            .numbers=${u}
-            .now=${l}
-            .pictures=${this._data.images}
-            @rv-strip-live=${(e) => {
-			this._showLarge(e.detail.cameraId);
+      </div>`;
+	}
+	_renderPages(e) {
+		return r`<span class="pages" role="group" aria-label="Pages">
+      <button
+        class="text icon-only"
+        aria-label="Previous page"
+        @click=${() => {
+			this._goPage(e.page - 1);
 		}}
-          ></rv-wall-strip>` : n}
-      <p class="said" role="status" aria-live="polite">${this._said}</p>`;
+      >
+        ${p("chevronBack")}
+      </button>
+      <span>${e.page + 1} / ${e.pages}</span>
+      <button
+        class="text icon-only"
+        aria-label="Next page"
+        @click=${() => {
+			this._goPage(e.page + 1);
+		}}
+      >
+        ${p("chevron")}
+      </button>
+    </span>`;
+	}
+	_renderFullButton() {
+		return r`<button
+      class="text with-icon"
+      @click=${() => {
+			this._toggleFull();
+		}}
+    >
+      ${p(this._wallFull ? "exitFull" : "enterFull")}${this._wallFull ? "Exit full screen" : "Full screen"}
+    </button>`;
+	}
+	_renderCardBar(e, t, i, a) {
+		return this.showBar ? r`<div class="bar">
+      <span class="name">${e.name}</span>
+      ${t.pages > 1 ? this._renderPages(t) : n}
+      ${i ? r`<span class="note">No layout “${this.layoutId ?? ""}” of yours: every camera instead</span>` : n}
+      <time class="clock" aria-label="Time">${g(this._now, this.hass?.config?.time_zone)}</time>
+      ${a ? this._renderFullButton() : n}
+    </div>` : n;
 	}
 	_renderCells(e, t, i, a, o, c) {
 		let l = this._editing ? this._draft.grid : this._layout.grid, d = e.slots.map((n, r) => {
 			let o = t[r];
 			if (!o) return;
-			let s = z(e, n, i, a), c = this._alone ? "alone on the screen" : (l === "1+5" || l === "1+7") && r === 0 ? "the large slot" : void 0;
+			let s = R(e, n, i, a), c = this._alone ? "alone on the screen" : (l === "1+5" || l === "1+7") && r === 0 ? "the large slot" : void 0;
 			return {
 				camera: o,
 				...s,
-				fit: B(ie(o), s),
+				fit: z(se(o), s),
 				...c ? { large: c } : {}
 			};
-		}), f = U(d, globalThis.devicePixelRatio || 1);
+		}), f = H(d, globalThis.devicePixelRatio || 1);
 		return r`<div
       class="cells"
       style=${`grid-template-columns: repeat(${String(e.cols)}, minmax(0, 1fr)); grid-template-rows: repeat(${String(e.rows)}, minmax(0, 1fr))`}
@@ -900,7 +957,7 @@ var Q = class extends i {
           style=${l}
           data-slot=${a}
           tabindex=${this._focus === a ? "0" : "-1"}
-          aria-label=${`${g}, ${v}${_ ? `, now: ${E(_.types)}` : ""}`}
+          aria-label=${`${g}, ${v}${_ ? `, now: ${T(_.types)}` : ""}`}
           role="group"
           aria-roledescription="Wall cell"
           draggable=${this._alone ? "false" : "true"}
@@ -942,11 +999,11 @@ var Q = class extends i {
                 .image=${this._data.images[p.id]}
                 .iceServers=${this._data.iceServers}
                 .warm=${s(this.hass, p)}
-                .suspended=${this._full !== void 0 && this._full !== p.id}
+                .suspended=${this._full !== void 0 && this._full !== p.id || this._asleep}
                 .controls=${this._controls(p)}
                 .detecting=${_ ? {
-				label: E(_.types),
-				icon: k(_.types)
+				label: T(_.types),
+				icon: O(_.types)
 			} : void 0}
               ></rv-live-tile>` : r`<div class="empty"></div>`}
           ${this._arranging ? r`<button
@@ -985,7 +1042,7 @@ var Q = class extends i {
       </label>
       <fieldset class="grids">
         <legend>Grid</legend>
-        ${N.map(({ grid: e, label: t }) => r`<label class="grid-choice">
+        ${M.map(({ grid: e, label: t }) => r`<label class="grid-choice">
               <input
                 type="radio"
                 name="grid"
@@ -997,7 +1054,7 @@ var Q = class extends i {
 				grid: e
 			};
 		}}
-              />${ce(e)}<span>${t}</span>
+              />${ue(e)}<span>${t}</span>
             </label>`)}
       </fieldset>
       <label class="name">
@@ -1012,12 +1069,12 @@ var Q = class extends i {
 			};
 		}}
         >
-          ${se.map(([e, t]) => r`<option value=${String(e ?? "")} ?selected=${this._draft.tour_s === e}>${t}</option>`)}
+          ${le.map(([e, t]) => r`<option value=${String(e ?? "")} ?selected=${this._draft.tour_s === e}>${t}</option>`)}
         </select>
       </label>
       <fieldset class="shows">
         <legend>Show</legend>
-        ${oe.map(([e, t]) => r`<label class="check">
+        ${ce.map(([e, t]) => r`<label class="check">
               <input
                 type="checkbox"
                 .checked=${this._draft[e]}
@@ -1075,6 +1132,19 @@ var Q = class extends i {
         overflow: hidden;
         color: var(--rv-on-board);
         background: var(--rv-board);
+      }
+      /* A dashboard card: as tall as the dashboard makes it. */
+      :host([card]) {
+        height: 100%;
+      }
+      /* Still for IDLE_CURSOR_MS: no pointer over the feeds (step 5's kiosk). */
+      :host([idle]) {
+        cursor: none;
+        --rv-pointer: none;
+      }
+      .bar .name {
+        font-size: 15px;
+        font-weight: 500;
       }
       .bar {
         flex: none;
@@ -1166,7 +1236,7 @@ var Q = class extends i {
         border: 2px dashed color-mix(in srgb, var(--rv-on-board) 50%, transparent);
         border-radius: 0;
         background: color-mix(in srgb, var(--rv-board) 25%, transparent);
-        cursor: pointer;
+        cursor: var(--rv-pointer, pointer);
       }
       .pick[aria-pressed="true"] {
         border: 4px solid var(--rv-on-board);
@@ -1257,7 +1327,7 @@ var Q = class extends i {
         padding: 4px 6px;
         border: 1px solid color-mix(in srgb, var(--rv-on-board) 30%, transparent);
         font-size: 13px;
-        cursor: pointer;
+        cursor: var(--rv-pointer, pointer);
       }
       .grid-choice:has(input:checked) {
         border-color: var(--rv-on-board);
@@ -1325,11 +1395,11 @@ var Q = class extends i {
         font-family: var(--rv-mono);
       }
     `];
-}, ae = {
+}, Q = {
 	floodlight: !0,
 	siren: !0,
 	strip: !0
-}, oe = [
+}, ce = [
 	["floodlight", "Floodlight buttons"],
 	["siren", "Siren buttons"],
 	["strip", "Latest detections"]
@@ -1341,7 +1411,7 @@ function $(e) {
 		strip: e.strip !== !1
 	};
 }
-var se = [
+var le = [
 	[null, "Off"],
 	[10, "Every 10 s"],
 	[20, "Every 20 s"],
@@ -1349,8 +1419,8 @@ var se = [
 	[60, "Every minute"],
 	[120, "Every 2 minutes"]
 ];
-function ce(e) {
-	let n = R(e, Array.from({ length: 6 }, () => void 0), 160, 90), i = 32 / n.cols, a = 20 / n.rows;
+function ue(e) {
+	let n = L(e, Array.from({ length: 6 }, () => void 0), 160, 90), i = 32 / n.cols, a = 20 / n.rows;
 	return r`<svg viewBox="0 0 32 20" aria-hidden="true">
     ${n.slots.map((e) => t`<rect
           x=${(e.col * i + .5).toFixed(2)}
@@ -1360,6 +1430,6 @@ function ce(e) {
         ></rect>`)}
   </svg>`;
 }
-customElements.get("rv-wall") || customElements.define("rv-wall", Q);
+customElements.get("rv-wall") || customElements.define("rv-wall", Z);
 //#endregion
-export { Z as ALL_CAMERAS, Q as RvWall, $ as shownBy, re as wallCameras };
+export { Y as ALL_CAMERAS, X as IDLE_CURSOR_MS, Z as RvWall, $ as shownBy, oe as wallCameras };

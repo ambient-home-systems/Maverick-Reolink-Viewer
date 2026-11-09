@@ -914,7 +914,7 @@ export class RvLiveTile extends LitElement {
         color: #f4f4f1;
       }
       .tile.interactive {
-        cursor: pointer;
+        cursor: var(--rv-pointer, pointer);
       }
       /* Over the picture, under what the tile says: the tile as a button. */
       .open {
@@ -927,7 +927,7 @@ export class RvLiveTile extends LitElement {
         border: none;
         border-radius: 0;
         background: transparent;
-        cursor: pointer;
+        cursor: var(--rv-pointer, pointer);
       }
       .open:hover:not(:disabled) {
         background: transparent;

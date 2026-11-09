@@ -7,6 +7,10 @@
 // page, stays under CARD_PAGE_KB, and with what a shown card fetches (the live
 // tile) under CARD_BUDGET_KB. Its editor, fetched when opened, is printed.
 //
+// The Wall's card (Phase 9 step 5): what a shown Wall card fetches beyond the
+// module (the panel's Wall, with the home view's files it shares) stays under
+// WALL_CARD_BUDGET_KB.
+//
 //   node scripts/bundle-budget.mjs [dist-dir]
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
@@ -15,6 +19,7 @@ import { gzipSync } from "node:zlib";
 const BUDGET_KB = 200;
 const CARD_PAGE_KB = 12;
 const CARD_BUDGET_KB = 60;
+const WALL_CARD_BUDGET_KB = 100;
 const ENTRY = "reolink-viewer-panel.js";
 const CARD = "reolink-viewer-card.js";
 const dist = process.argv[2] ?? new URL("../../custom_components/reolink_viewer/frontend_dist", import.meta.url).pathname;
@@ -65,6 +70,11 @@ lines.push(
     `${shownKb.toFixed(1)} KB once shown (budget ${CARD_BUDGET_KB} KB); its editor ${editorKb.toFixed(1)} KB more`,
 );
 
+// The Wall's card: its body (the panel's Wall) once shown.
+const wallFile = dynamicImports(CARD).find((f) => f.startsWith("wall-card-"));
+const wallKb = cardKb + sum(more(wallFile));
+lines.push(`Wall card: ${wallKb.toFixed(1)} KB gzipped once shown (budget ${WALL_CARD_BUDGET_KB} KB)`);
+
 const all = readdirSync(dist).filter((f) => f.endsWith(".js"));
 lines.push(`Every file: ${sum(all).toFixed(1)} KB gzipped in ${fileCount(all.length)}`);
 console.log(lines.join("\n"));
@@ -72,6 +82,8 @@ console.log(lines.join("\n"));
 const over = [];
 if (initialKb > BUDGET_KB) over.push(`The home view's JavaScript is ${initialKb.toFixed(1)} KB gzipped, over the ${BUDGET_KB} KB budget.`);
 if (!bodyFile) over.push("The card's module does not fetch its body (camera-card) on its own.");
+if (!wallFile) over.push("The card's module does not fetch the Wall card's body (wall-card) on its own.");
+if (wallKb > WALL_CARD_BUDGET_KB) over.push(`A shown Wall card fetches ${wallKb.toFixed(1)} KB gzipped, over its ${WALL_CARD_BUDGET_KB} KB budget.`);
 if (cardKb > CARD_PAGE_KB) over.push(`The card's module is ${cardKb.toFixed(1)} KB gzipped on every page, over its ${CARD_PAGE_KB} KB budget.`);
 if (shownKb > CARD_BUDGET_KB) over.push(`A shown card fetches ${shownKb.toFixed(1)} KB gzipped, over its ${CARD_BUDGET_KB} KB budget.`);
 if (over.length) {

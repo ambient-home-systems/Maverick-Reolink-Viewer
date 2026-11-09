@@ -18,10 +18,10 @@ import { chooseHd } from "../live/hd";
 import { rvTokens, sharedStyles } from "../styles";
 import type { HomeAssistant, LiveCamera, LiveConnection, LiveStreamKind } from "../types";
 import { rememberRatio, type CameraCardConfig } from "./config";
+import { PANEL_PATH, openPanel } from "./panel";
 import { tablet } from "./tablet";
 
-/** The panel's address (const.py's PANEL_URL_PATH). */
-export const PANEL_PATH = "/reolink-viewer";
+export { PANEL_PATH };
 
 /** The cards on the page: while one is full screen, the others stop (it hides them). */
 const cards = new Set<RvCameraCard>();
@@ -40,8 +40,7 @@ tablet.onSleep(() => {
 
 /** Open a camera's Live tab in the panel, as Home Assistant's own links do. */
 export function openInPanel(cameraId: string): void {
-  history.pushState(null, "", `${PANEL_PATH}#device/${encodeURIComponent(cameraId)}/live`);
-  window.dispatchEvent(new CustomEvent("location-changed", { detail: { replace: false } }));
+  openPanel(`#device/${encodeURIComponent(cameraId)}/live`);
 }
 
 /** The picture's shape (width over height) on the stream the card plays, when the camera says. */

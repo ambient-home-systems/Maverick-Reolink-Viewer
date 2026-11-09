@@ -159,6 +159,16 @@ The latest detections:
   tap it to see the camera large. Once it ends, the strip asks the camera again, and
   its recording takes the card's place.
 
+As a kiosk (a wall tablet, or a second screen):
+
+- **The pointer hides** after 3 seconds still, and shows again when it moves.
+- **The screen stays awake** while the Wall shows, where the browser can keep it so
+  (Chrome, Edge and Safari, on a page opened over https; not over plain http). In
+  Fully Kiosk, Fully's own **Keep Screen On** and screensaver settings do it.
+- **In Fully Kiosk,** with its JavaScript interface on (see
+  [A camera on a dashboard](#a-camera-on-a-dashboard)), the Wall's video stops while
+  Fully's screen is off or its screensaver shows, and starts again after.
+
 ### A camera full screen
 
 Each tile has small buttons, bottom right:
@@ -575,6 +585,25 @@ ring_full_screen: 30 # a doorbell: seconds full screen when it rings (0: not)
   Without it, the cards stop only when the page is hidden.
 - **What the cards saw** on each device, the screen going off and on and how soon
   video came back, is in the [Dashboard cards](#the-dashboard-cards-report) report.
+
+## The Wall on a dashboard
+
+**Reolink Wall** in the dashboard's card picker shows one of your saved Wall
+layouts on a dashboard, as the panel's Wall shows it: its grid, its tour, HD in the
+large tile, the tiles lighting up and the strip of latest detections, as the layout
+says. Its settings:
+
+- **Layout:** one of your saved layouts, or **All cameras**. Layouts are made on the
+  panel's Wall (**Layout ⌄**) and are your own: a dashboard shown to another Home
+  Assistant user (a tablet signed in as someone else) shows every camera instead,
+  and says so.
+- **Show the bar:** the layout's name, its pages, the time and **Full screen**, above
+  the video. Untick it for the video alone.
+
+The card arranges and edits nothing: do that on the panel's Wall, and the card
+follows. A tap on a detection opens its recording in the panel. In a sections view
+it is the dashboard's width and eight rows tall until you resize it; elsewhere it is
+16:9.
 
 ## Checks
 
