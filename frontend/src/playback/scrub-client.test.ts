@@ -62,6 +62,9 @@ describe("the scrub session's client", () => {
       serverMs: 4,
       ms: 12,
     });
+    // The camera's key-frame interval, where the server sends it.
+    const keyed = message({ seq: 4, at: 1, time: 1, source: "store", kind: "fmp4", codec: "avc1", interval: 1000 }, [], [1]);
+    expect(readPicture(keyed, 1).interval).toBe(1000);
   });
 
   it("asks one moment at a time: a newer one supersedes the one waiting", async () => {

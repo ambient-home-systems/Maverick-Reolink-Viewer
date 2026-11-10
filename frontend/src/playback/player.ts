@@ -255,24 +255,35 @@ export class RvPlayer extends LitElement {
     this._start(video);
   }
 
+  /** Whether the recording on screen has an absolute time buffered (a scrub shows it from there). */
+  buffers(time: number): boolean {
+    return this._bufferedAt(time) !== undefined;
+  }
+
   /**
    * Show the frame at an absolute time while scrubbing, if the recording on
    * screen has it buffered. Returns whether it could.
    */
   preview(time: number): boolean {
+    const seconds = this._bufferedAt(time);
+    const video = this._video(this._active);
+    if (seconds === undefined || !video) return false;
+    if (typeof video.fastSeek === "function") video.fastSeek(seconds);
+    else video.currentTime = seconds;
+    return true;
+  }
+
+  /** The media time (s) of an absolute time, if the video on screen has it buffered. */
+  private _bufferedAt(time: number): number | undefined {
     const item = this.current;
     const video = this._video(this._active);
-    if (!item || !video || time < item.start || time > item.end) return false;
+    if (!item || !video || time < item.start || time > item.end) return undefined;
     const seconds = (time - item.start) / 1000;
     const ranges = video.buffered;
     for (let i = 0; i < ranges.length; i += 1) {
-      if (seconds >= ranges.start(i) && seconds <= ranges.end(i)) {
-        if (typeof video.fastSeek === "function") video.fastSeek(seconds);
-        else video.currentTime = seconds;
-        return true;
-      }
+      if (seconds >= ranges.start(i) && seconds <= ranges.end(i)) return seconds;
     }
-    return false;
+    return undefined;
   }
 
   pause(): void {
@@ -503,6 +514,7 @@ export class RvPlayer extends LitElement {
     const note = this._waiting || (this._requestedAt !== undefined && this.note) ? this.note : undefined;
     return html`<div class="frame">
       ${this._renderVideo(0)}${this._renderVideo(1)}
+      <slot name="over"></slot>
       ${note ? html`<div class="note" role="status">${note}</div>` : nothing}
       ${this._started ? nothing : html`<p class="empty">Pick an event or a time on the timeline to play it.</p>`}
     </div>`;
@@ -553,6 +565,11 @@ export class RvPlayer extends LitElement {
       font-family: var(--rv-font, sans-serif);
       font-size: 15px;
       text-align: center;
+    }
+    /* What a scrub shows over the video (Phase 10, rv-scrub-picture). */
+    ::slotted([slot="over"]) {
+      position: absolute;
+      inset: 0;
     }
     /* The hidden buffer stays laid out (some browsers do not load hidden video). */
     video.hidden {

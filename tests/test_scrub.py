@@ -384,6 +384,7 @@ def test_the_message_to_the_browser() -> None:
         fragment=b"FRAGMENT",
         codec="avc1",
         timing={"ms": 3},
+        interval_ms=1_000,
     )
     raw = picture.message(7, 5_400)
     (length,) = struct.unpack_from(">I", raw)
@@ -398,6 +399,7 @@ def test_the_message_to_the_browser() -> None:
         "init": 4,
         "data": 8,
         "timing": {"ms": 3},
+        "interval": 1_000,
     }
     assert raw[4 + length :] == b"INITFRAGMENT"
     jpeg = Picture(5_000, "thumbnail", jpeg=b"JPEG").message(8, 5_000)
@@ -681,6 +683,8 @@ async def test_a_scrub_session_end_to_end(
         assert header["kind"] == "fmp4"
         assert header["time"] == segment["start"] + 4_000
         assert header["codec"] == "avc1.640033"
+        # No cut has shown this camera's interval: the usual 4 s.
+        assert header["interval"] == 4_000
         init, fragment = body[: header["init"]], body[header["init"] :]
         assert len(fragment) == header["data"]
         sample = key_sample(init, fragment)

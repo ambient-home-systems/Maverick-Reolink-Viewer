@@ -22,6 +22,8 @@ export interface ScrubPicture {
   /** The server's time for it, and the round trip from the ask (ms). */
   serverMs: number | undefined;
   ms: number;
+  /** The camera's key-frame interval (ms), as the server knows it. */
+  interval?: number;
 }
 
 /** No picture: why, in plain words, or that a newer moment was asked. */
@@ -64,6 +66,7 @@ export function readPicture(buffer: ArrayBuffer, ms: number): ScrubPicture & { s
     init: number;
     data: number;
     timing?: { ms?: number };
+    interval?: number | null;
   };
   const body = 4 + length;
   return {
@@ -77,6 +80,7 @@ export function readPicture(buffer: ArrayBuffer, ms: number): ScrubPicture & { s
     data: new Uint8Array(buffer, body + header.init, header.data),
     serverMs: header.timing?.ms,
     ms,
+    ...(typeof header.interval === "number" ? { interval: header.interval } : {}),
   };
 }
 

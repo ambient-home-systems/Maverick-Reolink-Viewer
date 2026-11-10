@@ -26,7 +26,7 @@ put on it:
 | 7 | Live video on dashboards: a Reolink Viewer camera card | Standard | 1–1.5 wk | **Done** (2026-11-03, v0.45.2), closed on daily use by the owner. **Step 1 done** (v0.44.0): the Reolink camera card, `custom:reolink-viewer-camera`, with its editor, on any dashboard and for any user. The owner's check (2026-11-02): on the wall tablet (Galaxy Tab A9+, Fully Kiosk, a sections view) and the iPhone app's dashboard, the Doorbell's and the front-yard camera's cards show their picture at once and their video quickly, kept warm or not, and go full screen in HD and back. **Step 2 built** (v0.45.0): what the cards see is logged per device (Devices → Dashboard cards), they sleep while Fully Kiosk's screen is off or its screensaver on, and a doorbell's card can wake the screen and go full screen when it rings. **Step 2 done** (2026-11-03, v0.45.2): on the owner's tablet the cards sleep under Fully's screensaver (no frames decoded) and a ring wakes the screen and shows the Doorbell full screen, playing in 0.6 s (v0.45.1 fills the window from the top layer). Step 3 stays gated. Not measured: a warm camera's wake time and 8 visible hours; the wall page's cards are the owner's choice. See "Phase 7" |
 | 8 | Unusual events: learning what is normal | High | 2–3 wk, then a week of learning | **Started** (2026-11-03). **Step 1 built** (v0.46.0): the detection journal, opt-in ("Learn what is normal"), with a 10-day head start from Home Assistant's recorder; on at the owner's since 2026-11-02, all 7 cameras. v0.46.1 keeps motion as bursts and a year of history (the owner's choices, from the first 10 days' sizes). **Step 2 built** (v0.47.0): Stamina's model, ported with its tests (MIT, in `THIRD_PARTY.md`), with a daily cap for a busy property; the Devices page shows each camera's state and the week's marks with their sentences. The owner's check: 3.6 marks a day at Balanced (243 a week without the cap). v0.47.1, the owner's choices: motion never marked, time counted once, one mark per incident across cameras; 5.1 a day, the journal 1.1 MB (about 2.8 MB a month). v0.47.2: only long stands out, a kind seen 10 times is known, only detections fire first; 5.3 a day. v0.47.3: an incident's later events take what fired before it; a mark always says why; the model saved between restarts; 5.3 a day, 39 without the cap. v0.47.4: anything seen 10 times is known, only "nothing fired first" raises; 1.4 a day, all rare by count. v0.47.5: Balanced aims at a few a day (floor 0, at most 3 a day), More knows a value after 20. **Step 3 built** (v0.48.0–v0.49.0), the owner's choice: marks on the timetable's rows with why, and an Unusual filter on Events (v0.48.0; the owner's check: 2.6 a day at Balanced); "What it has learned" on each camera's Overview, and a mark's count as a total (v0.49.0). **House-wide signals built** (v0.50.0): chosen in the options, kept beside the detections, learned and said. **Step 4 built** (v0.51.0): each detection scored as it begins and ends; `reolink_viewer_unusual`, an "unusual activity" sensor per camera, and a device trigger per camera, on Reolink Viewer's own device. See "Phase 8" |
 | 9 | The Wall: the Live page as a security monitor, with layouts, arranging, HD large tiles and the detection strip | Standard / High | 2–3 wk | **Done** (2026-11-10, v0.56.0): the owner validated v0.55.0's and v0.56.0's checklists. Started 2026-11-05. **Step 1 built** (v0.52.0): the Wall, its layouts (Auto by shape, 1, 2×2, 3×3, 4×4, 1+5, 1+7), saved per user on the server, `#wall/<id>`, each device remembering board or Wall; the owner's check: it works, nothing to scroll. **Step 2 built** (v0.53.0): swapping (drag, or Arrange and two taps), the large slot or alone by a double tap or Enter, the keyboard, pages and tours. **Step 3 built** (v0.54.0–v0.54.1): HD in the large tiles while a stream slot is spare, the NVR's budget 9 streams with 2 HD tiles (the capacity test). **Step 4 built** (v0.55.0): the detection strip, a tile lit at once by its sensor, and per layout the feeds' floodlight and siren buttons. **Step 5 built** (v0.56.0): the pointer hidden when still, the screen kept awake, the tiles asleep under Fully's screen off, and the Reolink Wall dashboard card. The owner's checks of v0.55.0 and v0.56.0 passed (2026-11-10): the phase is done. See "Phase 9" |
-| 10 | Scrubbing that shows the picture while dragging | Very high | 2–4 wk | **Started** (2026-11-10). **Step 0 built** (v0.57.0): the gate's measurements, the probe's scrub cuts and key frames, and the playback check's K row (key frames decoded one at a time); the owner's runs passed it (2026-11-10). **Step 1 built** (v0.58.0): the picture at a moment, from the server: a scrub session (a signed websocket), answered from a store of key frames found, the disk cache or a 2-second cut the device sends, taking its channel's turn; the playback check's F row. See "Phase 10" |
+| 10 | Scrubbing that shows the picture while dragging | Very high | 2–4 wk | **Started** (2026-11-10). **Step 0 built** (v0.57.0): the gate's measurements, the probe's scrub cuts and key frames, and the playback check's K row (key frames decoded one at a time); the owner's runs passed it (2026-11-10). **Step 1 built** (v0.58.0): the picture at a moment, from the server: a scrub session (a signed websocket), answered from a store of key frames found, the disk cache or a 2-second cut the device sends, taking its channel's turn; the playback check's F row. **Step 2 built** (v0.59.0): dragging over what the video has not buffered shows the server's key frame at the pointer, over the video, until release plays from there. See "Phase 10" |
 | 11 | Playback and settings extras: zoom, event clips, filters, copying settings | Standard | 1–2 wk | Planned. See "Phase 11" |
 | 12 | Optional R&D: the Doorbell's recordings and talk | Very high | 3–5 wk, gated | Planned. See "Phase 12" |
 | 13 | Optional: live picture integrity and outside live sources | High | 1–1.5 wk, gated | Planned. See "Phase 13" |
@@ -6924,7 +6924,7 @@ download cut, then the thumbnail.
 | --- | --- |
 | 0. Measure first (the gate) | Built (v0.57.0). **The gate passes** (2026-11-10): a cut's key frame in 166–182 ms back to back on all six cameras, and a key frame decoded in 1.7 ms on desktop Chrome; the iPhone app's and the wall tablet's K rows still to come (they choose step 2's way of painting, not whether step 1 is built) |
 | 1. Key frames from the server | Built (v0.58.0–v0.58.1); the owner's check passed on desktop Chrome (2026-11-10); the iPhone app's and the wall tablet's still to run |
-| 2. Painting while dragging | Not started |
+| 2. Painting while dragging | Built (v0.59.0); the owner's check to come |
 | 3. Press and release | Not started |
 | 4. The checks | Not started |
 | 5. Optional: storyboards | Not started; only if step 0's gate fails |
@@ -7206,6 +7206,88 @@ while F runs.
   - the time label gives the frame's own time;
   - a frame within one key-frame interval of the pointer counts as on time.
 - **Hover:** hovering without a press keeps today's thumbnail.
+
+**As built (v0.59.0), the owner's go-ahead ("proceed with step 2"):**
+
+- **Each move** (`rv-scrub`, from a drag or the arrow keys): where the video on
+  screen has the moment buffered (`RvPlayer.buffers`), it shows it as before
+  (`preview`, 80 ms apart). Elsewhere, inside a recording, the scrub controller
+  (`scrub-controller.ts`) asks the scrub session for it.
+- **One ask at a time:** while one is answered, only the newest moment the
+  pointer reached waits, and is asked next. Asking anew on every move would
+  cancel each ask before its answer came (newest wins, step 1), and a steady
+  drag would show nothing. A picture is shown only while the drag goes on.
+- **The session:** opened at a day's first ask and reused while the day shows;
+  closed when the day changes or the tab goes, and after a minute unused (the
+  next drag opens it again). One that cannot open leaves the day's drags to
+  the buffer, as in v0.58.
+- **Painting** (`rv-scrub-picture`, in the player's new `over` slot, so it
+  covers the video wherever the player is, full screen included):
+  - **WebCodecs** (`KeyFramePainter`): one `VideoDecoder`, kept while the
+    stream's codec, size and description stay the same; each key frame is
+    decoded and flushed, drawn on a canvas, and let go. A decoder that fails,
+    or gives no frame in 2 s, is replaced for the next picture.
+  - **MSE** where the browser has no `VideoDecoder` (`MsePainter`, the
+    browser's `ManagedMediaSource` or `MediaSource`): a video element of its
+    own, its buffer holding the one picture (the one before removed, the init
+    appended only when it changes), set to the picture's time. WebCodecs
+    exists only in a secure context, so Home Assistant opened over plain HTTP
+    (not HTTPS, not localhost) paints this way too.
+  - **In Chromium** (a scratch run before the PR, the sample clips' key frames,
+    H.264 and VP9, 64×64): WebCodecs decoded and drew each in 5 ms, 1 ms or
+    less with the decoder kept; MSE showed each in 2 to 3 ms.
+  - **A thumbnail** (the JPEG a camera without the protocol answers with) is
+    shown as an image.
+  - **Newest first:** a picture that comes while another is painted waits, and
+    only the last of those is painted next.
+- **What is shown:** the picture's own time in its corner (the dayline's clock
+  is the pointer's); a picture further from the pointer than the camera's
+  key-frame interval and half a second is **late** and dimmed until the next
+  comes. The server now sends that interval with each picture (`interval`,
+  ms: the one the cuts learned, else 4 s).
+- **While dragging,** the playing video's time no longer moves the cursor (the
+  pointer is the time), and the hover box above the timeline shows the time
+  alone, fetching no thumbnail; without a press, hovering is as before.
+- **Release** plays from the pointer as now (step 3 starts from the picture
+  shown); the picture stays until the video's first frame (or 10 s, or a
+  failure), so the screen goes from the picture to the video. A drag the
+  browser takes (a cancelled pointer) takes its picture away at once.
+- **Seen in:** Technical details' "Pictures while dragging": shown of asked,
+  missed, and the last picture's source, round trip and distance from its
+  moment; or why there are none (no WebCodecs nor MSE, the session not open).
+- **Checks:** the controller (one ask in flight, the newest waiting, nothing
+  shown after the drag, a miss, a session the server closed opened again, one
+  that cannot open, closing on a new day and after a minute unused but not
+  during a drag); the painters (the sample clip's key frame decoded with its
+  description, the decoder kept or replaced, a JPEG or a broken picture
+  refused, a failed decoder replaced, no frame in time; MSE's init once and
+  each fragment alone, a new source for a new codec); the element (shown only
+  once painted, newest first, late by the camera's interval, a JPEG, MSE
+  without WebCodecs, neither); the tab (a drag over what is not buffered asks
+  the session and paints, the cursor kept, the bare hover, release holds the
+  picture until the first frame, a buffered moment from the video alone, no
+  ask between recordings, a cancelled drag, the hold's limit, a session that
+  cannot open); the interval in the server's message.
+
+**Hardware checklist (the owner, v0.59.0):** after Home Assistant's restart and
+a full reload of the page (Ctrl+F5), on LAN Chrome:
+
+1. Open a camera's day whose recordings are not cached, and drag slowly along
+   an hour that has not played: a picture follows the pointer, its time in the
+   corner, within a second of the pointer on Front Yard Right and within 4 s
+   on the others; a new one about every 0.3 s (the first pass) and quicker over
+   the same stretch again (the store).
+2. Drag fast across the hour: pictures keep coming, dimmed while they lag, and
+   catch up when the pointer rests.
+3. Release: the picture stays until the video starts there, with no black
+   frame between.
+4. Drag inside the recording that is playing, over what it has loaded: the
+   video itself shows it, as before.
+5. Hover without pressing: the thumbnail above the timeline as before.
+6. Technical details, "Pictures while dragging": how many were shown of those
+   asked, and the last one's source and round trip.
+7. Then the iPhone app and the wall tablet (their K and F rows too, if not run
+   yet): the same drag, and what Technical details says there.
 
 #### Step 10.3: press and release
 

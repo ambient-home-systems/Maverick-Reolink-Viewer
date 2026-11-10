@@ -1,7 +1,7 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
 import { B as i, E as a, Ft as o, G as s, H as c, It as l, J as u, K as d, Mt as f, Pt as p, R as m, S as h, T as g, U as _, V as v, W as y, Y as b, Z as x, at as S, b as C, dt as w, ft as T, h as E, ht as D, j as O, mt as k, n as A, p as j, q as ee, st as te, x as ne } from "./live-D6mEGytR.js";
-import { q as re, tt as ie } from "./home-DZHvBXAF.js";
-import { c as ae, o as oe, r as se, s as ce } from "./check-vnuvOAva.js";
+import { q as re, tt as ie } from "./home-Ciew1Vor.js";
+import { d as ae, f as oe, p as se, r as ce } from "./check-Bho42WiC.js";
 import { a as M, i as N, n as P, o as F, r as I, t as L } from "./findings-0DTL4xoa.js";
 //#region src/live/check.ts
 var R = [
@@ -87,7 +87,7 @@ var R = [
 	}
 	async _header() {
 		let e = this._hass.user?.is_admin === !0;
-		this._log(`Reolink Viewer live check v${ie} · ${this.options.setup} · ${(/* @__PURE__ */ new Date()).toLocaleString()}`), this._log(`Browser: ${oe(navigator.userAgent)} · page ${E(location.hostname)} over ${location.protocol.replace(":", "")} · screen ${screen.width}×${screen.height} @${window.devicePixelRatio}x`), this._log(`User agent: ${navigator.userAgent}`);
+		this._log(`Reolink Viewer live check v${ie} · ${this.options.setup} · ${(/* @__PURE__ */ new Date()).toLocaleString()}`), this._log(`Browser: ${ae(navigator.userAgent)} · page ${E(location.hostname)} over ${location.protocol.replace(":", "")} · screen ${screen.width}×${screen.height} @${window.devicePixelRatio}x`), this._log(`User agent: ${navigator.userAgent}`);
 		let t = g(), n = t ? window[t] : void 0;
 		this._log(`MSE: ${t ?? "none"}${n ? `, takes ${s((e) => n.isTypeSupported(e)) || "none of go2rtc's codecs"}` : ""}`), this._log(`WebRTC receives: ${he()}`);
 		let r = await te(this._hass).catch(() => []);
@@ -558,7 +558,7 @@ var $ = class extends r {
 	}
 	async _loadReports() {
 		if (this.hass) try {
-			let { reports: e } = await se(this.hass);
+			let { reports: e } = await ce(this.hass);
 			this._reports = e.filter((e) => e.setup.startsWith(i));
 		} catch {
 			this._reports = [];
@@ -696,7 +696,7 @@ var $ = class extends r {
                     >` : t}` : t}
         </div>
       </div>
-      ${ae(this._setup, navigator.userAgent) ? n`<div class="banner warning" role="alert">
+      ${se(this._setup, navigator.userAgent) ? n`<div class="banner warning" role="alert">
             “${this._setup}” is for another kind of device: pick the one for this device, so the report is
             filed under it.
           </div>` : t}
@@ -869,7 +869,7 @@ function ge() {
 		let e = window.localStorage.getItem(X);
 		if (e && R.includes(e)) return e;
 	} catch {}
-	return ce(navigator.userAgent);
+	return oe(navigator.userAgent);
 }
 function _e(e) {
 	try {

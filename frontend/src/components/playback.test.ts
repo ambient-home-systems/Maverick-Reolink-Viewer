@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fakePip, makeHass, okDevices, type FakeHass } from "../test-fixtures";
 import type { PlaybackUrl, TimelineDay } from "../types";
 import { playsProgressive } from "../playback/codec";
+import type { ScrubPicture, SocketLike } from "../playback/scrub-client";
+import type { KeyFramePainter } from "../playback/scrub-paint";
 import { ThumbLoader } from "../playback/thumb-loader";
 import "./playback";
 import { TOAST_EVENT } from "./navigation";
@@ -10,8 +12,10 @@ import {
   EVENTS_RETRIES,
   EVENTS_RETRY_MS,
   STALE_TODAY_S,
+  SCRUB_HOLD_MS,
   deliveryOf,
   describeCache,
+  describeScrub,
   videoCodec,
   type RvPlayback,
 } from "./playback";
@@ -814,6 +818,200 @@ describe("rv-playback with MSE", () => {
     await el.playAt(T0 + 60 * MIN + 30_000);
     await new Promise((resolve) => setTimeout(resolve, 1_100));
     expect(el._note).toBe("Asking the recorder for this moment…");
+  });
+});
+
+describe("rv-playback while dragging (Phase 10)", () => {
+  /** A scrub session that answers each moment with the key frame half a second before it. */
+  class ScrubSocket implements SocketLike {
+    binaryType = "blob";
+    readyState = 0;
+    onopen: ((event: unknown) => void) | null = null;
+    onmessage: ((event: { data: unknown }) => void) | null = null;
+    onclose: ((event: unknown) => void) | null = null;
+    onerror: ((event: unknown) => void) | null = null;
+    asked: number[] = [];
+    closed = false;
+
+    constructor(readonly url: string) {
+      queueMicrotask(() => {
+        this.readyState = 1;
+        this.onopen?.({});
+      });
+    }
+
+    send(data: string): void {
+      const { seq, at } = JSON.parse(data) as { seq: number; at: number };
+      this.asked.push(at);
+      const header = { seq, at, time: at - 500, source: "store", kind: "fmp4", codec: "avc1", timing: { ms: 2 }, interval: 4000 };
+      const json = new TextEncoder().encode(JSON.stringify({ ...header, init: 1, data: 1 }));
+      const out = new Uint8Array(4 + json.length + 2);
+      new DataView(out.buffer).setUint32(0, json.length);
+      out.set(json, 4);
+      queueMicrotask(() => this.onmessage?.({ data: out.buffer }));
+    }
+
+    close(): void {
+      this.closed = true;
+      this.readyState = 3;
+    }
+  }
+
+  async function scrubMount(hass = playbackHass()) {
+    const base = hass.callWS.bind(hass);
+    hass.callWS = <T,>(message: Record<string, unknown>) => {
+      if (message.type === "reolink_viewer/playback/scrub") {
+        hass.sent.push(message);
+        return Promise.resolve({ url: "/api/reolink_viewer/scrub?authSig=s", expires_in: 600 } as T);
+      }
+      return base<T>(message);
+    };
+    const el = await mount(hass);
+    const sockets: ScrubSocket[] = [];
+    el.scrubSocket = (url) => {
+      const socket = new ScrubSocket(url);
+      sockets.push(socket);
+      return socket;
+    };
+    const picture = el.renderRoot.querySelector("rv-scrub-picture");
+    if (!picture) throw new Error("no scrub picture");
+    const painted: number[] = [];
+    picture.codecs = {
+      available: true,
+      paint: (p: ScrubPicture) => {
+        painted.push(p.time);
+        return Promise.resolve(true);
+      },
+      close: () => undefined,
+    } as unknown as KeyFramePainter;
+    const timeline = el.renderRoot.querySelector("rv-timeline");
+    const player = el.renderRoot.querySelector("rv-player");
+    if (!timeline || !player) throw new Error("no timeline or player");
+    const send = (target: Element, type: string, detail: unknown = {}) =>
+      target.dispatchEvent(new CustomEvent(type, { detail, bubbles: true, composed: true }));
+    return { el, hass, sockets, picture, painted, timeline, player, send };
+  }
+
+  const settle = async (el: RvPlayback) => {
+    for (let i = 0; i < 6; i += 1) await flush();
+    await el.updateComplete;
+  };
+
+  it("paints the server's picture where the video has none, until the video starts there", async () => {
+    const { el, hass, sockets, picture, painted, timeline, player, send } = await scrubMount();
+    const at = T0 + 61 * MIN;
+    send(timeline, "rv-scrub", { time: at });
+    await settle(el);
+    expect(sentOf(hass, "reolink_viewer/playback/scrub")).toEqual([
+      expect.objectContaining({ device_id: "dev-cam", date: "2026-10-17" }),
+    ]);
+    expect(sockets[0]?.url).toBe("/api/reolink_viewer/scrub?authSig=s");
+    expect(sockets[0]?.asked).toEqual([at]);
+    expect(el._scrubPicture?.time).toBe(at - 500);
+    expect(painted).toEqual([at - 500]);
+    await picture.updateComplete;
+    expect(picture.renderRoot.querySelector(".frame")?.classList.contains("on")).toBe(true);
+    // The pointer is the time while dragging, whatever the playing video says.
+    send(player, "rv-time", { time: T0 + 60 * MIN });
+    expect(el._cursor).toBe(at);
+    // The hover shows the time alone: the picture is in the player.
+    const thumbs = sentOf(hass, "reolink_viewer/thumbnail/urls").length;
+    send(timeline, "rv-hover", { time: at, x: 200 });
+    await settle(el);
+    expect(el._hover?.bare).toBe(true);
+    expect(el.renderRoot.querySelector(".hover img, .hover .noimg")).toBeNull();
+    expect(sentOf(hass, "reolink_viewer/thumbnail/urls")).toHaveLength(thumbs);
+    expect(el._metrics.scrub).toMatchObject({ asked: 1, shown: 1, missed: 0, last: "store, 0 ms, 0.5 s before" });
+
+    // Released: it plays from there; the picture stays until the video's first frame.
+    const play = vi.spyOn(player, "play").mockResolvedValue(undefined);
+    send(timeline, "rv-seek", { time: at });
+    await settle(el);
+    expect(play).toHaveBeenCalledTimes(1);
+    expect(el._scrubPicture).toBeDefined();
+    send(player, "rv-first-frame", { ms: 300 });
+    await el.updateComplete;
+    expect(el._scrubPicture).toBeUndefined();
+
+    // Another day: the session closes.
+    el.renderRoot.querySelector<HTMLButtonElement>('button[aria-label="Previous day"]')?.click();
+    await settle(el);
+    expect(sockets[0]?.closed).toBe(true);
+  });
+
+  it("shows the video's own frame where it has it buffered, and asks the server nothing", async () => {
+    const { el, hass, timeline, player, send } = await scrubMount();
+    player.buffers = () => true;
+    const preview = vi.spyOn(player, "preview").mockReturnValue(true);
+    send(timeline, "rv-scrub", { time: T0 + 61 * MIN });
+    await settle(el);
+    expect(preview).toHaveBeenCalledWith(T0 + 61 * MIN);
+    expect(sentOf(hass, "reolink_viewer/playback/scrub")).toHaveLength(0);
+    expect(el._scrubPicture).toBeUndefined();
+  });
+
+  it("asks nothing between recordings, and takes the picture away when the browser takes the drag", async () => {
+    const { el, sockets, timeline, send } = await scrubMount();
+    send(timeline, "rv-scrub", { time: T0 + 300 * MIN });
+    await settle(el);
+    expect(sockets).toHaveLength(0);
+    send(timeline, "rv-scrub", { time: T0 + 61 * MIN });
+    await settle(el);
+    expect(el._scrubPicture).toBeDefined();
+    send(timeline, "rv-hover-end");
+    await el.updateComplete;
+    expect(el._scrubPicture).toBeUndefined();
+  });
+
+  it("lets a released picture go after a while if the video never starts", async () => {
+    const { el, timeline, send } = await scrubMount();
+    vi.spyOn(el, "playAt").mockResolvedValue(undefined);
+    send(timeline, "rv-scrub", { time: T0 + 61 * MIN });
+    await settle(el);
+    vi.useFakeTimers();
+    try {
+      send(timeline, "rv-seek", { time: T0 + 61 * MIN });
+      vi.advanceTimersByTime(SCRUB_HOLD_MS - 1);
+      expect(el._scrubPicture).toBeDefined();
+      vi.advanceTimersByTime(1);
+      expect(el._scrubPicture).toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("falls back to the buffer for the day when the session cannot open", async () => {
+    const { el, hass, timeline, send } = await scrubMount();
+    el.scrubSocket = () => {
+      const socket = {
+        binaryType: "",
+        readyState: 3,
+        onopen: null,
+        onmessage: null,
+        onclose: null,
+        onerror: null as ((event: unknown) => void) | null,
+        send: () => undefined,
+        close: () => undefined,
+      };
+      queueMicrotask(() => socket.onerror?.({}));
+      return socket;
+    };
+    send(timeline, "rv-scrub", { time: T0 + 61 * MIN });
+    await settle(el);
+    expect(el._scrubPicture).toBeUndefined();
+    // Hovering fetches thumbnails as before.
+    send(timeline, "rv-hover", { time: T0 + 61 * MIN, x: 200 });
+    await settle(el);
+    expect(sentOf(hass, "reolink_viewer/thumbnail/urls").length).toBeGreaterThan(0);
+  });
+
+  it("describes the pictures while dragging for the debug panel", () => {
+    expect(describeScrub(undefined, false, true)).toBe("none yet");
+    expect(describeScrub(undefined, false, false)).toContain("neither WebCodecs nor MSE");
+    expect(describeScrub(undefined, true, true)).toContain("could not open");
+    expect(describeScrub({ asked: 5, shown: 4, missed: 1, last: "device, 270 ms, 0.4 s before" }, false, true)).toBe(
+      "4 shown of 5 asked, 1 missed (last: device, 270 ms, 0.4 s before)",
+    );
   });
 });
 
