@@ -6922,7 +6922,7 @@ download cut, then the thumbnail.
 
 | Step | Status |
 | --- | --- |
-| 0. Measure first (the gate) | Built (v0.57.0); the probe's half passed on all six cameras (2026-11-10): a cut's key frame in 166–182 ms back to back; waiting for the playback check's K rows |
+| 0. Measure first (the gate) | Built (v0.57.0). **The gate passes** (2026-11-10): a cut's key frame in 166–182 ms back to back on all six cameras, and a key frame decoded in 1.7 ms on desktop Chrome; the iPhone app's and the wall tablet's K rows still to come (they choose step 2's way of painting, not whether step 1 is built) |
 | 1. Key frames from the server | Not started |
 | 2. Painting while dragging | Not started |
 | 3. Press and release | Not started |
@@ -7040,6 +7040,21 @@ its first key frame near the moment, median and p90, ms):
   login, within the exit criterion.
 - **Key frames:** 16–86 KB on the sub streams, so a scrub's picture is a small
   read on the LAN.
+
+**The owner's playback check (2026-11-09 21:11 local, v0.5.0, Desktop Chrome
+156 on Windows, 2560×1440, Front Yard Right, SD; HD not ticked):**
+
+- **K:** 21 key frames in 20.0 s of media, one a second, 38–41 KB (median 41
+  KB), at 640×360; `VideoDecoder` decodes one in **1.7 ms** (median of 11; the
+  first, with the decoder's start, 4.4 ms), drawn on a canvas in 0.1 ms. The
+  browser's half of the gate (30 ms) passes many times over.
+- The rest as before: S showed 5 of 5 buffered points (median 8 ms), deep
+  starts 0.86 s uncached from the cut and 0.39 s cached, events 0.13–0.88 s.
+
+**Verdict: step 1.** Both halves pass on the LAN desktop. The iPhone app
+(WKWebView) and the wall tablet (Fully's Android WebView) are still to run K:
+`VideoDecoder` there, or not, decides how step 2 paints (WebCodecs, or the
+hidden MSE video), not whether the server serves key frames (step 1).
 
 #### Step 10.1: key frames from the server
 
