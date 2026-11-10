@@ -47,8 +47,9 @@ indexed like it (``fmp4.FragmentIndex``), so the MSE view serves both alike.
 
 Scrub cuts (Phase 10 step 1, :meth:`BaichuanSource.async_key_frame`): for a
 moment a drag passes that is not on disk, a 2-second cut of the sub stream
-from that moment, ended (144) as soon as its first key frame near the moment
-is in, and that key frame alone handed back (``fmp4.key_sample``). It takes
+from that moment, ended (144) as soon as a key frame past the moment is in,
+and the last key frame at or before it handed back alone (``fmp4.key_sample``;
+the device starts a cut a few seconds early, v0.58.1). It takes
 its channel's turn as a cut's first span does (the cut downloading gives way
 at its next block, and asks again after it), a stream slot within
 ``SCRUB_SLOT_WAIT_S`` (never the download's), and the host's connection; it
@@ -69,6 +70,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 import contextlib
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, tzinfo
+import itertools
 import logging
 import os
 from pathlib import Path
@@ -345,6 +347,8 @@ class BaichuanSource:
         self._rates: dict[str, int] | None = None
         # Scrub cuts asked, answered, failed; key frames of other cuts passed by.
         self._scrubs = {"asked": 0, "answered": 0, "failed": 0, "stale": 0}
+        # Each camera's key-frame interval (ms), as its scrub cuts' key frames showed.
+        self._key_intervals: dict[tuple[str, int], int] = {}
 
     @property
     def enabled(self) -> bool:
@@ -464,35 +468,48 @@ class BaichuanSource:
         muxer: BaichuanMuxer,
         times: tuple[datetime, datetime],
     ) -> KeySample:
-        """Ask a scrub's cut, take its first key frame near the moment, end it."""
+        """Ask a scrub's cut, take its key frame showing the moment, end it.
+
+        The device starts a cut a few seconds before the moment asked (the
+        owner's CX410, a key frame a second, from 3 s before), so the cut's
+        key frames near the moment are kept as they come until one is past
+        the moment (or the cut ends, or its time is up), and the last at or
+        before the moment is the picture: within one key-frame interval of
+        it. Their spacing is the camera's interval (``key_interval_ms``).
+        """
         asked = muxer.asked_unix
-        pieces: list[bytes] = []
-        failures: list[str] = []
-        found = asyncio.Event()
+        keys: list[Block] = []
+        enough = asyncio.Event()
 
         def on_block(block: Block) -> None:
-            if found.is_set() or block.kind != "key":
+            if enough.is_set() or block.kind != "key":
                 return
             unix = block.unix_time
+            clocked = unix is not None and 1_500_000_000 < unix < 2_100_000_000
             if (
                 asked is not None
                 and unix is not None
-                and 1_500_000_000 < unix < 2_100_000_000
+                and clocked
                 and not -SCRUB_KEY_BEFORE_S <= unix - asked <= SCRUB_KEY_AFTER_S
             ):
                 # Another cut's, still arriving.
                 self._scrubs["stale"] += 1
                 return
-            try:
-                pieces.extend(muxer.feed(block))
-                pieces.extend(muxer.finish())
-            except Exception as err:  # noqa: BLE001 - the device's input
-                failures.append(f"cannot mux the key frame ({type(err).__name__})")
-            found.set()
+            keys.append(block)
+            if asked is None or unix is None or not clocked or unix > asked:
+                # Past the moment (or no clock to tell): no closer one comes.
+                enough.set()
+
+        def on_chunk(stats: StreamStats) -> None:
+            # The cut's end, once it brought a key frame (an end marker before
+            # any may be the cut before's, still arriving).
+            if stats.end_status is not None and keys:
+                enough.set()
 
         options: dict[str, Any] = {
             "support_sub": 1,
             "on_block": on_block,
+            "on_chunk": on_chunk,
             "analyse": False,
         }
         start, end = times
@@ -514,7 +531,7 @@ class BaichuanSource:
                     **options,
                 )
             cut.timing["reply_ms"] = reply_ms
-            waiter = asyncio.ensure_future(found.wait())
+            waiter = asyncio.ensure_future(enough.wait())
             lost = asyncio.ensure_future(client.lost.wait())
             try:
                 done, _pending = await asyncio.wait(
@@ -525,10 +542,10 @@ class BaichuanSource:
             finally:
                 waiter.cancel()
                 lost.cancel()
-            if not found.is_set():
+            if not keys:
                 raise CutError(
                     "connection lost"
-                    if done
+                    if lost in done
                     else f"no key frame within {SCRUB_KEY_TIMEOUT_S:g} s"
                 )
         finally:
@@ -543,16 +560,35 @@ class BaichuanSource:
             # sends would reach it; let that pass first.
             if any(not waiting.scrub for waiting in self._channel(cut).waiting):
                 await asyncio.sleep(SCRUB_DRAIN_S)
-        if failures:
-            raise CutError(failures[0])
+        self._learn_interval(cut, keys)
+        chosen = keys[0]
+        if asked is not None:
+            for key in keys:
+                if key.unix_time is not None and key.unix_time <= asked:
+                    chosen = key
+        try:
+            pieces = muxer.feed(chosen) + muxer.finish()
+        except Exception as err:
+            raise CutError(f"cannot mux the key frame ({type(err).__name__})") from err
         init = muxer.init
         fragment = next((p for p in pieces if p[4:8] == b"moof"), None)
         if init is None or fragment is None:
             raise CutError("no picture in the key frame (no parameter sets)")
         sample = key_sample(init, fragment)
         if sample is None:
-            raise CutError("the cut's first sample is not a key frame")
+            raise CutError("the cut's key frame is not a sync sample")
         return sample
+
+    def _learn_interval(self, cut: Cut, keys: list[Block]) -> None:
+        """Keep the camera's key-frame interval, from a cut's key frames' times."""
+        times = [k.unix_time for k in keys if k.unix_time is not None]
+        steps = [b - a for a, b in itertools.pairwise(times) if b > a]
+        if steps:
+            self._key_intervals[(cut.entry_id, cut.channel)] = min(steps) * 1000
+
+    def key_interval_ms(self, entry_id: str, channel: int) -> int | None:
+        """Return a camera's key-frame interval (ms) as scrub cuts saw it, if known."""
+        return self._key_intervals.get((entry_id, channel))
 
     async def async_stop(self, cut: Cut) -> None:
         """Stop a cut (the viewer left, or the cache let it go)."""
