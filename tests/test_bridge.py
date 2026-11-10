@@ -2,11 +2,15 @@
 
 import asyncio
 from datetime import UTC, datetime, timedelta, timezone
+from importlib.metadata import version
+from pathlib import Path
+import shutil
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
+from reolink_aio.baichuan.baichuan import Baichuan
 from reolink_aio.enums import VodRequestType
 from reolink_aio.exceptions import ApiError, ReolinkError, UnexpectedDataError
 from reolink_aio.typings import VOD_search_status, VOD_trigger
@@ -27,6 +31,7 @@ from custom_components.reolink_viewer.bridge import (
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
+from .baichuan_fixtures import encode
 from .conftest import (
     PICTURE_FRAME,
     SECRETS,
@@ -60,7 +65,7 @@ async def test_compat_ok(hass: HomeAssistant, loaded_reolink: MockConfigEntry) -
     """The real Reolink integration with a mocked host is compatible."""
     report = bridge.async_check_compat(hass)
     assert report.ok, report.errors
-    assert report.reolink_aio_version == "0.21.18"
+    assert report.reolink_aio_version == version("reolink-aio")
     assert report.as_dict()["ok"] is True
 
 
@@ -799,6 +804,59 @@ async def test_baichuan_clock(
         await host.async_baichuan_clock()
 
 
+@pytest.mark.parametrize(
+    ("channel", "stream", "kind"),
+    [(0, "sub", "sub"), (3, "main", "main"), (1, "autotrack_main", "main")],
+)
+async def test_picture_request_is_reolink_aios(
+    channel: int, stream: str, kind: str
+) -> None:
+    """The past-picture request read here is the one reolink-aio sends.
+
+    Asked of the reolink-aio installed (CI runs the next one too), so a change
+    to its request shows here. 0.23.0 changed its template, not the request.
+    """
+
+    class SentError(Exception):
+        """Stops reolink-aio once its request is sent."""
+
+    device = MagicMock(_host="host")
+    device.send_payload = AsyncMock(side_effect=SentError)
+    when = datetime(2026, 12, 31, 23, 59, 55)  # its end is in the next year
+    with pytest.raises(SentError):
+        await Baichuan.snapshot_past(device, channel, when, stream, "ffmpeg")
+    assert device.send_payload.await_args.kwargs["cmd_id"] == 298
+    sent = device.send_payload.await_args.kwargs["body"]
+    assert bridge._cover_preview_xml(channel, kind, when) == sent
+
+
+async def test_doorbell_picture_with_real_ffmpeg(
+    hass: HomeAssistant,
+    reolink_host: MagicMock,
+    loaded_reolink: MockConfigEntry,
+    tmp_path: Path,
+) -> None:
+    """The Doorbell's past picture, end to end on the reolink-aio installed.
+
+    Nothing of the path is mocked but the device: its 1002 answer around a real
+    key frame becomes a JPEG. With reolink-aio 0.23.0 this failed before
+    0.61.3 (the path imported ``i_frame_to_jpeg``, which 0.23.0 took out).
+    """
+    ffmpeg = shutil.which("ffmpeg")
+    encoded = encode(tmp_path, "h264", seconds=0.3) if ffmpeg else None
+    if ffmpeg is None or encoded is None:
+        pytest.skip("ffmpeg with libx264 is not installed")
+    frame = b"".join(b"\x00\x00\x00\x01" + unit for unit in encoded.units[0])
+    reolink_host.baichuan_only = True
+    reolink_host.baichuan.send_payload = AsyncMock(
+        return_value=("", picture_answer(b"1002", frame))
+    )
+    (host,) = bridge.async_get_hosts(hass)
+    image = await host.async_snapshot_past(0, datetime(2026, 11, 1, 8), "sub", ffmpeg)
+    assert image.startswith(b"\xff\xd8")
+    reolink_host.baichuan.snapshot_past.assert_not_awaited()
+
+
 async def test_snapshot_past_read_here(
     hass: HomeAssistant, reolink_host: MagicMock, loaded_reolink: MockConfigEntry
 ) -> None:
@@ -808,7 +866,7 @@ async def test_snapshot_past_read_here(
     send = AsyncMock(return_value=("", picture_answer(b"1002", PICTURE_FRAME)))
     reolink_host.baichuan.send_payload = send
     convert = AsyncMock(return_value=b"\xff\xd8here")
-    with patch("reolink_aio.baichuan.util.i_frame_to_jpeg", convert):
+    with patch.object(bridge, "async_jpeg_from_frame", convert):
         # reolink-aio reads it: its picture.
         assert await host.async_snapshot_past(0, when, "sub", "ffmpeg") == (
             b"\xff\xd8jpegdata"
@@ -833,7 +891,7 @@ async def test_snapshot_past_read_here(
             "<second>17</second>",  # ten seconds on, as reolink-aio asks
         ):
             assert field in body, field
-        convert.assert_awaited_with(PICTURE_FRAME, "ffmpeg")
+        convert.assert_awaited_with("ffmpeg", PICTURE_FRAME)
         # Any other failure is the device's: not asked again.
         reolink_host.baichuan.snapshot_past = AsyncMock(side_effect=ReolinkError("400"))
         send.reset_mock()

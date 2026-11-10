@@ -3,6 +3,22 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.61.3
+
+Ready for Home Assistant 2026.11.2, which brings reolink-aio 0.23.0. That
+reolink-aio release answers our report of the recorder's download cut
+([reolink_aio#240](https://github.com/starkillerOG/reolink_aio/issues/240)).
+
+- **The Doorbell's timeline pictures keep working on 2026.11.2:** reolink-aio
+  0.23.0 takes out the step Reolink Viewer used to turn the Doorbell's past
+  pictures into images. On 2026.11.2 the Doorbell's timeline would have shown no
+  pictures, and the events check's picture samples would have failed. Reolink
+  Viewer now does that step itself, with the same request to the Doorbell and the
+  same ffmpeg conversion, so nothing changes on today's Home Assistant.
+- **Tested on the next reolink-aio:** every change is now also tested with the
+  reolink-aio that Home Assistant's next release will ship, so a change like this
+  one shows up before that release does.
+
 ## 0.61.2
 
 From the owner's run of the playback check in Safari on a Mac.

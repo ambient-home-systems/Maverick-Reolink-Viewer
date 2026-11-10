@@ -110,6 +110,10 @@ class FakeConnection:
 
     con_type = ConnectionEnum.tcp
     connection_open = True
+    # What a TCP connection has learned before the login (reolink-aio 0.23.0
+    # reads them): no nonce, so the login asks for one, as the client does.
+    nonce: str | None = None
+    account_device = False
 
     def __init__(self, aes_key_holder: dict[str, bytes]) -> None:
         self.events: list[tuple[str, bytes]] = []

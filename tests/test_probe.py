@@ -3,6 +3,7 @@
 import asyncio
 from collections.abc import Callable, Generator
 from datetime import timedelta, timezone
+from importlib.metadata import version
 import json
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -141,7 +142,7 @@ async def test_probe_nvr_success(
     await scheduler.async_shutdown()
 
     assert report["schema_version"] == 2
-    assert report["reolink_aio_version"] == "0.21.18"
+    assert report["reolink_aio_version"] == version("reolink-aio")
     assert report["compat"]["ok"] is True
     assert messages
     (host,) = report["hosts"]

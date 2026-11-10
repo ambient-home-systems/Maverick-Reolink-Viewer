@@ -242,7 +242,17 @@ CI runs the whole test suite against:
   `scripts/ha_requirements.py` installs what that release pins for the Reolink,
   ffmpeg, frontend, camera and stream components (reolink-aio above all);
 - **the newest release**, every week, non-blocking: it warns before users meet a
-  Home Assistant release that changed the Reolink integration.
+  Home Assistant release that changed the Reolink integration;
+- **the next reolink-aio**, blocking: the version Home Assistant's `dev` branch pins
+  (`homeassistant/components/reolink/manifest.json`), installed over the pinned
+  release (the matrix's `reolink_aio` entry). A bump there often reaches a patch
+  release within days, before a harness for it exists: reolink-aio 0.23.0, pinned
+  for 2026.11.2, took out a helper the Doorbell's past pictures used (fixed in
+  0.61.3). Move the entry on when `dev` pins a newer one; drop it once the pin
+  catches up.
+
+To run the suite on another reolink-aio locally: `pip install reolink-aio==<version>`,
+`pytest`, then `pip install -r requirements_test.txt` to go back.
 
 To move the pin to a newer release (each `pytest-homeassistant-custom-component`
 version names its Home Assistant release on PyPI):

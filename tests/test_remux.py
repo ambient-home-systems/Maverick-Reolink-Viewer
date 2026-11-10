@@ -1,4 +1,4 @@
-"""Tests for rewriting cached recordings as plain MP4."""
+"""Tests for ffmpeg's rewrites: recordings as plain MP4, key frames as JPEG."""
 
 from pathlib import Path
 import shutil
@@ -8,11 +8,14 @@ import pytest
 from custom_components.reolink_viewer.remux import (
     RemuxError,
     async_flatten,
+    async_jpeg_from_frame,
     is_plain,
     moov_size,
 )
 
+from .baichuan_fixtures import encode
 from .mp4_fixtures import FTYP, box, fragmented_av, moov, mp4_file, real_fragmented
+from .test_baichuan_media import annexb
 
 FFMPEG = shutil.which("ffmpeg")
 needs_ffmpeg = pytest.mark.skipif(FFMPEG is None, reason="ffmpeg is not installed")
@@ -80,3 +83,54 @@ def test_moov_size(tmp_path: Path) -> None:
     assert moov_size(path) is None
     path.write_bytes(b"\0\0")
     assert moov_size(path) is None
+
+
+@needs_ffmpeg
+@pytest.mark.parametrize("codec", ["h264", "h265"])
+async def test_jpeg_from_a_real_key_frame(tmp_path: Path, codec: str) -> None:
+    """A camera's key frame (Annex B, parameter sets first) becomes one JPEG."""
+    encoded = encode(tmp_path, codec, seconds=0.3)
+    if encoded is None:
+        pytest.skip("ffmpeg with libx264, libx265 and AAC is not installed")
+    assert FFMPEG is not None
+    image = await async_jpeg_from_frame(FFMPEG, annexb(*encoded.units[0]))
+    assert image.startswith(b"\xff\xd8")
+    assert image.endswith(b"\xff\xd9")
+    assert image.count(b"\xff\xd8") == 1
+
+
+@needs_ffmpeg
+async def test_jpeg_reports_ffmpeg_errors() -> None:
+    """A frame ffmpeg cannot read fails with its message."""
+    assert FFMPEG is not None
+    with pytest.raises(RemuxError, match=r"\S"):
+        await async_jpeg_from_frame(FFMPEG, b"not a frame" * 10)
+
+
+async def test_jpeg_without_ffmpeg(tmp_path: Path) -> None:
+    """No ffmpeg where it is said to be: said so."""
+    with pytest.raises(RemuxError, match="cannot start ffmpeg"):
+        await async_jpeg_from_frame(str(tmp_path / "no-ffmpeg"), b"frame")
+
+
+async def test_jpeg_times_out(tmp_path: Path) -> None:
+    """A stuck ffmpeg is stopped."""
+    slow = tmp_path / "slow-ffmpeg"
+    slow.write_text("#!/bin/sh\nexec sleep 30\n")
+    slow.chmod(0o755)
+    with pytest.raises(RemuxError, match="timed out"):
+        await async_jpeg_from_frame(str(slow), b"frame", 0.2)
+
+
+@pytest.mark.parametrize(
+    ("script", "message"), [("exit 3", "exited with 3"), ("exit 0", "exited with 0")]
+)
+async def test_jpeg_reports_a_silent_failure(
+    tmp_path: Path, script: str, message: str
+) -> None:
+    """A failing ffmpeg, or one that writes no picture, names its exit code."""
+    failing = tmp_path / "failing-ffmpeg"
+    failing.write_text(f"#!/bin/sh\ncat > /dev/null\n{script}\n")
+    failing.chmod(0o755)
+    with pytest.raises(RemuxError, match=message):
+        await async_jpeg_from_frame(str(failing), b"frame")
