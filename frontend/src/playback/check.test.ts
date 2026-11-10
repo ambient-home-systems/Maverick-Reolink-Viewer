@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { parseInShort } from "../plain";
 import { makeHass, okDevices, type FakeHass } from "../test-fixtures";
+import { VERSION } from "../version";
 import type { TimelineDay } from "../types";
 import { PlaybackCheck, hdByDefault, noteInterruptedCheck, type CheckTarget } from "./check";
 import { MSE_SAMPLES } from "./mse-sample";
@@ -137,6 +138,8 @@ describe("PlaybackCheck", () => {
     expect(report).toContain("F  skipped: no recording on this day");
     expect(report).toContain("P  skipped: no timeline or recording on screen");
     expect(report).toContain("V  skipped: no recording on screen");
+    // The device list could not be read here: the versions are said, not judged.
+    expect(report).toContain(`Reolink Viewer: this page ${VERSION}, Home Assistant not read`);
     expect(report).toContain('H  skipped: not asked for (tick "with HD")');
     expect(report).toContain("HD as the tab opened: this browser cannot decode hvc1 at 7680×2160");
     expect(report).toContain("Summary:");

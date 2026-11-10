@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { explainLoad, integrationProblem } from "./integration";
+import { explainLoad, integrationProblem, laterVersion } from "./integration";
 import { okDevices } from "./test-fixtures";
 
 describe("integrationProblem", () => {
@@ -41,5 +41,15 @@ describe("explainLoad", () => {
     const explained = explainLoad(error, "Live view");
     expect(explained.text).toBe(text);
     expect(explained.advice).toBeTruthy();
+  });
+});
+
+describe("laterVersion", () => {
+  it("compares versions part by part, as numbers", () => {
+    expect(laterVersion("0.61.1", "0.61.0")).toBe(true);
+    expect(laterVersion("0.61.0", "0.61.1")).toBe(false);
+    expect(laterVersion("0.100.0", "0.99.9")).toBe(true);
+    expect(laterVersion("1.0", "0.99.99")).toBe(true);
+    expect(laterVersion("0.61.0", "0.61.0")).toBe(false);
   });
 });

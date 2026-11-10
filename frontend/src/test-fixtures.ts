@@ -1,4 +1,5 @@
 // Shared fixtures for the Vitest suites.
+import { VERSION } from "./version";
 import type {
   CameraNode,
   Catalog,
@@ -80,7 +81,7 @@ export function makeCamera(overrides: Partial<CameraNode> = {}): CameraNode {
 export const okDevices = (
   hosts: HostNode[] = [makeHostNode()],
   cameras: CameraNode[] = [makeCamera()],
-): DevicesResponse => ({ degraded: false, compat: COMPAT, hosts, cameras });
+): DevicesResponse => ({ degraded: false, compat: COMPAT, hosts, cameras, version: VERSION });
 
 export function makeEntity(
   entityId: string,

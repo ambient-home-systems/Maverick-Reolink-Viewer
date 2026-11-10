@@ -1,8 +1,8 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
 import { Lt as i, M as a, Z as o, _ as s, at as c, d as l, dt as u, g as d, j as f, jt as p, rt as m, t as h, v as g, y as _, zt as v } from "./live-49uKNz9D.js";
-import { $ as y, G as b, H as x, K as S, Q as C, U as w, X as T, Z as E, et as D, nt as O, o as k, rt as A, s as j, t as M, tt as N, z as P } from "./home-BHJMpmeP.js";
+import { $ as y, G as b, H as x, K as S, Q as C, U as w, X as T, Z as E, et as D, it as O, nt as k, o as A, rt as j, s as M, t as N, tt as P, z as F } from "./home-BnR4IIur.js";
 //#region src/reolink-viewer-panel.ts
-var F = {
+var I = {
 	live: "Live",
 	events: "Events",
 	list: "Devices",
@@ -11,7 +11,7 @@ var F = {
 	soak: "Soak report",
 	cards: "Dashboard cards",
 	wall: "Wall"
-}, I = 6e3, L = class extends r {
+}, L = 6e3, R = class extends r {
 	static properties = {
 		hass: { attribute: !1 },
 		narrow: {
@@ -74,7 +74,7 @@ var F = {
 	willUpdate(e) {
 		if (this.toggleAttribute("dark", this.hass?.themes?.darkMode === !0), e.has("_route")) {
 			let e = this._route.view;
-			this._viewError = void 0, M(e).catch((t) => {
+			this._viewError = void 0, N(e).catch((t) => {
 				this._route.view === e && (this._viewError = i(t).message);
 			});
 		}
@@ -104,14 +104,14 @@ var F = {
 	showToast(e) {
 		clearTimeout(this._toastTimer), this._toast = e, this._toastTimer = setTimeout(() => {
 			this._toast = void 0;
-		}, I);
+		}, L);
 	}
 	async _load() {
 		if (this.hass) {
 			this._loading = !0;
 			try {
 				this._devices = await c(this.hass), this._loadError = void 0, !this._board.length && !this._devices.degraded && u(this.hass).then(({ cameras: e }) => {
-					this._board.length || (this._board = P(e));
+					this._board.length || (this._board = F(e));
 				}).catch(() => void 0), !this._warmed && !this._devices.degraded && (this._warmed = !0, v(this.hass).catch(() => void 0));
 			} catch (e) {
 				this._loadError = i(e).message;
@@ -125,7 +125,7 @@ var F = {
 	}
 	render() {
 		let e = this._route;
-		return e.view === "wall" ? n`<main class="wall" tabindex="-1" aria-label=${F.wall}>${this._renderView()}</main>` : n`
+		return e.view === "wall" ? n`<main class="wall" tabindex="-1" aria-label=${I.wall}>${this._renderView()}</main>` : n`
       <header class="band">
         <ha-menu-button .hass=${this.hass} .narrow=${this.narrow}></ha-menu-button>
         <div class="title">Reolink</div>
@@ -141,7 +141,7 @@ var F = {
       <main
         class=${e.view === "live" || e.view === "events" ? "wide" : "page"}
         tabindex="-1"
-        aria-label=${F[e.view]}
+        aria-label=${I[e.view]}
       >${this._renderView()}</main>
       ${this._toast ? n`<div class="toast ${this._toast.kind}" role="status" aria-live="polite">
             <span>${this._toast.message}</span>
@@ -168,7 +168,7 @@ var F = {
         Could not load this page: ${this._viewError}. Check the connection to Home Assistant, then
         <button
           @click=${() => {
-			this._viewError = void 0, M(e.view).catch((e) => {
+			this._viewError = void 0, N(e.view).catch((e) => {
 				this._viewError = i(e).message;
 			});
 		}}
@@ -176,7 +176,7 @@ var F = {
           Try again
         </button>
       </div>`;
-		let r = A(this._devices), a = r ? this._renderIntegration(r) : t;
+		let r = j(this._devices), a = r ? this._renderIntegration(r) : t;
 		switch (e.view) {
 			case "live": return r ? n`<div class="wide-note">${a}</div>` : n`<rv-live-grid
             .hass=${this.hass}
@@ -229,12 +229,15 @@ var F = {
     </div>`;
 	}
 	_renderBanner() {
-		if (this._loadError) return y(O(this._loadError, "Your devices"), this._loadError, {
+		if (this._loadError) return y(k(this._loadError, "Your devices"), this._loadError, {
 			action: n`<button @click=${() => void this._load()} ?disabled=${this._loading}>Try again</button>`,
 			help: "loading"
 		});
-		let e = A(this._devices);
-		return !e || e.kind === "none" ? t : this._renderIntegration(e);
+		let e = O(this._devices, P), r = e ? y(e, `This page: ${P} · Home Assistant: ${this._devices?.version ?? "older than 0.61.1"}`, {
+			kind: "warning",
+			help: "updated"
+		}) : t, i = j(this._devices);
+		return !i || i.kind === "none" ? r : n`${r}${this._renderIntegration(i)}`;
 	}
 	_renderIntegration(e) {
 		let r = e.kind !== "none";
@@ -333,7 +336,7 @@ var F = {
     </li>`;
 		return n`<section class="card">
       <h2>Help</h2>
-      <p class="muted">The guides to this version of Reolink Viewer (${N}). They open in a new tab.</p>
+      <p class="muted">The guides to this version of Reolink Viewer (${P}). They open in a new tab.</p>
       <ul class="checks">
         ${e("User guide", "What each part of the panel does, and how to use it.", "guide")}
         ${e("Troubleshooting", "What a message means, and what to do about it.", "troubleshooting")}
@@ -627,7 +630,7 @@ var F = {
           </p>
           <div class="actions">
             <button @click=${() => {
-				j(e.report, e.filename);
+				M(e.report, e.filename);
 			}}>
               Download again
             </button>
@@ -678,12 +681,12 @@ var F = {
 		this._run = t, t.result.then((e) => {
 			if (this._run !== t) return;
 			this._run = void 0;
-			let n = k(/* @__PURE__ */ new Date());
+			let n = A(/* @__PURE__ */ new Date());
 			this._probe = {
 				status: "done",
 				report: e,
 				filename: n
-			}, j(e, n);
+			}, M(e, n);
 		}, (e) => {
 			this._run === t && (this._run = void 0, this._probe = {
 				status: "error",
@@ -1014,6 +1017,6 @@ var F = {
     `
 	];
 };
-customElements.get("reolink-viewer-panel") || customElements.define("reolink-viewer-panel", L);
+customElements.get("reolink-viewer-panel") || customElements.define("reolink-viewer-panel", R);
 //#endregion
-export { L as ReolinkViewerPanel, M as loadView };
+export { R as ReolinkViewerPanel, N as loadView };

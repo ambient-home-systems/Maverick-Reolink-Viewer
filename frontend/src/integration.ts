@@ -46,6 +46,39 @@ export function integrationProblem(devices: DevicesResponse | undefined): Integr
   };
 }
 
+/** Whether `a` is a later version than `b` ("0.61.1" after "0.61.0"). */
+export function laterVersion(a: string, b: string): boolean {
+  const parts = (v: string) => v.split(".").map((n) => Number.parseInt(n, 10) || 0);
+  const [x, y] = [parts(a), parts(b)];
+  for (let i = 0; i < Math.max(x.length, y.length); i += 1) {
+    const d = (x[i] ?? 0) - (y[i] ?? 0);
+    if (d) return d > 0;
+  }
+  return false;
+}
+
+/**
+ * An update half done: this page and the Reolink Viewer Home Assistant runs
+ * differ. A newer page (Home Assistant has not restarted since HACS updated
+ * the files, or runs one from before it said its version) needs a restart; an
+ * older page, from the browser's cache, needs a reload.
+ */
+export function versionProblem(devices: DevicesResponse | undefined, page: string): Explained | undefined {
+  if (!devices) return undefined;
+  const server = devices.version;
+  if (server === page) return undefined;
+  if (server === undefined || laterVersion(page, server)) {
+    return {
+      text: `This page is Reolink Viewer ${page}, but Home Assistant is still running ${server ?? "an older version"}: it has not restarted since the update.`,
+      advice: "Restart Home Assistant (Settings → System → Restart), then reload this page.",
+    };
+  }
+  return {
+    text: `Home Assistant runs Reolink Viewer ${server}, but this page is still ${page}, from the browser's cache.`,
+    advice: "Reload this page: Ctrl+F5 on a computer; in the Home Assistant app, pull down on the page.",
+  };
+}
+
 /** The compatibility check's findings, one per line, with the library's version. */
 export function compatText(compat: CompatReport): string {
   return [...compat.errors, ...(compat.reolink_aio_version ? [`reolink-aio ${compat.reolink_aio_version}`] : [])].join(

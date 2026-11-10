@@ -14,7 +14,7 @@ from homeassistant.components.ffmpeg import get_ffmpeg_manager
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.loader import async_get_integration
+from homeassistant.loader import async_get_integration, async_get_loaded_integration
 from homeassistant.util.ssl import SSLCipherList
 
 from . import bridge, devices, events
@@ -152,7 +152,9 @@ def ws_devices(
     """List Reolink devices: NVRs/Hubs and cameras, duplicates merged.
 
     In degraded mode (internals changed) the list comes from the device
-    registry alone.
+    registry alone. ``version`` is the Reolink Viewer Home Assistant runs:
+    the panel compares it with its own, to say when Home Assistant has not
+    restarted since an update, or the page is an older one from the cache.
     """
     if _loaded_entry(hass) is None:
         connection.send_error(msg["id"], ERR_NOT_LOADED, "Reolink Viewer is not loaded")
@@ -160,7 +162,10 @@ def ws_devices(
     compat, model = _device_call(
         hass, lambda degraded: devices.async_device_list(hass, degraded=degraded)
     )
-    connection.send_result(msg["id"], {**model, "compat": compat.as_dict()})
+    version = str(async_get_loaded_integration(hass, DOMAIN).version)
+    connection.send_result(
+        msg["id"], {**model, "compat": compat.as_dict(), "version": version}
+    )
 
 
 @websocket_api.websocket_command(

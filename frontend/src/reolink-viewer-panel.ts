@@ -25,7 +25,7 @@ import { loadFonts } from "./fonts";
 import { probeFilename } from "./format";
 import { helpUrl, type HelpTopic } from "./help";
 import { icon } from "./icons";
-import { explainLoad, integrationProblem, type IntegrationProblem } from "./integration";
+import { explainLoad, integrationProblem, versionProblem, type IntegrationProblem } from "./integration";
 import { fullScreenHd, keepsFullScreenTaps, rememberFullScreenHd, setKeepsFullScreenTaps, type Where } from "./network";
 import { formatClock } from "./playback/time";
 import { helpLink, problem } from "./problem";
@@ -418,10 +418,18 @@ export class ReolinkViewerPanel extends LitElement {
         help: "loading",
       });
     }
+    // An update half done: say it first, whatever else is wrong.
+    const updated = versionProblem(this._devices, VERSION);
+    const version = updated
+      ? problem(updated, `This page: ${VERSION} · Home Assistant: ${this._devices?.version ?? "older than 0.61.1"}`, {
+          kind: "warning",
+          help: "updated",
+        })
+      : nothing;
     const trouble = integrationProblem(this._devices);
     // With no devices at all, the list says how to set them up.
-    if (!trouble || trouble.kind === "none") return nothing;
-    return this._renderIntegration(trouble);
+    if (!trouble || trouble.kind === "none") return version;
+    return html`${version}${this._renderIntegration(trouble)}`;
   }
 
   /** Why Reolink Viewer cannot reach the cameras, what still works, and what to do. */

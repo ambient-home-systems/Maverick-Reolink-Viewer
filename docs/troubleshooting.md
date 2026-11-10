@@ -83,6 +83,27 @@ under **Settings → Devices & services → Add integration → Reolink**, with 
 camera's address, user name and password. An NVR brings all of its cameras with it.
 They appear in Reolink Viewer once the integration has loaded them.
 
+### After an update
+
+Reolink Viewer's page and the part that runs in Home Assistant come from the same
+update, and must be the same version. When they are not, a yellow note over every
+page says which one is behind (Details gives both versions):
+
+> **This page is Reolink Viewer 0.61.1, but Home Assistant is still running 0.61.0:
+> it has not restarted since the update.**
+
+HACS installed the new version, but Home Assistant still runs the one it started
+with. Restart Home Assistant (**Settings → System → Restart**), then reload the
+page. Until then, what is new in the update does not work, and a check run now
+measures the old version.
+
+> **Home Assistant runs Reolink Viewer 0.61.1, but this page is still 0.61.0, from
+> the browser's cache.**
+
+Home Assistant runs the new version, but the browser kept the old page. Reload it:
+**Ctrl+F5** on a computer (**Cmd+Shift+R** on a Mac); in the Home Assistant app,
+pull down on the page.
+
 ### A page could not load
 
 These messages start with what could not load: "Live view", "Today's events", "This
