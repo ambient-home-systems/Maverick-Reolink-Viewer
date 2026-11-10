@@ -6923,7 +6923,7 @@ download cut, then the thumbnail.
 | Step | Status |
 | --- | --- |
 | 0. Measure first (the gate) | Built (v0.57.0). **The gate passes** (2026-11-10): a cut's key frame in 166–182 ms back to back on all six cameras, and a key frame decoded in 1.7 ms on desktop Chrome; the iPhone app's and the wall tablet's K rows still to come (they choose step 2's way of painting, not whether step 1 is built) |
-| 1. Key frames from the server | Built (v0.58.0); v0.58.1 from the owner's check |
+| 1. Key frames from the server | Built (v0.58.0–v0.58.1); the owner's check passed on desktop Chrome (2026-11-10); the iPhone app's and the wall tablet's still to run |
 | 2. Painting while dragging | Not started |
 | 3. Press and release | Not started |
 | 4. The checks | Not started |
@@ -7181,6 +7181,17 @@ device again); the pictures 0.1 to 3.9 s before their moments; all 10 decode
   (the interval learned, 1000 ms); a cut that ends, or goes quiet, before one
   past the moment keeps its last; the store's reach (one before, never after;
   a camera keyed every second asks again 2 s on).
+
+**The owner's check of v0.58.1 (2026-11-10, Chrome 156 on Windows, Front
+Yard Right): passed.** F: first pass 10 of 10, median **269 ms** (device 9,
+cache 1), inside the uncached exit criterion (300 ms); again 10 of 10, median
+**31 ms**, all from the store; the pictures **0.3 to 0.8 s** before their
+moments, within the camera's interval (a key frame a second); all 10 decode
+(4.2 ms each, each with its own decoder). Deep starts as before (0.85 s
+uncached, 0.40 s cached), every rate smooth. Still to run: the iPhone app's
+and the wall tablet's checks (their K and F rows decide step 2's way of
+painting there), and a recording playing on the same camera in another tab
+while F runs.
 
 #### Step 10.2: painting while dragging
 
