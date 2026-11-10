@@ -7,6 +7,7 @@ import itertools
 import json
 from pathlib import Path
 import struct
+import time
 from typing import Any, cast
 from unittest.mock import patch
 
@@ -505,6 +506,9 @@ async def test_a_scrub_cut_gives_the_key_frame_near_the_moment(rig: Rig) -> None
     assert "<hour>22</hour>\n<minute>10</minute>\n<second>0</second>" in xml
     assert "<hour>22</hour>\n<minute>10</minute>\n<second>2</second>" in xml
     assert "<streamType>subStream</streamType>" in xml
+    # The picture is answered first; the cut's end (and any drain) follow it,
+    # still holding the channel's turn and the slot (Phase 10 step 3).
+    await asyncio.gather(*rig.source._closing)
     assert rig.nvr.ended == [4]
     assert rig.source.stats()["scrub_cuts"] == {
         "asked": 1,
@@ -600,6 +604,48 @@ async def test_a_scrub_takes_the_turn_of_a_playing_cut_which_goes_on(
             entry_id="entry1", channel=3, start_ms=START_MS, end_ms=END_MS, at_ms=AT_MS
         )
     assert sample.time_ms == AT_MS
+    assert playing.gave_way == 1
+    rig.nvr.gate.set()
+    assert playing.task is not None
+    async with asyncio.timeout(10):
+        await asyncio.shield(playing.task)
+    assert playing.complete, playing.error
+    starts = [(f.start_ms, f.duration_ms) for f in playing.index.fragments]
+    for (start, length), (following, _length) in itertools.pairwise(starts):
+        assert abs(start + length - following) < 1
+
+
+async def test_the_picture_is_answered_before_the_drain(
+    rig: Rig,  # noqa: F811
+) -> None:
+    """A playing cut waits for the turn: the picture goes first, the drain after.
+
+    Phase 10 step 3: a picture waited for its cut's drain (0.3 s each while a
+    recording played the camera); the drain still holds the turn, so the
+    playing cut resumes only after it, unharmed.
+    """
+    rig.nvr.media = camera_blocks(CUT_ASKED - 3, seconds=20)
+    rig.nvr.gate = asyncio.Event()
+    rig.nvr.gate_at = 8
+    playing = await rig.cut(channel=3, name="a")
+
+    async def has_fragment() -> None:
+        while not playing.index.fragments:  # noqa: ASYNC110
+            await asyncio.sleep(0.01)
+
+    async with asyncio.timeout(5):
+        await has_fragment()
+    with patch.object(baichuan_source, "SCRUB_DRAIN_S", 1.0):
+        began = time.monotonic()
+        sample = await rig.source.async_key_frame(
+            entry_id="entry1", channel=3, start_ms=START_MS, end_ms=END_MS, at_ms=AT_MS
+        )
+        assert time.monotonic() - began < 1.0
+        assert sample.time_ms == AT_MS
+        # The cut's end and the drain go on, holding the turn.
+        assert rig.source._closing
+        await asyncio.gather(*rig.source._closing)
+        assert time.monotonic() - began >= 1.0
     assert playing.gave_way == 1
     rig.nvr.gate.set()
     assert playing.task is not None

@@ -464,7 +464,9 @@ The camera's recordings, from its NVR or its own SD card.
   play from there. The large clock shows the time playing.
 - The **timeline** shows the day's recordings as a band, and each event as a mark.
   **−** and **+** zoom from the whole day to 5 minutes. Drag along it to look through
-  the recording; on a computer, hovering over it shows the picture at that time.
+  the recording: the video pauses and the picture under your finger or pointer shows,
+  with its time in the corner. Let go, and it plays from that picture. On a computer,
+  hovering over the timeline shows the picture at that time.
 - **⏮ ▶ ⏭**: the previous event, play or pause, the next event. At the end of a
   recording, the next one plays by itself.
 - **SD / HD**: switch quality; playback carries on from the same moment. HD may take

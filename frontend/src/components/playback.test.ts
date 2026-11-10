@@ -968,6 +968,60 @@ describe("rv-playback while dragging (Phase 10)", () => {
     expect(el._scrubPicture).toBeUndefined();
   });
 
+  it("pauses the video while dragging: a cancelled drag plays on, a release plays from there", async () => {
+    const { el, timeline, player, send } = await scrubMount();
+    const hold = vi.spyOn(player, "hold").mockReturnValue(true);
+    const resume = vi.spyOn(player, "resume").mockImplementation(() => undefined);
+    const playAt = vi.spyOn(el, "playAt").mockResolvedValue(undefined);
+    send(timeline, "rv-scrub", { time: T0 + 61 * MIN });
+    send(timeline, "rv-scrub", { time: T0 + 61 * MIN + 500 });
+    await settle(el);
+    expect(hold).toHaveBeenCalledTimes(1);
+    // The browser took the drag: the video plays on.
+    send(timeline, "rv-hover-end");
+    expect(resume).toHaveBeenCalledTimes(1);
+    // Released: it plays from there, not on from where it was.
+    send(timeline, "rv-scrub", { time: T0 + 61 * MIN });
+    send(timeline, "rv-seek", { time: T0 + 61 * MIN });
+    expect(hold).toHaveBeenCalledTimes(2);
+    expect(resume).toHaveBeenCalledTimes(1);
+    expect(playAt).toHaveBeenCalledTimes(1);
+    // A drag over a video already paused leaves it paused when cancelled.
+    hold.mockReturnValue(false);
+    send(timeline, "rv-scrub", { time: T0 + 61 * MIN });
+    send(timeline, "rv-hover-end");
+    expect(resume).toHaveBeenCalledTimes(1);
+  });
+
+  it("a release plays from the picture on screen when it is the pointer's, else from the pointer", async () => {
+    const { el, picture, timeline, send } = await scrubMount();
+    const playAt = vi.spyOn(el, "playAt").mockResolvedValue(undefined);
+    const drag = async (time: number) => {
+      send(timeline, "rv-scrub", { time });
+      await settle(el);
+      await picture.updateComplete;
+    };
+    // The picture is the key frame 0.5 s before the moment asked (the stand-in session's).
+    const at = T0 + 61 * MIN;
+    await drag(at + 0.37);
+    expect(picture.shown?.time).toBe(at - 500);
+    send(timeline, "rv-seek", { time: at + 0.37 });
+    expect(playAt).toHaveBeenLastCalledWith(at - 500);
+    // Late (the pointer went on, past the camera's interval and half a second): from the pointer.
+    await drag(at);
+    send(timeline, "rv-seek", { time: at + 30_000 });
+    expect(playAt).toHaveBeenLastCalledWith(at + 30_000);
+    // In the recording before the pointer's: from the pointer.
+    const next = T0 + 62 * MIN + 200;
+    await drag(next);
+    expect(picture.shown?.time).toBe(next - 500);
+    send(timeline, "rv-seek", { time: next });
+    expect(playAt).toHaveBeenLastCalledWith(next);
+    // A click (no drag): from the click, whatever was shown before.
+    send(timeline, "rv-seek", { time: at + 0.37 });
+    expect(playAt).toHaveBeenLastCalledWith(at + 0.37);
+  });
+
   it("lets a released picture go after a while if the video never starts", async () => {
     const { el, timeline, send } = await scrubMount();
     vi.spyOn(el, "playAt").mockResolvedValue(undefined);
@@ -1016,11 +1070,16 @@ describe("rv-playback while dragging (Phase 10)", () => {
     hass.responses["reolink_viewer/playback/stats"] = { vod: { baichuan: { enabled: true, logged_in: 1, logins: 3, logouts: 2, cuts_running: 0 } } };
     hass.responses["reolink_viewer/playback/check_report"] = null;
     const { el, sockets, player } = await scrubMount(hass);
-    // The player starts a recording at once: its first frame.
-    vi.spyOn(player, "play").mockImplementation(() => {
-      setTimeout(() => player.dispatchEvent(new CustomEvent("rv-first-frame", { detail: { ms: 200 } })), 5);
+    // Every player (the tab's and the second viewer's) starts a recording at once: its first frame.
+    const Player = customElements.get("rv-player") as unknown as { prototype: { play: (...args: unknown[]) => Promise<void> } };
+    let started: number | undefined;
+    vi.spyOn(Player.prototype, "play").mockImplementation(function (this: HTMLElement, ...args: unknown[]) {
+      const [item, offset] = args as [{ start: number }, number];
+      if (this === player) started = item.start + offset;
+      setTimeout(() => this.dispatchEvent(new CustomEvent("rv-first-frame", { detail: { ms: 200 } })), 5);
       return Promise.resolve();
     });
+    Object.defineProperty(player, "time", { get: () => started });
     const target = (el as unknown as { _checkTarget(): CheckTarget })._checkTarget();
     const check = new PlaybackCheck(target, { setup: "test", soakMinutes: 0 });
     check.timeScale = 0.02;
@@ -1029,7 +1088,9 @@ describe("rv-playback while dragging (Phase 10)", () => {
     expect(report).toContain("P  Pictures while dragging (Phase 10): painted with WebCodecs");
     expect(report).toMatch(/ {3}slow \(30 s of recording in 10 s\): \d+ pictures, the first after/);
     expect(report).toContain("within the camera's 4.0 s of their moment (0.5 to 0.5 s before)");
+    // Released, the video began at the picture shown (the key frame 0.5 s before the pointer).
     expect(report).toContain("   release: the picture stayed until the video's first frame");
+    expect(report).toMatch(/; it began under 0\.1 s from the picture's own time \(0\.5 s before the pointer\) ✓/);
     // Where the release's start spent its time: the page's steps, then the server's.
     expect(report).toMatch(/ {5}\[URL \d+ ms\] /);
     expect(report).toContain("     server: ");
@@ -1040,8 +1101,10 @@ describe("rv-playback while dragging (Phase 10)", () => {
     expect(asked.length).toBeGreaterThan(3);
     expect(asked.every((at) => Number.isInteger(at))).toBe(true);
     // The fast drag rests inside the last recording, and the last picture shows it.
-    expect(report).toMatch(/ {3}fast \(3\.4 min in 5 s\): .*at rest, 0\.5 s from the pointer.* ✓/);
-    expect(report).toContain("   another recording of this camera playing meanwhile");
+    expect(report).toMatch(/ {3}fast \(2\.8 min in 5 s\): .*at rest, 0\.5 s from the pointer.* ✓/);
+    // The next 30 s beside a second viewer of the camera, playing the other recording; it went away again.
+    expect(report).toMatch(/ {3}beside another viewer \(playing another recording, started in \d+ ms\): \d+ pictures, .*; the viewer played .*, longest stall .* ✓/);
+    expect(document.querySelectorAll("body > rv-player")).toHaveLength(0);
     expect(report).toContain("   over what the video has buffered: skipped, nothing playing");
     expect(check.inShort(true).findings.map((f) => f.text)).toContain("While dragging, pictures are decoded with WebCodecs.");
   });
@@ -1071,7 +1134,9 @@ describe("rv-playback while dragging (Phase 10)", () => {
     expect(preview).toHaveBeenCalled();
     // The drag went over s2, the other recording; none was left to play meanwhile.
     expect(Math.min(...sockets.flatMap((socket) => socket.asked))).toBeGreaterThanOrEqual(T0 + 62 * MIN);
-    expect(report).toContain("   another recording playing meanwhile: none");
+    expect(report).toContain("   beside another viewer: none (no second recording not cached on this day)");
+    // The drag paused the tab's video.
+    expect(report).toContain("   this tab's video while dragging: paused ✓");
   });
 
   it("the playback check's V row plays two viewers on one camera and waits for the NVR to be back at rest", async () => {

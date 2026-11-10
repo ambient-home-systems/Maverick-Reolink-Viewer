@@ -290,6 +290,17 @@ export class RvPlayer extends LitElement {
     this._video(this._active)?.pause();
   }
 
+  /**
+   * Pause the video on screen if it plays or is starting (a drag, Phase 10
+   * step 3); returns whether it did, so that a cancelled drag resumes it.
+   */
+  hold(): boolean {
+    const video = this._video(this._active);
+    if (!video || !this.current || video.paused) return false;
+    video.pause();
+    return true;
+  }
+
   resume(): void {
     const video = this._video(this._active);
     if (video) this._start(video);

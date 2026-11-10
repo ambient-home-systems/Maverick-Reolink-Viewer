@@ -21,12 +21,12 @@ put on it:
 | 2 | Event timeline, thumbnails, smooth playback | High (backend) / Very high (player) | 3–5 wk | Done (2026-10-21, v0.3.2). 2A (2026-10-20, v0.2.7): timeline 105–287 ms, first frame 0.6–1.1 s, auto-advance 6–7 ms on hardware. 2B: MSE player; uncached deep starts are the NVR's download up to the target (6.9–13.0 s in hour-long recordings, up to 84 s before), speeds 0.5–8×, HD/SD at the same moment, one-hour sessions within the caps, the iPhone app on Wi-Fi, Tailscale and Nabu Casa |
 | 3 | Live view via go2rtc, grid, fullscreen, PTZ | High | 3–4 wk | Done (2026-10-27, v0.15.1). Our own go2rtc and the live check (v0.4.0, runs 5–13); the key-frame cache, the image cache, the Live grid and Live tab, keep warm, full-screen HD, PTZ and the camera's controls, the picture first, battery cameras on wired power, a debug view per tile and the soak report (v0.5.0–v0.15.1). Exit runs: the soak passed (run 15), every tile's first image in a median 0.02 s on the iPhone and the Mac (runs 16–17), and the Phase 2 playback criteria held with live view running (runs 18–19) |
 | 4 | Design, performance, mobile, packaging, first release | Standard | 3–4 wk | Done (2026-10-28, v0.32.3). Step 1, the design (the Timetable), in v0.16.0–v0.22.0; step 2, the performance budget, in v0.23.0; step 3, mobile, in v0.24.0–v0.26.0; step 4, error states, in v0.27.0–v0.29.0; step 5, accessibility, in v0.30.0; step 6, packaging, in v0.31.0, the first release; step 7, docs, in v0.32.0, released the same day; v0.32.1 starts live video sooner where WebRTC cannot connect, from the work PC's check, v0.32.2 keeps the capacity test from blaming the NVR for a stream that plays no video, from the owner's live check, and v0.32.3 fixes full screen and the timeline's pinch on the iPhone, from the owner's iPhone. The rest of the exit checklist was not run: the owner closed the phase on v0.32.0 working in daily use. See "Phase 4 status" |
-| 5 | Optional R&D: Baichuan live/playback | Very high | 4–8 wk, time-boxed with gates | **5a done, go** (2026-10-29, v0.34.1): prior art surveyed, the capture tool and the owner's captures, `docs/baichuan-playback.md`, and the read-only check: a deep start over Baichuan costs the NVR 0.2 s against 4.7 s of HTTP download for the same point of a short recording. 5b–5d estimated at 3.5–5 wk, deep starts only; talk deferred. **5b step 1 built** (2026-10-29, v0.35.0): the probe measures the replay and the download cut (143) 75 % into sub and main recordings, decodes what arrives and counts the sessions; the source (replay, 143 or both) is chosen from the owner's report before step 2, the prototype. **Step 1 done** (2026-10-30, v0.35.5): the download cut (143) is the source. **5b step 2 built** (2026-10-30, v0.36.0): the muxer, one Baichuan connection per host, deep starts served from the cut behind an option (off by default), the fallback to the download. **Hardware check passed** (2026-10-30): an uncached deep start 52 min into an hour shows its first frame in 0.51 s on Chrome and 0.60 s on the iPhone (9.0 s from the download with the option off); v0.36.1 cuts HD in 3-minute spans and searches the day's HD list ahead. **5b done** (2026-10-30, v0.36.2): every exit criterion met on the hardware, the NVR's own list of online users included (one more session while deep starts are in use, gone when idle). **5c done** (2026-10-30 to 2026-11-02, v0.37.0–v0.40.0): a deep start fetches the recording once, in two pieces, on one stream; on by default, a device that refuses the protocol left alone; each camera's counter rate kept; the device's zone built from its own DST rules (reolink-aio's land on the wrong days); two viewers of a camera take turns. **5d reports posted** (2026-11-02): the time zone bug as [starkillerOG/reolink_aio#239](https://github.com/starkillerOG/reolink_aio/issues/239), the download cut (143/144) and the media message class as [#240](https://github.com/starkillerOG/reolink_aio/issues/240); the rest is the maintainer's. **#240 answered** (2026-11-10): the maintainer's own download in reolink-aio 0.23.0, which HA pins for 2026.11.2; **v0.61.3** keeps the Doorbell's past pictures working on it and tests every change on it. **v0.40.1** (2026-11-02): six findings of a review of 5b/5c fixed (chief among them, an HD cut left by a closed tab held the recorder's login until restart); the owner's check of it closes the phase. See "Phase 5 status" |
+| 5 | Optional R&D: Baichuan live/playback | Very high | 4–8 wk, time-boxed with gates | **Done** (2026-11-10): v0.40.1's hardware check, automated as the playback check's V row (v0.61.0), passed on the owner's runs in Safari on the LAN (v0.61.1) and Chrome through Nabu Casa (v0.61.3); what is left of 5d is the maintainer's. **5a done, go** (2026-10-29, v0.34.1): prior art surveyed, the capture tool and the owner's captures, `docs/baichuan-playback.md`, and the read-only check: a deep start over Baichuan costs the NVR 0.2 s against 4.7 s of HTTP download for the same point of a short recording. 5b–5d estimated at 3.5–5 wk, deep starts only; talk deferred. **5b step 1 built** (2026-10-29, v0.35.0): the probe measures the replay and the download cut (143) 75 % into sub and main recordings, decodes what arrives and counts the sessions; the source (replay, 143 or both) is chosen from the owner's report before step 2, the prototype. **Step 1 done** (2026-10-30, v0.35.5): the download cut (143) is the source. **5b step 2 built** (2026-10-30, v0.36.0): the muxer, one Baichuan connection per host, deep starts served from the cut behind an option (off by default), the fallback to the download. **Hardware check passed** (2026-10-30): an uncached deep start 52 min into an hour shows its first frame in 0.51 s on Chrome and 0.60 s on the iPhone (9.0 s from the download with the option off); v0.36.1 cuts HD in 3-minute spans and searches the day's HD list ahead. **5b done** (2026-10-30, v0.36.2): every exit criterion met on the hardware, the NVR's own list of online users included (one more session while deep starts are in use, gone when idle). **5c done** (2026-10-30 to 2026-11-02, v0.37.0–v0.40.0): a deep start fetches the recording once, in two pieces, on one stream; on by default, a device that refuses the protocol left alone; each camera's counter rate kept; the device's zone built from its own DST rules (reolink-aio's land on the wrong days); two viewers of a camera take turns. **5d reports posted** (2026-11-02): the time zone bug as [starkillerOG/reolink_aio#239](https://github.com/starkillerOG/reolink_aio/issues/239), the download cut (143/144) and the media message class as [#240](https://github.com/starkillerOG/reolink_aio/issues/240); the rest is the maintainer's. **#240 answered** (2026-11-10): the maintainer's own download in reolink-aio 0.23.0, which HA pins for 2026.11.2; **v0.61.3** keeps the Doorbell's past pictures working on it and tests every change on it. **v0.40.1** (2026-11-02): six findings of a review of 5b/5c fixed (chief among them, an HD cut left by a closed tab held the recorder's login until restart); the owner's check of it (the V row) closed the phase. See "Phase 5 status" |
 | 6 | The Doorbell's events: a camera that records but cannot be played lists its events | Standard / High | 0.5–1 wk | **Done** (2026-11-02, v0.43.0). **Step 1 done** (v0.41.0–v0.41.1): run 2 found the Doorbell's event and day searches working, its zone Home Assistant's, and its pictures refused by reolink-aio (a `1002` header). **Step 2 built** (v0.42.0): the Doorbell's events in the feed, the Events view and the calendar, on wired power. **Step 3 built** (v0.43.0): its pictures read here, and its Playback tab shows each event as pictures. **The owner's check** (2026-11-02): the Doorbell's events show and open as pictures, and a press of the doorbell is listed as a "Doorbell" event at the right time, so step 4 (the fallback) was not needed. Phase 7 started meanwhile, at the owner's request. See "Phase 6" |
 | 7 | Live video on dashboards: a Reolink Viewer camera card | Standard | 1–1.5 wk | **Done** (2026-11-03, v0.45.2), closed on daily use by the owner. **Step 1 done** (v0.44.0): the Reolink camera card, `custom:reolink-viewer-camera`, with its editor, on any dashboard and for any user. The owner's check (2026-11-02): on the wall tablet (Galaxy Tab A9+, Fully Kiosk, a sections view) and the iPhone app's dashboard, the Doorbell's and the front-yard camera's cards show their picture at once and their video quickly, kept warm or not, and go full screen in HD and back. **Step 2 built** (v0.45.0): what the cards see is logged per device (Devices → Dashboard cards), they sleep while Fully Kiosk's screen is off or its screensaver on, and a doorbell's card can wake the screen and go full screen when it rings. **Step 2 done** (2026-11-03, v0.45.2): on the owner's tablet the cards sleep under Fully's screensaver (no frames decoded) and a ring wakes the screen and shows the Doorbell full screen, playing in 0.6 s (v0.45.1 fills the window from the top layer). Step 3 stays gated. Not measured: a warm camera's wake time and 8 visible hours; the wall page's cards are the owner's choice. See "Phase 7" |
 | 8 | Unusual events: learning what is normal | High | 2–3 wk, then a week of learning | **Started** (2026-11-03). **Step 1 built** (v0.46.0): the detection journal, opt-in ("Learn what is normal"), with a 10-day head start from Home Assistant's recorder; on at the owner's since 2026-11-02, all 7 cameras. v0.46.1 keeps motion as bursts and a year of history (the owner's choices, from the first 10 days' sizes). **Step 2 built** (v0.47.0): Stamina's model, ported with its tests (MIT, in `THIRD_PARTY.md`), with a daily cap for a busy property; the Devices page shows each camera's state and the week's marks with their sentences. The owner's check: 3.6 marks a day at Balanced (243 a week without the cap). v0.47.1, the owner's choices: motion never marked, time counted once, one mark per incident across cameras; 5.1 a day, the journal 1.1 MB (about 2.8 MB a month). v0.47.2: only long stands out, a kind seen 10 times is known, only detections fire first; 5.3 a day. v0.47.3: an incident's later events take what fired before it; a mark always says why; the model saved between restarts; 5.3 a day, 39 without the cap. v0.47.4: anything seen 10 times is known, only "nothing fired first" raises; 1.4 a day, all rare by count. v0.47.5: Balanced aims at a few a day (floor 0, at most 3 a day), More knows a value after 20. **Step 3 built** (v0.48.0–v0.49.0), the owner's choice: marks on the timetable's rows with why, and an Unusual filter on Events (v0.48.0; the owner's check: 2.6 a day at Balanced); "What it has learned" on each camera's Overview, and a mark's count as a total (v0.49.0). **House-wide signals built** (v0.50.0): chosen in the options, kept beside the detections, learned and said. **Step 4 built** (v0.51.0): each detection scored as it begins and ends; `reolink_viewer_unusual`, an "unusual activity" sensor per camera, and a device trigger per camera, on Reolink Viewer's own device. See "Phase 8" |
 | 9 | The Wall: the Live page as a security monitor, with layouts, arranging, HD large tiles and the detection strip | Standard / High | 2–3 wk | **Done** (2026-11-10, v0.56.0): the owner validated v0.55.0's and v0.56.0's checklists. Started 2026-11-05. **Step 1 built** (v0.52.0): the Wall, its layouts (Auto by shape, 1, 2×2, 3×3, 4×4, 1+5, 1+7), saved per user on the server, `#wall/<id>`, each device remembering board or Wall; the owner's check: it works, nothing to scroll. **Step 2 built** (v0.53.0): swapping (drag, or Arrange and two taps), the large slot or alone by a double tap or Enter, the keyboard, pages and tours. **Step 3 built** (v0.54.0–v0.54.1): HD in the large tiles while a stream slot is spare, the NVR's budget 9 streams with 2 HD tiles (the capacity test). **Step 4 built** (v0.55.0): the detection strip, a tile lit at once by its sensor, and per layout the feeds' floodlight and siren buttons. **Step 5 built** (v0.56.0): the pointer hidden when still, the screen kept awake, the tiles asleep under Fully's screen off, and the Reolink Wall dashboard card. The owner's checks of v0.55.0 and v0.56.0 passed (2026-11-10): the phase is done. See "Phase 9" |
-| 10 | Scrubbing that shows the picture while dragging | Very high | 2–4 wk | **Started** (2026-11-10). **Step 0 built** (v0.57.0): the gate's measurements, the probe's scrub cuts and key frames, and the playback check's K row (key frames decoded one at a time); the owner's runs passed it (2026-11-10). **Step 1 built** (v0.58.0): the picture at a moment, from the server: a scrub session (a signed websocket), answered from a store of key frames found, the disk cache or a 2-second cut the device sends, taking its channel's turn; the playback check's F row. **Step 2 built** (v0.59.0): dragging over what the video has not buffered shows the server's key frame at the pointer, over the video, until release plays from there. See "Phase 10" |
+| 10 | Scrubbing that shows the picture while dragging | Very high | 2–4 wk | **Started** (2026-11-10). **Step 0 built** (v0.57.0): the gate's measurements, the probe's scrub cuts and key frames, and the playback check's K row (key frames decoded one at a time); the owner's runs passed it (2026-11-10). **Step 1 built** (v0.58.0): the picture at a moment, from the server: a scrub session (a signed websocket), answered from a store of key frames found, the disk cache or a 2-second cut the device sends, taking its channel's turn; the playback check's F row. **Step 2 built** (v0.59.0): dragging over what the video has not buffered shows the server's key frame at the pointer, over the video, until release plays from there. **Step 4 built** (v0.60.0, the owner's ask): the playback check's P row replaces the hand checklist. **Step 3 built** (v0.62.0): a drag pauses the video, the server answers each picture before its cut's drain, and a release plays from the picture shown; the P row drags slowly alone and beside a second viewer. See "Phase 10" |
 | 11 | Playback and settings extras: zoom, event clips, filters, copying settings | Standard | 1–2 wk | Planned. See "Phase 11" |
 | 12 | Optional R&D: the Doorbell's recordings and talk | Very high | 3–5 wk, gated | Planned. See "Phase 12" |
 | 13 | Optional: live picture integrity and outside live sources | High | 1–1.5 wk, gated | Planned. See "Phase 13" |
@@ -4160,6 +4160,10 @@ more precisely than the Phase 2 path, measured with the debug panel.
 
 ### Phase 5 status
 
+**Done (2026-11-10).** The last record, v0.40.1's hardware check, passed as
+the playback check's V row on the owner's runs (see "The owner's check" under
+v0.40.1). What is left of 5d waits on reolink-aio's maintainer.
+
 Started 2026-10-29 with step 5a only, the gate. The original targets are mostly
 gone: no owned camera has broken RTSP/FLV, the battery Doorbell runs on wired
 power and starts live over WebRTC in 0.4 s, and speeds and scrubbing work. Two
@@ -5010,8 +5014,21 @@ deep in another, then far into the first one's; the first is sampled for
 stalls all along (✓ under 1 s); both start (✓ under 3 s). Then both stop, the
 second as a closed tab does (it never ends its leases), and the list is read
 every 5 s: ✓ when it is back at rest, with no Reolink protocol login left,
-within 75 s. Once the owner's run shows ✓, Phase 5 is done; what is
-left of 5d waits on the maintainer
+within 75 s.
+
+**Passed: Phase 5 is done (2026-11-10, the owner's runs).**
+
+- **Safari 26.5 on macOS, on the LAN (v0.61.1):** the NVR listed 2 users at
+  rest, 2 with one viewer, 3 with two, and 2 again 32 s after both stopped;
+  the first viewer never stalled; the second started in 0.9 s, and in 0.4 s
+  far into the first one's recording.
+- **Chrome 156 through Nabu Casa (v0.61.3):** 3 at rest (the check's earlier
+  rows' Reolink protocol login still open), 3 with one viewer and with two
+  (their cuts shared it), and 2, with no login left, 26 s after both stopped;
+  the first viewer never stalled; the second started in 1.1 s, and in 0.9 s
+  far into the first one's recording.
+
+What is left of 5d waits on the maintainer
 ([#239](https://github.com/starkillerOG/reolink_aio/issues/239);
 [#240](https://github.com/starkillerOG/reolink_aio/issues/240) is answered:
 see "#240's answer").
@@ -5058,10 +5075,12 @@ Recommended, the owner's to change:
 8. **Phase 14 is TBD** (decision 7): a sketch, to be planned if the owner
    picks it up.
 
-Before Phase 6, two records are still open from the first round: Phase 5's
-v0.40.1 hardware check (this plan still says "not run yet"), and Phase 4's
-exit item (an install through HACS on a clean Home Assistant). Both are
-automated in v0.61.0: the playback check's V row, and CI's clean install.
+Before Phase 6, two records were still open from the first round: Phase 5's
+v0.40.1 hardware check, and Phase 4's exit item (an install through HACS on a
+clean Home Assistant). Both were automated in v0.61.0, and both are closed:
+the playback check's V row passed on the owner's runs (2026-11-10), so Phase 5
+is done, and CI installs the release zip into a clean Home Assistant on every
+run (`scripts/install_check.py`).
 
 ### Decisions for the owner
 
@@ -7402,6 +7421,57 @@ a full reload of the page (Ctrl+F5), on LAN Chrome:
   the playback check. **Done early, in v0.60.0** (`RvScrubPicture.path`), with
   the playback check's P row.
 
+**As built (v0.62.0), from the owner's Chrome run through Nabu Casa (step
+10.4, "The owner's Chrome run"), where the slow drag gave a picture every
+0.65 s beside a recording the device sent:**
+
+- **A drag pauses the video** (`RvPlayer.hold`): at the drag's first move the
+  video on screen pauses if it plays or is starting. A cancelled drag (the
+  browser took it) resumes it; a release plays from the new place. The
+  picture covers the video anyway, and a recording the device sends would
+  take the camera's channel in turns with the pictures' cuts, each turn
+  handed back costing a pictures' cut its 0.3 s drain.
+- **Each picture is answered before its cut's drain** (`async_key_frame`): the
+  cut runs in a task of its own, and the picture is answered as soon as its
+  key frames are in. The cut's end and, when another cut waits for the
+  channel, the drain (`SCRUB_DRAIN_S`) follow, still holding the turn, so the
+  cut that waits resumes as before. This shortens each picture's wait, not the
+  pace beside another viewer's cut: the next picture still waits for the
+  drain and the turns between, about a drain and a cut each.
+- **Release plays from the picture shown** (`_releaseAt`): when the picture
+  on screen is the pointer's (within the camera's key-frame interval and half
+  a second, `isLate`) and in the same recording, the video starts at the
+  picture's own time, so it starts on the frame chosen; else from the
+  pointer. A click (no drag) plays from the click.
+- **Touch and keyboard:** as before. One finger drags; a second pinches, and
+  the drag ends where it is. The arrow keys show pictures as they step, then
+  play after `KEY_SEEK_MS`, from the picture shown.
+- **Not built:** listing the visible span's cached key frames on press, and
+  fetching around the cursor ahead of the drag. The store answers a stretch
+  dragged again (a picture every 0.13 s through Nabu Casa) and a fast drag
+  catches up at rest, so this waits for a run that shows the first pass alone
+  still slow.
+- **The playback check v0.8.0's P row** drags slowly twice over stretches not
+  asked before:
+  1. **Alone:** the tab's video paused by the drag (its own line, ✓); ✓ at
+     0.3 s between pictures, fine to 0.6 s.
+  2. **Beside a second viewer:** over the next 30 s, while a second viewer
+     (off screen, as the V row's) plays another recording deep in (a cut
+     where it is not cached). ✓ if the viewer never stops for 1 s or more;
+     the pictures' pace is said, not graded.
+
+  The tab no longer plays another recording itself during the drags. The
+  release line says how far the video began from the picture's own time.
+- **Checks:**
+  - the server: a picture answered before the drain (1 s in the test), the
+    drain still held, and the playing cut resuming contiguous;
+  - the tab: the drag pausing the video once; a cancel resuming it, a release
+    not, and a video already paused left so; a release from the picture on
+    time, from the pointer when late or in another recording, and a click
+    from the click;
+  - the P row: its two slow drags, the second viewer gone after, and the
+    release at the picture.
+
 #### Step 10.4: the checks
 
 - **In CI:** `scrub_check.cjs` drags against a fake key-frame endpoint,
@@ -7505,6 +7575,27 @@ Home Assistant, or reload the page; "After an update" in the troubleshooting
 guide), and the check says both versions at its top (a difference is a
 problem); the V row gives no ✓ when the NVR's list was not read, and says why;
 the P row's release line says where the start's time went.
+
+**The owner's Chrome run (2026-11-10, v0.61.3 on both sides, Chrome 156
+through Nabu Casa, Front Yard Right):**
+
+- **P:** every line ✓ but the slow drag, a new picture every **0.65 s** (15
+  of 16 from the device; the F row's single picture from the device took
+  258 ms through Nabu Casa). Meanwhile the tab played another recording of
+  the camera from a cut, as the row set up, so the pictures' cuts and that
+  cut took the channel in turns, each picture waiting for its cut's 0.3 s
+  drain before it was answered. Again over the same stretch, every 0.13 s
+  (the store); fast, caught up at rest; **the release in 0.3 s** (the first
+  run's 4.7 s was not seen again); the recording playing never stalled; no
+  more logins.
+- **V, all ✓:** Phase 5 passed a second time (see "Phase 5 status").
+- The rest: timelines under 0.1 s, events 0.2–0.8 s, deep starts 1.0 s not
+  cached and 0.1 s cached, moving on in 6 ms, 0.5× to 8× smooth.
+
+**v0.62.0, from it:** step 3 (see "Step 10.3: press and release"): the drag
+pauses the tab's video, a picture is answered before its cut's drain, and the
+P row's slow drag is measured alone and beside a second viewer, each graded
+for what it shows.
 
 #### Step 10.5: optional, storyboards
 

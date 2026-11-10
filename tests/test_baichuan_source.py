@@ -487,9 +487,20 @@ async def test_a_deep_start_is_served_from_the_cut_while_the_download_goes_on(
     assert window.start_ms == AT_MS
     data = b"".join([c async for c in cache.async_read_window(entry, window)])
     assert data[4:8] == b"moof"
-    after = await _window(cache, entry, first=window.first + len(window.fragments))
-    assert after.source == "cut"
-    assert after.start_ms == window.end_ms
+    # The windows after it come from the cut too, each where the last ended.
+    # How many there are depends on the cut's pace: on a slow runner the cut
+    # has sent every fragment before the first window is asked (CI, v0.62.0).
+    served = window
+    for _ in range(10):
+        if served.last:
+            break
+        after = await _window(cache, entry, first=served.first + len(served.fragments))
+        assert after.source == "cut"
+        if after.fragments:
+            assert after.start_ms == served.end_ms
+        served = after
+    assert served.last
+    assert served.first + len(served.fragments) == CUT_FIRST + 6
     assert entry.cut is not None
     await _done(entry.cut)
     end = await _window(cache, entry, first=CUT_FIRST + 6)

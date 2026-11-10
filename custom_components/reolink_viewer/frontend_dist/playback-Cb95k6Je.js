@@ -1,9 +1,9 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
 import { At as i, B as a, C as o, D as s, Lt as c, O as l, Ot as u, Rt as d, St as f, T as p, X as ee, Z as m, _t as h, a as g, bt as _, c as v, d as y, gt as te, i as b, j as x, kt as S, m as ne, n as re, o as ie, p as ae, r as oe, s as se, tt as C, u as ce, vt as w, w as le, xt as T } from "./live-49uKNz9D.js";
-import { $ as E, D as ue, E as de, F as fe, I as pe, L as me, M as he, N as ge, O as D, P as _e, R as O, T as k, b as A, c as ve, g as j, h as M, j as N, k as ye, l as be, m as xe, q as P, u as F, v as Se, w as Ce, x as we, y as I } from "./home-Cfyo5poZ.js";
-import { dayLabel as Te, shortDay as Ee } from "./events-view-DtH-U5RO.js";
+import { $ as E, D as ue, E as de, F as fe, I as pe, L as me, M as he, N as ge, O as D, P as _e, R as O, T as k, b as A, c as ve, g as j, h as M, j as N, k as ye, l as be, m as xe, q as P, u as F, v as Se, w as Ce, x as we, y as I } from "./home-BEq3E41E.js";
+import { dayLabel as Te, shortDay as Ee } from "./events-view-By2P_wep.js";
 import { i as De } from "./findings-D8z8rKHP.js";
-import { a as Oe, c as ke, f as Ae, i as L, l as je, n as R, o as Me, r as Ne, s as z, t as Pe, u as Fe } from "./check-OwGRPSHY.js";
+import { a as Oe, c as ke, f as Ae, i as L, l as je, n as R, o as Me, r as Ne, s as z, t as Pe, u as Fe } from "./check-DJLLItca.js";
 var Ie = class extends r {
 	static properties = {
 		events: { attribute: !1 },
@@ -299,6 +299,10 @@ var Le = [
 	}
 	pause() {
 		this._video(this._active)?.pause();
+	}
+	hold() {
+		let e = this._video(this._active);
+		return !e || !this.current || e.paused ? !1 : (e.pause(), !0);
 	}
 	resume() {
 		let e = this._video(this._active);
@@ -753,10 +757,10 @@ function We(e, t) {
 	for (let n = 0; n < e.length; n += 1) if (e[n] !== t[n]) return !1;
 	return !0;
 }
-function Ge(e, t, n) {
+function W(e, t, n) {
 	return t !== void 0 && Math.abs(t - e) > (n ?? 4e3) + 500;
 }
-var Ke = class extends r {
+var Ge = class extends r {
 	static properties = {
 		picture: { attribute: !1 },
 		pointer: { attribute: !1 },
@@ -785,6 +789,9 @@ var Ke = class extends r {
 	}
 	get showing() {
 		return this.picture !== void 0 && this._shown !== void 0;
+	}
+	get shown() {
+		return this.picture === void 0 ? void 0 : this._shown;
 	}
 	disconnectedCallback() {
 		super.disconnectedCallback(), this.codecs.close(), this.mse.close(this._video ?? void 0), this._revoke();
@@ -827,7 +834,7 @@ var Ke = class extends r {
 		n && this.mse.available && await this.mse.paint(e, n) && this.picture && this._show(e, "video", t);
 	}
 	_show(e, t, n) {
-		this._shown = qe(e, t);
+		this._shown = Ke(e, t);
 		let r = {
 			time: e.time,
 			at: e.at,
@@ -851,7 +858,7 @@ var Ke = class extends r {
 		this._jpeg && URL.revokeObjectURL(this._jpeg), this._jpeg = void 0;
 	}
 	render() {
-		let e = this.picture ? this._shown : void 0, r = e && Ge(e.time, this.pointer, e.interval);
+		let e = this.picture ? this._shown : void 0, r = e && W(e.time, this.pointer, e.interval);
 		return n`<div class="frame ${e ? "on" : ""} ${r ? "late" : ""}" aria-hidden="true">
       <canvas class=${e?.how === "canvas" ? "on" : ""}></canvas>
       <video class=${e?.how === "video" ? "on" : ""} muted playsinline></video>
@@ -907,17 +914,17 @@ var Ke = class extends r {
     }
   `;
 };
-function qe(e, t) {
+function Ke(e, t) {
 	return {
 		time: e.time,
 		how: t,
 		...e.interval === void 0 ? {} : { interval: e.interval }
 	};
 }
-customElements.get("rv-scrub-picture") || customElements.define("rv-scrub-picture", Ke);
+customElements.get("rv-scrub-picture") || customElements.define("rv-scrub-picture", Ge);
 //#endregion
 //#region src/playback/thumb-loader.ts
-var Je = class {
+var qe = class {
 	_concurrency;
 	_create;
 	_queue = [];
@@ -965,7 +972,7 @@ var Je = class {
 			}, this._active.add(n), t.src = e.url;
 		}
 	}
-}, Ye = 4, W = 24, Xe = .01, G = 76, K = 18, q = 22, Ze = 26, Qe = 52, $e = 16, et = [
+}, Je = 4, G = 24, Ye = .01, K = 76, q = 18, Xe = 22, Ze = 26, Qe = 52, $e = 16, et = [
 	1e4,
 	3e4,
 	M,
@@ -1063,7 +1070,7 @@ var nt = class extends r {
 	}
 	_onWheel(e) {
 		if (e.preventDefault(), e.ctrlKey) {
-			let t = this._span(this.view.span * Math.exp(e.deltaY * Xe));
+			let t = this._span(this.view.span * Math.exp(e.deltaY * Ye));
 			this._setView(O(this.view, t, this.timeAt(this._x(e)), this._bounds));
 		} else if (e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
 			let t = e.shiftKey ? e.deltaY : e.deltaX;
@@ -1074,7 +1081,7 @@ var nt = class extends r {
 		if (e.button !== 0) return;
 		e.isPrimary && (this._pointers.clear(), this._pinch = void 0, this._pinched = !1);
 		let t = this._x(e);
-		this._pointers.set(e.pointerId, t), rt(this._canvas, e.pointerId, !0), this._pointers.size === 2 ? this._startPinch() : this._pinched || this._pointers.size > 2 || (this._drag = {
+		this._pointers.set(e.pointerId, t), J(this._canvas, e.pointerId, !0), this._pointers.size === 2 ? this._startPinch() : this._pinched || this._pointers.size > 2 || (this._drag = {
 			pointerId: e.pointerId,
 			x: t,
 			moved: !1
@@ -1099,7 +1106,7 @@ var nt = class extends r {
 	_movePinch() {
 		let e = this._pinch, t = [...this._pointers.values()];
 		if (!e || t.length < 2) return;
-		let [n = 0, r = 0] = t, i = Math.abs(n - r), a = e.dist >= W && i >= W ? this._span(e.span * e.dist / i) : this.view.span, o = (n + r) / 2;
+		let [n = 0, r = 0] = t, i = Math.abs(n - r), a = e.dist >= G && i >= G ? this._span(e.span * e.dist / i) : this.view.span, o = (n + r) / 2;
 		this._setView({
 			start: e.anchor - o / (this._width || 1) * a,
 			span: a
@@ -1113,14 +1120,14 @@ var nt = class extends r {
 		}
 		let n = this._drag;
 		if (n && n.pointerId === e.pointerId) {
-			if (Math.abs(t - n.x) > Ye && (n.moved = !0), n.moved) {
+			if (Math.abs(t - n.x) > Je && (n.moved = !0), n.moved) {
 				let e = this.timeAt(t);
 				n.time = e, this._emit("rv-scrub", { time: e }), this._scheduleHover(e, t);
 			}
 		} else e.pointerType === "mouse" && this._scheduleHover(this.timeAt(t), t);
 	}
 	_onPointerUp(e) {
-		if (this._pointers.delete(e.pointerId), rt(this._canvas, e.pointerId, !1), this._pinched) {
+		if (this._pointers.delete(e.pointerId), J(this._canvas, e.pointerId, !1), this._pinched) {
 			this._pinch = void 0, this._pointers.size || (this._pinched = !1);
 			return;
 		}
@@ -1189,18 +1196,18 @@ var nt = class extends r {
 		let t = this._observed || Math.max(1, Math.round(this.getBoundingClientRect().width || e.clientWidth || 300));
 		this._width = t;
 		let n = window.devicePixelRatio || 1;
-		e.width !== t * n && (e.width = t * n, e.height = G * n);
+		e.width !== t * n && (e.width = t * n, e.height = K * n);
 		let r = e.getContext("2d");
 		if (!r) return;
 		r.setTransform(n, 0, 0, n, 0, 0);
 		let i = getComputedStyle(this), a = (e, t) => i.getPropertyValue(e).trim() || t, o = a("--rv-text", "#111418"), s = a("--rv-muted", "#5d6370");
-		r.clearRect(0, 0, t, G);
+		r.clearRect(0, 0, t, K);
 		let c = this.view, l = (e) => fe(e, c, t);
 		r.font = `500 12px ${a("--rv-font", "sans-serif")}`, r.textBaseline = "top", r.fillStyle = s, r.strokeStyle = a("--rv-rule", "#e0e0e0"), r.lineWidth = 1;
 		let u = this.timeZone, d = ge(c, t) < M;
 		for (let e of _e(c, t, (e) => ne(e, u))) {
 			let n = Math.round(l(e)) + .5;
-			r.beginPath(), r.moveTo(n, 14), r.lineTo(n, G), r.stroke();
+			r.beginPath(), r.moveTo(n, 14), r.lineTo(n, K), r.stroke();
 			let i = y(e, u, d);
 			n + 3 + r.measureText(i).width <= t && r.fillText(i, n + 3, 2);
 		}
@@ -1209,12 +1216,12 @@ var nt = class extends r {
 			if (f.now < f.end) {
 				r.fillStyle = a("--rv-ground-2", "#f2f2f2");
 				let e = Math.max(0, l(f.now));
-				r.fillRect(e, q, t - e, 54);
+				r.fillRect(e, Xe, t - e, 54);
 			}
 			r.fillStyle = a("--rv-recording", "#1b2a6e");
 			for (let e of Se(f.segments, c, t)) {
 				let n = Math.max(0, l(e.start)), i = Math.min(t, l(e.end));
-				r.fillRect(n, q, Math.max(1, i - n), Ze);
+				r.fillRect(n, Xe, Math.max(1, i - n), Ze);
 			}
 			r.fillStyle = o;
 			for (let e of this.events) {
@@ -1222,11 +1229,11 @@ var nt = class extends r {
 				let t = l(e.start), n = Math.max(3, l(e.end) - t);
 				r.fillRect(t, Qe, n, $e);
 			}
-			f.now < f.end && f.now >= c.start && f.now <= c.start + c.span && (r.fillStyle = a("--rv-red", "#e10600"), r.fillRect(Math.round(l(f.now)) - 1, K, 2, 58));
+			f.now < f.end && f.now >= c.start && f.now <= c.start + c.span && (r.fillStyle = a("--rv-red", "#e10600"), r.fillRect(Math.round(l(f.now)) - 1, q, 2, 58));
 		}
 		if (this.cursor !== void 0) {
 			let e = Math.round(l(this.cursor));
-			r.fillStyle = o, r.fillRect(e - 1, K, 2, 58), r.beginPath(), r.moveTo(e - 6, 14), r.lineTo(e + 6, 14), r.lineTo(e, 21), r.closePath(), r.fill();
+			r.fillStyle = o, r.fillRect(e - 1, q, 2, 58), r.beginPath(), r.moveTo(e - 6, 14), r.lineTo(e + 6, 14), r.lineTo(e, 21), r.closePath(), r.fill();
 		}
 	}
 	render() {
@@ -1295,7 +1302,7 @@ var nt = class extends r {
     canvas {
       display: block;
       width: 100%;
-      height: ${G}px;
+      height: ${K}px;
       /* One finger scrolls the page up and down; the rest is the timeline's. */
       touch-action: pan-y;
       cursor: pointer;
@@ -1311,7 +1318,7 @@ var nt = class extends r {
     }
   `;
 };
-function rt(e, t, n) {
+function J(e, t, n) {
 	try {
 		n ? e?.setPointerCapture(t) : e?.releasePointerCapture(t);
 	} catch {}
@@ -1319,7 +1326,7 @@ function rt(e, t, n) {
 customElements.get("rv-timeline") || customElements.define("rv-timeline", nt);
 //#endregion
 //#region src/playback/explain.ts
-function it(e, t) {
+function rt(e, t) {
 	return t.offline ? {
 		text: `${t.name} is offline, so the recordings on its SD card cannot be read.`,
 		advice: "They come back when it does."
@@ -1334,7 +1341,7 @@ function it(e, t) {
 		advice: "Try again in a moment."
 	};
 }
-function J(e) {
+function Y(e) {
 	return /not enough free disk space/i.test(e) ? {
 		text: "Home Assistant's disk is too full to fetch this recording.",
 		advice: "Free some space on it, then play the recording again."
@@ -1363,7 +1370,7 @@ function J(e) {
 }
 //#endregion
 //#region src/components/playback.ts
-var Y = 6e4, at = 3e3, X = 1e4, ot = 3, Z = 86400, st = 10 * M, ct = 10, lt = 8e3, Q = 3 * M, ut = 6e4, dt = 60, $ = 1e3, ft = 6e4, pt = "reolink-viewer-check-setup", mt = "reolink-viewer-player", ht = !1, gt = 3e4, _t = 1e4, vt = class extends r {
+var X = 6e4, it = 3e3, Z = 1e4, at = 3, ot = 86400, st = 10 * M, ct = 10, lt = 8e3, Q = 3 * M, ut = 6e4, dt = 60, $ = 1e3, ft = 6e4, pt = "reolink-viewer-check-setup", mt = "reolink-viewer-player", ht = !1, gt = 3e4, _t = 1e4, vt = class extends r {
 	static properties = {
 		hass: { attribute: !1 },
 		deviceId: { attribute: !1 },
@@ -1408,7 +1415,7 @@ var Y = 6e4, at = 3e3, X = 1e4, ot = 3, Z = 86400, st = 10 * M, ct = 10, lt = 8e
 	_hoverSeq = 0;
 	_monthSeq = 0;
 	_thumbsRequested = /* @__PURE__ */ new Set();
-	thumbLoader = new Je();
+	thumbLoader = new qe();
 	_thumbPause;
 	_eventsRetry;
 	_eventsRetries = 0;
@@ -1424,6 +1431,7 @@ var Y = 6e4, at = 3e3, X = 1e4, ot = 3, Z = 86400, st = 10 * M, ct = 10, lt = 8e
 	_scrubber;
 	_scrubKey = "";
 	_scrubbing = !1;
+	_heldForScrub = !1;
 	_scrubHold;
 	scrubSocket = (e) => new WebSocket(ee(e, location.href));
 	constructor() {
@@ -1464,7 +1472,7 @@ var Y = 6e4, at = 3e3, X = 1e4, ot = 3, Z = 86400, st = 10 * M, ct = 10, lt = 8e
 				keepView: !0,
 				quiet: !0
 			});
-		}, Y);
+		}, X);
 	}
 	disconnectedCallback() {
 		super.disconnectedCallback(), clearInterval(this._refreshTimer), this._player?.stop(), this.thumbLoader.clear(), clearTimeout(this._thumbPause), clearTimeout(this._eventsRetry), this._check?.stop(), this._closeScrub();
@@ -1498,7 +1506,7 @@ var Y = 6e4, at = 3e3, X = 1e4, ot = 3, Z = 86400, st = 10 * M, ct = 10, lt = 8e
 		let r = ++this._daySeq, i = performance.now(), a = !1;
 		t.quiet || (this._loading = !0);
 		try {
-			let o = await T(n, this.deviceId, e, t.quiet ? 0 : Z);
+			let o = await T(n, this.deviceId, e, t.quiet ? 0 : ot);
 			if (r !== this._daySeq) return;
 			let s = !this._day || this._day.date !== o.date;
 			if (this._day = o, this._error = void 0, s || !t.keepView) {
@@ -1530,7 +1538,7 @@ var Y = 6e4, at = 3e3, X = 1e4, ot = 3, Z = 86400, st = 10 * M, ct = 10, lt = 8e
 				keepView: !0,
 				quiet: !0
 			});
-		}, X));
+		}, Z));
 	}
 	async _loadMonth(e, t) {
 		let n = this.hass;
@@ -1766,7 +1774,7 @@ var Y = 6e4, at = 3e3, X = 1e4, ot = 3, Z = 86400, st = 10 * M, ct = 10, lt = 8e
 			...this._metrics,
 			hdFailures: (this._metrics.hdFailures ?? 0) + 1,
 			lastHdFailure: e
-		}, P(this, `HD could not play: ${J(e).text} Back to SD.`, "error"), this._cursor !== void 0 && this.playAt(this._cursor)) : (this._playFailure = e, P(this, J(e).text, "error"));
+		}, P(this, `HD could not play: ${Y(e).text} Back to SD.`, "error"), this._cursor !== void 0 && this.playAt(this._cursor)) : (this._playFailure = e, P(this, Y(e).text, "error"));
 	}
 	_onTime(e) {
 		if (this._starting !== void 0 || this._scrubbing) return;
@@ -1780,7 +1788,7 @@ var Y = 6e4, at = 3e3, X = 1e4, ot = 3, Z = 86400, st = 10 * M, ct = 10, lt = 8e
 		}));
 	}
 	_onScrub(e) {
-		this._cursor = e, this._scrubbing = !0, clearTimeout(this._scrubHold);
+		this._cursor = e, this._scrubbing || (this._heldForScrub = this._player?.hold() ?? !1), this._scrubbing = !0, clearTimeout(this._scrubHold);
 		let t = this._player;
 		if (t?.buffers(e)) {
 			this._scrubber?.end(), this._scrubPicture = void 0;
@@ -1824,15 +1832,21 @@ var Y = 6e4, at = 3e3, X = 1e4, ot = 3, Z = 86400, st = 10 * M, ct = 10, lt = 8e
 		};
 	}
 	_endScrub(e) {
-		this._scrubbing = !1, this._scrubber?.end(), clearTimeout(this._scrubHold), this._scrubPicture && (e ? this._scrubHold = setTimeout(() => {
+		this._scrubbing = !1, this._scrubber?.end(), clearTimeout(this._scrubHold), this._heldForScrub && !e && this._player?.resume(), this._heldForScrub = !1, this._scrubPicture && (e ? this._scrubHold = setTimeout(() => {
 			this._scrubPicture = void 0;
 		}, _t) : this._scrubPicture = void 0);
 	}
 	_clearScrubPicture() {
 		this._scrubbing || (clearTimeout(this._scrubHold), this._scrubPicture = void 0);
 	}
+	_releaseAt(e) {
+		let t = this._scrubbing ? this._scrubView?.shown : void 0, n = this._day?.segments;
+		if (!t || !n || W(t.time, e, t.interval)) return e;
+		let r = D(n, e);
+		return r && D(n, t.time) === r ? t.time : e;
+	}
 	_closeScrub() {
-		this._scrubber?.close(), this._scrubber = void 0, this._scrubKey = "", this._scrubbing = !1, clearTimeout(this._scrubHold), this._scrubPicture = void 0;
+		this._scrubber?.close(), this._scrubber = void 0, this._scrubKey = "", this._scrubbing = !1, this._heldForScrub = !1, clearTimeout(this._scrubHold), this._scrubPicture = void 0;
 	}
 	_jump(e) {
 		let t = this._cursor ?? this._view.start, n = e > 0 ? Ce(this._events, t) : ue(this._events, t);
@@ -2021,6 +2035,9 @@ var Y = 6e4, at = 3e3, X = 1e4, ot = 3, Z = 86400, st = 10 * M, ct = 10, lt = 8e
 			},
 			get position() {
 				return e.renderRoot.querySelector("video.active")?.currentTime;
+			},
+			get source() {
+				return e.mseStats?.atSource;
 			},
 			close: () => {
 				e.stop(), e.remove();
@@ -2361,11 +2378,11 @@ var Y = 6e4, at = 3e3, X = 1e4, ot = 3, Z = 86400, st = 10 * M, ct = 10, lt = 8e
             </span>
           </div>
           ${this._renderStorage()}
-          ${this._error ? E(it(this._error, {
+          ${this._error ? E(rt(this._error, {
 			name: this.cameraName || "This camera",
 			offline: this.offline
 		}), `Could not load recordings: ${this._error}`, { help: "recordings" }) : t}
-          ${this._playFailure ? E(J(this._playFailure), `Playback failed: ${this._playFailure}`, { help: "recordings" }) : t}
+          ${this._playFailure ? E(Y(this._playFailure), `Playback failed: ${this._playFailure}`, { help: "recordings" }) : t}
           <div class="timeline-wrap">
             ${this._renderHover()}
             <rv-timeline
@@ -2378,7 +2395,8 @@ var Y = 6e4, at = 3e3, X = 1e4, ot = 3, Z = 86400, st = 10 * M, ct = 10, lt = 8e
 			this._view = e.detail.view;
 		}}
               @rv-seek=${(e) => {
-			this._endScrub(!0), this.playAt(e.detail.time);
+			let t = this._releaseAt(e.detail.time);
+			this._endScrub(!0), this.playAt(t);
 		}}
               @rv-scrub=${(e) => {
 			this._onScrub(e.detail.time);
@@ -2780,4 +2798,4 @@ function At(e) {
 }
 customElements.get("rv-playback") || customElements.define("rv-playback", vt);
 //#endregion
-export { dt as CHECK_SESSION_MIN, ot as EVENTS_RETRIES, X as EVENTS_RETRY_MS, Q as PRELOAD_LEAD_MS, at as PROGRESSIVE_SEEK_LIMIT_MS, $ as PROGRESS_EVERY_MS, ut as RECOVER_EVERY_MS, vt as RvPlayback, _t as SCRUB_HOLD_MS, Z as STALE_TODAY_S, lt as THUMB_PAUSE_MAX_MS, Y as TODAY_REFRESH_MS, wt as deliveryOf, Tt as describeCache, St as describePlayer, Ct as describeScrub, xt as videoCodec };
+export { dt as CHECK_SESSION_MIN, at as EVENTS_RETRIES, Z as EVENTS_RETRY_MS, Q as PRELOAD_LEAD_MS, it as PROGRESSIVE_SEEK_LIMIT_MS, $ as PROGRESS_EVERY_MS, ut as RECOVER_EVERY_MS, vt as RvPlayback, _t as SCRUB_HOLD_MS, ot as STALE_TODAY_S, lt as THUMB_PAUSE_MAX_MS, X as TODAY_REFRESH_MS, wt as deliveryOf, Tt as describeCache, St as describePlayer, Ct as describeScrub, xt as videoCodec };

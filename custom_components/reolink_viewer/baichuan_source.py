@@ -441,22 +441,55 @@ class BaichuanSource:
         tz = bridge.async_get_host(self._hass, entry_id).timezone()
         rates = await self._load_rates()
         muxer = BaichuanMuxer(origin, asked, rate=rates.get(f"{entry_id}|{channel}"))
+        # The picture is answered as soon as it is made; the cut's end, and the
+        # drain owed to a cut waiting for the channel, go on after it in the
+        # background, still holding the turn (Phase 10 step 3: a picture waited
+        # for the drain, 0.3 s more each while a recording played the camera).
+        ready: asyncio.Future[KeySample] = asyncio.get_running_loop().create_future()
+
+        async def run() -> None:
+            try:
+                async with self._slot(cut, SCRUB_SLOT_WAIT_S, first=True):
+                    client = await self._acquire(cut)
+                    try:
+                        async with self._turn(cut):
+                            await self._scrub_cut(
+                                cut,
+                                client,
+                                muxer,
+                                (_local(asked, tz), _local(end, tz)),
+                                ready,
+                            )
+                    finally:
+                        self._release(entry_id)
+            except CutError as err:
+                if not ready.done():
+                    ready.set_exception(err)
+            except (BaichuanClientError, OSError, TimeoutError, FragmentError) as err:
+                if not ready.done():
+                    ready.set_exception(CutError(_describe(err)))
+            except asyncio.CancelledError:
+                if not ready.done():
+                    ready.cancel()
+                raise
+            except Exception as err:  # noqa: BLE001 - the asker gets it
+                if not ready.done():
+                    ready.set_exception(err)
+
+        task = asyncio.ensure_future(run())
+        self._closing.add(task)
+        task.add_done_callback(self._closing.discard)
         try:
-            async with self._slot(cut, SCRUB_SLOT_WAIT_S, first=True):
-                client = await self._acquire(cut)
-                try:
-                    async with self._turn(cut):
-                        sample = await self._scrub_cut(
-                            cut, client, muxer, (_local(asked, tz), _local(end, tz))
-                        )
-                finally:
-                    self._release(entry_id)
+            sample = await asyncio.shield(ready)
+        except asyncio.CancelledError:
+            # A newer moment: this cut is not wanted (unless its picture is
+            # made, and only its end is left).
+            if not ready.done():
+                task.cancel()
+            raise
         except CutError:
             self._scrubs["failed"] += 1
             raise
-        except (BaichuanClientError, OSError, TimeoutError, FragmentError) as err:
-            self._scrubs["failed"] += 1
-            raise CutError(_describe(err)) from err
         self._hosts[entry_id].worked = True
         self._scrubs["answered"] += 1
         return sample
@@ -467,8 +500,12 @@ class BaichuanSource:
         client: BaichuanReplayClient,
         muxer: BaichuanMuxer,
         times: tuple[datetime, datetime],
+        ready: asyncio.Future[KeySample] | None = None,
     ) -> KeySample:
         """Ask a scrub's cut, take its key frame showing the moment, end it.
+
+        ``ready`` gets the picture as soon as it is made, before the cut's end
+        and the drain (the caller answers with it; this goes on to the end).
 
         The device starts a cut a few seconds before the moment asked (the
         owner's CX410, a key frame a second, from 3 s before), so the cut's
@@ -548,6 +585,10 @@ class BaichuanSource:
                     if lost in done
                     else f"no key frame within {SCRUB_KEY_TIMEOUT_S:g} s"
                 )
+            self._learn_interval(cut, keys)
+            sample = _key_frame_sample(muxer, keys, asked)
+            if ready is not None and not ready.done():
+                ready.set_result(sample)
         finally:
             if client.connected:
                 ending = asyncio.ensure_future(_end_download(client, cut.channel))
@@ -560,23 +601,6 @@ class BaichuanSource:
             # sends would reach it; let that pass first.
             if any(not waiting.scrub for waiting in self._channel(cut).waiting):
                 await asyncio.sleep(SCRUB_DRAIN_S)
-        self._learn_interval(cut, keys)
-        chosen = keys[0]
-        if asked is not None:
-            for key in keys:
-                if key.unix_time is not None and key.unix_time <= asked:
-                    chosen = key
-        try:
-            pieces = muxer.feed(chosen) + muxer.finish()
-        except Exception as err:
-            raise CutError(f"cannot mux the key frame ({type(err).__name__})") from err
-        init = muxer.init
-        fragment = next((p for p in pieces if p[4:8] == b"moof"), None)
-        if init is None or fragment is None:
-            raise CutError("no picture in the key frame (no parameter sets)")
-        sample = key_sample(init, fragment)
-        if sample is None:
-            raise CutError("the cut's key frame is not a sync sample")
         return sample
 
     def _learn_interval(self, cut: Cut, keys: list[Block]) -> None:
@@ -1073,6 +1097,29 @@ class BaichuanSource:
             ],
             "scrub_cuts": dict(self._scrubs),
         }
+
+
+def _key_frame_sample(
+    muxer: BaichuanMuxer, keys: list[Block], asked: float | None
+) -> KeySample:
+    """Mux the scrub's picture: the last key frame at or before the moment."""
+    chosen = keys[0]
+    if asked is not None:
+        for key in keys:
+            if key.unix_time is not None and key.unix_time <= asked:
+                chosen = key
+    try:
+        pieces = muxer.feed(chosen) + muxer.finish()
+    except Exception as err:
+        raise CutError(f"cannot mux the key frame ({type(err).__name__})") from err
+    init = muxer.init
+    fragment = next((p for p in pieces if p[4:8] == b"moof"), None)
+    if init is None or fragment is None:
+        raise CutError("no picture in the key frame (no parameter sets)")
+    sample = key_sample(init, fragment)
+    if sample is None:
+        raise CutError("the cut's key frame is not a sync sample")
+    return sample
 
 
 def _turn_wait(cut: Cut) -> float:
