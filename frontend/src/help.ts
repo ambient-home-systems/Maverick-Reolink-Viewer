@@ -16,6 +16,7 @@ export const HELP = {
   stopped: ["troubleshooting", "the-reolink-integration-is-not-running"],
   none: ["troubleshooting", "no-reolink-devices-yet"],
   loading: ["troubleshooting", "a-page-could-not-load"],
+  updated: ["troubleshooting", "after-an-update"],
   recordings: ["troubleshooting", "recordings-and-events"],
 } as const satisfies Record<string, readonly [HelpDoc] | readonly [HelpDoc, string]>;
 

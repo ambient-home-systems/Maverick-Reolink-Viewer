@@ -2,6 +2,8 @@
 
 import asyncio
 from collections.abc import Generator
+import json
+from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -52,6 +54,14 @@ async def test_devices(
     result = msg["result"]
     assert result["degraded"] is False
     assert result["compat"]["ok"] is True
+    # The version Home Assistant runs, for the panel to compare with its own.
+    manifest = json.loads(
+        (
+            Path(__file__).parent.parent
+            / "custom_components/reolink_viewer/manifest.json"
+        ).read_text()
+    )
+    assert result["version"] == manifest["version"]
     assert {"hosts", "cameras"} <= set(result)
 
 

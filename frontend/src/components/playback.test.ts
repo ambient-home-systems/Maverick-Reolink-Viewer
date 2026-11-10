@@ -1030,6 +1030,9 @@ describe("rv-playback while dragging (Phase 10)", () => {
     expect(report).toMatch(/ {3}slow \(30 s of recording in 10 s\): \d+ pictures, the first after/);
     expect(report).toContain("within the camera's 4.0 s of their moment (0.5 to 0.5 s before)");
     expect(report).toContain("   release: the picture stayed until the video's first frame");
+    // Where the release's start spent its time: the page's steps, then the server's.
+    expect(report).toMatch(/ {5}\[URL \d+ ms\] /);
+    expect(report).toContain("     server: ");
     expect(report).toContain("   hovering while dragging: the time alone, no thumbnail ✓");
     expect(report).toContain("   the NVR: 0 more logins while dragging ✓");
     // Every moment asked in whole milliseconds; the fast drag rested inside a recording.
@@ -1137,6 +1140,31 @@ describe("rv-playback while dragging (Phase 10)", () => {
     // 75 s at the test's speed (a hundredth).
     expect(check.text).toContain("NOT back at rest after 1 s: the NVR lists 3 (2 at rest), 1 Reolink protocol login(s) left ✗");
     expect(check.inShort(true).findings.find((f) => f.text.startsWith("When both viewers stopped"))?.grade).toBe("problem");
+  });
+
+  it("the V row passes nothing it could not read: an older Home Assistant without the NVR's list", async () => {
+    const hass = playbackHass();
+    hass.responses["reolink_viewer/playback/peek"] = { segment_id: "s", cache: null };
+    hass.responses["reolink_viewer/playback/check_report"] = null;
+    hass.responses["reolink_viewer/playback/stats"] = { vod: { baichuan: { enabled: true, logged_in: 0, logins: 1, logouts: 1, cuts_running: 0 } } };
+    const base = hass.callWS.bind(hass);
+    // As a Home Assistant still running 0.60.0 answers a command it does not have.
+    hass.callWS = <T,>(message: Record<string, unknown>) =>
+      message.type === "reolink_viewer/playback/online_users" ? Promise.reject(new Error("Unknown command.")) : base<T>(message);
+    const { el } = await scrubMount(hass);
+    const Player = customElements.get("rv-player") as unknown as { prototype: { play: () => Promise<void> } };
+    vi.spyOn(Player.prototype, "play").mockImplementation(function (this: HTMLElement) {
+      setTimeout(() => this.dispatchEvent(new CustomEvent("rv-first-frame", { detail: { ms: 200 } })), 5);
+      return Promise.resolve();
+    });
+    const target = (el as unknown as { _checkTarget(): CheckTarget })._checkTarget();
+    const check = new PlaybackCheck(target, { setup: "test", soakMinutes: 0 });
+    check.timeScale = 0.01;
+    await (check as unknown as { _viewers(): Promise<void> })._viewers();
+    const line = check.text.split("\n").find((l) => l.includes("both stopped")) ?? "";
+    expect(line).toContain("the NVR's list of users could not be read (Home Assistant runs an older Reolink Viewer than this page: restart it, then run the check again)");
+    expect(line).not.toContain("✓");
+    expect(check.inShort(true).findings.find((f) => f.text.startsWith("When both viewers stopped"))?.grade).toBe("note");
   });
 
   it("describes the pictures while dragging for the debug panel, with how they are painted", () => {

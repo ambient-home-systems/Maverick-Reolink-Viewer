@@ -10,7 +10,19 @@
 import { fetchCacheStatus, fetchMediaInfo, fetchTimelineDay, openScrubSession, toError, urlToken } from "../api";
 import { wsUrl } from "../live/check-util";
 import { count, inShortLines, middle, secondsText, speed, worst, type Finding, type Grade, type InShort } from "../plain";
-import type { CacheStatus, HomeAssistant, MediaInfo, PlaybackUrl, Segment, Stream, TimelineDay, Timing } from "../types";
+import { versionProblem } from "../integration";
+import type {
+  CacheStatus,
+  DevicesResponse,
+  HomeAssistant,
+  MediaInfo,
+  PlaybackUrl,
+  Segment,
+  Stream,
+  TimelineDay,
+  Timing,
+} from "../types";
+import { VERSION } from "../version";
 import {
   browserLabel,
   bufferedSeconds,
@@ -412,6 +424,17 @@ export class PlaybackCheck {
     );
     this._log(`Player: ${t.mode} · file player delivery: ${t.progressive ? "progressive" : "whole file first (WebKit)"}`);
     this._summary.push(`Player: ${t.mode}`);
+    // An update half done (Home Assistant not restarted, or an old page) skews
+    // everything after: said first, in the report and in plain words.
+    const devices = await t.hass
+      .callWS<DevicesResponse>({ type: "reolink_viewer/devices" })
+      .catch(() => undefined);
+    const mismatch = versionProblem(devices, VERSION);
+    this._log(
+      `Reolink Viewer: this page ${VERSION}, Home Assistant ${devices ? (devices.version ?? "older than 0.61.1") : "not read"}` +
+        (mismatch ? ` · NOT THE SAME: ${mismatch.advice ?? ""}` : ""),
+    );
+    if (mismatch) this._plain.push({ grade: "problem", text: mismatch.text, ...(mismatch.advice ? { advice: mismatch.advice } : {}) });
     await this._wait(() => Boolean(t.day) && !t.loading, 30_000);
   }
 
@@ -1061,6 +1084,15 @@ export class PlaybackCheck {
       `   fast (${minutes(fastEnd - fastFrom)} in ${span(DRAG_FAST.ms)}): ${describeDrag(sFast, fast)}${mark(fastOk)}`,
     );
     this._log(`   release: ${release.text}${mark(release.ok)}`);
+    if (release.firstMs !== undefined) {
+      // Where the start's time went: the page's steps, then the server's (a cut's slot and reply).
+      const m = t.metrics;
+      const served = t.player.mseStats?.atSource;
+      this._log(
+        `     [URL ${ms(m.urlMs)}] ${m.delivery ?? "?"}${served ? ` · from ${sourceLabel(served)}` : ""} · ${m.stream ?? "?"} ${m.codec ?? ""}`,
+      );
+      this._log(`     ${await this._fillReport()}`);
+    }
     this._log(`   over what the video has buffered: ${buffered.text}${mark(buffered.ok)}`);
     this._log(
       whilePlaying
@@ -1355,7 +1387,7 @@ export class PlaybackCheck {
     this._log(`   both stopped (the second as a closed tab): ${back.text}${mark(back.ok)}`);
 
     this._summary.push(
-      `Two viewers: first viewer's longest stall ${span(played.longestStallMs)}; second started in ${twoMs === undefined ? "–" : ms(twoMs)}, jumped in ${jumpMs === undefined ? "–" : ms(jumpMs)}; ${back.ok ? "the NVR back at rest" : "the NVR NOT back at rest"}`,
+      `Two viewers: first viewer's longest stall ${span(played.longestStallMs)}; second started in ${twoMs === undefined ? "–" : ms(twoMs)}, jumped in ${jumpMs === undefined ? "–" : ms(jumpMs)}; ${back.ok === undefined ? "the NVR's list not read" : back.ok ? "the NVR back at rest" : "the NVR NOT back at rest"}`,
     );
     this._plain.push({
       grade: stallOk ? "good" : "problem",
@@ -1370,7 +1402,7 @@ export class PlaybackCheck {
           ? "A second viewer of the same camera did not start."
           : `A second viewer of the same camera starts in ${secondsText(twoMs)}, and in ${secondsText(jumpMs)} far into the first one's recording.`,
     });
-    this._plain.push({ grade: back.ok ? "good" : "problem", text: back.plain });
+    this._plain.push({ grade: back.ok === undefined ? "note" : back.ok ? "good" : "problem", text: back.plain });
   }
 
   /** The longest recordings of the day on screen that are not cached (up to `n`), else the longest. */
@@ -1405,7 +1437,10 @@ export class PlaybackCheck {
   }
 
   /** Wait until the NVR lists no more users than at rest and no Reolink protocol login is left. */
-  private async _backAtRest(rest: OnlineUsers, limitMs: number): Promise<{ ok: boolean; text: string; plain: string }> {
+  private async _backAtRest(
+    rest: OnlineUsers,
+    limitMs: number,
+  ): Promise<{ ok: boolean | undefined; text: string; plain: string }> {
     const began = performance.now();
     let users: OnlineUsers;
     let loggedIn: number | undefined;
@@ -1415,6 +1450,17 @@ export class PlaybackCheck {
       const listBack = rest.count === undefined || (users.count !== undefined && users.count <= rest.count);
       const loginGone = loggedIn === undefined || loggedIn === 0;
       const waited = performance.now() - began;
+      if (rest.count === undefined && loginGone) {
+        // Without the NVR's list, only half of it is known: no pass.
+        const why = /unknown command/i.test(rest.error ?? "")
+          ? "Home Assistant runs an older Reolink Viewer than this page: restart it, then run the check again"
+          : (rest.error ?? "not said");
+        return {
+          ok: undefined,
+          text: `no Reolink protocol login left after ${secondsText(waited)}, but the NVR's list of users could not be read (${why})`,
+          plain: `When both viewers stopped, no Reolink protocol login was left, but the NVR's list of users could not be read (${why}).`,
+        };
+      }
       if (listBack && loginGone) {
         const after = secondsText(waited);
         return {

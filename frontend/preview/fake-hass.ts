@@ -5,6 +5,7 @@
 // footage or a real measurement; it exists so every view can be rendered and
 // looked at without a Home Assistant.
 import categories from "../../custom_components/reolink_viewer/catalog/categories.json";
+import { VERSION } from "../src/version";
 import settings from "../../custom_components/reolink_viewer/catalog/settings-catalog.json";
 import type {
   CameraNode,
@@ -290,7 +291,12 @@ function cameraNode(cam: Cam): CameraNode {
   };
 }
 
+/** The device list, with the version this page is (so no update note shows). */
 function devices(): DevicesResponse {
+  return { ...deviceList(), version: VERSION };
+}
+
+function deviceList(): DevicesResponse {
   if (trouble === "none")
     return { degraded: true, compat: COMPAT, hosts: [], cameras: [] };
   const cameras = CAMS.map(cameraNode);

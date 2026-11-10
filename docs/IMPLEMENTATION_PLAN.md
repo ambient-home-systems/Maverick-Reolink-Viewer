@@ -7409,6 +7409,32 @@ day is not all cached (Front Yard Right, then Garage), then on the iPhone app
 and the wall tablet; every P line ✓. The report is saved on the server, so the
 phone's and tablet's runs can be copied from the desktop.
 
+**The owner's first run (2026-11-10, the playback check v0.7.0 on Chrome 156
+through Nabu Casa, Front Yard Right; the page 0.61.0, Home Assistant still
+0.60.0):**
+
+- **P, all ✓:** slow, a new picture every 0.21 s (36 of 36 within the
+  camera's 1 s interval of their moment; 1.7 s behind a pointer moving 3 s
+  of recording a second); again, every 0.05 s from the store; fast, caught up
+  (0.1 s from the resting pointer); over the buffer, 0 asks; the recording
+  playing on the camera (a cut) played 32 s in 32 s; hover and logins ✓.
+- **The release took 4.7 s** (graded slow), where D1's start from cold took
+  1.0 s and the exit criterion asks 0.4–0.6 s. Not explained by the report:
+  v0.61.1 adds the start's steps and the server's report (the cut's slot,
+  reply, first fragment) to the release line. Step 3 is about the release.
+- **V:** both viewers started (0.8 s, 0.7 s far into the first one's
+  recording) and the first never stalled; but the NVR's list read "Unknown
+  command.": Home Assistant had not restarted since the update, so it still
+  ran 0.60.0, without `playback/online_users`. The row passed "back at rest"
+  on the login alone.
+
+**v0.61.1, from it:** the device list says the version Home Assistant runs;
+the panel shows a note over every page when it and the page differ (restart
+Home Assistant, or reload the page; "After an update" in the troubleshooting
+guide), and the check says both versions at its top (a difference is a
+problem); the V row gives no ✓ when the NVR's list was not read, and says why;
+the P row's release line says where the start's time went.
+
 #### Step 10.5: optional, storyboards
 
 Built only if step 0's gate fails:

@@ -3,6 +3,25 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.61.1
+
+From the owner's first run of the new playback check (0.61.0's page on a Home
+Assistant still running 0.60.0).
+
+- **The panel says when an update is half done:** when the page and the Reolink Viewer
+  Home Assistant runs are not the same version, a note over every page says which to
+  do: restart Home Assistant (it has not restarted since HACS updated it), or reload
+  the page (the browser kept the old one). The playback check says both versions at
+  its top, and counts a difference as a problem.
+- **The check passes nothing it could not read:** its V row passed "back at rest" on
+  the Reolink protocol login alone when the NVR's list of users could not be read (the
+  older Home Assistant did not have the command). It now says the list was not read,
+  and why, with no ✓.
+- **The check says where a release's start spent its time:** letting go took 4.7 s in
+  that run, where a start from cold takes 1.0 s; the P row's release line now gives
+  the start's steps and the server's side (the recorder's cut, its slot, its reply), to
+  find out why.
+
 ## 0.61.0
 
 The rest of the checks you ran by hand now run themselves (after 0.60.0's drag

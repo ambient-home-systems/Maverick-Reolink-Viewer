@@ -249,6 +249,30 @@ describe("reolink-viewer-panel", () => {
     }
   });
 
+  it("says when Home Assistant has not restarted since an update, or the page is an old one", async () => {
+    const banner = (el: Element) => el.shadowRoot?.querySelector(".banner.warning");
+    // Home Assistant runs the version before (or one too old to say): restart it.
+    const older = await mount(makeHass({ ...okDevices(), version: "0.0.1" }));
+    expect(banner(older)?.textContent).toContain(
+      `This page is Reolink Viewer ${VERSION}, but Home Assistant is still running 0.0.1: it has not restarted since the update.`,
+    );
+    expect(banner(older)?.textContent).toContain("Restart Home Assistant (Settings → System → Restart), then reload this page.");
+    expect(banner(older)?.querySelector("a.help-link")?.getAttribute("href")).toMatch(/troubleshooting\.md#after-an-update$/);
+    document.body.innerHTML = "";
+    // A Home Assistant from before 0.61.1 does not say its version.
+    const unsaid = okDevices();
+    delete unsaid.version;
+    const silent = await mount(makeHass(unsaid));
+    expect(banner(silent)?.textContent).toContain("but Home Assistant is still running an older version");
+    document.body.innerHTML = "";
+    // Home Assistant runs a later one: the page is from the cache.
+    const newer = await mount(makeHass({ ...okDevices(), version: "99.0.0" }));
+    expect(banner(newer)?.textContent).toContain(`Home Assistant runs Reolink Viewer 99.0.0, but this page is still ${VERSION}, from the browser's cache.`);
+    document.body.innerHTML = "";
+    // The same: nothing said.
+    expect(banner(await mount(makeHass(okDevices())))).toBeNull();
+  });
+
   it("shows an empty state", async () => {
     const el = await mount(makeHass(okDevices([], [])));
     expect(text(el)).toContain("No Reolink devices");

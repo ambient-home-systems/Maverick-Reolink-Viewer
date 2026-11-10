@@ -148,6 +148,8 @@ export type DeviceNode = HostNode | CameraNode;
 export interface DevicesResponse {
   degraded: boolean;
   compat: CompatReport;
+  /** The Reolink Viewer Home Assistant runs (absent before 0.61.1). */
+  version?: string;
   hosts: HostNode[];
   cameras: CameraNode[];
 }
