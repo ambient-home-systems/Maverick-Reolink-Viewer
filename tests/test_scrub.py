@@ -39,6 +39,7 @@ from custom_components.reolink_viewer.scrub import (
 )
 from custom_components.reolink_viewer.thumbnails import ThumbKey, ThumbnailError
 from custom_components.reolink_viewer.timeline import Day, Segment
+from custom_components.reolink_viewer.views import _scrub_request
 from custom_components.reolink_viewer.vodcache import Recording, VodCache
 from homeassistant.core import HomeAssistant
 
@@ -408,6 +409,24 @@ def test_the_message_to_the_browser() -> None:
     assert jpeg[4 + length :] == b"JPEG"
 
 
+def test_scrub_request_takes_a_moment_to_the_millisecond() -> None:
+    """A request's moment may have fractions (a drag's); nothing else passes."""
+    assert _scrub_request('{"seq": 3, "at": 1762750000123.46}') == (3, 1762750000123)
+    assert _scrub_request('{"seq": 3, "at": 1762750000123}') == (3, 1762750000123)
+    for bad in (
+        '{"seq": 3, "at": true}',
+        '{"seq": true, "at": 5}',
+        '{"seq": 3.5, "at": 5}',
+        '{"seq": 3, "at": "5"}',
+        '{"seq": 3, "at": NaN}',
+        '{"seq": 3, "at": Infinity}',
+        '{"seq": 3}',
+        "[3, 5]",
+        "not json",
+    ):
+        assert _scrub_request(bad) is None, bad
+
+
 # ---- A key frame from what the cache holds ----
 
 
@@ -666,7 +685,7 @@ async def test_a_scrub_session_end_to_end(
     http = await hass_client_no_auth()
     assert (await http.get(url.split("?")[0])).status == 401
 
-    async def ask(socket: Any, seq: int, at: int) -> tuple[dict[str, Any], bytes]:
+    async def ask(socket: Any, seq: int, at: float) -> tuple[dict[str, Any], bytes]:
         await socket.send_json({"seq": seq, "at": at})
         reply = await socket.receive(timeout=10)
         if reply.type is WSMsgType.TEXT:
@@ -690,9 +709,11 @@ async def test_a_scrub_session_end_to_end(
         sample = key_sample(init, fragment)
         assert sample is not None
         assert set(init_tracks(init)) == {1}
-        # Again nearby: from the store.
-        header, _body = await ask(socket, 2, segment["start"] + 6_000)
+        # Again nearby, at a drag's time (a fraction of a millisecond, which
+        # v0.59.0's server left unanswered): from the store.
+        header, _body = await ask(socket, 2, segment["start"] + 6_000.37)
         assert header["source"] == "store"
+        assert header["at"] == segment["start"] + 6_000
         # An older request than the last is ignored; a gap is said plainly.
         await socket.send_json({"seq": 1, "at": segment["start"]})
         await socket.send_json({"not": "a request"})

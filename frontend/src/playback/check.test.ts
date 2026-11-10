@@ -73,6 +73,10 @@ function stubTarget(hass: FakeHass): CheckTarget {
     monthDays: new Set<number>(),
     player: null,
     playing: undefined,
+    timeline: null,
+    scrubView: null,
+    scrub: undefined,
+    hover: undefined,
     selectDate: () => undefined,
     playAt: () => Promise.resolve(),
   };
@@ -119,7 +123,7 @@ describe("PlaybackCheck", () => {
       changes.push(1),
     );
     const report = await check.run();
-    expect(report).toContain("Reolink Viewer playback check v0.6.0 · Desktop Chrome, LAN · Garage");
+    expect(report).toContain("Reolink Viewer playback check v0.7.0 · Desktop Chrome, LAN · Garage");
     expect(report).toContain("A1 Time to timeline, today (as the tab opened): 120 ms (server: memory, total 4 ms)");
     expect(report).toContain("A2/A3 skipped: no earlier recording day this month");
     expect(report).toContain("B  skipped: no events today");
@@ -130,6 +134,7 @@ describe("PlaybackCheck", () => {
     expect(report).toContain("S  skipped: nothing playing");
     expect(report).toContain("K  SD skipped: nothing playing through MSE (the file player has no fragments to read)");
     expect(report).toContain("F  skipped: no recording on this day");
+    expect(report).toContain("P  skipped: no timeline or recording on screen");
     expect(report).toContain('H  skipped: not asked for (tick "with HD")');
     expect(report).toContain("HD as the tab opened: this browser cannot decode hvc1 at 7680×2160");
     expect(report).toContain("Summary:");

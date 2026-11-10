@@ -1,6 +1,7 @@
 // Pure helpers of the playback check (playback/check.ts): how the page is
 // reached, what the browser is, and the arithmetic of the report.
 import type { Segment, TimelineEvent } from "../types";
+import { count } from "../plain";
 
 export { classifyHost } from "../network";
 
@@ -339,4 +340,152 @@ export function describePass(pass: ScrubPass): string {
     (median === undefined ? "" : `, median ${ms(median)}${from ? ` (${from})` : ""}`) +
     (missText ? ` · none for ${missText}` : "")
   );
+}
+
+// ---- P: pictures while dragging (Phase 10 step 4) ----
+
+/** The camera's key-frame interval where the server does not say it (ms), and the slack on it. */
+export const DRAG_INTERVAL_MS = 4000;
+export const DRAG_SLACK_MS = 500;
+
+/** A picture painted during a drag: when (ms from the pass's start), where the pointer was, and the picture. */
+export interface DragPaint {
+  wall: number;
+  pointer: number;
+  time: number;
+  at: number;
+  source: string;
+  interval?: number;
+}
+
+/** One drag over a stretch: its pictures, and the session's asks during it. */
+export interface DragPass {
+  /** How long the pointer moved (ms), and where it rested after. */
+  movedMs: number;
+  rest: number;
+  paints: DragPaint[];
+  asked: number;
+  missed: number;
+  lastMiss?: string;
+}
+
+export interface DragSummary {
+  pictures: number;
+  /** From the first move to the first picture (ms). */
+  firstMs?: number;
+  /** The median time between pictures while the pointer moved (ms). */
+  gapMs?: number;
+  /** How many were within the camera's interval (and slack) before the moment asked. */
+  onTime: number;
+  /** The picture's distance before its moment (s): the least and most. */
+  before?: [number, number];
+  /** The median distance of a picture behind the moving pointer (ms). */
+  lagMs?: number;
+  /** Where the last picture was from the resting pointer (ms), and the camera's interval. */
+  restMs?: number;
+  interval: number;
+  sources: Record<string, number>;
+}
+
+const medianOf = (values: readonly number[]): number | undefined => {
+  if (!values.length) return undefined;
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.floor((sorted.length - 1) / 2)];
+};
+
+export function summarizeDrag(pass: DragPass): DragSummary {
+  const paints = pass.paints;
+  const interval = paints.find((p) => p.interval !== undefined)?.interval ?? DRAG_INTERVAL_MS;
+  const moving = paints.filter((p) => p.wall <= pass.movedMs);
+  const gaps = moving.slice(1).map((p, i) => p.wall - (moving[i]?.wall ?? p.wall));
+  const before = paints.map((p) => p.at - p.time);
+  const last = paints.at(-1);
+  const sources: Record<string, number> = {};
+  for (const p of paints) sources[p.source] = (sources[p.source] ?? 0) + 1;
+  const summary: DragSummary = {
+    pictures: paints.length,
+    onTime: before.filter((b) => b >= -DRAG_SLACK_MS && b <= interval + DRAG_SLACK_MS).length,
+    interval,
+    sources,
+  };
+  const gapMs = medianOf(gaps);
+  const lagMs = medianOf(moving.map((p) => p.pointer - p.time));
+  if (paints[0]) summary.firstMs = paints[0].wall;
+  if (gapMs !== undefined) summary.gapMs = gapMs;
+  if (before.length) summary.before = [Math.min(...before) / 1000, Math.max(...before) / 1000];
+  if (lagMs !== undefined) summary.lagMs = lagMs;
+  if (last) summary.restMs = Math.abs(pass.rest - last.time);
+  return summary;
+}
+
+/** Whether the last picture showed the resting pointer: within the camera's interval (and slack). */
+export const caughtUp = (s: DragSummary): boolean => s.restMs !== undefined && s.restMs <= s.interval + DRAG_SLACK_MS;
+
+/** "34 pictures, the first after 0.41 s, a new one every 0.27 s (median), 33 of 34 within the camera's 1.0 s of their moment (0.1–0.9 s before), 0.8 s behind the moving pointer; device 30, store 4" */
+export function describeDrag(s: DragSummary, pass: DragPass): string {
+  if (!s.pictures) {
+    return `no picture in ${String(pass.asked)} asked${pass.missed ? ` (${String(pass.missed)} missed${pass.lastMiss ? `, last: ${pass.lastMiss}` : ""})` : ""}`;
+  }
+  const sources = Object.entries(s.sources)
+    .map(([source, n]) => `${source} ${String(n)}`)
+    .join(", ");
+  return (
+    count(s.pictures, "picture") +
+    (s.firstMs === undefined ? "" : `, the first after ${(s.firstMs / 1000).toFixed(2)} s`) +
+    (s.gapMs === undefined ? "" : `, a new one every ${(s.gapMs / 1000).toFixed(2)} s (median)`) +
+    `, ${String(s.onTime)} of ${String(s.pictures)} within the camera's ${(s.interval / 1000).toFixed(1)} s of their moment` +
+    (s.before ? ` (${s.before[0].toFixed(1)} to ${s.before[1].toFixed(1)} s before)` : "") +
+    (s.lagMs === undefined ? "" : `, ${(s.lagMs / 1000).toFixed(1)} s behind the moving pointer`) +
+    (s.restMs === undefined ? "" : `; at rest, ${(s.restMs / 1000).toFixed(1)} s from the pointer`) +
+    ` · ${sources}` +
+    (pass.missed ? ` · ${String(pass.missed)} of ${String(pass.asked)} asked missed${pass.lastMiss ? ` (last: ${pass.lastMiss})` : ""}` : "")
+  );
+}
+
+/** A recording playing while a drag ran: how much of the time it played, and its longest stall. */
+export interface PlayedWhile {
+  wallMs: number;
+  playedMs: number;
+  longestStallMs: number;
+}
+
+/** Sample a video's time while something else runs: its progress and longest stall (no advance in a row). */
+export function sampleStalls(read: () => number | undefined, everyMs = 250): { stop: () => PlayedWhile } {
+  const began = performance.now();
+  const first = read();
+  let last = first;
+  let lastMoved = began;
+  let longest = 0;
+  const timer = setInterval(() => {
+    const now = performance.now();
+    const value = read();
+    if (value !== undefined && last !== undefined && value > last) {
+      lastMoved = now;
+    } else {
+      longest = Math.max(longest, now - lastMoved);
+    }
+    last = value;
+  }, everyMs);
+  return {
+    stop: () => {
+      clearInterval(timer);
+      const end = read();
+      return {
+        wallMs: performance.now() - began,
+        playedMs: first !== undefined && end !== undefined ? Math.max(0, (end - first) * 1000) : 0,
+        longestStallMs: longest,
+      };
+    },
+  };
+}
+
+/**
+ * Where a drag toward `end` should stop so the pointer rests inside a
+ * recording: `end` itself, or just before the end of the last recording
+ * that starts before it (a drag resting between recordings shows nothing).
+ */
+export function restInside(segments: readonly { start: number; end: number }[], from: number, end: number): number {
+  const last = [...segments].reverse().find((s) => s.start <= end && s.end > from);
+  if (!last || end < last.end) return end;
+  return Math.max(from, Math.min(end, last.end - 2_000));
 }

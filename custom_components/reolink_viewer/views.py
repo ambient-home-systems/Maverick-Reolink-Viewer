@@ -41,6 +41,7 @@ from datetime import date, timedelta
 from http import HTTPStatus
 import json
 import logging
+import math
 import secrets
 import time
 from typing import TYPE_CHECKING, Any
@@ -469,7 +470,11 @@ class ScrubView(HomeAssistantView):
 
 
 def _scrub_request(text: str) -> tuple[int, int] | None:
-    """Return a scrub request's (seq, at), or None if it is not one."""
+    """Return a scrub request's (seq, at), or None if it is not one.
+
+    ``at`` is taken to the millisecond: a drag's time comes from the pointer's
+    pixel, with fractions (v0.59.0 sent them, and they went unanswered).
+    """
     try:
         request = json.loads(text)
     except ValueError:
@@ -477,9 +482,15 @@ def _scrub_request(text: str) -> tuple[int, int] | None:
     if not isinstance(request, dict):
         return None
     seq, at_ms = request.get("seq"), request.get("at")
-    if not isinstance(seq, int) or not isinstance(at_ms, int):
+    if not isinstance(seq, int) or isinstance(seq, bool):
         return None
-    return seq, at_ms
+    if (
+        not isinstance(at_ms, int | float)
+        or isinstance(at_ms, bool)
+        or not math.isfinite(at_ms)
+    ):
+        return None
+    return seq, round(at_ms)
 
 
 class ThumbView(HomeAssistantView):

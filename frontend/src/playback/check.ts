@@ -9,7 +9,7 @@
 // under memory pressure) keeps what it measured.
 import { fetchCacheStatus, fetchMediaInfo, fetchTimelineDay, openScrubSession, toError, urlToken } from "../api";
 import { wsUrl } from "../live/check-util";
-import { count, inShortLines, middle, secondsText, speed, worst, type Finding, type InShort } from "../plain";
+import { count, inShortLines, middle, secondsText, speed, worst, type Finding, type Grade, type InShort } from "../plain";
 import type { CacheStatus, HomeAssistant, MediaInfo, PlaybackUrl, Segment, Stream, TimelineDay, Timing } from "../types";
 import {
   browserLabel,
@@ -17,6 +17,8 @@ import {
   classifyHost,
   cutReport,
   deepTarget,
+  caughtUp,
+  describeDrag,
   describePass,
   describeRate,
   loginReport,
@@ -27,22 +29,29 @@ import {
   smooth,
   SMOOTH_RULE,
   sourceLabel,
+  restInside,
+  sampleStalls,
   span,
   spreadMoments,
+  summarizeDrag,
   touchingPairs,
   within,
   type BaichuanStats,
   type CutStatus,
+  type DragPaint,
+  type DragPass,
+  type DragSummary,
   type RateSample,
   type ScrubPass,
 } from "./check-util";
 import type { StreamDecision } from "./codec";
 import { decodeKeyFrames, describeKeyFrames, keyFrames, videoCodec, videoTrack } from "./keyframes";
+import type { PaintedDetail, RvScrubPicture } from "./scrub-picture";
 import { ScrubClient, isPicture, type ScrubPicture, type SocketLike } from "./scrub-client";
 import { SHAPES, mseApi, mseSupports, pickSample, probeShape, type MseApi } from "./mse-probe";
 import type { RvPlayer } from "./player";
 
-export const CHECK_VERSION = "0.6.0";
+export const CHECK_VERSION = "0.7.0";
 export const SETUPS = [
   "Desktop Chrome, LAN",
   "Desktop Chrome, Tailscale",
@@ -80,6 +89,25 @@ const KEY_WINDOW_MS = 20_000;
 const KEY_WINDOW_BYTES = 8 * 1024 * 1024;
 /** F asks the server for the picture at this many moments of the day (Phase 10). */
 const SERVER_MOMENTS = 10;
+/**
+ * P: the drags (Phase 10 step 4), as a pointer drags: a move every 50 ms; a
+ * slow drag over 30 s of recording in 10 s, the same again, then a fast one
+ * over 5 minutes in 5 s; the pointer rests 2 s after each, still pressed.
+ */
+const DRAG_STEP_MS = 50;
+const DRAG_SLOW = { spanMs: 30_000, ms: 10_000 };
+const DRAG_FAST = { spanMs: 300_000, ms: 5_000 };
+const DRAG_REST_MS = 2_000;
+const DRAG_RELEASE_MS = 20_000;
+/** The timeline's hover comes this often while dragging (moves). */
+const DRAG_HOVER_EVERY = 5;
+/** A pointer's time has fractions of a millisecond (it comes from a pixel; v0.60.0). */
+const DRAG_FRACTION = 0.37;
+/** Phase 10's exit criteria: ms between pictures, not cached and cached; twice these is fine (the iPhone's allowance). */
+const DRAG_UNCACHED_MS = 300;
+const DRAG_CACHED_MS = 100;
+/** A recording playing on the same camera may pause this long at most (ms). */
+const DRAG_STALL_MS = 1_000;
 /** The first HD frame may wait for the NVR's main recording up to the moment. */
 const HD_TIMEOUT_MS = 300_000;
 const PEEK_LIMIT = 15;
@@ -94,6 +122,8 @@ export interface CheckMetrics {
   firstFrameMs?: number | undefined;
   gapMs?: number | undefined;
   stream?: string;
+  /** Pictures from the server while dragging (Phase 10): the last answer, picture or miss. */
+  scrub?: { last?: string };
   codec?: string | null;
   delivery?: string;
   cache?: CacheStatus | undefined;
@@ -123,6 +153,11 @@ export interface CheckTarget {
   readonly playing: PlaybackUrl | undefined;
   /** The stream the tab plays (the SD/HD buttons). */
   readonly stream: Stream;
+  /** Phase 10's P row: the timeline it drags, the picture shown over the video, the tab's asks and its hover box. */
+  readonly timeline: HTMLElement | null;
+  readonly scrubView: RvScrubPicture | null;
+  readonly scrub: { counts: { asked: number; shown: number; missed: number }; unavailable: boolean } | undefined;
+  readonly hover: { bare?: boolean } | undefined;
   selectDate(date: string): void;
   playAt(time: number, requestedAt?: number): Promise<void>;
   /** Press SD or HD: plays the other stream from the same moment. */
@@ -204,6 +239,8 @@ export class PlaybackCheck {
   private _hdPlayed = false;
   private readonly _summary: string[] = [];
   private readonly _plain: Finding[] = [];
+  /** The P row's times are multiplied by this (the tests' quick drags). */
+  dragScale = 1;
 
   constructor(
     private readonly _t: CheckTarget,
@@ -236,6 +273,7 @@ export class PlaybackCheck {
       await this._scrub();
       await this._keyFrames();
       await this._serverPictures();
+      await this._drag();
       await this._switchHd();
       await this._link();
       await this._capabilities();
@@ -905,6 +943,317 @@ export class PlaybackCheck {
     } finally {
       client.close();
     }
+  }
+
+  /**
+   * P: pictures while dragging (Phase 10 step 4). The check drags the
+   * timeline itself, as a pointer does (`rv-scrub` every 50 ms, from a pixel:
+   * fractions of a millisecond), and times the pictures the tab paints:
+   *
+   * - over what the video has buffered: the video shows it, nothing is asked;
+   * - slowly over a recording not cached, then the same stretch again, then
+   *   fast: a new picture how often, how near its moment, how far behind the
+   *   moving pointer, and whether the last showed the resting pointer;
+   * - meanwhile another recording of the camera plays (a cut from the device
+   *   where it is not cached): its stalls;
+   * - the hover box shows the time alone; the release plays from there with
+   *   the picture held until the video's first frame; the NVR's logins.
+   */
+  private async _drag(): Promise<void> {
+    const t = this._t;
+    const view = t.scrubView;
+    const day = t.day;
+    if (!view || !t.timeline || !t.player || !day?.segments.length) {
+      this._log("P  skipped: no timeline or recording on screen");
+      return;
+    }
+    const path = view.path;
+    const how = `painted with ${path.how}${path.why ? ` (${path.why})` : ""}`;
+    if (path.how === "none") {
+      this._log(`P  Pictures while dragging: not here (${path.why ?? "no way to paint"})`);
+      this._summary.push("Dragging: no pictures in this browser");
+      this._plain.push({
+        grade: "problem",
+        text: "Dragging along the timeline cannot show pictures in this browser: it has neither WebCodecs nor MSE.",
+      });
+      return;
+    }
+    const logins = (await this._stats())?.vod.baichuan?.logins;
+    const buffered = await this._dragBuffered();
+    const { stretch, other, cached } = await this._dragStretch();
+    if (!stretch) {
+      this._log("P  skipped: no recording to drag over on this day");
+      return;
+    }
+    const scale = this.dragScale;
+    const slowSpan = Math.min(DRAG_SLOW.spanMs, Math.max(5_000, stretch.end - stretch.start - 10_000));
+    const from = stretch.start + Math.min(5_000, (stretch.end - stretch.start) / 10);
+    // Another recording of this camera plays meanwhile (served by a cut where it is not cached).
+    let playing: { label: string; stop: () => { wallMs: number; playedMs: number; longestStallMs: number } } | undefined;
+    if (other) {
+      const played = await this._play(other.start + (other.end - other.start) * 0.6);
+      const video = activeVideo(t.player);
+      if (played.ok && video) {
+        const watch = sampleStalls(() => activeVideo(t.player)?.currentTime);
+        playing = { label: played.served ? `from ${sourceLabel(played.served)}` : "", stop: watch.stop };
+      }
+    }
+    const slow = await this._dragPass(from, slowSpan, DRAG_SLOW.ms * scale);
+    const bare = t.hover?.bare === true;
+    const again = await this._dragPass(from, slowSpan, DRAG_SLOW.ms * scale);
+    const fastFrom = from + slowSpan;
+    const fastEnd = restInside(day.segments, fastFrom, fastFrom + DRAG_FAST.spanMs);
+    const fast = await this._dragPass(fastFrom, fastEnd - fastFrom, DRAG_FAST.ms * scale);
+    const whilePlaying = playing?.stop();
+    const release = await this._dragRelease(fast.rest);
+    const after = (await this._stats())?.vod.baichuan?.logins;
+    const moreLogins = logins !== undefined && after !== undefined ? after - logins : undefined;
+
+    const sSlow = summarizeDrag(slow);
+    const sAgain = summarizeDrag(again);
+    const sFast = summarizeDrag(fast);
+    const firstTarget = cached ? DRAG_CACHED_MS : DRAG_UNCACHED_MS;
+    const slowGrade = this._dragGrade(sSlow, firstTarget);
+    const againGrade = this._dragGrade(sAgain, DRAG_CACHED_MS);
+    const fastOk = caughtUp(sFast);
+    const stallOk = whilePlaying ? whilePlaying.longestStallMs < DRAG_STALL_MS : undefined;
+    const mark = (ok: boolean | undefined) => (ok === undefined ? "" : ok ? " ✓" : " ✗");
+    const good = (grade: string) => grade === "good" || grade === "fine";
+    const minutes = (value: number) => `${(value / 60_000).toFixed(1)} min`;
+
+    this._log(
+      `P  Pictures while dragging (Phase 10): ${how} · over ${clock(from)}, a recording ${cached ? "already cached" : "not cached"}` +
+        (t.scrub?.unavailable ? " · THE SCRUB SESSION DID NOT OPEN" : ""),
+    );
+    this._log(`   slow (${span(slowSpan)} of recording in ${span(DRAG_SLOW.ms)}): ${describeDrag(sSlow, slow)}${mark(good(slowGrade))}`);
+    this._log(`   again over the same stretch: ${describeDrag(sAgain, again)}${mark(good(againGrade))}`);
+    this._log(
+      `   fast (${minutes(fastEnd - fastFrom)} in ${span(DRAG_FAST.ms)}): ${describeDrag(sFast, fast)}${mark(fastOk)}`,
+    );
+    this._log(`   release: ${release.text}${mark(release.ok)}`);
+    this._log(`   over what the video has buffered: ${buffered.text}${mark(buffered.ok)}`);
+    this._log(
+      whilePlaying
+        ? `   another recording of this camera playing meanwhile${playing?.label ? ` (${playing.label})` : ""}: played ${span(whilePlaying.playedMs)} in ${span(whilePlaying.wallMs)}, longest stall ${span(whilePlaying.longestStallMs)}${mark(stallOk)}`
+        : "   another recording playing meanwhile: none (no second recording not cached on this day)",
+    );
+    this._log(`   hovering while dragging: ${bare ? "the time alone, no thumbnail" : "a thumbnail was fetched"}${mark(bare)}`);
+    if (moreLogins !== undefined) this._log(`   the NVR: ${count(moreLogins, "more login")} while dragging${mark(moreLogins <= 1)}`);
+
+    const gapText = (s: DragSummary) => (s.gapMs === undefined ? "–" : secondsText(s.gapMs));
+    this._summary.push(
+      `Dragging (${path.how}): slow ${String(sSlow.pictures)} pictures every ${gapText(sSlow)}; again every ${gapText(sAgain)}; ` +
+        `fast ${fastOk ? "caught up" : "did not catch up"}; release ${release.ok ? "held the picture" : "NOT CLEAN"}` +
+        (whilePlaying ? `; the recording playing: longest stall ${span(whilePlaying.longestStallMs)}` : ""),
+    );
+    this._plain.push({
+      grade: "note",
+      text:
+        path.how === "WebCodecs"
+          ? "While dragging, pictures are decoded with WebCodecs."
+          : `While dragging, pictures are played through MSE: ${path.why ?? ""}.`,
+    });
+    this._plain.push(
+      sSlow.pictures
+        ? {
+            grade: slowGrade,
+            text: `Dragging over a recording ${cached ? "already cached" : "not cached yet"} shows a new picture every ${gapText(sSlow)}, ${String(sSlow.onTime)} of ${String(sSlow.pictures)} within the camera's key-frame interval of their moment.`,
+          }
+        : {
+            grade: "problem",
+            text: `Dragging over a recording showed no picture (${String(slow.asked)} asked, ${String(slow.missed)} missed).`,
+          },
+    );
+    if (sAgain.pictures) {
+      this._plain.push({ grade: againGrade, text: `Dragging over the same stretch again shows a new picture every ${gapText(sAgain)}.` });
+    }
+    this._plain.push({
+      grade: fastOk ? "good" : "slow",
+      text: fastOk
+        ? `A fast drag catches up when the pointer stops (the last picture ${secondsText(sFast.restMs ?? 0)} from it).`
+        : "A fast drag did not catch up with the pointer when it stopped.",
+    });
+    this._plain.push({ grade: release.ok ? speed(release.firstMs, 1000, 2500) : "problem", text: release.plain });
+    if (buffered.ok !== undefined) {
+      this._plain.push({
+        grade: buffered.ok ? "good" : "problem",
+        text: buffered.ok
+          ? "Over what the video has loaded, the video itself shows the moment."
+          : "Over what the video has loaded, the server was asked anyway.",
+      });
+    }
+    if (whilePlaying) {
+      this._plain.push({
+        grade: stallOk ? "good" : "problem",
+        text: stallOk
+          ? "A recording playing on this camera played on while dragging."
+          : `A recording playing on this camera stalled ${secondsText(whilePlaying.longestStallMs)} while dragging.`,
+      });
+    }
+    if (moreLogins !== undefined && moreLogins > 1) {
+      this._plain.push({ grade: "problem", text: `Dragging logged in to the NVR ${String(moreLogins)} more times (at most 1 expected).` });
+    }
+  }
+
+  private _dragGrade(s: DragSummary, target: number): Grade {
+    if (!s.pictures) return "problem";
+    const often = speed(s.gapMs, target, target * 2);
+    return worst([often, s.onTime >= s.pictures * 0.8 ? "good" : "slow"]);
+  }
+
+  /** One drag: the pointer moves from `from` over `spanMs` in `durationMs`, then rests, still pressed. */
+  private async _dragPass(from: number, spanMs: number, durationMs: number): Promise<DragPass> {
+    const t = this._t;
+    const timeline = t.timeline;
+    const view = t.scrubView;
+    if (!timeline || !view) return { movedMs: 0, rest: from, paints: [], asked: 0, missed: 0 };
+    const before = t.scrub?.counts;
+    const paints: DragPaint[] = [];
+    let pointer = from;
+    const began = performance.now();
+    const onPaint = (event: Event) => {
+      const d = (event as CustomEvent<PaintedDetail>).detail;
+      paints.push({
+        wall: performance.now() - began,
+        pointer,
+        time: d.time,
+        at: d.at,
+        source: d.source,
+        ...(d.interval !== undefined ? { interval: d.interval } : {}),
+      });
+    };
+    view.addEventListener("rv-scrub-painted", onPaint);
+    const steps = Math.max(1, Math.round(durationMs / (DRAG_STEP_MS * this.dragScale)));
+    const x = timeline.clientWidth / 2;
+    let movedMs: number;
+    try {
+      for (let i = 0; i <= steps; i += 1) {
+        this._checkStopped();
+        pointer = from + (spanMs * i) / steps + DRAG_FRACTION;
+        timeline.dispatchEvent(new CustomEvent("rv-scrub", { detail: { time: pointer } }));
+        if (i % DRAG_HOVER_EVERY === 0) timeline.dispatchEvent(new CustomEvent("rv-hover", { detail: { time: pointer, x } }));
+        await sleep(durationMs / steps);
+      }
+      movedMs = performance.now() - began;
+      await this._pause(DRAG_REST_MS * this.dragScale);
+    } finally {
+      view.removeEventListener("rv-scrub-painted", onPaint);
+    }
+    const after = t.scrub?.counts;
+    const asked = (after?.asked ?? 0) - (before?.asked ?? 0);
+    const missed = (after?.missed ?? 0) - (before?.missed ?? 0);
+    const last = t.metrics.scrub?.last;
+    return { movedMs, rest: pointer, paints, asked, missed, ...(missed && !paints.length && last ? { lastMiss: last } : {}) };
+  }
+
+  /** Over what the video has buffered: a short drag around its time; the video shows it, nothing is asked. */
+  private async _dragBuffered(): Promise<{ text: string; ok: boolean | undefined }> {
+    const t = this._t;
+    const player = t.player;
+    const timeline = t.timeline;
+    const view = t.scrubView;
+    const now = player?.time;
+    if (!player || !timeline || !view || !player.current || now === undefined) return { text: "skipped, nothing playing", ok: undefined };
+    const asked = t.scrub?.counts.asked ?? 0;
+    let tried = 0;
+    let byVideo = 0;
+    for (let i = 0; i < 8; i += 1) {
+      this._checkStopped();
+      const time = now - 3000 + i * 750 + DRAG_FRACTION;
+      if (!player.buffers(time)) continue;
+      tried += 1;
+      timeline.dispatchEvent(new CustomEvent("rv-scrub", { detail: { time } }));
+      await sleep(120 * this.dragScale);
+      if (!view.showing) byVideo += 1;
+    }
+    // Let go as a drag the browser takes: nothing starts.
+    timeline.dispatchEvent(new CustomEvent("rv-hover-end"));
+    const extra = (t.scrub?.counts.asked ?? 0) - asked;
+    if (!tried) return { text: "skipped, the video had nothing buffered around its time", ok: undefined };
+    return {
+      text: `${String(byVideo)} of ${String(tried)} moments shown by the video, ${count(extra, "picture")} asked of the server`,
+      ok: byVideo === tried && extra === 0,
+    };
+  }
+
+  /** The recording to drag over (the longest not cached, not the one playing), and another not cached to play meanwhile. */
+  private async _dragStretch(): Promise<{ stretch: Segment | undefined; other: Segment | undefined; cached: boolean }> {
+    const t = this._t;
+    const playing = t.player?.current?.segmentId;
+    const candidates = [...(t.day?.segments ?? [])]
+      .filter((s) => s.id !== playing)
+      .sort((a, b) => b.end - b.start - (a.end - a.start))
+      .slice(0, PEEK_LIMIT);
+    const uncached: Segment[] = [];
+    for (const segment of candidates) {
+      this._checkStopped();
+      const peek = await this._peek(t.date, segment.id);
+      if (peek && !peek.cache?.complete) uncached.push(segment);
+      if (uncached.length >= 2) break;
+    }
+    const stretch = uncached.at(0) ?? candidates.at(0);
+    const other = uncached.find((s) => s !== stretch);
+    return { stretch, other, cached: stretch !== undefined && !uncached.includes(stretch) };
+  }
+
+  /** Let go at `at`: the video starts there, the picture staying on screen until its first frame. */
+  private async _dragRelease(at: number): Promise<{ text: string; plain: string; ok: boolean; firstMs?: number }> {
+    const t = this._t;
+    const timeline = t.timeline;
+    const view = t.scrubView;
+    const player = t.player;
+    if (!timeline || !view || !player) return { text: "skipped", plain: "Letting go was not measured.", ok: false };
+    const showing = view.showing;
+    let framed = false;
+    let goneMs: number | undefined;
+    const began = performance.now();
+    const frame = new Promise<boolean>((resolve) => {
+      const timer = setTimeout(() => {
+        resolve(false);
+      }, DRAG_RELEASE_MS);
+      player.addEventListener(
+        "rv-first-frame",
+        () => {
+          framed = true;
+          clearTimeout(timer);
+          resolve(true);
+        },
+        { once: true },
+      );
+    });
+    const poll = setInterval(() => {
+      if (!framed && goneMs === undefined && !view.showing) goneMs = performance.now() - began;
+    }, 25);
+    timeline.dispatchEvent(new CustomEvent("rv-seek", { detail: { time: at } }));
+    const ok = await frame;
+    clearInterval(poll);
+    const firstMs = performance.now() - began;
+    timeline.dispatchEvent(new CustomEvent("rv-hover-end"));
+    if (!ok) {
+      return { text: `no first frame in ${span(DRAG_RELEASE_MS)}`, plain: "Letting go did not start the video.", ok: false };
+    }
+    if (!showing) {
+      return {
+        text: `the video's first frame after ${secondsText(firstMs)} (no picture was on screen at the release)`,
+        plain: `Letting go starts the video in ${secondsText(firstMs)}.`,
+        ok: true,
+        firstMs,
+      };
+    }
+    if (goneMs !== undefined) {
+      return {
+        text: `the picture went ${secondsText(firstMs - goneMs)} before the video's first frame (${secondsText(firstMs)})`,
+        plain: `Letting go left the screen without a picture for ${secondsText(firstMs - goneMs)} before the video started.`,
+        ok: false,
+        firstMs,
+      };
+    }
+    return {
+      text: `the picture stayed until the video's first frame, ${secondsText(firstMs)} after letting go`,
+      plain: `Letting go plays from there in ${secondsText(firstMs)}, the picture staying until the video shows.`,
+      ok: true,
+      firstMs,
+    };
   }
 
   private async _askPass(client: ScrubClient, moments: readonly number[], keep: ScrubPicture[]): Promise<ScrubPass> {

@@ -1,6 +1,6 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
 import { It as i, Z as a, ct as o, j as s, p as c } from "./live-D6mEGytR.js";
-import { W as l, r as u } from "./home-Ciew1Vor.js";
+import { W as l, r as u } from "./home-B3FbD3nj.js";
 //#region src/components/learning.ts
 var d = class extends r {
 	static properties = {

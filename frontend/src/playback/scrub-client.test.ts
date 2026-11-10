@@ -1,7 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { describePass, spreadMoments } from "./check-util";
-import { ScrubClient, isPicture, readPicture, type SocketLike } from "./scrub-client";
+import { ASK_TIMEOUT_MS, ScrubClient, isPicture, readPicture, type SocketLike } from "./scrub-client";
 
 /** A websocket the test drives: what was sent, and answers to give. */
 class FakeSocket implements SocketLike {
@@ -115,6 +115,40 @@ describe("the scrub session's client", () => {
     socket.onerror?.({});
     await expect(client.ready()).rejects.toThrow("could not open");
   });
+
+  it("asks for whole milliseconds: a drag's time has fractions, which the server took for no request", async () => {
+    const socket = new FakeSocket();
+    const client = new ScrubClient(socket);
+    socket.open();
+    void client.ask(1792213260000.37);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(socket.sent).toEqual([{ seq: 1, at: 1792213260000 }]);
+  });
+
+  it("gives up on an ask with no answer, so the next one is asked", async () => {
+    vi.useFakeTimers();
+    const socket = new FakeSocket();
+    let now = 0;
+    const client = new ScrubClient(socket, () => now);
+    socket.open();
+    const lost = client.ask(1000);
+    await vi.advanceTimersByTimeAsync(0);
+    now = ASK_TIMEOUT_MS;
+    await vi.advanceTimersByTimeAsync(ASK_TIMEOUT_MS);
+    expect(await lost).toEqual({ at: 1000, error: "no answer in time", ms: ASK_TIMEOUT_MS });
+    // An answer that comes in time clears its own timer.
+    const next = client.ask(2000);
+    await vi.advanceTimersByTimeAsync(0);
+    socket.answer(JSON.stringify({ seq: 2, error: "no recording at that moment" }));
+    expect(await next).toMatchObject({ at: 2000, error: "no recording at that moment" });
+    await vi.advanceTimersByTimeAsync(ASK_TIMEOUT_MS * 2);
+    expect(socket.sent.map((m) => m.seq)).toEqual([1, 2]);
+  });
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe("the playback check's F row", () => {
