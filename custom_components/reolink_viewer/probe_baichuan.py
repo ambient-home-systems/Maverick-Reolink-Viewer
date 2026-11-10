@@ -18,7 +18,11 @@ of a past day and measures, 75 % into it:
 - **session cost**: the device's logged-in users before, during and after
   each stream, what ``GetOnline`` exposes about limits, and, on request, one
   replay held open beside a full-speed download, then two replays at once on
-  the same connection.
+  the same connection;
+- **scrub cuts** (Phase 10 step 0), on request: 2-second cuts at 20 moments
+  through the sub recording, one at a time, back to back and beside a
+  playback cut (``probe_scrub``). The streams' key frames (their size and
+  interval) are in each stream's ``media``.
 
 Every stream runs under the host's stream budget at playback priority.
 Nothing is written to the device; the only Baichuan commands sent are login,
@@ -50,6 +54,7 @@ from .bridge import ChannelInfo, HostInfo, ReolinkHostHandle, VodFile, VodMethod
 from .const import PROBE_SEARCH_DAYS
 from .media import async_fetch
 from .probe_playback import JobRunner, describe_file
+from .probe_scrub import SCRUB_POINTS, ScrubCuts
 from .scheduler import HostScheduler, Priority
 
 STREAM_TYPES = {"sub": "subStream", "main": "mainStream"}
@@ -100,6 +105,8 @@ class BaichuanOptions:
     cameras: str = ""
     # The download cut's length from the target.
     cut_seconds: float = 20.0
+    # Scrub cuts on the sub stream (Phase 10 step 0, the gate).
+    scrub: bool = False
 
     def __post_init__(self) -> None:
         """Clamp to safe values."""
@@ -309,6 +316,12 @@ class BaichuanCheck:
         if self._options.download:
             self._progress(f"ch{ch} baichuan {stream}: download cut at {when:%H:%M:%S}")
             result["download"] = await self._download(ch, file, when, stream)
+        if stream == "sub" and self._options.scrub:
+            self._progress(
+                f"ch{ch} baichuan {stream}: scrub cuts at {SCRUB_POINTS} moments,"
+                " three ways"
+            )
+            result["scrub"] = await self._scrub(ch, file)
         if stream == "sub":
             self._progress(f"ch{ch} baichuan {stream}: the HTTP path for comparison")
             result["http"] = await self._http(ch, file, target_bytes)
@@ -528,6 +541,26 @@ class BaichuanCheck:
                 if stats.first_key_frame is None:
                     result["error"] = "no key frame within the hold"
                 result["ok"] = "error" not in result
+        except (BaichuanClientError, OSError, TimeoutError) as err:
+            result["error"] = _err(err)
+        finally:
+            await self._finish(client)
+        return result
+
+    async def _scrub(self, ch: int, file: VodFile) -> dict[str, Any]:
+        """Scrub cuts on one login and one stream slot (``probe_scrub``)."""
+        client = self._client()
+        began = time.monotonic()
+        result: dict[str, Any] = {"ok": False}
+        try:
+            async with self._slot(f"ch{ch} baichuan sub scrub cuts"):
+                result["slot_wait_ms"] = _ms(began)
+                await client.connect()
+                result["login"] = await client.login()
+                scrub = ScrubCuts(client, ch, file, tz=self._host.timezone())
+                result.update(await scrub.async_run())
+                result["users_during"] = await self._users()
+                result["ok"] = bool(result["back_to_back"].get("answered"))
         except (BaichuanClientError, OSError, TimeoutError) as err:
             result["error"] = _err(err)
         finally:

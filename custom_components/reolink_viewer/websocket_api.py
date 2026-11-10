@@ -251,6 +251,7 @@ def _redacted_error(err: Exception, hosts: list[bridge.ReolinkHostHandle]) -> st
         ],
         probatio.Optional("baichuan_download", default=True): bool,
         probatio.Optional("baichuan_session", default=False): bool,
+        probatio.Optional("baichuan_scrub", default=False): bool,
         probatio.Optional("baichuan_cameras", default=""): probatio.All(
             str, probatio.Length(max=300)
         ),
@@ -327,6 +328,7 @@ async def ws_probe(
             session=msg["baichuan_session"],
             cameras=msg["baichuan_cameras"],
             cut_seconds=msg["baichuan_cut"],
+            scrub=msg["baichuan_scrub"],
         ),
         events=EventsOptions(enabled=msg["events_test"], only=msg["events_only"]),
     )

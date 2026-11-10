@@ -3,6 +3,24 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.57.0
+
+Measuring before scrubbing shows the picture (Phase 10's first step). Nothing
+changes in how the panel plays; two diagnostics gain what the next step is
+decided on.
+
+- **The hardware probe's scrub cuts:** under **Test replay over the Reolink app's
+  own protocol**, a new **Scrub cuts** box times short recording cuts at 20 moments
+  through each camera's sub recording: one at a time, back to back as a drag would
+  ask, and taking turns with a recording that plays. Each stream's report also gives
+  its key frames' size and how far apart they are.
+- **The playback check's K row:** it reads the key frames of the recording it plays
+  and decodes each one on its own (WebCodecs), as showing pictures while dragging
+  would, and says how long that takes on the device, for SD and, with HD, the main
+  stream.
+- **Phase 9, the Wall, is done:** both checklists passed on the owner's desktop and
+  wall tablet.
+
 ## 0.56.0
 
 The Wall as a kiosk, and on a dashboard.

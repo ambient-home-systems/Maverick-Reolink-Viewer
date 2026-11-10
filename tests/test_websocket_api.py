@@ -170,6 +170,7 @@ async def test_probe_baichuan_options(
                 "baichuan_streams": ["sub", "main"],
                 "baichuan_download": False,
                 "baichuan_session": True,
+                "baichuan_scrub": True,
                 "baichuan_cameras": "Duo 3, CX810, Garage",
                 "baichuan_hold": 10,
                 "baichuan_cut": 20,
@@ -182,6 +183,7 @@ async def test_probe_baichuan_options(
     assert options.streams == ("sub", "main")
     assert options.download is False
     assert options.session is True
+    assert options.scrub is True
     assert options.cameras == "Duo 3, CX810, Garage"
     assert options.hold_seconds == 10
     assert options.cut_seconds == 20

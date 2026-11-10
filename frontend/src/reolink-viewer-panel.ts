@@ -79,6 +79,7 @@ export class ReolinkViewerPanel extends LitElement {
     _baichuanMain: { state: true },
     _baichuanDownload: { state: true },
     _baichuanSession: { state: true },
+    _baichuanScrub: { state: true },
     _baichuanCameras: { state: true },
     _baichuanHold: { state: true },
     _events: { state: true },
@@ -110,6 +111,7 @@ export class ReolinkViewerPanel extends LitElement {
   declare _baichuanMain: boolean;
   declare _baichuanDownload: boolean;
   declare _baichuanSession: boolean;
+  declare _baichuanScrub: boolean;
   declare _baichuanCameras: string;
   declare _baichuanHold: number;
   /** The events check of cameras that record but cannot be played (Phase 6). */
@@ -148,6 +150,7 @@ export class ReolinkViewerPanel extends LitElement {
     this._baichuanMain = false;
     this._baichuanDownload = true;
     this._baichuanSession = false;
+    this._baichuanScrub = false;
     this._baichuanCameras = "";
     this._baichuanHold = 5;
     this._events = false;
@@ -712,6 +715,21 @@ export class ReolinkViewerPanel extends LitElement {
           >
         </label>
         <label class="option nested">
+          <input
+            type="checkbox"
+            .checked=${this._baichuanScrub}
+            ?disabled=${running || !this._baichuan}
+            @change=${(e: Event) => {
+              this._baichuanScrub = (e.target as HTMLInputElement).checked;
+            }}
+          />
+          <span
+            >Scrub cuts (Phase 10): 2-second cuts at 20 moments through each sub recording, one
+            at a time, back to back as a drag would ask, and taking turns with a playing cut.
+            A minute or two per camera</span
+          >
+        </label>
+        <label class="option nested">
           <span
             >Cameras:
             <input
@@ -850,6 +868,7 @@ export class ReolinkViewerPanel extends LitElement {
         baichuan_streams: this._baichuanMain ? ["sub", "main"] : ["sub"],
         baichuan_download: this._baichuanDownload,
         baichuan_session: this._baichuanSession,
+        baichuan_scrub: this._baichuanScrub,
         baichuan_cameras: this._baichuanCameras.trim(),
         baichuan_hold: this._baichuanHold,
         baichuan_cut: 20,

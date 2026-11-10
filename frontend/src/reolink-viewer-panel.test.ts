@@ -482,6 +482,7 @@ describe("reolink-viewer-panel", () => {
       baichuan_streams: ["sub"],
       baichuan_download: true,
       baichuan_session: false,
+      baichuan_scrub: false,
       baichuan_cameras: "",
       baichuan_hold: 5,
       baichuan_cut: 20,
@@ -557,6 +558,7 @@ describe("reolink-viewer-panel", () => {
     await toggle(7); // the main recordings too
     await toggle(8); // no download cut
     await toggle(9); // the session test
+    await toggle(10); // scrub cuts (Phase 10)
     const cameras = probeSection(el)?.querySelector<HTMLInputElement>("input[type=text]");
     if (!cameras) throw new Error("no cameras field");
     cameras.value = " Duo 3, CX810 ";
@@ -574,6 +576,7 @@ describe("reolink-viewer-panel", () => {
       baichuan_streams: ["sub", "main"],
       baichuan_download: false,
       baichuan_session: true,
+      baichuan_scrub: true,
       baichuan_cameras: "Duo 3, CX810",
       baichuan_hold: 90,
     });
@@ -581,15 +584,15 @@ describe("reolink-viewer-panel", () => {
     await flush();
 
     // The events check (Phase 6) is its own opt-in, "only" by default.
-    expect(boxes()[11]?.disabled).toBe(true);
-    await toggle(10);
-    expect(boxes()[11]?.disabled).toBe(false);
+    expect(boxes()[12]?.disabled).toBe(true);
+    await toggle(11);
+    expect(boxes()[12]?.disabled).toBe(false);
     button(el, "Run probe")?.click();
     await flush();
     expect(hass.sent.at(-1)).toMatchObject({ events_test: true, events_only: true });
     button(el, "Cancel")?.click();
     await flush();
-    await toggle(11);
+    await toggle(12);
     button(el, "Run probe")?.click();
     await flush();
     expect(hass.sent.at(-1)).toMatchObject({ events_test: true, events_only: false });

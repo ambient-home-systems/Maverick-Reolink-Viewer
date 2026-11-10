@@ -33,10 +33,11 @@ import {
   type RateSample,
 } from "./check-util";
 import type { StreamDecision } from "./codec";
+import { decodeKeyFrames, describeKeyFrames, keyFrames, videoCodec, videoTrack } from "./keyframes";
 import { SHAPES, mseApi, mseSupports, pickSample, probeShape, type MseApi } from "./mse-probe";
 import type { RvPlayer } from "./player";
 
-export const CHECK_VERSION = "0.4.5";
+export const CHECK_VERSION = "0.5.0";
 export const SETUPS = [
   "Desktop Chrome, LAN",
   "Desktop Chrome, Tailscale",
@@ -69,6 +70,9 @@ const SAVE_EVERY_MS = 10_000;
 /** The scrub part previews these points around the play position (s). */
 const SCRUB_POINTS_S = [-10, -5, 3, 8, 15] as const;
 const SCRUB_FAR_MS = 10 * 60_000;
+/** K reads this much media from the play position (Phase 10 step 0). */
+const KEY_WINDOW_MS = 20_000;
+const KEY_WINDOW_BYTES = 8 * 1024 * 1024;
 /** The first HD frame may wait for the NVR's main recording up to the moment. */
 const HD_TIMEOUT_MS = 300_000;
 const PEEK_LIMIT = 15;
@@ -223,6 +227,7 @@ export class PlaybackCheck {
       await this._advance();
       await this._rates();
       await this._scrub();
+      await this._keyFrames();
       await this._switchHd();
       await this._link();
       await this._capabilities();
@@ -842,6 +847,49 @@ export class PlaybackCheck {
   }
 
   /**
+   * K: the key frames of the recording playing, read from its fragments and
+   * decoded one at a time, as scrubbing that shows the picture would (Phase
+   * 10 step 0, the gate's browser half). The HD part adds the main stream's.
+   */
+  private async _keyFrames(): Promise<void> {
+    const key = await this._keyLine("SD");
+    this._log(`K  ${key.text}`);
+    this._summary.push(`Key frames: ${key.short}`);
+  }
+
+  private async _keyLine(label: string): Promise<{ text: string; short: string }> {
+    const player = this._t.player;
+    const item = player?.current;
+    const source = item?.mse;
+    if (!player || !item || !source) {
+      const why = "nothing playing through MSE (the file player has no fragments to read)";
+      return { text: `${label} skipped: ${why}`, short: `${label} skipped` };
+    }
+    const at = Math.round(Math.max(0, (player.time ?? item.start) - item.start));
+    try {
+      const window = await source.fetch(`${source.base}/frags?at=${String(at)}&ms=${String(KEY_WINDOW_MS)}&bytes=${String(KEY_WINDOW_BYTES)}`);
+      const from = window.headers.get("X-RV-Source") ?? "file";
+      const init = await source.fetch(`${source.base}/init?source=${from}`);
+      if (!window.ok || !init.ok) {
+        const line = `${label}: the fragments did not come (HTTP ${String(window.status)}, init ${String(init.status)})`;
+        return { text: line, short: `${label} not read` };
+      }
+      const track = videoTrack(new Uint8Array(await init.arrayBuffer()));
+      const codec = videoCodec(init.headers.get("X-RV-Mime") ?? "");
+      if (!track || !codec) return { text: `${label}: no video track in the init segment`, short: `${label} not read` };
+      const frames = keyFrames(new Uint8Array(await window.arrayBuffer()), track);
+      if (!frames.length) return { text: `${label}: no key frame in ${span(KEY_WINDOW_MS)} of fragments`, short: `${label}: none` };
+      this._checkStopped();
+      const decoded = await decodeKeyFrames(codec, track, frames);
+      const described = describeKeyFrames(label, codec, track, frames, decoded);
+      return { text: `${described.text} · from the ${from}`, short: described.short };
+    } catch (err) {
+      if (err instanceof Stopped) throw err;
+      return { text: `${label}: ${toError(err).message}`, short: `${label} failed` };
+    }
+  }
+
+  /**
    * H: SD → HD → SD on the recording playing, as pressing the buttons does:
    * the first HD frame's time and whether each switch kept the moment.
    */
@@ -877,6 +925,9 @@ export class PlaybackCheck {
     this._hdPlayed = true;
     this._log(`H  HD at ${clock(hd.at)}${where}: ${hd.line} · ${t.metrics.stream ?? "?"} ${t.metrics.codec ?? "?"} · ${t.metrics.delivery ?? "?"}`);
     this._log(`     ${await this._fillReport()}`);
+    const key = await this._keyLine("HD");
+    this._log(`     K ${key.text}`);
+    this._summary.push(`Key frames: ${key.short}`);
     await this._pause(5000);
     const sd = await this._switchTo("sub");
     this._log(`     Back to SD at ${clock(sd.at)}: ${sd.line}`);
