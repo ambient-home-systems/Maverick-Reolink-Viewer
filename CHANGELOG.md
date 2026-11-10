@@ -3,6 +3,26 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.61.0
+
+The rest of the checks you ran by hand now run themselves (after 0.60.0's drag
+rows): the owner's ask, "It's confusing for me to follow with the steps".
+
+- **Two viewers on one camera (the playback check's new V row):** the check plays a
+  recording on the camera, starts a second viewer off screen in another, then far
+  into the first one's, and watches the first for stalls; then it stops both, the
+  second as a closed tab, and waits for the NVR's list of users to be back at rest
+  (it reads the list itself). Each with ✓ or ✗; about a minute and a half.
+- **The learning check (Devices → Learning what is normal → Run the check):** from
+  this update on, Home Assistant keeps each unusual event it fires and which
+  automations ran on it. The check compares them with the panel's marks: each mark
+  fired once, within 2 s of the detection; nothing fired that is not marked; the
+  house-wide signals chosen are there and learned with; an automation listens and
+  ran on every event. Each with ✓ or ✗, and a report to copy.
+- **A clean install, checked on every change:** the release zip is installed as HACS
+  installs it into an empty Home Assistant (the oldest supported and the newest),
+  added and set up, and every part of the panel loads.
+
 ## 0.60.0
 
 Dragging along the timeline works, and the playback check now tests it for you.

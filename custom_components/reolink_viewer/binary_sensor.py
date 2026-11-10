@@ -32,11 +32,12 @@ DISCOVER_S = timedelta(seconds=60)
 
 # Reolink Viewer's own device, holding every camera's "Unusual activity".
 UNUSUAL_DEVICE = (DOMAIN, "unusual")
+UNUSUAL_SENSOR_SUFFIX = "_unusual_activity"
 
 
 def unusual_unique_id(camera_id: str) -> str:
     """Return a camera's "Unusual activity" sensor's unique id."""
-    return f"{camera_id}_unusual_activity"
+    return f"{camera_id}{UNUSUAL_SENSOR_SUFFIX}"
 
 
 async def async_setup_entry(

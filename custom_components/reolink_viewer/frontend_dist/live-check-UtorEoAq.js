@@ -1,8 +1,8 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
-import { B as i, E as a, Ft as o, G as s, H as c, It as l, J as u, K as d, Mt as f, Pt as p, R as m, S as h, T as g, U as _, V as ee, W as v, Y as y, Z as b, at as x, b as S, dt as C, ft as te, h as w, ht as T, j as E, mt as D, n as O, p as k, q as ne, st as re, x as ie } from "./live-D6mEGytR.js";
-import { q as ae, tt as oe } from "./home-B3FbD3nj.js";
-import { a as A, i as se, n as ce, o as j, r as M, t as N } from "./findings-0DTL4xoa.js";
-import { d as P, f as F, p as I, r as L } from "./check-DTd2h3nH.js";
+import { B as i, E as a, Ft as o, G as s, H as c, It as l, J as u, K as d, Lt as f, Nt as p, R as m, S as h, T as g, U as _, V as ee, W as v, Y as y, Z as b, at as x, b as S, dt as C, ft as te, h as w, ht as T, j as E, mt as D, n as O, p as k, q as ne, st as re, x as ie } from "./live-49uKNz9D.js";
+import { q as ae, tt as oe } from "./home-BHJMpmeP.js";
+import { a as A, i as se, n as ce, o as j, r as M, t as N } from "./findings-D8z8rKHP.js";
+import { d as P, f as F, p as I, r as L } from "./check-DimhEG0c.js";
 //#region src/live/check.ts
 var R = [
 	"Desktop Chrome, LAN",
@@ -54,7 +54,7 @@ var R = [
 			}
 			this.options.capacity && (this.plainStatus = "Testing how many streams each NVR serves at once", await this._capacityTests()), this._summary(e);
 		} catch (e) {
-			this._log(e instanceof G ? "Stopped." : `Check failed: ${l(e).message}`);
+			this._log(e instanceof G ? "Stopped." : `Check failed: ${f(e).message}`);
 		} finally {
 			this._session?.close(), await this._go2rtcLog(), this.running = !1, this.status = "", this.plainStatus = "", this._log(`Done at ${(/* @__PURE__ */ new Date()).toLocaleTimeString()}.`), await this._save(!0);
 		}
@@ -106,21 +106,21 @@ var R = [
 		let t = /* @__PURE__ */ new Map(), n, r = () => void 0, i = performance.now(), a;
 		this._log("");
 		try {
-			a = await o(this._hass, (e) => {
+			a = await l(this._hass, (e) => {
 				n ??= performance.now() - i;
 				for (let [n, r] of Object.entries(e.images)) t.set(n, r);
 				r();
 			});
 		} catch (e) {
-			this._log(`First images (ours): failed (${l(e).message})`);
+			this._log(`First images (ours): failed (${f(e).message})`);
 			return;
 		}
-		let s = () => new Promise((e) => {
+		let o = () => new Promise((e) => {
 			r = e, setTimeout(e, 100);
 		});
 		try {
 			let r = i + U;
-			for (; n === void 0 && performance.now() < r;) await s();
+			for (; n === void 0 && performance.now() < r;) await o();
 			if (n === void 0) {
 				this._log(`First images (ours): no list in ${u(U)}`);
 				return;
@@ -129,20 +129,20 @@ var R = [
 			for (let r of e) {
 				this._checkStopped();
 				let e = performance.now();
-				for (; !t.has(r.id) && performance.now() < e + U;) await s();
+				for (; !t.has(r.id) && performance.now() < e + U;) await o();
 				let i = t.get(r.id);
 				if (!i) {
 					this._log(`  ${r.name}: none in ${u(U)}`);
 					continue;
 				}
-				let a = performance.now() - e, o = await J(i.url);
-				o.ms !== void 0 && this._posters.push({
+				let a = performance.now() - e, s = await J(i.url);
+				s.ms !== void 0 && this._posters.push({
 					kind: "ours",
-					ms: n + a + o.ms,
+					ms: n + a + s.ms,
 					cameraId: r.id
 				});
 				let c = Math.max(0, Date.now() - i.taken) / 1e3;
-				this._log(`  ${r.name}: ${o.text}, taken ${c < 100 ? c.toFixed(1) : Math.round(c)} s before` + (a >= 50 ? ` (none kept: waited ${Math.round(a)} ms for it)` : ""));
+				this._log(`  ${r.name}: ${s.text}, taken ${c < 100 ? c.toFixed(1) : Math.round(c)} s before` + (a >= 50 ? ` (none kept: waited ${Math.round(a)} ms for it)` : ""));
 			}
 		} finally {
 			await a().catch(() => void 0);
@@ -176,11 +176,11 @@ var R = [
 				transport: i,
 				result: a
 			});
-		}, c = [], d = (e.keep_warm_entity ? this._hass.states[e.keep_warm_entity]?.state === "on" : !1) && n === "sub" && m(e) === t, p = d ? "kept warm by its switch; turn it off to measure cold" : "a viewer kept it running";
+		}, c = [], l = (e.keep_warm_entity ? this._hass.states[e.keep_warm_entity]?.state === "on" : !1) && n === "sub" && m(e) === t, d = l ? "kept warm by its switch; turn it off to measure cold" : "a viewer kept it running";
 		for (let e of ["WebRTC", "MSE"]) {
 			this._status(`${o}: cold ${e}`);
-			let t = !d && await this._waitCold(r), n = await this._session_(e, r, z);
-			s("cold", e, n), c.push(`${e} ${q(n)}${t ? "" : ` (${p}: not cold)`}`), e === "MSE" && c.push(...await this._videoOnly(n, r, z, o));
+			let t = !l && await this._waitCold(r), n = await this._session_(e, r, z);
+			s("cold", e, n), c.push(`${e} ${q(n)}${t ? "" : ` (${d}: not cold)`}`), e === "MSE" && c.push(...await this._videoOnly(n, r, z, o));
 		}
 		if (this._log(`  cold: ${c.join(" · ")}`), this.options.stock) {
 			let e = i.entity_id;
@@ -199,9 +199,9 @@ var R = [
 			this._status(`${o}: keeping it warm`);
 			let e = performance.now(), n;
 			try {
-				({key_frame: n} = await f(this._hass, r, !0));
+				({key_frame: n} = await p(this._hass, r, !0));
 			} catch (e) {
-				this._log(`  warm: keeping it warm failed: ${l(e).message}`);
+				this._log(`  warm: keeping it warm failed: ${f(e).message}`);
 				return;
 			}
 			let i = performance.now() - e;
@@ -216,7 +216,7 @@ var R = [
 				let a = (await D(this._hass, r).catch(() => void 0))?.cache, c = n ? `key frame cached in ${u(i)}` : `no key frame in ${u(i)}`;
 				this._log(`  warm (${c}${ee(a)}): frame ${e} · ${t.join(" · ")}`);
 			} finally {
-				await f(this._hass, r, !1).catch(() => void 0);
+				await p(this._hass, r, !1).catch(() => void 0);
 			}
 		}
 	}
@@ -271,7 +271,7 @@ var R = [
 				ms: n.ms
 			}), n.text;
 		} catch (e) {
-			return `failed (${l(e).message})`;
+			return `failed (${f(e).message})`;
 		}
 	}
 	async _capacityTests() {
@@ -306,16 +306,16 @@ var R = [
 		return new Promise((n) => {
 			let r, i = !1, a = (e) => {
 				i || (i = !0, r?.().catch(() => void 0), n(e));
-			}, o = this.options.capacityMains ?? 1;
-			p(this._hass, e, (e) => {
+			}, s = this.options.capacityMains ?? 1;
+			o(this._hass, e, (e) => {
 				e.type === "progress" ? t(e.message) : e.type === "result" ? a(e.report) : a(e.advice ? {
 					message: e.message,
 					advice: e.advice
 				} : { message: e.message });
-			}, o > 1 ? { mains: o } : {}).then((e) => {
+			}, s > 1 ? { mains: s } : {}).then((e) => {
 				r = e, i && e().catch(() => void 0);
 			}).catch((e) => {
-				a({ message: l(e).message });
+				a({ message: f(e).message });
 			});
 		});
 	}
@@ -551,7 +551,7 @@ var $ = class extends r {
 				let [t, n] = await Promise.all([T(e), C(e)]);
 				this._status = t, this._cameras = n.cameras;
 			} catch (e) {
-				this._error = l(e).message;
+				this._error = f(e).message;
 			}
 			this._loadReports();
 		}
@@ -706,7 +706,7 @@ var $ = class extends r {
               ?disabled=${!this._streams.length || !this._cameras}
               @click=${() => {
 			this.runCheck({ setup: this._setup }).catch((e) => {
-				this._error = l(e).message;
+				this._error = f(e).message;
 			});
 		}}
             >

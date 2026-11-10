@@ -12,11 +12,13 @@ import probatio
 from homeassistant.components import websocket_api
 from homeassistant.components.ffmpeg import get_ffmpeg_manager
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.loader import async_get_integration
 from homeassistant.util.ssl import SSLCipherList
 
 from . import bridge, devices, events
+from .binary_sensor import UNUSUAL_DEVICE, UNUSUAL_SENSOR_SUFFIX
 from .catalog import async_get_catalog
 from .checks import MAX_TEXT
 from .const import DOMAIN, PROBE_HARD_MAX_STREAMS, PROBE_PLAYBACK_HARD_MAX_STREAMS
@@ -29,6 +31,7 @@ from .scheduler import Priority
 from .thumbnails import BUCKETS_S
 from .timeconv import epoch_ms
 from .timeline import TimelineError
+from .unusual import check as unusual_check
 from .unusual.model import mark_payload
 from .unusual.score import incidents
 from .unusual.shapes import profile_payload
@@ -87,11 +90,13 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_thumbnail_urls)
     websocket_api.async_register_command(hass, ws_media_info)
     websocket_api.async_register_command(hass, ws_playback_peek)
+    websocket_api.async_register_command(hass, ws_playback_online_users)
     websocket_api.async_register_command(hass, ws_playback_cache_status)
     websocket_api.async_register_command(hass, ws_playback_stats)
     websocket_api.async_register_command(hass, ws_check_report)
     websocket_api.async_register_command(hass, ws_check_reports)
     websocket_api.async_register_command(hass, ws_journal_status)
+    websocket_api.async_register_command(hass, ws_unusual_check)
     websocket_api.async_register_command(hass, ws_unusual_events)
     websocket_api.async_register_command(hass, ws_unusual_marks)
     websocket_api.async_register_command(hass, ws_unusual_profile)
@@ -1001,6 +1006,51 @@ async def ws_playback_peek(
     connection.send_result(msg["id"], {"segment_id": segment_id, "cache": cache})
 
 
+# The playback check's V row waits this long for the device's list of users (s).
+ONLINE_USERS_TIMEOUT_S = 10.0
+
+
+@websocket_api.websocket_command(
+    {
+        probatio.Required("type"): f"{DOMAIN}/playback/online_users",
+        probatio.Required("device_id"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_playback_online_users(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Return how many clients the camera's recording host lists as logged in.
+
+    The playback check's V row (Phase 5's two-viewer check, automated): read
+    at rest, while two viewers play, and after they stop, to see Home
+    Assistant's extra sessions go. ``count`` is None, with ``error``, when the
+    device does not say.
+    """
+    if (resolved := _playback_source(hass, connection, msg)) is None:
+        return
+    entry, source = resolved
+    try:
+        host = bridge.async_get_host(hass, source.entry_id)
+    except bridge.HostNotFoundError:
+        connection.send_error(
+            msg["id"], websocket_api.ERR_NOT_FOUND, "Reolink host not loaded"
+        )
+        return
+    try:
+        count, why = await entry.runtime_data.scheduler.run(
+            source.entry_id,
+            host.async_online_users,
+            priority=Priority.SETTINGS,
+            timeout=ONLINE_USERS_TIMEOUT_S,
+        )
+    except TimeoutError:
+        count, why = None, "the device did not answer in time"
+    connection.send_result(msg["id"], {"count": count, "error": why})
+
+
 @callback
 @websocket_api.websocket_command(
     {
@@ -1144,6 +1194,96 @@ async def ws_journal_status(
 
 # The longest window scored at once (a week of a busy property: about a second).
 UNUSUAL_MAX_SPAN_MS = 7 * 86_400_000
+
+
+@websocket_api.websocket_command({probatio.Required("type"): f"{DOMAIN}/unusual/check"})
+@websocket_api.async_response
+async def ws_unusual_check(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Return the learning check (Phase 8's hand checks, automated).
+
+    Whether it learns and with which house-wide signals; the panel's marks
+    since the log of fired events began (at most a week), each with what
+    fired for it and how soon; what fired for no mark; and the automations
+    listening, with which of them ran on each.
+    """
+    entry = _loaded_entry(hass)
+    if entry is None:
+        connection.send_error(msg["id"], ERR_NOT_LOADED, "Reolink Viewer is not loaded")
+        return
+    data = entry.runtime_data
+    journal, unusual, fired = data.journal, data.unusual, data.fired
+    if journal is None or not journal.running or unusual is None or fired is None:
+        connection.send_result(msg["id"], {"enabled": False})
+        return
+    now = time.time()
+    since = max(fired.since or now, now - UNUSUAL_MAX_SPAN_MS / 1000)
+    await journal.async_flush()
+    status = await journal.async_status()
+    learned = {s["entity_id"]: s for s in status.get("signals", [])}
+    signals = []
+    for entity_id in journal.signals:
+        state = hass.states.get(entity_id)
+        signals.append(
+            {
+                "entity_id": entity_id,
+                "name": _friendly(hass, entity_id),
+                "state": None if state is None else state.state,
+                "changes": learned.get(entity_id, {}).get("changes", 0),
+            }
+        )
+    marks = await unusual.async_marks(since=since, until=now)
+    matched, unmarked = unusual_check.compare(marks, fired.entries(since))
+    # Who listens: the device trigger (Reolink Viewer's own device), a camera's
+    # "Unusual activity" sensor, or an event trigger.
+    device = dr.async_get(hass).async_get_device(identifiers={UNUSUAL_DEVICE})
+    sensors = [
+        e.entity_id
+        for e in er.async_entries_for_config_entry(er.async_get(hass), entry.entry_id)
+        if e.unique_id.endswith(UNUSUAL_SENSOR_SUFFIX)
+    ]
+    listening = unusual_check.listening(
+        hass, [device.id] if device is not None else [], sensors
+    )
+    automations = []
+    for entity_id, how in sorted(listening.items()):
+        state = hass.states.get(entity_id)
+        automations.append(
+            {
+                "entity_id": entity_id,
+                "name": _friendly(hass, entity_id),
+                "how": how,
+                "on": state is not None and state.state == "on",
+                "last_triggered": None
+                if state is None
+                else state.attributes.get("last_triggered"),
+            }
+        )
+    connection.send_result(
+        msg["id"],
+        {
+            "enabled": True,
+            "built": bool(unusual.model.built_at),
+            "since": int(since * 1000),
+            "until": int(now * 1000),
+            "signals": signals,
+            "marks": matched,
+            "unmarked": [
+                {
+                    "camera": event["camera"],
+                    "kind": event["kind"],
+                    "start": int(event["start"] * 1000),
+                    "delay": round(event["fired"] - event["start"], 1),
+                }
+                for event in unmarked
+            ],
+            "automations": automations,
+            "prompt_s": unusual_check.PROMPT_S,
+        },
+    )
 
 
 @websocket_api.websocket_command(

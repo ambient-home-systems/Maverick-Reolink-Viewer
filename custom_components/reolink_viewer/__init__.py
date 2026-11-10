@@ -62,6 +62,7 @@ from .scheduler import HostLimits, Scheduler
 from .scrub import STORE_BYTES as SCRUB_STORE_BYTES, KeyFrameStore, ScrubService
 from .thumbnails import ThumbnailService
 from .timeline import TimelineService
+from .unusual.check import FiredLog
 from .unusual.const import DEFAULT_SCOPE, DEFAULT_SENSITIVITY
 from .unusual.live import UnusualWatch
 from .unusual.model import Unusual
@@ -220,6 +221,9 @@ async def async_setup_entry(
         hosts=lambda: devices.async_camera_hosts(hass, degraded=not compat.ok),
         version=str((await async_get_integration(hass, DOMAIN)).version),
     )
+    # The learning check's record of each event fired (kept between restarts).
+    fired = FiredLog(hass)
+    await fired.async_load()
     # Phase 8 step 4: each detection scored as it begins and ends.
     watch = UnusualWatch(
         hass,
@@ -228,6 +232,7 @@ async def async_setup_entry(
         model_built=lambda: bool(unusual.model.built_at),
         running=lambda: journal.running,
         names=lambda: unusual.names,
+        fired=fired.record,
     )
     entry.runtime_data = ReolinkViewerData(
         scheduler=scheduler,
@@ -242,11 +247,13 @@ async def async_setup_entry(
         journal=journal,
         unusual=unusual,
         watch=watch,
+        fired=fired,
         wall=wall,
         scrub=scrub,
     )
     entry.async_on_unload(journal.listen_detections(watch.detected))
     entry.async_on_unload(watch.async_stop)
+    entry.async_on_unload(fired.async_stop)
     await _async_apply_learning(hass, entry)
     entry.async_on_unload(entry.add_update_listener(_async_options_updated))
 

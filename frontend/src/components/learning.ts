@@ -1,8 +1,11 @@
 import { LitElement, css, html, nothing, type TemplateResult } from "lit";
 
-import { fetchJournalStatus, toError } from "../api";
+import { fetchJournalStatus, fetchUnusualCheck, toError } from "../api";
+import { copyText } from "../clipboard";
 import { formatStamp } from "../playback/time";
 import { sharedStyles } from "../styles";
+import { learningCheckLines, learningCheckReport, type CheckLine } from "./learning-check";
+import { toast } from "./navigation";
 import type {
   HomeAssistant,
   JournalStatus,
@@ -12,6 +15,7 @@ import type {
 } from "../types";
 
 type LearningState = "loading" | JournalStatus | { error: string };
+type CheckState = "idle" | "running" | { lines: CheckLine[]; report: string } | { error: string };
 
 /**
  * "Learning what is normal" (Phase 8), on the Devices page: whether the
@@ -24,16 +28,19 @@ export class RvLearning extends LitElement {
   static override properties = {
     hass: { attribute: false },
     _state: { state: true },
+    _check: { state: true },
   };
 
   declare hass: HomeAssistant | undefined;
   declare _state: LearningState;
+  declare _check: CheckState;
 
   private _read = false;
 
   constructor() {
     super();
     this._state = "loading";
+    this._check = "idle";
   }
 
   protected override updated(): void {
@@ -50,10 +57,76 @@ export class RvLearning extends LitElement {
   }
 
   protected override render(): TemplateResult {
+    const on = this._state !== "loading" && !("error" in this._state) && this._state.enabled;
     return html`<section class="card">
       <h2>Learning what is normal</h2>
-      ${this._renderState()}
+      ${this._renderState()} ${on ? this._renderCheck() : nothing}
     </section>`;
+  }
+
+  /** Run the learning check: the marks compared with the events fired, and who listens. */
+  async runCheck(): Promise<void> {
+    const hass = this.hass;
+    if (!hass) return;
+    this._check = "running";
+    try {
+      const result = await fetchUnusualCheck(hass);
+      const zone = hass.config?.time_zone;
+      const state = this._state;
+      const names = new Map(
+        state !== "loading" && !("error" in state) && state.enabled ? state.cameras.map((c) => [c.id, c.name]) : [],
+      );
+      const lines = learningCheckLines(result, zone, names);
+      this._check = { lines, report: learningCheckReport(lines, Date.now(), zone) };
+    } catch (err) {
+      this._check = { error: toError(err).message };
+    }
+  }
+
+  private _renderCheck(): TemplateResult {
+    const check = this._check;
+    return html`<h3>The learning check</h3>
+      <p class="muted small">
+        Compares each mark since the check began keeping its record with the event
+        fired for it (once, within 2 s), and says which automations listen and
+        whether each ran. It reads what Home Assistant kept: nothing to watch.
+      </p>
+      <div class="actions">
+        <button class="text" ?disabled=${check === "running"} @click=${() => void this.runCheck()}>
+          ${check === "running" ? "Checking…" : "Run the check"}
+        </button>
+        ${typeof check === "object" && "report" in check
+          ? html`<button
+              class="text"
+              @click=${async () => {
+                toast(this, (await copyText(check.report)) ? "Report copied" : "Could not copy the report", "info");
+              }}
+            >
+              Copy the report
+            </button>`
+          : nothing}
+      </div>
+      ${typeof check === "object" && "error" in check
+        ? html`<p class="muted">The check could not run: ${check.error}</p>`
+        : nothing}
+      ${typeof check === "object" && "lines" in check
+        ? html`<ul class="check">
+            ${check.lines.map(
+              (line) =>
+                html`<li class=${line.ok === undefined ? "said" : line.ok ? "pass" : "fail"}>
+                  <span class="mark" aria-label=${line.ok === undefined ? "noted" : line.ok ? "passed" : "failed"}
+                    >${line.ok === undefined ? "·" : line.ok ? "✓" : "✗"}</span
+                  >
+                  <span>${line.text}</span>
+                  ${line.details?.length
+                    ? html`<ul>
+                        ${line.details.map((detail) => html`<li>${detail}</li>`)}
+                      </ul>`
+                    : nothing}
+                </li>`,
+            )}
+          </ul>`
+        : nothing}`;
   }
 
   private _renderState(): TemplateResult | typeof nothing {
@@ -226,6 +299,41 @@ export class RvLearning extends LitElement {
       ol.marks {
         margin: 0 0 8px;
         padding-left: 20px;
+      }
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 8px 0;
+      }
+      ul.check {
+        list-style: none;
+        padding-left: 0;
+      }
+      ul.check > li {
+        display: grid;
+        grid-template-columns: 20px 1fr;
+        margin-bottom: 4px;
+      }
+      ul.check > li > ul {
+        grid-column: 2;
+        margin: 2px 0 0;
+        padding-left: 16px;
+        color: var(--secondary-text-color);
+      }
+      ul.check .mark {
+        font-weight: 600;
+      }
+      ul.check .pass .mark {
+        color: var(--rv-text);
+      }
+      /* What needs a look, in the fault colour (as the playback check's findings). */
+      ul.check .fail .mark,
+      ul.check .fail > span:nth-child(2) {
+        color: var(--rv-fault-ink);
+      }
+      ul.check .said .mark {
+        color: var(--rv-muted);
       }
       ol.marks li {
         margin-bottom: 4px;

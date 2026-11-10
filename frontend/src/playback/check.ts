@@ -41,6 +41,7 @@ import {
   type DragPaint,
   type DragPass,
   type DragSummary,
+  type PlayedWhile,
   type RateSample,
   type ScrubPass,
 } from "./check-util";
@@ -108,6 +109,17 @@ const DRAG_UNCACHED_MS = 300;
 const DRAG_CACHED_MS = 100;
 /** A recording playing on the same camera may pause this long at most (ms). */
 const DRAG_STALL_MS = 1_000;
+/**
+ * V: two viewers on one camera (Phase 5's check, automated): each plays this
+ * long after its start (ms); then, both stopped, the NVR's list of users is
+ * read this often until it is back at rest, for at most this long (the
+ * server's 25 s unread and 30 s idle logout: under a minute).
+ */
+const VIEWER_PLAY_MS = 8_000;
+const VIEWER_POLL_MS = 5_000;
+const VIEWER_BACK_MS = 75_000;
+/** A viewer's first frame: good under this, fine under twice it (ms). */
+const VIEWER_START_MS = 1_500;
 /** The first HD frame may wait for the NVR's main recording up to the moment. */
 const HD_TIMEOUT_MS = 300_000;
 const PEEK_LIMIT = 15;
@@ -158,10 +170,22 @@ export interface CheckTarget {
   readonly scrubView: RvScrubPicture | null;
   readonly scrub: { counts: { asked: number; shown: number; missed: number }; unavailable: boolean } | undefined;
   readonly hover: { bare?: boolean } | undefined;
+  /** Phase 5's V row: a second viewer of this camera. */
+  openViewer(): SecondViewer;
   selectDate(date: string): void;
   playAt(time: number, requestedAt?: number): Promise<void>;
   /** Press SD or HD: plays the other stream from the same moment. */
   setStream(stream: Stream): void;
+}
+
+/** A second viewer of the camera (the V row): a player of its own, off screen. */
+export interface SecondViewer {
+  /** Play from a time; resolves with the time to its first frame (ms), or undefined if none came. */
+  playAt(time: number): Promise<number | undefined>;
+  /** Its video's position (s), to see it play. */
+  readonly position: number | undefined;
+  /** Stop it as closing its tab does: it stops reading, and tells the server nothing. */
+  close(): void;
 }
 
 export interface CheckOptions {
@@ -170,6 +194,11 @@ export interface CheckOptions {
   soakMinutes: number;
   /** Switch to HD and back (the server fetches a main recording). */
   hd?: boolean;
+}
+
+interface OnlineUsers {
+  count?: number;
+  error?: string;
 }
 
 interface Peek {
@@ -239,8 +268,8 @@ export class PlaybackCheck {
   private _hdPlayed = false;
   private readonly _summary: string[] = [];
   private readonly _plain: Finding[] = [];
-  /** The P row's times are multiplied by this (the tests' quick drags). */
-  dragScale = 1;
+  /** The P and V rows' times are multiplied by this (the tests' quick runs). */
+  timeScale = 1;
 
   constructor(
     private readonly _t: CheckTarget,
@@ -278,6 +307,7 @@ export class PlaybackCheck {
       await this._link();
       await this._capabilities();
       if (this.options.soakMinutes > 0) await this._soak();
+      await this._viewers();
       for (const line of inShortLines(this.inShort(true))) this._log(line);
       this._log("");
       this._log("Summary:");
@@ -985,7 +1015,7 @@ export class PlaybackCheck {
       this._log("P  skipped: no recording to drag over on this day");
       return;
     }
-    const scale = this.dragScale;
+    const scale = this.timeScale;
     const slowSpan = Math.min(DRAG_SLOW.spanMs, Math.max(5_000, stretch.end - stretch.start - 10_000));
     const from = stretch.start + Math.min(5_000, (stretch.end - stretch.start) / 10);
     // Another recording of this camera plays meanwhile (served by a cut where it is not cached).
@@ -1123,7 +1153,7 @@ export class PlaybackCheck {
       });
     };
     view.addEventListener("rv-scrub-painted", onPaint);
-    const steps = Math.max(1, Math.round(durationMs / (DRAG_STEP_MS * this.dragScale)));
+    const steps = Math.max(1, Math.round(durationMs / (DRAG_STEP_MS * this.timeScale)));
     const x = timeline.clientWidth / 2;
     let movedMs: number;
     try {
@@ -1135,7 +1165,7 @@ export class PlaybackCheck {
         await sleep(durationMs / steps);
       }
       movedMs = performance.now() - began;
-      await this._pause(DRAG_REST_MS * this.dragScale);
+      await this._pause(DRAG_REST_MS * this.timeScale);
     } finally {
       view.removeEventListener("rv-scrub-painted", onPaint);
     }
@@ -1163,7 +1193,7 @@ export class PlaybackCheck {
       if (!player.buffers(time)) continue;
       tried += 1;
       timeline.dispatchEvent(new CustomEvent("rv-scrub", { detail: { time } }));
-      await sleep(120 * this.dragScale);
+      await sleep(120 * this.timeScale);
       if (!view.showing) byVideo += 1;
     }
     // Let go as a drag the browser takes: nothing starts.
@@ -1253,6 +1283,154 @@ export class PlaybackCheck {
       plain: `Letting go plays from there in ${secondsText(firstMs)}, the picture staying until the video shows.`,
       ok: true,
       firstMs,
+    };
+  }
+
+  /**
+   * V: two viewers on one camera (Phase 5's v0.40.1 check, automated). The
+   * NVR's list of users at rest; the tab starts deep in one recording not
+   * cached (a cut), and a second viewer, off screen, deep in another, then
+   * far into the first one's: the first is sampled for stalls all along, as
+   * the two cuts take the channel in turns. Then both stop, the second as a
+   * closed tab does (it tells the server nothing): within a minute the NVR's
+   * list is back at rest and no Reolink protocol login is left (v0.40.0 kept
+   * the extra session until Home Assistant restarted).
+   */
+  private async _viewers(): Promise<void> {
+    const t = this._t;
+    if (!t.day?.segments.length || !t.player) {
+      this._log("V  skipped: no recording on screen");
+      return;
+    }
+    const recordings = await this._uncached(2);
+    const first = recordings.at(0);
+    if (!first) {
+      this._log("V  skipped: no recording to play on this day");
+      return;
+    }
+    const scale = this.timeScale;
+    const rest = await this._onlineUsers();
+    const mid = (s: Segment, part: number) => s.start + (s.end - s.start) * part;
+    const one = await this._play(mid(first, 0.5));
+    const withOne = await this._onlineUsers();
+    const viewer = t.openViewer();
+    let twoMs: number | undefined;
+    let jumpMs: number | undefined;
+    let withTwo: OnlineUsers;
+    let played: PlayedWhile;
+    let secondPlayed: boolean;
+    try {
+      const watch = sampleStalls(() => activeVideo(t.player)?.currentTime);
+      const second = recordings.at(1);
+      twoMs = await viewer.playAt(second ? mid(second, 0.5) : mid(first, 0.2));
+      await this._pause(VIEWER_PLAY_MS * scale);
+      withTwo = await this._onlineUsers();
+      // The second viewer jumps far into the first one's recording: the same cut's turns.
+      const before = viewer.position;
+      jumpMs = await viewer.playAt(mid(first, 0.85));
+      await this._pause(VIEWER_PLAY_MS * scale);
+      secondPlayed = viewer.position !== undefined && (before === undefined || viewer.position !== before);
+      played = watch.stop();
+    } finally {
+      viewer.close();
+    }
+    t.player.stop();
+    const back = await this._backAtRest(rest, VIEWER_BACK_MS * scale);
+
+    const usersText = (u: OnlineUsers) => (u.count === undefined ? `? (${u.error ?? "not said"})` : String(u.count));
+    const startOk = (value: number | undefined) => value !== undefined && value < VIEWER_START_MS * 2;
+    const stallOk = played.longestStallMs < DRAG_STALL_MS;
+    const mark = (ok: boolean | undefined) => (ok === undefined ? "" : ok ? " ✓" : " ✗");
+    this._log(
+      `V  Two viewers on one camera (Phase 5): the NVR's users at rest ${usersText(rest)}, with one viewer ${usersText(withOne)}, with two ${usersText(withTwo)}`,
+    );
+    this._log(`   the first viewer (this tab, ${clock(mid(first, 0.5))}): ${one.line}${mark(one.ok)}`);
+    this._log(
+      `   the second viewer: first frame ${twoMs === undefined ? "none" : ms(twoMs)}${mark(startOk(twoMs))}; ` +
+        `then far into the first one's recording: ${jumpMs === undefined ? "none" : ms(jumpMs)}${mark(startOk(jumpMs) && secondPlayed)}`,
+    );
+    this._log(
+      `   the first viewer meanwhile: played ${span(played.playedMs)} in ${span(played.wallMs)}, longest stall ${span(played.longestStallMs)}${mark(stallOk)}`,
+    );
+    this._log(`   both stopped (the second as a closed tab): ${back.text}${mark(back.ok)}`);
+
+    this._summary.push(
+      `Two viewers: first viewer's longest stall ${span(played.longestStallMs)}; second started in ${twoMs === undefined ? "–" : ms(twoMs)}, jumped in ${jumpMs === undefined ? "–" : ms(jumpMs)}; ${back.ok ? "the NVR back at rest" : "the NVR NOT back at rest"}`,
+    );
+    this._plain.push({
+      grade: stallOk ? "good" : "problem",
+      text: stallOk
+        ? "Two viewers on one camera play on: the first did not stall while the second started and jumped into its recording."
+        : `With two viewers on one camera, the first stalled ${secondsText(played.longestStallMs)} while the second started.`,
+    });
+    this._plain.push({
+      grade: startOk(twoMs) && startOk(jumpMs) ? worst([speed(twoMs, VIEWER_START_MS, VIEWER_START_MS * 2), speed(jumpMs, VIEWER_START_MS, VIEWER_START_MS * 2)]) : "problem",
+      text:
+        twoMs === undefined || jumpMs === undefined
+          ? "A second viewer of the same camera did not start."
+          : `A second viewer of the same camera starts in ${secondsText(twoMs)}, and in ${secondsText(jumpMs)} far into the first one's recording.`,
+    });
+    this._plain.push({ grade: back.ok ? "good" : "problem", text: back.plain });
+  }
+
+  /** The longest recordings of the day on screen that are not cached (up to `n`), else the longest. */
+  private async _uncached(n: number): Promise<Segment[]> {
+    const t = this._t;
+    const playing = t.player?.current?.segmentId;
+    const candidates = [...(t.day?.segments ?? [])]
+      .filter((s) => s.id !== playing)
+      .sort((a, b) => b.end - b.start - (a.end - a.start))
+      .slice(0, PEEK_LIMIT);
+    const found: Segment[] = [];
+    for (const segment of candidates) {
+      this._checkStopped();
+      const peek = await this._peek(t.date, segment.id);
+      if (peek && !peek.cache?.complete) found.push(segment);
+      if (found.length >= n) break;
+    }
+    return found.length ? found : candidates.slice(0, n);
+  }
+
+  private async _onlineUsers(): Promise<OnlineUsers> {
+    const t = this._t;
+    try {
+      const result = await t.hass.callWS<{ count: number | null; error: string | null }>({
+        type: "reolink_viewer/playback/online_users",
+        device_id: t.deviceId,
+      });
+      return result.count === null ? { error: result.error ?? "not said" } : { count: result.count };
+    } catch (err) {
+      return { error: toError(err).message };
+    }
+  }
+
+  /** Wait until the NVR lists no more users than at rest and no Reolink protocol login is left. */
+  private async _backAtRest(rest: OnlineUsers, limitMs: number): Promise<{ ok: boolean; text: string; plain: string }> {
+    const began = performance.now();
+    let users: OnlineUsers;
+    let loggedIn: number | undefined;
+    for (;;) {
+      users = await this._onlineUsers();
+      loggedIn = (await this._stats())?.vod.baichuan?.logged_in;
+      const listBack = rest.count === undefined || (users.count !== undefined && users.count <= rest.count);
+      const loginGone = loggedIn === undefined || loggedIn === 0;
+      const waited = performance.now() - began;
+      if (listBack && loginGone) {
+        const after = secondsText(waited);
+        return {
+          ok: true,
+          text: `back at rest after ${after} (the NVR lists ${users.count === undefined ? "?" : String(users.count)}, no Reolink protocol login left)`,
+          plain: `When both viewers stop, the NVR is back at rest within ${after}.`,
+        };
+      }
+      if (waited >= limitMs) break;
+      await this._pause(Math.min(VIEWER_POLL_MS * this.timeScale, limitMs - waited));
+    }
+    const left = `the NVR lists ${users.count === undefined ? "?" : String(users.count)} (${rest.count === undefined ? "?" : String(rest.count)} at rest), ${loggedIn === undefined ? "?" : String(loggedIn)} Reolink protocol login(s) left`;
+    return {
+      ok: false,
+      text: `NOT back at rest after ${span(limitMs)}: ${left}`,
+      plain: `When both viewers stopped, the NVR was not back at rest after ${secondsText(limitMs)}: ${left}.`,
     };
   }
 

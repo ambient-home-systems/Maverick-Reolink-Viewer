@@ -77,6 +77,7 @@ function stubTarget(hass: FakeHass): CheckTarget {
     scrubView: null,
     scrub: undefined,
     hover: undefined,
+    openViewer: () => ({ playAt: () => Promise.resolve(undefined), position: undefined, close: () => undefined }),
     selectDate: () => undefined,
     playAt: () => Promise.resolve(),
   };
@@ -135,6 +136,7 @@ describe("PlaybackCheck", () => {
     expect(report).toContain("K  SD skipped: nothing playing through MSE (the file player has no fragments to read)");
     expect(report).toContain("F  skipped: no recording on this day");
     expect(report).toContain("P  skipped: no timeline or recording on screen");
+    expect(report).toContain("V  skipped: no recording on screen");
     expect(report).toContain('H  skipped: not asked for (tick "with HD")');
     expect(report).toContain("HD as the tab opened: this browser cannot decode hvc1 at 7680×2160");
     expect(report).toContain("Summary:");

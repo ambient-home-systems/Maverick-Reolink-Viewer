@@ -14,6 +14,7 @@ from .scheduler import Scheduler
 from .scrub import ScrubService
 from .thumbnails import ThumbnailService
 from .timeline import TimelineService
+from .unusual.check import FiredLog
 from .unusual.live import UnusualWatch
 from .unusual.model import Unusual
 from .views import Grants
@@ -44,6 +45,8 @@ class ReolinkViewerData:
     unusual: Unusual | None = None
     # Phase 8 step 4: what is unusual as it happens (an event, a sensor per camera).
     watch: UnusualWatch | None = None
+    # The learning check: each unusual event fired, and the automations it ran.
+    fired: FiredLog | None = None
     # Phase 9: each user's saved Wall layouts.
     wall: WallStore | None = None
     # Phase 10: scrubbing that shows the picture (key frames from the server).

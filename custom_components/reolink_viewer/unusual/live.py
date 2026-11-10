@@ -67,9 +67,14 @@ class UnusualWatch:
         model_built: Callable[[], bool],
         running: Callable[[], bool],
         names: Callable[[], dict[str, str]],
+        fired: Callable[[dict[str, Any], float], None] | None = None,
     ) -> None:
-        """Wire to the journal (flush, running) and the model (window, built)."""
+        """Wire to the journal (flush, running) and the model (window, built).
+
+        ``fired`` is told each event fired, with when (the learning check's log).
+        """
         self._hass = hass
+        self._fired = fired
         self._flush = flush
         self._window = window
         self._built = model_built
@@ -159,20 +164,20 @@ class UnusualWatch:
         said = last is None or event.started_at - last > INCIDENT_SECONDS
         self._incidents[kind] = max(last or 0.0, event.ended_at or now)
         if said:
-            self._hass.bus.async_fire(
-                UNUSUAL_EVENT,
-                {
-                    "device_id": camera,
-                    "camera": self._names().get(camera, camera),
-                    "kind": kind,
-                    "score": round(result.total, 2),
-                    "line": None
-                    if result.threshold is None
-                    else round(result.threshold, 2),
-                    "reason": result.reason,
-                    "start": dt_util.utc_from_timestamp(event.started_at).isoformat(),
-                },
-            )
+            payload = {
+                "device_id": camera,
+                "camera": self._names().get(camera, camera),
+                "kind": kind,
+                "score": round(result.total, 2),
+                "line": None
+                if result.threshold is None
+                else round(result.threshold, 2),
+                "reason": result.reason,
+                "start": dt_util.utc_from_timestamp(event.started_at).isoformat(),
+            }
+            self._hass.bus.async_fire(UNUSUAL_EVENT, payload)
+            if self._fired is not None:
+                self._fired(payload, time.time())
         self._activate(camera, event)
         return said
 

@@ -2906,7 +2906,7 @@ redesigned views.
 | 3. Mobile, and networks that cut websockets | **Done** (v0.24.0–v0.26.0), in three parts (see "Step 3: mobile, and networks that cut websockets"). 3.1 built (v0.24.0): a page whose network cuts MSE's websockets switches live view to WebRTC first, and the capacity test sets the cameras kept warm aside and says plainly what else holds the slots, see "Step 3.1: live view that holds up". 3.2 built (v0.25.0): pinch and two-finger pan on the timeline, and picture-in-picture for live and playback, see "Step 3.2: touch, and picture-in-picture". 3.3 built (v0.26.0): full screen stays in the lighter SD away from home or on mobile data, with an HD button remembered per device, see "Step 3.3: away from home, and the iPhone checklist". The iPhone checklist ran in a shorter form on 2026-10-28 (see "Phase 4 exit: the checklist"); v0.32.3 fixes full screen's crop and corners and the timeline's pinch it found. At the work PC the network cut nothing this time, so 3.1's switch is still not seen there, and WebRTC could not start: v0.32.1 then starts over MSE first on that device (see "Step 3.1: live view that holds up" and "Phase 4 exit: the checklist") |
 | 4. Error states | **Done** (v0.27.0–v0.29.0), in three parts (see "Step 4: error states"). 4.1 (v0.27.0): offline cameras on the board from Home Assistant's state, and live errors in plain words, see "Step 4.1: live error states". 4.2 (v0.28.0): cameras with nothing to play say why, disks that are not ready are flagged, and recordings that cannot be read or played say why in plain words, see "Step 4.2: playback and storage error states". 4.3 (v0.29.0): a plain note over every view when Reolink Viewer cannot reach the cameras, plain load errors, and screenshots of every error state, see "Step 4.3: when Reolink Viewer cannot reach the cameras". |
 | 5. Accessibility | **Done** (v0.30.0): every view passes WCAG 2.1 AA (axe-core, light and dark, desktop and phone) and works from the keyboard, checked in CI; the timeline, the calendar and the device tabs are keyboard widgets; reduced motion is honoured and tested. See "Step 5: accessibility". |
-| 6. Packaging and the HA version matrix | **Done** (v0.31.0): releases from a Release workflow (CI, then the package checked and attached, notes from `CHANGELOG.md`); CI tests the oldest supported Home Assistant (2026.10.1: the matrix found 2026.10.0 cannot run it) and the pinned newest (2026.10.4), and the newest weekly. The optional go2rtc app is not built (see "Step 6: packaging"). The first release, [v0.31.0](https://github.com/ambient-home-systems/Maverick-Reolink-Viewer/releases/tag/v0.31.0), was published on 2026-10-28, [v0.32.0](https://github.com/ambient-home-systems/Maverick-Reolink-Viewer/releases/tag/v0.32.0) and [v0.32.1](https://github.com/ambient-home-systems/Maverick-Reolink-Viewer/releases/tag/v0.32.1), [v0.32.2](https://github.com/ambient-home-systems/Maverick-Reolink-Viewer/releases/tag/v0.32.2) and [v0.32.3](https://github.com/ambient-home-systems/Maverick-Reolink-Viewer/releases/tag/v0.32.3) and [v0.33.0](https://github.com/ambient-home-systems/Maverick-Reolink-Viewer/releases/tag/v0.33.0) the same day, each through the Release workflow. HACS updated the owner's Home Assistant to each (Help said 0.32.1, 0.32.2 and 0.32.3; 0.33.0's new setting is there). The install through HACS on a clean Home Assistant, with the hardware checklist (the exit criterion), was not run, see "Phase 4 exit: the checklist" |
+| 6. Packaging and the HA version matrix | **Done** (v0.31.0): releases from a Release workflow (CI, then the package checked and attached, notes from `CHANGELOG.md`); CI tests the oldest supported Home Assistant (2026.10.1: the matrix found 2026.10.0 cannot run it) and the pinned newest (2026.10.4), and the newest weekly. The optional go2rtc app is not built (see "Step 6: packaging"). The first release, [v0.31.0](https://github.com/ambient-home-systems/Maverick-Reolink-Viewer/releases/tag/v0.31.0), was published on 2026-10-28, [v0.32.0](https://github.com/ambient-home-systems/Maverick-Reolink-Viewer/releases/tag/v0.32.0) and [v0.32.1](https://github.com/ambient-home-systems/Maverick-Reolink-Viewer/releases/tag/v0.32.1), [v0.32.2](https://github.com/ambient-home-systems/Maverick-Reolink-Viewer/releases/tag/v0.32.2) and [v0.32.3](https://github.com/ambient-home-systems/Maverick-Reolink-Viewer/releases/tag/v0.32.3) and [v0.33.0](https://github.com/ambient-home-systems/Maverick-Reolink-Viewer/releases/tag/v0.33.0) the same day, each through the Release workflow. HACS updated the owner's Home Assistant to each (Help said 0.32.1, 0.32.2 and 0.32.3; 0.33.0's new setting is there). The install through HACS on a clean Home Assistant, with the hardware checklist (the exit criterion), was not run, see "Phase 4 exit: the checklist". **The clean install is checked in CI from v0.61.0** (the owner's ask for automated checks): `scripts/install_check.py`, on the oldest and the pinned Home Assistant, unpacks the release zip as HACS installs it into an empty config, finds the integration there at the release's version, adds it through its config flow, sets it up with no camera, and loads every module of the panel and the card, however deep |
 | 7. Docs | **Done** ([v0.32.0](https://github.com/ambient-home-systems/Maverick-Reolink-Viewer/releases/tag/v0.32.0), 2026-10-28): a user guide, a troubleshooting guide that has every message the panel shows (checked word for word by a test), per-model notes from the hardware matrix, and Help in the panel that opens them for the version installed (checked against the published tag). See "Step 7: docs" |
 
 ### Step 1: the design
@@ -4959,7 +4959,16 @@ so does the option's label.
 **Exit criteria:** the online users back at the count at rest within a
 minute of closing the tab; both viewers play through without a stall.
 
-**The owner's check:** not run yet. Once it passes, Phase 5 is done; what is
+**The owner's check:** not run by hand. **Automated in v0.61.0** (the owner's
+ask for automated checks): the playback check's **V row** runs both items on
+the camera on screen. The NVR's list of users (`playback/online_users`, the
+read-only `GetOnline` through the scheduler) at rest; the tab starts deep in
+the longest recording not cached (a cut) and a second viewer, off screen,
+deep in another, then far into the first one's; the first is sampled for
+stalls all along (✓ under 1 s); both start (✓ under 3 s). Then both stop, the
+second as a closed tab does (it never ends its leases), and the list is read
+every 5 s: ✓ when it is back at rest, with no Reolink protocol login left,
+within 75 s. Once the owner's run shows ✓, Phase 5 is done; what is
 left of 5d waits on the maintainer
 ([#239](https://github.com/starkillerOG/reolink_aio/issues/239),
 [#240](https://github.com/starkillerOG/reolink_aio/issues/240)).
@@ -5008,7 +5017,8 @@ Recommended, the owner's to change:
 
 Before Phase 6, two records are still open from the first round: Phase 5's
 v0.40.1 hardware check (this plan still says "not run yet"), and Phase 4's
-exit item (an install through HACS on a clean Home Assistant).
+exit item (an install through HACS on a clean Home Assistant). Both are
+automated in v0.61.0: the playback check's V row, and CI's clean install.
 
 ### Decisions for the owner
 
@@ -6498,6 +6508,37 @@ Viewer: a "… unusual activity" sensor per camera; an automation from the
 user guide's example (a notification on "Something unusual seen on …");
 over the next days, the notifications against the panel's marks (each mark
 said once; anything said that the panel does not mark, or the reverse).
+
+**The learning check (v0.61.0), the owner's ask for automated checks,**
+replaces that comparison by hand. Devices → Learning what is normal → **Run
+the check** (`unusual/check`, `unusual/check.py`):
+
+- **Kept by Home Assistant:** every `reolink_viewer_unusual` fired (camera,
+  kind, the detection's start, when it fired) and the automations that ran
+  in the 10 s after it (`automation_triggered`), kept 90 days between
+  restarts (`FiredLog`, `.storage/reolink_viewer.unusual_fired`), from the
+  update on.
+- **Compared:** each of the panel's marks since the log began (at most a
+  week) with what fired for it (its kind, a camera of its incident, its
+  start within 2 s): ✓ fired once; ✓ at the detection's start within 2 s (the
+  exit criterion), or at its end for one that stands out by its length;
+  ✗ not fired, fired twice, late; ✗ an event fired for no mark.
+- **The house-wide signals chosen:** ✓ each there now and learned with.
+- **Who listens** (the device trigger, a camera's Unusual activity sensor,
+  or an event trigger on the event): ✗ none ("make the user guide's
+  example"); for each, ✓ on and run on every event fired.
+- A report to copy, as the playback check's. The panel's marks are scored
+  with the model of now, the live ones with that of the night before: after
+  a night's rebuild, a mark of the day before can differ (said as not fired
+  or unmarked), as before.
+
+Checks: the comparison (an incident on two cameras matched by its other
+camera, not fired, twice, late, at the end, unmarked); the log (the
+automations in the window and not after, kept between restarts, the window
+closed on unload); who listens (an event trigger, a sensor's state trigger,
+not another event); the command end to end (an event fired, the automation
+it runs, the check matching it with its mark; learning off); the card's
+lines and report.
 
 **Exit criteria:**
 

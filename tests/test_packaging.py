@@ -11,7 +11,7 @@ import zipfile
 import pytest
 
 import homeassistant.const
-from scripts import build_release, bump_version, ha_requirements
+from scripts import build_release, bump_version, ha_requirements, install_check
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -153,3 +153,17 @@ def test_the_oldest_home_assistant_claimed_is_tested() -> None:
     assert f'ha: "{minimum}"' in ci
     readme = (ROOT / "README.md").read_text()
     assert f"Requires Home Assistant {minimum} or newer" in readme
+
+
+def test_the_install_check_unpacks_the_release_as_hacs_does(tmp_path: Path) -> None:
+    """scripts/install_check.py: the zip in an empty config, with its own test."""
+    release = install_check.prepare(tmp_path)
+    package = tmp_path / "custom_components" / "reolink_viewer"
+    assert json.loads((package / "manifest.json").read_text())["version"] == release
+    assert (package / "frontend_dist" / "reolink-viewer-panel.js").is_file()
+    assert (tmp_path / "custom_components" / "__init__.py").is_file()
+    test = (tmp_path / "test_installed.py").read_text()
+    compile(test, "test_installed.py", "exec")
+    compile((tmp_path / "conftest.py").read_text(), "conftest.py", "exec")
+    assert f'RELEASE = "{release}"' in test
+    assert "asyncio_mode = auto" in (tmp_path / "pytest.ini").read_text()
