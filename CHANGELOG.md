@@ -3,6 +3,22 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.58.0
+
+Pictures for scrubbing, from the server (Phase 10's step 1). Nothing changes on
+screen yet: the next step shows them as you drag along the timeline.
+
+- **The picture at any moment of a recording:** Home Assistant hands the panel the
+  key frame at the moment asked for: from the recording if it is cached, else from a
+  2-second cut the recorder sends (about 0.2 s on the owner's NVR); it keeps the
+  pictures it found for the next pass over them. A camera that does not take the
+  Reolink protocol gives its thumbnail instead.
+- **A recording playing on the same camera goes on:** a picture's cut takes its
+  turn as another viewer's would, and what it sends after its end does not reach the
+  recording that plays.
+- **The playback check's F row:** it asks for the pictures at 10 moments of the day,
+  twice, and says how long each took, where it came from, and that each decodes.
+
 ## 0.57.0
 
 Measuring before scrubbing shows the picture (Phase 10's first step). Nothing

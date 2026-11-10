@@ -119,7 +119,7 @@ describe("PlaybackCheck", () => {
       changes.push(1),
     );
     const report = await check.run();
-    expect(report).toContain("Reolink Viewer playback check v0.5.0 · Desktop Chrome, LAN · Garage");
+    expect(report).toContain("Reolink Viewer playback check v0.6.0 · Desktop Chrome, LAN · Garage");
     expect(report).toContain("A1 Time to timeline, today (as the tab opened): 120 ms (server: memory, total 4 ms)");
     expect(report).toContain("A2/A3 skipped: no earlier recording day this month");
     expect(report).toContain("B  skipped: no events today");
@@ -129,6 +129,7 @@ describe("PlaybackCheck", () => {
     expect(report).toContain("L  skipped: nothing played");
     expect(report).toContain("S  skipped: nothing playing");
     expect(report).toContain("K  SD skipped: nothing playing through MSE (the file player has no fragments to read)");
+    expect(report).toContain("F  skipped: no recording on this day");
     expect(report).toContain('H  skipped: not asked for (tick "with HD")');
     expect(report).toContain("HD as the tab opened: this browser cannot decode hvc1 at 7680×2160");
     expect(report).toContain("Summary:");
@@ -363,6 +364,94 @@ describe("PlaybackCheck: scrubbing and HD", () => {
     expect(decoded).toHaveLength(1);
     expect(report).toMatch(/K {2}SD avc1\.42C00A 64×64: 1 key frame, .* · VideoDecoder: one in \d+\.\d ms \(median of 1\)/);
     expect(report).toMatch(/gate 30 ms: (passes|fails) · from the cut/);
+  });
+
+  it("asks the server for pictures over the day, twice (Phase 10 step 1)", async () => {
+    vi.spyOn(PlaybackCheck.prototype as unknown as { _pause: () => Promise<void> }, "_pause").mockResolvedValue();
+    const bytes = (base64: string) => Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+    const sample = MSE_SAMPLES.h264;
+    const fragment = new Uint8Array([...bytes(sample.normalized), ...bytes(sample.mdat)]);
+    const init = bytes(sample.init);
+    const opened: string[] = [];
+    const asked: number[] = [];
+    // The server: the first pass from the device (one moment between
+    // recordings), the second from its store.
+    class Socket {
+      binaryType = "blob";
+      readyState = 0;
+      onopen: ((e: unknown) => void) | null = null;
+      onmessage: ((e: { data: unknown }) => void) | null = null;
+      onclose: ((e: unknown) => void) | null = null;
+      onerror: ((e: unknown) => void) | null = null;
+      constructor(url: string) {
+        opened.push(url);
+        setTimeout(() => {
+          this.readyState = 1;
+          this.onopen?.({});
+        }, 1);
+      }
+      send(text: string): void {
+        const { seq, at } = JSON.parse(text) as { seq: number; at: number };
+        asked.push(at);
+        const second = asked.length > 10;
+        setTimeout(() => {
+          if (!second && asked.length === 2) {
+            this.onmessage?.({ data: JSON.stringify({ seq, at, error: "no recording at that moment" }) });
+            return;
+          }
+          const header = new TextEncoder().encode(
+            JSON.stringify({
+              seq,
+              at,
+              time: at - 1000,
+              source: second ? "store" : "device",
+              kind: "fmp4",
+              codec: sample.codec,
+              init: init.length,
+              data: fragment.length,
+            }),
+          );
+          const out = new Uint8Array(4 + header.length + init.length + fragment.length);
+          new DataView(out.buffer).setUint32(0, header.length);
+          out.set(header, 4);
+          out.set(init, 4 + header.length);
+          out.set(fragment, 4 + header.length + init.length);
+          this.onmessage?.({ data: out.buffer });
+        }, 1);
+      }
+      close(): void {
+        this.readyState = 3;
+      }
+    }
+    vi.stubGlobal("WebSocket", Socket);
+    const day = emptyDay();
+    day.segments = [
+      { id: "a", start: T0, end: T0 + 3_000_000, triggers: [], ambiguous: false },
+      { id: "b", start: T0 + 5_000_000, end: T0 + 6_000_000, triggers: [], ambiguous: false },
+    ];
+    const hass = reportingHass();
+    const fallback = hass.callWS.bind(hass);
+    hass.callWS = <T,>(message: Record<string, unknown>) =>
+      message.type === "reolink_viewer/playback/scrub"
+        ? Promise.resolve({ url: "/api/reolink_viewer/scrub/tok?authSig=x", expires_in: 600 } as T)
+        : fallback<T>(message);
+    const check = new PlaybackCheck({ ...stubTarget(hass), day }, { setup: "Desktop Chrome, LAN", soakMinutes: 0 });
+    try {
+      await (check as unknown as { _serverPictures(): Promise<void> })._serverPictures();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+    const report = check.text + "\n- " + (check as unknown as { _summary: string[] })._summary.join("\n- ");
+    expect(opened).toHaveLength(1);
+    expect(opened[0]).toMatch(/^ws:\/\/.*\/api\/reolink_viewer\/scrub\/tok\?authSig=x$/);
+    // Ten moments over the 4000 s of recordings, asked twice.
+    expect(asked).toHaveLength(20);
+    expect(asked.slice(0, 3)).toEqual([T0 + 200_000, T0 + 600_000, T0 + 1_000_000]);
+    expect(asked.slice(10)).toEqual(asked.slice(0, 10));
+    expect(report).toMatch(
+      /F {2}Pictures from the server \(scrub, 10 moments over the day\): first 9 of 10, median \d+ ms \(device 9\) · none for 1: no recording at that moment · again 10 of 10, median \d+ ms \(store 10\) · each 1\.0 to 1\.0 s before its moment · VideoDecoder absent/,
+    );
+    expect(report).toMatch(/- Pictures from the server: first 9 of 10, median \d+ ms \(device 9\)/);
   });
 
   it("reports an HD failure, and skips HD where it is not offered", async () => {

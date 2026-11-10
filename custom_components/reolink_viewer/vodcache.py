@@ -52,6 +52,9 @@ served from the cache, with Range, by ``views.py``:
   recording from its start again and skips the bytes on disk. Whatever needs the whole original
   (the file player, a clip, a part neither piece holds) resumes it to the
   end;
+- a scrub (Phase 10) reads the key frame showing a moment from what is on
+  disk now, the original or a cut, without starting or waiting for a fill
+  (:meth:`VodCache.async_key_frame`);
 - the file player (the fallback) gets a plain MP4 (``remux.py``), rewritten
   from the complete original when first asked for, one at a time: browsers
   read a fragmented file whole before playing it. The original is kept (the
@@ -83,7 +86,7 @@ from . import bridge
 from .baichuan_source import BaichuanSource, Cut, CutError
 from .bridge import VodFile, VodMethod
 from .devices import PlaybackSource
-from .fmp4 import Fragment, FragmentError, FragmentIndex
+from .fmp4 import Fragment, FragmentError, FragmentIndex, KeySample, key_sample
 from .mp4 import BoxScanner
 from .mp4index import (
     OffsetShifter,
@@ -155,6 +158,9 @@ LAYOUT = 5
 # A copy of a recording that has since grown still serves a start at least
 # this long before the copy's end.
 COVER_MARGIN_MS = 60_000
+# A scrub's key frame from the cache is at most this far before the moment (a
+# group of pictures is 1-4 s on the owner's cameras); else a cut answers.
+KEY_FRAME_REACH_MS = 10_000
 # Fragments are read and made MSE-ready in batches of about this many bytes.
 FRAGMENT_BATCH = 4 * 1024 * 1024
 # A cut that asked for the download's stream slot waits this long for it.
@@ -917,6 +923,77 @@ class VodCache:
             if window.source == "cut" and cut is not None:
                 cut.readers -= 1
                 cut.last_read = time.monotonic()
+
+    # ---- Scrubbing (Phase 10) ----
+
+    async def async_key_frame(
+        self, recording: Recording, at_ms: float
+    ) -> tuple[KeySample, str] | None:
+        """Return the key frame showing ``at_ms`` (ms of media) from the disk.
+
+        From the original (or a copy at another length that reaches it), else
+        a cut of the recording that holds that moment; and where it came from
+        ("file" or "cut"). It reads what is on disk now: it never starts,
+        speeds up or waits for a fill. None when no copy holds that moment
+        (yet), or its key frame is more than ``KEY_FRAME_REACH_MS`` before it.
+        """
+        if self._closed:
+            return None
+        utc = int(recording.start_ms + at_ms)
+        entry = self._entries.get(recording.cache_id) or self._copy_for(
+            recording, utc, any_copy=False
+        )
+        if entry is None:
+            path = self._dir / f"{recording.cache_id}{SUFFIX}"
+            found = await self._hass.async_add_executor_job(_on_disk, path)
+            if found is None:
+                return None
+            # A complete file from an earlier run: known from now on, as a
+            # player's open would make it (no fill: it is complete).
+            entry = self._entries.get(recording.cache_id) or self._new_entry(
+                recording, path, Priority.PREFETCH, None, found
+            )
+        if entry.error is not None and not entry.complete:
+            return None
+        index = await self._indexed_now(entry)
+        cut: Cut | None = None
+        candidates = self._candidates(entry)
+        number = index.find(at_ms) if index is not None else None
+        if index is None or number is None or index.init is None:
+            index, number, cut = None, None, None
+            for held in (entry.cut, *entry.old_cuts.values()):
+                start = held.start_ms if held is not None else None
+                end = held.end_ms if held is not None else None
+                if held is None or start is None or end is None:
+                    continue
+                if held.index.init is None or not start <= at_ms < end:
+                    continue
+                if (found_at := held.index.find(at_ms)) is not None:
+                    index, number, cut = held.index, found_at, held
+                    candidates = (held.path, held.path)
+                    break
+        if index is None or number is None or index.init is None:
+            return None
+        if at_ms - index.fragments[number].start_ms > KEY_FRAME_REACH_MS:
+            return None
+        entry.readers += 1
+        if cut is not None:
+            cut.readers += 1
+        try:
+            sample = await self._hass.async_add_executor_job(
+                _read_key_frame, candidates, index, number
+            )
+        except (FragmentError, OSError) as err:
+            _LOGGER.debug("No key frame from the cache: %s", _describe(err))
+            return None
+        finally:
+            entry.readers -= 1
+            entry.last_access = time.monotonic()
+            if cut is not None:
+                cut.readers -= 1
+        if sample is None:
+            return None
+        return sample, "cut" if cut is not None else "file"
 
     # ---- Cuts (Phase 5b) ----
 
@@ -1733,6 +1810,15 @@ def _read_fragments(
 ) -> bytes:
     with _open_original(candidates) as file:
         return b"".join(index.read_fragment(file, i) for i in numbers)
+
+
+def _read_key_frame(
+    candidates: tuple[Path, Path], index: FragmentIndex, number: int
+) -> KeySample | None:
+    """Read fragment ``number`` and take its key frame out on its own."""
+    assert index.init is not None
+    fragment = _read_fragments(candidates, index, [number])
+    return key_sample(index.init, fragment)
 
 
 def _cache_id_of(path: Path) -> str:

@@ -295,3 +295,48 @@ export function loginReport(stats: BaichuanStats | undefined): string {
     (stats.unsupported?.length ? `; not supported by ${String(stats.unsupported.length)} device(s): ${stats.unsupported.join("; ")}` : "")
   );
 }
+
+// ---- F: pictures from the server (Phase 10 step 1) ----
+
+/** `n` moments spread evenly over a day's recorded time (UTC ms). */
+export function spreadMoments(segments: readonly { start: number; end: number }[], n: number): number[] {
+  const total = segments.reduce((sum, s) => sum + Math.max(0, s.end - s.start), 0);
+  if (!total || n <= 0) return [];
+  const moments: number[] = [];
+  for (let i = 0; i < n; i += 1) {
+    let left = ((i + 0.5) / n) * total;
+    for (const s of segments) {
+      const length = Math.max(0, s.end - s.start);
+      if (left < length) {
+        moments.push(Math.round(s.start + left));
+        break;
+      }
+      left -= length;
+    }
+  }
+  return moments;
+}
+
+/** One pass of asks: what came back for each moment. */
+export interface ScrubPass {
+  answered: { ms: number; source: string; offsetMs: number }[];
+  missed: string[];
+}
+
+/** How a pass went: "10 of 10, median 212 ms (device 7, cache 3)". */
+export function describePass(pass: ScrubPass): string {
+  const asked = pass.answered.length + pass.missed.length;
+  const sorted = pass.answered.map((a) => a.ms).sort((a, b) => a - b);
+  const median = sorted.length ? sorted[Math.floor((sorted.length - 1) / 2)] : undefined;
+  const sources = new Map<string, number>();
+  for (const a of pass.answered) sources.set(a.source, (sources.get(a.source) ?? 0) + 1);
+  const from = [...sources].map(([source, n]) => `${source} ${String(n)}`).join(", ");
+  const misses = new Map<string, number>();
+  for (const why of pass.missed) misses.set(why, (misses.get(why) ?? 0) + 1);
+  const missText = [...misses].map(([why, n]) => `${String(n)}: ${why}`).join("; ");
+  return (
+    `${String(pass.answered.length)} of ${String(asked)}` +
+    (median === undefined ? "" : `, median ${ms(median)}${from ? ` (${from})` : ""}`) +
+    (missText ? ` · none for ${missText}` : "")
+  );
+}

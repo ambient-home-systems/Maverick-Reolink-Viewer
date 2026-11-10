@@ -11,6 +11,7 @@ from .events import SeenStore
 from .journal import Journal
 from .live.service import LiveService
 from .scheduler import Scheduler
+from .scrub import ScrubService
 from .thumbnails import ThumbnailService
 from .timeline import TimelineService
 from .unusual.live import UnusualWatch
@@ -45,6 +46,8 @@ class ReolinkViewerData:
     watch: UnusualWatch | None = None
     # Phase 9: each user's saved Wall layouts.
     wall: WallStore | None = None
+    # Phase 10: scrubbing that shows the picture (key frames from the server).
+    scrub: ScrubService | None = None
 
 
 type ReolinkViewerConfigEntry = ConfigEntry[ReolinkViewerData]

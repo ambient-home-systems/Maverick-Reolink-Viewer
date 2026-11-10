@@ -1,6 +1,6 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
-import { Pt as i, X as a, Z as o, d as s, f as c, j as l, n as u, p as d, tt as f } from "./live-BazhJ5O3.js";
-import { s as p, tt as m } from "./home-BMbYbMt5.js";
+import { It as i, Q as a, Z as o, d as s, f as c, j as l, n as u, nt as d, p as f } from "./live-D6mEGytR.js";
+import { s as p, tt as m } from "./home-D2hbHRQT.js";
 //#region src/live/card-report.ts
 var h = /* @__PURE__ */ new Set([
 	"visible",
@@ -99,7 +99,7 @@ var w = class extends r {
 		if (e) {
 			this._read = !0, this._state = "loading";
 			try {
-				this._state = { devices: (await f(e)).devices };
+				this._state = { devices: (await d(e)).devices };
 			} catch (e) {
 				this._state = { error: i(e).message };
 			}
@@ -107,7 +107,7 @@ var w = class extends r {
 	}
 	async _startOver() {
 		if (this._confirm = !1, this.hass) try {
-			await o(this.hass), await this.refresh();
+			await a(this.hass), await this.refresh();
 		} catch (e) {
 			this._state = { error: i(e).message };
 		}
@@ -127,7 +127,7 @@ var w = class extends r {
 			this.refresh();
 		}}
         >
-          ${a("refresh")}Refresh
+          ${o("refresh")}Refresh
         </button>
         ${typeof e == "object" && "devices" in e && e.devices.length ? n`<button
               @click=${() => {
@@ -178,7 +178,7 @@ var w = class extends r {
           </ul>
         </section>`)}
       <details class="support">
-        <summary>Every event${a("chevronDown")}</summary>
+        <summary>Every event${o("chevronDown")}</summary>
         <div class="actions">
           <button
             @click=${() => {
@@ -242,7 +242,7 @@ var w = class extends r {
 };
 function T(e, t) {
 	let n = Date.parse(e);
-	return Number.isNaN(n) ? e : d(n, t);
+	return Number.isNaN(n) ? e : f(n, t);
 }
 customElements.get("rv-card-report") || customElements.define("rv-card-report", w);
 //#endregion

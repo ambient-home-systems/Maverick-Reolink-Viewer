@@ -1,6 +1,6 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
-import { Pt as i, X as a, j as o, nt as s, rt as c } from "./live-BazhJ5O3.js";
-import { W as l, r as u } from "./home-BMbYbMt5.js";
+import { It as i, Z as a, it as o, j as s, rt as c } from "./live-D6mEGytR.js";
+import { W as l, r as u } from "./home-D2hbHRQT.js";
 //#region src/render-filter.ts
 function d(e, t, n) {
 	if (e === t) return !1;
@@ -11,10 +11,10 @@ function d(e, t, n) {
 //#endregion
 //#region src/components/device-page.ts
 var f = {
-	overview: () => import("./overview-BHR3N9JB.js"),
-	playback: () => import("./playback-B5gG9iZx.js"),
-	pictures: () => import("./event-pictures-BaoabzhY.js"),
-	settings: () => import("./settings-DgR-i5AX.js")
+	overview: () => import("./overview-CGh26nGy.js"),
+	playback: () => import("./playback-vYl5nthz.js"),
+	pictures: () => import("./event-pictures-BcUudVEK.js"),
+	settings: () => import("./settings-BOxLzwKS.js")
 }, p = 1e3, m = class extends r {
 	static properties = {
 		hass: { attribute: !1 },
@@ -74,7 +74,7 @@ var f = {
 		let n = ++this._loadSeq;
 		e || (this._device = void 0, this._error = void 0);
 		try {
-			let [e, r] = await Promise.all([c(t, this.deviceId), s(t)]);
+			let [e, r] = await Promise.all([o(t, this.deviceId), c(t)]);
 			if (n !== this._loadSeq) return;
 			this._catalog = r, this._device = e, this._error = void 0, this._watched = w(e);
 		} catch (e) {
@@ -170,7 +170,7 @@ var f = {
             </div>` : this._error ? t : n`<p class="muted">Loading…</p>`}
     `;
 	}
-	static styles = [o, e`
+	static styles = [s, e`
       :host {
         display: flex;
         flex-direction: column;

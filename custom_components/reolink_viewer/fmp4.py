@@ -11,7 +11,10 @@ movie-fragment relative addressing and a ``tfdt`` in every ``traf``. So:
 - :func:`normalize_fragment` rewrites one fragment: every ``traf`` gets
   ``default-base-is-moof`` without ``base-data-offset``, a ``tfdt`` with the
   track's decode time, and ``trun`` data offsets relative to the ``moof``.
-  Sample data and every other box are copied as stored.
+  Sample data and every other box are copied as stored;
+- :func:`key_sample` takes a fragment's first video sample, a key frame,
+  out on its own (Phase 10, scrubbing that shows the picture): an init segment
+  of the video track alone and a fragment of that one sample.
 
 Everything here is blocking file and byte work: run it in the executor.
 """
@@ -422,6 +425,185 @@ def set_sample_size(moof: bytes, size: int) -> bytes | None:
     return bytes(out)
 
 
+@dataclass(frozen=True, slots=True)
+class KeySample:
+    """A key frame alone: what a scrub sends to the browser (Phase 10)."""
+
+    # ftyp + moov of the video track alone (its trex, no other track).
+    init: bytes
+    # moof + mdat of that one sample, MSE-ready (default-base-is-moof, a tfdt).
+    fragment: bytes
+    # Its decode time, in the track's timescale, from the recording's start.
+    decode: int
+    timescale: int
+    codec: str | None
+
+    @property
+    def time_ms(self) -> float:
+        """Return its media time (ms from the recording's start)."""
+        return self.decode * 1000 / self.timescale
+
+
+def key_sample(init: bytes, fragment: bytes) -> KeySample | None:
+    """Return the first video sample of an MSE-ready fragment, if a sync sample.
+
+    ``fragment`` is one ``moof`` and its ``mdat``, as :func:`normalize_fragment`
+    or the muxer gives them (moof-relative data offsets, a ``tfdt``).
+    None if its video track's first sample is not a sync sample, or the
+    fragment has none.
+    """
+    ftyp = b""
+    moov_payload: bytes | None = None
+    for box_type, raw, header in _boxes(init):
+        if box_type == "ftyp":
+            ftyp = raw
+        elif box_type == "moov":
+            moov_payload = raw[header:]
+    if moov_payload is None:
+        raise FragmentError("no moov in the init segment")
+    tracks, _codecs = _parse_moov(moov_payload)
+    video = next((t for t in tracks.values() if t.handler == "vide"), None)
+    if video is None:
+        raise FragmentError("no video track")
+    codec: str | None = None
+    kept: list[bytes] = []
+    for box_type, raw, header in _boxes(moov_payload):
+        if box_type == "trak":
+            found = _trak(raw[header:])
+            if found is None or found[0] != video.track_id:
+                continue
+            codec = found[3]
+        elif box_type == "mvex":
+            entries = [
+                child
+                for child_type, child, child_header in _boxes(raw[header:])
+                if child_type != "trex"
+                or struct.unpack_from(">I", child, child_header + 4)[0]
+                == video.track_id
+            ]
+            kept.append(_box("mvex", b"".join(entries)))
+            continue
+        elif box_type != "mvhd":
+            continue
+        kept.append(raw)
+    sample = _first_sample(fragment, video)
+    if sample is None:
+        return None
+    decode, duration, _size, flags, data = sample
+    if flags & _NON_SYNC:
+        return None
+    return KeySample(
+        init=ftyp + _box("moov", b"".join(kept)),
+        fragment=_one_sample(video.track_id, decode, duration, flags, data),
+        decode=decode,
+        timescale=video.timescale,
+        codec=codec,
+    )
+
+
+def _first_sample(
+    fragment: bytes, video: Track
+) -> tuple[int, int, int, int, bytes] | None:
+    """Return the video track's first sample: decode, duration, size, flags, data."""
+    moof = parse_box_header(fragment[:16], 0)
+    if moof is None or moof.type != "moof" or moof.end is None:
+        raise FragmentError("not a moof")
+    for box_type, raw, header in _boxes(fragment[moof.header : moof.end]):
+        if box_type != "traf":
+            continue
+        children = list(_boxes(raw[header:]))
+        if not children or children[0][0] != "tfhd":
+            raise FragmentError("traf without tfhd first")
+        _type, tfhd, tfhd_header = children[0]
+        body = tfhd[tfhd_header:]
+        flags = int.from_bytes(body[1:4], "big")
+        (track_id,) = struct.unpack_from(">I", body, 4)
+        if track_id != video.track_id:
+            continue
+        if flags & _TFHD_BASE_OFFSET:
+            raise FragmentError("an absolute base offset (not MSE-ready)")
+        at = 8
+        duration, size, sample_flags = (
+            video.default_duration,
+            video.default_size,
+            video.default_flags,
+        )
+        if flags & _TFHD_DESCRIPTION:
+            at += 4
+        if flags & _TFHD_DURATION:
+            (duration,) = struct.unpack_from(">I", body, at)
+            at += 4
+        if flags & _TFHD_SIZE:
+            (size,) = struct.unpack_from(">I", body, at)
+            at += 4
+        if flags & _TFHD_FLAGS:
+            (sample_flags,) = struct.unpack_from(">I", body, at)
+        decode: int | None = None
+        for child_type, child, child_header in children[1:]:
+            payload = child[child_header:]
+            if child_type == "tfdt":
+                decode = struct.unpack_from(
+                    ">Q" if payload[0] == 1 else ">I", payload, 4
+                )[0]
+            elif child_type == "trun":
+                run_flags = int.from_bytes(payload[1:4], "big")
+                (count,) = struct.unpack_from(">I", payload, 4)
+                if not count:
+                    return None
+                at = 8
+                offset: int | None = None
+                if run_flags & _TRUN_DATA_OFFSET:
+                    (offset,) = struct.unpack_from(">i", payload, at)
+                    at += 4
+                first_flags: int | None = None
+                if run_flags & _TRUN_FIRST_FLAGS:
+                    (first_flags,) = struct.unpack_from(">I", payload, at)
+                    at += 4
+                if run_flags & _TRUN_DURATION:
+                    (duration,) = struct.unpack_from(">I", payload, at)
+                    at += 4
+                if run_flags & _TRUN_SIZE:
+                    (size,) = struct.unpack_from(">I", payload, at)
+                    at += 4
+                if run_flags & _TRUN_FLAGS:
+                    (sample_flags,) = struct.unpack_from(">I", payload, at)
+                if first_flags is not None:
+                    sample_flags = first_flags
+                if offset is None or decode is None or not size:
+                    raise FragmentError("a sample without its place or size")
+                data = fragment[offset : offset + size]
+                if len(data) != size:
+                    raise FragmentError("sample data outside the fragment")
+                return decode, duration, size, sample_flags, data
+        return None
+    return None
+
+
+def _one_sample(
+    track_id: int, decode: int, duration: int, flags: int, data: bytes
+) -> bytes:
+    """Return a fragment of one sample (moof + mdat), MSE-ready."""
+    trun_flags = _TRUN_DATA_OFFSET | _TRUN_DURATION | _TRUN_SIZE | _TRUN_FLAGS
+
+    def moof(data_offset: int) -> bytes:
+        traf = (
+            _full_box("tfhd", 0, _TFHD_BASE_IS_MOOF, struct.pack(">I", track_id))
+            + _full_box("tfdt", 1, 0, struct.pack(">Q", decode))
+            + _full_box(
+                "trun",
+                0,
+                trun_flags,
+                struct.pack(">IiIII", 1, data_offset, duration, len(data), flags),
+            )
+        )
+        return _box(
+            "moof", _full_box("mfhd", 0, 0, struct.pack(">I", 1)) + _box("traf", traf)
+        )
+
+    size = len(moof(0))
+    return moof(size + 8) + _box("mdat", data)
+
+
 def child_boxes(data: bytes) -> list[tuple[str, bytes]]:
     """Return the boxes in ``data``, in order: (type, payload)."""
     return _children(data)
@@ -607,6 +789,10 @@ def _boxes(data: bytes) -> list[tuple[str, bytes, int]]:
 def _children(data: bytes) -> list[tuple[str, bytes]]:
     """Child boxes of a payload: (type, payload)."""
     return [(t, raw[header:]) for t, raw, header in _boxes(data)]
+
+
+def _box(box_type: str, payload: bytes) -> bytes:
+    return struct.pack(">I4s", 8 + len(payload), box_type.encode()) + payload
 
 
 def _full_box(box_type: str, version: int, flags: int, body: bytes) -> bytes:

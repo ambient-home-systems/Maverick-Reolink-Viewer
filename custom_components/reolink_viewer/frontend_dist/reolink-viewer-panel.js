@@ -1,6 +1,6 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
-import { It as i, M as a, Ot as o, Pt as s, X as c, _ as l, d as u, g as d, it as f, j as p, nt as m, t as h, ut as g, v as _, y as v } from "./live-BazhJ5O3.js";
-import { $ as y, G as b, H as x, K as S, Q as C, U as w, X as T, Z as E, et as D, nt as O, o as k, rt as A, s as j, t as M, tt as N, z as P } from "./home-BMbYbMt5.js";
+import { At as i, It as a, M as o, Rt as s, Z as c, _ as l, at as u, d, dt as f, g as p, j as m, rt as h, t as g, v as _, y as v } from "./live-D6mEGytR.js";
+import { $ as y, G as b, H as x, K as S, Q as C, U as w, X as T, Z as E, et as D, nt as O, o as k, rt as A, s as j, t as M, tt as N, z as P } from "./home-D2hbHRQT.js";
 //#region src/reolink-viewer-panel.ts
 var F = {
 	live: "Live",
@@ -61,7 +61,7 @@ var F = {
 		});
 	}
 	connectedCallback() {
-		super.connectedCallback(), h(import.meta.url), this._route = this._start(b(window.location.hash)), window.addEventListener("hashchange", this._onHashChange), this._tick();
+		super.connectedCallback(), g(import.meta.url), this._route = this._start(b(window.location.hash)), window.addEventListener("hashchange", this._onHashChange), this._tick();
 	}
 	disconnectedCallback() {
 		super.disconnectedCallback(), window.removeEventListener("hashchange", this._onHashChange), clearTimeout(this._toastTimer), clearTimeout(this._clockTimer), this._run?.cancel(), this._run = void 0;
@@ -75,12 +75,12 @@ var F = {
 		if (this.toggleAttribute("dark", this.hass?.themes?.darkMode === !0), e.has("_route")) {
 			let e = this._route.view;
 			this._viewError = void 0, M(e).catch((t) => {
-				this._route.view === e && (this._viewError = s(t).message);
+				this._route.view === e && (this._viewError = a(t).message);
 			});
 		}
 	}
 	updated(e) {
-		if (e.has("hass") && this.hass && !this._devices && !this._loading && (this._load(), m(this.hass).catch(() => void 0)), e.get("_route") !== void 0 && !this.shadowRoot?.activeElement) {
+		if (e.has("hass") && this.hass && !this._devices && !this._loading && (this._load(), h(this.hass).catch(() => void 0)), e.get("_route") !== void 0 && !this.shadowRoot?.activeElement) {
 			let e = document.activeElement;
 			(!e || e === document.body) && this.shadowRoot?.querySelector("main")?.focus({ preventScroll: !0 });
 		}
@@ -110,11 +110,11 @@ var F = {
 		if (this.hass) {
 			this._loading = !0;
 			try {
-				this._devices = await f(this.hass), this._loadError = void 0, !this._board.length && !this._devices.degraded && g(this.hass).then(({ cameras: e }) => {
+				this._devices = await u(this.hass), this._loadError = void 0, !this._board.length && !this._devices.degraded && f(this.hass).then(({ cameras: e }) => {
 					this._board.length || (this._board = P(e));
-				}).catch(() => void 0), !this._warmed && !this._devices.degraded && (this._warmed = !0, i(this.hass).catch(() => void 0));
+				}).catch(() => void 0), !this._warmed && !this._devices.degraded && (this._warmed = !0, s(this.hass).catch(() => void 0));
 			} catch (e) {
-				this._loadError = s(e).message;
+				this._loadError = a(e).message;
 			} finally {
 				this._loading = !1;
 			}
@@ -135,7 +135,7 @@ var F = {
           ${this._renderTab("Devices", { view: "list" }, e.view !== "live" && e.view !== "events")}
         </nav>
         <time class="clock" aria-label="Time">
-          ${u(this._now, this.hass?.config?.time_zone)}
+          ${d(this._now, this.hass?.config?.time_zone)}
         </time>
       </header>
       <main
@@ -169,7 +169,7 @@ var F = {
         <button
           @click=${() => {
 			this._viewError = void 0, M(e.view).catch((e) => {
-				this._viewError = s(e).message;
+				this._viewError = a(e).message;
 			});
 		}}
         >
@@ -283,7 +283,7 @@ var F = {
 	}
 	_renderThisDevice() {
 		let e = (e, t, r) => {
-			let i = d({
+			let i = p({
 				where: e,
 				why: ""
 			}).hd;
@@ -650,7 +650,7 @@ var F = {
 			started: Date.now(),
 			log: e
 		};
-		let t = o(this.hass, {
+		let t = i(this.hass, {
 			include_battery: this._includeBattery,
 			concurrency_test: this._concurrency,
 			max_streams: this._maxStreams,
@@ -687,7 +687,7 @@ var F = {
 		}, (e) => {
 			this._run === t && (this._run = void 0, this._probe = {
 				status: "error",
-				message: s(e).message
+				message: a(e).message
 			});
 		});
 	}
@@ -703,8 +703,8 @@ var F = {
 		}
 	}
 	static styles = [
-		a,
-		p,
+		o,
+		m,
 		e`
       :host {
         display: flex;

@@ -1,6 +1,6 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
-import { $ as i, Pt as a, X as o, j as s } from "./live-BazhJ5O3.js";
-import { n as c, q as l } from "./home-BMbYbMt5.js";
+import { It as i, Z as a, et as o, j as s } from "./live-D6mEGytR.js";
+import { n as c, q as l } from "./home-D2hbHRQT.js";
 //#region src/catalog.ts
 var u = {
 	id: "other",
@@ -239,11 +239,11 @@ var b = 1e4, x = class {
     </div>`;
 	}
 	_renderRow(e) {
-		let { entity: r, entry: i, label: a } = e, s = this._open.has(r.entity_id);
+		let { entity: r, entry: i, label: o } = e, s = this._open.has(r.entity_id);
 		return n`<li class="row" data-entity-id=${r.entity_id}>
       <div class="info">
         <div class="label">
-          ${a}
+          ${o}
           ${r.sub_device ? n`<span class="badge">${r.sub_device}</span>` : t}
           ${r.disabled_by === null ? t : n`<span class="badge">Turned off</span>`}
           ${r.hidden_by === null ? t : n`<span class="badge">Hidden</span>`}
@@ -252,7 +252,7 @@ var b = 1e4, x = class {
         </div>
         ${i ? n`<div class="muted small">${i.summary}</div>` : t}
       </div>
-      <div class="control">${this._renderControl(r, a)}</div>
+      <div class="control">${this._renderControl(r, o)}</div>
       ${i ? n`<details
             class="about"
             .open=${s}
@@ -260,7 +260,7 @@ var b = 1e4, x = class {
 			this._setOpen(r.entity_id, e.target.open);
 		}}
           >
-            <summary class="small" aria-label=${`About this setting: ${a}`}>About this setting${o("chevronDown")}</summary>
+            <summary class="small" aria-label=${`About this setting: ${o}`}>About this setting${a("chevronDown")}</summary>
             ${s ? this._renderAbout(i) : t}
           </details>` : t}
     </li>`;
@@ -423,17 +423,17 @@ var b = 1e4, x = class {
           </button>` : t}
     </span>`;
 	}
-	async _write(e, t, n, r, i) {
+	async _write(e, t, n, r, a) {
 		let o = this.hass;
 		if (!o) return;
 		let s = m(d(this.catalog, e.domain, e.key), r);
 		if (s !== null && !await this.confirm(t, s)) return;
-		let c = i ?? v(e.domain, e.domain === "button" ? "press" : e.domain === "update" ? "install" : n), u = e.entity_id, f = this.writes.begin(u, n, o.states[u]);
+		let c = a ?? v(e.domain, e.domain === "button" ? "press" : e.domain === "update" ? "install" : n), u = e.entity_id, f = this.writes.begin(u, n, o.states[u]);
 		this.requestUpdate();
 		try {
 			await o.callService(c.domain, c.service, c.data, { entity_id: u }, !1), this.writes.confirm(u, f), this._scheduleSettle();
 		} catch (e) {
-			this.writes.fail(u, f) && l(this, `Could not change ${t}: ${a(e).message}`, "error");
+			this.writes.fail(u, f) && l(this, `Could not change ${t}: ${i(e).message}`, "error");
 		}
 		this.requestUpdate();
 	}
@@ -486,13 +486,13 @@ var b = 1e4, x = class {
 		if (n) {
 			this._enabling = /* @__PURE__ */ new Set([...this._enabling, e.entity_id]);
 			try {
-				let r = (await i(n, e.entity_id)).reload_delay;
+				let r = (await o(n, e.entity_id)).reload_delay;
 				l(this, `${t} enabled. Home Assistant reloads the Reolink entry${r ? ` in about ${r} seconds` : ""}; the entity becomes available after that.`), this.dispatchEvent(new CustomEvent("rv-entity-enabled", {
 					bubbles: !0,
 					composed: !0
 				}));
 			} catch (e) {
-				l(this, `Could not enable ${t}: ${a(e).message}`, "error");
+				l(this, `Could not enable ${t}: ${i(e).message}`, "error");
 			} finally {
 				let t = new Set(this._enabling);
 				t.delete(e.entity_id), this._enabling = t;

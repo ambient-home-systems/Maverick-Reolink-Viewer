@@ -313,6 +313,14 @@ export const fetchThumbnailUrls = (
 export const fetchMediaInfo = (hass: HomeAssistant, deviceId: string): Promise<MediaInfoResponse> =>
   hass.callWS<MediaInfoResponse>({ type: "reolink_viewer/playback/media_info", device_id: deviceId });
 
+/** A scrub session for a camera's day (Phase 10): its signed websocket path. */
+export const openScrubSession = (
+  hass: HomeAssistant,
+  deviceId: string,
+  date: string,
+): Promise<{ url: string; expires_in: number }> =>
+  hass.callWS({ type: "reolink_viewer/playback/scrub", device_id: deviceId, date });
+
 // ---- Live view ----
 
 export const fetchLiveStatus = (hass: HomeAssistant): Promise<LiveStatus> =>
