@@ -15,6 +15,7 @@ import {
   loginReport,
   longRecordings,
   mb,
+  rateFindings,
   restInside,
   sampleStalls,
   setupMismatch,
@@ -138,6 +139,21 @@ describe("rates and sums", () => {
     ended: false,
     focused: true,
     ...over,
+  });
+
+  it("says rates measured with the page behind as not measured, never as a stutter", () => {
+    // The owner's Mac (v0.61.1): 2× to 8× with the window behind played nothing.
+    const behind = (rate: number) => sample({ rate, mediaS: 0, painted: 0, decoded: 0, focused: false });
+    expect(rateFindings([sample({ rate: 0.5, mediaS: 3 }), sample({ rate: 1, mediaS: 6 }), behind(2), behind(4), behind(8)])).toEqual([
+      { grade: "good", text: "Slow motion and fast forward (0.5× to 1×) play smoothly." },
+      {
+        grade: "note",
+        text: "Playback at 2×, 4×, 8× was not measured: the page was not in front.",
+        advice: "Keep the page in front, and the screen on, while the check runs.",
+      },
+    ]);
+    expect(rateFindings([sample({ dropped: 10 })])).toEqual([{ grade: "slow", text: "Playback stutters at 2× speed." }]);
+    expect(rateFindings([])).toEqual([]);
   });
 
   it("describes a rate and judges smoothness", () => {

@@ -1,7 +1,7 @@
 // Pure helpers of the playback check (playback/check.ts): how the page is
 // reached, what the browser is, and the arithmetic of the report.
 import type { Segment, TimelineEvent } from "../types";
-import { count } from "../plain";
+import { count, type Finding } from "../plain";
 
 export { classifyHost } from "../network";
 
@@ -176,6 +176,37 @@ export function countersAgree(sample: RateSample): boolean {
  * Where the dropped-frame counter disagrees with the frames painted, the
  * frames painted decide.
  */
+/**
+ * The rates in plain words. A browser pauses or slows a page that is not in
+ * front: those rates were not measured, which is said as such, never as a
+ * stutter (the owner's Mac, v0.61.1: 2× to 8× "stuttered" with the window behind).
+ */
+export function rateFindings(results: readonly RateSample[]): Finding[] {
+  const measured = results.filter((r) => r.focused);
+  const unmeasured = results.filter((r) => !r.focused);
+  const rough = measured.filter((r) => !smooth(r));
+  const rates = (list: readonly RateSample[]) => list.map((r) => `${String(r.rate)}×`).join(", ");
+  const findings: Finding[] = [];
+  if (measured.length) {
+    findings.push(
+      rough.length
+        ? { grade: "slow", text: `Playback stutters at ${rates(rough)} speed.` }
+        : {
+            grade: "good",
+            text: `Slow motion and fast forward (${String(measured[0]?.rate)}× to ${String(measured.at(-1)?.rate)}×) play smoothly.`,
+          },
+    );
+  }
+  if (unmeasured.length) {
+    findings.push({
+      grade: "note",
+      text: `Playback at ${rates(unmeasured)} was not measured: the page was not in front.`,
+      advice: "Keep the page in front, and the screen on, while the check runs.",
+    });
+  }
+  return findings;
+}
+
 export function smooth(sample: RateSample): boolean {
   const effective = sample.wallMs > 0 ? (sample.mediaS * 1000) / sample.wallMs : 0;
   if (Math.abs(effective - sample.rate) > sample.rate * 0.1 || sample.stalledMs >= STALL_ALLOWANCE_MS) return false;
