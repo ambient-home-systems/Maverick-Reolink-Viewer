@@ -81,6 +81,8 @@ jobs:
         env:
           # Fail, not skip, if the live tests cannot run go2rtc.
           RV_GO2RTC_TESTS: "1"
+      - name: The release zip installs and sets up in a clean Home Assistant
+        run: python -m scripts.install_check
 
   browser:
     name: MSE and live in Chromium (Playwright)

@@ -985,3 +985,34 @@ async def test_a_camera_whose_recordings_cannot_be_played(
             },
         )
         assert msg["error"]["code"] == "no_playback"
+
+
+async def test_online_users_for_the_check(
+    hass: HomeAssistant,
+    hass_ws_client: WebSocketGenerator,
+    reolink_host: MagicMock,
+    wired: MockConfigEntry,
+) -> None:
+    """The V row reads the recording host's list of users, through the scheduler."""
+    client = await hass_ws_client(hass)
+    camera = await _camera_id(client)
+    reolink_host.send = AsyncMock(
+        return_value=[{"cmd": "GetOnline", "code": 0, "value": {"User": [{}, {}, {}]}}]
+    )
+    msg = await _ws(
+        client, {"type": "reolink_viewer/playback/online_users", "device_id": camera}
+    )
+    assert msg["result"] == {"count": 3, "error": None}
+    (call,) = reolink_host.send.await_args_list
+    assert call.args[0] == [{"cmd": "GetOnline", "action": 0, "param": {}}]
+    # A device that does not say: why, not a failure.
+    reolink_host.send = AsyncMock(side_effect=RuntimeError("no GetOnline"))
+    msg = await _ws(
+        client, {"type": "reolink_viewer/playback/online_users", "device_id": camera}
+    )
+    assert msg["result"]["count"] is None
+    assert msg["result"]["error"]
+    msg = await _ws(
+        client, {"type": "reolink_viewer/playback/online_users", "device_id": "nope"}
+    )
+    assert not msg["success"]

@@ -24,6 +24,7 @@ import {
   noteInterruptedCheck,
   type CheckOptions,
   type CheckTarget,
+  type SecondViewer,
   type SavedReport,
 } from "../playback/check";
 import { deviceSetup } from "../playback/check-util";
@@ -147,6 +148,9 @@ export interface Metrics {
   /** Pictures from the server while dragging (Phase 10): asked, shown, missed, and the last. */
   scrub?: { asked: number; shown: number; missed: number; last?: string };
 }
+
+/** A second viewer's start (the playback check's V row) is given up after this long (ms). */
+const VIEWER_START_LIMIT_MS = 30_000;
 
 /** After a drag's release, its picture stays until the video has a frame, at most this long. */
 export const SCRUB_HOLD_MS = 10_000;
@@ -1096,10 +1100,67 @@ export class RvPlayback extends LitElement {
       get hover() {
         return el._hover;
       },
+      openViewer: () => el._openViewer(),
       selectDate: (date: string) => {
         void el._selectDate(date);
       },
       playAt: (time: number, requestedAt?: number) => el.playAt(time, requestedAt),
+    };
+  }
+
+  /**
+   * A second viewer of this camera, off screen (the playback check's V row):
+   * a player of its own, playing as this tab would (MSE or the file player).
+   * It never ends its leases: closing it is closing a tab, which tells the
+   * server nothing, so the server's own unread and idle limits must end the
+   * device's session.
+   */
+  private _openViewer(): SecondViewer {
+    const player = document.createElement("rv-player");
+    // Laid out but off screen: some browsers do not load a hidden video.
+    player.style.cssText = "position: fixed; left: -10000px; top: 0; width: 320px;";
+    document.body.appendChild(player);
+    return {
+      playAt: async (time: number) => {
+        const hass = this.hass;
+        const target = this._day ? playTarget(this._day.segments, time) : undefined;
+        if (!hass || !target) return undefined;
+        const wanted = target.segment.start + target.offset;
+        const began = performance.now();
+        const ref = this._ref(target.segment);
+        const playback = this._useMse(this._stream)
+          ? await fetchPlaybackMse(hass, ref, wanted)
+          : await fetchPlaybackUrl(hass, ref, this._progressive, wanted);
+        const first = new Promise<number | undefined>((resolve) => {
+          const timer = setTimeout(() => {
+            resolve(undefined);
+          }, VIEWER_START_LIMIT_MS);
+          const done = (ms: number | undefined) => {
+            clearTimeout(timer);
+            player.removeEventListener("rv-first-frame", onFrame);
+            player.removeEventListener("rv-player-error", onError);
+            resolve(ms);
+          };
+          const onFrame = () => {
+            done(performance.now() - began);
+          };
+          const onError = () => {
+            done(undefined);
+          };
+          player.addEventListener("rv-first-frame", onFrame);
+          player.addEventListener("rv-player-error", onError);
+        });
+        const item = { ...this._toItem(playback, target.segment), release: () => undefined };
+        await player.play(item, Math.max(0, wanted - playback.start), began);
+        return await first;
+      },
+      get position() {
+        return player.renderRoot.querySelector<HTMLVideoElement>("video.active")?.currentTime;
+      },
+      close: () => {
+        player.stop();
+        player.remove();
+      },
     };
   }
 

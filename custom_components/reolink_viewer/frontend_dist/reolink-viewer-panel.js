@@ -1,6 +1,6 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
-import { At as i, It as a, M as o, Rt as s, Z as c, _ as l, at as u, d, dt as f, g as p, j as m, rt as h, t as g, v as _, y as v } from "./live-D6mEGytR.js";
-import { $ as y, G as b, H as x, K as S, Q as C, U as w, X as T, Z as E, et as D, nt as O, o as k, rt as A, s as j, t as M, tt as N, z as P } from "./home-B3FbD3nj.js";
+import { Lt as i, M as a, Z as o, _ as s, at as c, d as l, dt as u, g as d, j as f, jt as p, rt as m, t as h, v as g, y as _, zt as v } from "./live-49uKNz9D.js";
+import { $ as y, G as b, H as x, K as S, Q as C, U as w, X as T, Z as E, et as D, nt as O, o as k, rt as A, s as j, t as M, tt as N, z as P } from "./home-BHJMpmeP.js";
 //#region src/reolink-viewer-panel.ts
 var F = {
 	live: "Live",
@@ -61,7 +61,7 @@ var F = {
 		});
 	}
 	connectedCallback() {
-		super.connectedCallback(), g(import.meta.url), this._route = this._start(b(window.location.hash)), window.addEventListener("hashchange", this._onHashChange), this._tick();
+		super.connectedCallback(), h(import.meta.url), this._route = this._start(b(window.location.hash)), window.addEventListener("hashchange", this._onHashChange), this._tick();
 	}
 	disconnectedCallback() {
 		super.disconnectedCallback(), window.removeEventListener("hashchange", this._onHashChange), clearTimeout(this._toastTimer), clearTimeout(this._clockTimer), this._run?.cancel(), this._run = void 0;
@@ -75,12 +75,12 @@ var F = {
 		if (this.toggleAttribute("dark", this.hass?.themes?.darkMode === !0), e.has("_route")) {
 			let e = this._route.view;
 			this._viewError = void 0, M(e).catch((t) => {
-				this._route.view === e && (this._viewError = a(t).message);
+				this._route.view === e && (this._viewError = i(t).message);
 			});
 		}
 	}
 	updated(e) {
-		if (e.has("hass") && this.hass && !this._devices && !this._loading && (this._load(), h(this.hass).catch(() => void 0)), e.get("_route") !== void 0 && !this.shadowRoot?.activeElement) {
+		if (e.has("hass") && this.hass && !this._devices && !this._loading && (this._load(), m(this.hass).catch(() => void 0)), e.get("_route") !== void 0 && !this.shadowRoot?.activeElement) {
 			let e = document.activeElement;
 			(!e || e === document.body) && this.shadowRoot?.querySelector("main")?.focus({ preventScroll: !0 });
 		}
@@ -110,11 +110,11 @@ var F = {
 		if (this.hass) {
 			this._loading = !0;
 			try {
-				this._devices = await u(this.hass), this._loadError = void 0, !this._board.length && !this._devices.degraded && f(this.hass).then(({ cameras: e }) => {
+				this._devices = await c(this.hass), this._loadError = void 0, !this._board.length && !this._devices.degraded && u(this.hass).then(({ cameras: e }) => {
 					this._board.length || (this._board = P(e));
-				}).catch(() => void 0), !this._warmed && !this._devices.degraded && (this._warmed = !0, s(this.hass).catch(() => void 0));
+				}).catch(() => void 0), !this._warmed && !this._devices.degraded && (this._warmed = !0, v(this.hass).catch(() => void 0));
 			} catch (e) {
-				this._loadError = a(e).message;
+				this._loadError = i(e).message;
 			} finally {
 				this._loading = !1;
 			}
@@ -135,7 +135,7 @@ var F = {
           ${this._renderTab("Devices", { view: "list" }, e.view !== "live" && e.view !== "events")}
         </nav>
         <time class="clock" aria-label="Time">
-          ${d(this._now, this.hass?.config?.time_zone)}
+          ${l(this._now, this.hass?.config?.time_zone)}
         </time>
       </header>
       <main
@@ -147,7 +147,7 @@ var F = {
             <span>${this._toast.message}</span>
             <button class="dismiss" aria-label="Dismiss" @click=${() => {
 			this._toast = void 0;
-		}}>${c("close")}</button>
+		}}>${o("close")}</button>
           </div>` : t}
     `;
 	}
@@ -169,24 +169,24 @@ var F = {
         <button
           @click=${() => {
 			this._viewError = void 0, M(e.view).catch((e) => {
-				this._viewError = a(e).message;
+				this._viewError = i(e).message;
 			});
 		}}
         >
           Try again
         </button>
       </div>`;
-		let r = A(this._devices), i = r ? this._renderIntegration(r) : t;
+		let r = A(this._devices), a = r ? this._renderIntegration(r) : t;
 		switch (e.view) {
-			case "live": return r ? n`<div class="wide-note">${i}</div>` : n`<rv-live-grid
+			case "live": return r ? n`<div class="wide-note">${a}</div>` : n`<rv-live-grid
             .hass=${this.hass}
             @rv-board=${(e) => {
 				this._board = e.detail.cameras;
 			}}
           ></rv-live-grid>
           <rv-timetable .hass=${this.hass} .cameras=${this._board} .filters=${!0}></rv-timetable>`;
-			case "events": return r ? n`<div class="wide-note">${i}</div>` : n`<rv-events .hass=${this.hass} .cameras=${this._board} .date=${e.date}></rv-events>`;
-			case "device": return n`${i}<rv-device-page
+			case "events": return r ? n`<div class="wide-note">${a}</div>` : n`<rv-events .hass=${this.hass} .cameras=${this._board} .date=${e.date}></rv-events>`;
+			case "device": return n`${a}<rv-device-page
           .hass=${this.hass}
           .cameras=${this._board}
           .devices=${this._devices}
@@ -196,21 +196,21 @@ var F = {
         ></rv-device-page>`;
 			case "live-check": return n`${this._renderBack()}
           <h1>Live check</h1>
-          ${i}
+          ${a}
           <rv-live-check .hass=${this.hass}></rv-live-check>`;
 			case "soak": return n`${this._renderBack()}
           <h1>Soak report</h1>
-          ${i}
+          ${a}
           <rv-live-soak .hass=${this.hass}></rv-live-soak>`;
-			case "wall": return r ? n`<div class="wide-note">${i}</div>` : n`<rv-wall .hass=${this.hass} .layoutId=${e.layout}></rv-wall>`;
+			case "wall": return r ? n`<div class="wide-note">${a}</div>` : n`<rv-wall .hass=${this.hass} .layoutId=${e.layout}></rv-wall>`;
 			case "cards": return n`${this._renderBack()}
           <h1>Dashboard cards</h1>
-          ${i}
+          ${a}
           <rv-card-report .hass=${this.hass}></rv-card-report>`;
 			case "list": return n`<div class="heading">
             <h1>Devices</h1>
             <button class="text with-icon" @click=${() => void this._load()} ?disabled=${this._loading}>
-              ${c("refresh")}Refresh
+              ${o("refresh")}Refresh
             </button>
           </div>
           ${this._renderBanner()}
@@ -225,7 +225,7 @@ var F = {
 		return n`<div>
       <button class="text with-icon back" @click=${() => {
 			this.navigate({ view: "list" });
-		}}>${c("back")}All devices</button>
+		}}>${o("back")}All devices</button>
     </div>`;
 	}
 	_renderBanner() {
@@ -244,7 +244,7 @@ var F = {
       <p>${e.advice}</p>
       <div class="actions">
         <button class="check" @click=${() => void this._load()} ?disabled=${this._loading}>
-          ${c("refresh")}${this._loading ? "Checking…" : "Check again"}
+          ${o("refresh")}${this._loading ? "Checking…" : "Check again"}
         </button>
         ${C(e.kind)}
       </div>
@@ -264,7 +264,7 @@ var F = {
 		}}
       >
         <span class="what"><span class="name">${e}</span><span class="muted">${t}</span></span>
-        ${c("chevron")}
+        ${o("chevron")}
       </button>
     </li>`;
 		return n`<section class="card">
@@ -283,7 +283,7 @@ var F = {
 	}
 	_renderThisDevice() {
 		let e = (e, t, r) => {
-			let i = p({
+			let i = d({
 				where: e,
 				why: ""
 			}).hd;
@@ -293,7 +293,7 @@ var F = {
           <select
             aria-label=${t}
             @change=${(t) => {
-				_(e, t.target.value === "hd"), this.requestUpdate();
+				g(e, t.target.value === "hd"), this.requestUpdate();
 			}}
           >
             <option value="hd" ?selected=${i}>${r[0]}</option>
@@ -311,9 +311,9 @@ var F = {
         <label class="option">
           <input
             type="checkbox"
-            .checked=${l()}
+            .checked=${s()}
             @change=${(e) => {
-			v(e.target.checked), this.requestUpdate();
+			_(e.target.checked), this.requestUpdate();
 		}}
           />
           <span
@@ -328,7 +328,7 @@ var F = {
 		let e = (e, t, r) => n`<li>
       <a class="row" href=${D(r)} target="_blank" rel="noopener noreferrer">
         <span class="what"><span class="name">${e}</span><span class="muted">${t}</span></span>
-        ${c("external")}
+        ${o("external")}
       </a>
     </li>`;
 		return n`<section class="card">
@@ -613,7 +613,7 @@ var F = {
           <p class="now">Testing your cameras… this can take several minutes with an NVR.</p>
           ${e.log.length ? n`<p class="muted small">Now: ${e.log.at(-1)}</p>` : t}
           <details>
-            <summary class="small">Every step so far${c("chevronDown")}</summary>
+            <summary class="small">Every step so far${o("chevronDown")}</summary>
             <ol class="log">
               ${e.log.map((e) => n`<li>${e}</li>`)}
             </ol>
@@ -636,7 +636,7 @@ var F = {
             </button>
           </div>
           <details>
-            <summary class="small">Show what is in the file${c("chevronDown")}</summary>
+            <summary class="small">Show what is in the file${o("chevronDown")}</summary>
             <pre class="report">${JSON.stringify(e.report, null, 2)}</pre>
           </details>
         </div>`;
@@ -650,7 +650,7 @@ var F = {
 			started: Date.now(),
 			log: e
 		};
-		let t = i(this.hass, {
+		let t = p(this.hass, {
 			include_battery: this._includeBattery,
 			concurrency_test: this._concurrency,
 			max_streams: this._maxStreams,
@@ -687,7 +687,7 @@ var F = {
 		}, (e) => {
 			this._run === t && (this._run = void 0, this._probe = {
 				status: "error",
-				message: a(e).message
+				message: i(e).message
 			});
 		});
 	}
@@ -703,8 +703,8 @@ var F = {
 		}
 	}
 	static styles = [
-		o,
-		m,
+		a,
+		f,
 		e`
       :host {
         display: flex;

@@ -4,6 +4,7 @@ import type {
   CapacityEvent,
   IceServer,
   JournalStatus,
+  UnusualCheck,
   LiveCamera,
   LiveImagesEvent,
   LiveSignal,
@@ -329,6 +330,10 @@ export const fetchLiveStatus = (hass: HomeAssistant): Promise<LiveStatus> =>
 /** The detection journal: whether it records, and what it holds (Phase 8). */
 export const fetchJournalStatus = (hass: HomeAssistant): Promise<JournalStatus> =>
   hass.callWS<JournalStatus>({ type: "reolink_viewer/journal/status" });
+
+/** The learning check: the marks compared with the events fired, and who listens (Phase 8). */
+export const fetchUnusualCheck = (hass: HomeAssistant): Promise<UnusualCheck> =>
+  hass.callWS<UnusualCheck>({ type: "reolink_viewer/unusual/check" });
 
 /** The incidents marked unusual in [since, until) (epoch ms), for the panel (Phase 8.3). */
 export const fetchUnusualMarks = (hass: HomeAssistant, since: number, until: number): Promise<UnusualMarks> =>

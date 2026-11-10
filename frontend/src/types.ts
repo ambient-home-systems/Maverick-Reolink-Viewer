@@ -472,6 +472,39 @@ export interface LiveStreamInfo {
 }
 
 /** The detection journal (Phase 8, journal/status): off, or what it holds. */
+/** The learning check (Phase 8's hand checks, automated): reolink_viewer/unusual/check. */
+export type UnusualCheck =
+  | { enabled: false }
+  | {
+      enabled: true;
+      built: boolean;
+      /** The period compared (epoch ms): from when the log of fired events began, at most a week. */
+      since: number;
+      until: number;
+      /** The house-wide signals chosen: their state now, and the changes learned. */
+      signals: { entity_id: string; name: string; state: string | null; changes: number }[];
+      /** The panel's marks, each with what fired for it. */
+      marks: {
+        kind: string;
+        start: number;
+        end: number | null;
+        camera: string;
+        cameras: string[] | null;
+        reason: string | null;
+        /** How many events fired for it (one is right), the first's delay (s) and when it came. */
+        fired: number;
+        delay: number | null;
+        when: "start" | "end" | "late" | null;
+        automations: string[];
+      }[];
+      /** Events fired for no mark. */
+      unmarked: { camera: string; kind: string; start: number; delay: number }[];
+      /** The automations listening, and how. */
+      automations: { entity_id: string; name: string; how: string; on: boolean; last_triggered: string | null }[];
+      /** Seconds from a detection's start within which its event should fire. */
+      prompt_s: number;
+    };
+
 export type JournalStatus =
   | { enabled: false }
   | {

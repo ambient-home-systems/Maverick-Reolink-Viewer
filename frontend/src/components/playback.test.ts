@@ -1023,7 +1023,7 @@ describe("rv-playback while dragging (Phase 10)", () => {
     });
     const target = (el as unknown as { _checkTarget(): CheckTarget })._checkTarget();
     const check = new PlaybackCheck(target, { setup: "test", soakMinutes: 0 });
-    check.dragScale = 0.02;
+    check.timeScale = 0.02;
     await (check as unknown as { _drag(): Promise<void> })._drag();
     const report = check.text;
     expect(report).toContain("P  Pictures while dragging (Phase 10): painted with WebCodecs");
@@ -1061,7 +1061,7 @@ describe("rv-playback while dragging (Phase 10)", () => {
     });
     const target = (el as unknown as { _checkTarget(): CheckTarget })._checkTarget();
     const check = new PlaybackCheck(target, { setup: "test", soakMinutes: 0 });
-    check.dragScale = 0.02;
+    check.timeScale = 0.02;
     await (check as unknown as { _drag(): Promise<void> })._drag();
     const report = check.text;
     expect(report).toContain("   over what the video has buffered: 8 of 8 moments shown by the video, 0 pictures asked of the server ✓");
@@ -1069,6 +1069,74 @@ describe("rv-playback while dragging (Phase 10)", () => {
     // The drag went over s2, the other recording; none was left to play meanwhile.
     expect(Math.min(...sockets.flatMap((socket) => socket.asked))).toBeGreaterThanOrEqual(T0 + 62 * MIN);
     expect(report).toContain("   another recording playing meanwhile: none");
+  });
+
+  it("the playback check's V row plays two viewers on one camera and waits for the NVR to be back at rest", async () => {
+    const hass = playbackHass();
+    hass.responses["reolink_viewer/playback/peek"] = { segment_id: "s", cache: null };
+    hass.responses["reolink_viewer/playback/check_report"] = null;
+    // The NVR's users: 2 at rest, 3 while viewing, 3 just after, then 2 again.
+    const users = [2, 3, 3, 3, 2];
+    const loggedIn = [1, 0];
+    const base = hass.callWS.bind(hass);
+    hass.callWS = <T,>(message: Record<string, unknown>) => {
+      if (message.type === "reolink_viewer/playback/online_users") {
+        hass.sent.push(message);
+        return Promise.resolve({ count: users.length > 1 ? users.shift() : users[0], error: null } as T);
+      }
+      if (message.type === "reolink_viewer/playback/stats") {
+        const logged = loggedIn.length > 1 ? loggedIn.shift() : loggedIn[0];
+        return Promise.resolve({ vod: { baichuan: { enabled: true, logged_in: logged, logins: 1, logouts: 0, cuts_running: 0 } } } as T);
+      }
+      return base<T>(message);
+    };
+    const { el } = await scrubMount(hass);
+    // Every player (the tab's and the second viewer's) starts at once.
+    const Player = customElements.get("rv-player") as unknown as { prototype: { play: (...args: unknown[]) => Promise<void> } };
+    const released: string[] = [];
+    vi.spyOn(Player.prototype, "play").mockImplementation(function (this: HTMLElement, ...args: unknown[]) {
+      const item = args[0] as { segmentId: string; release?: () => void };
+      released.push(item.release ? "has release" : "none");
+      setTimeout(() => this.dispatchEvent(new CustomEvent("rv-first-frame", { detail: { ms: 200 } })), 5);
+      return Promise.resolve();
+    });
+    const target = (el as unknown as { _checkTarget(): CheckTarget })._checkTarget();
+    const check = new PlaybackCheck(target, { setup: "test", soakMinutes: 0 });
+    check.timeScale = 0.01;
+    await (check as unknown as { _viewers(): Promise<void> })._viewers();
+    const report = check.text;
+    expect(report).toContain("V  Two viewers on one camera (Phase 5): the NVR's users at rest 2, with one viewer 3, with two 3");
+    expect(report).toMatch(/ {3}the second viewer: first frame \d+ ms ✓; then far into the first one's recording: \d+ ms/);
+    expect(report).toMatch(/ {3}both stopped \(the second as a closed tab\): back at rest after .* \(the NVR lists 2, no Reolink protocol login left\) ✓/);
+    // The second viewer went off screen and away again.
+    expect(document.querySelectorAll("body > rv-player")).toHaveLength(0);
+    expect(sentOf(hass, "reolink_viewer/playback/online_users").every((m) => m.device_id === "dev-cam")).toBe(true);
+  });
+
+  it("the V row says when the NVR is not back at rest", async () => {
+    const hass = playbackHass();
+    hass.responses["reolink_viewer/playback/peek"] = { segment_id: "s", cache: null };
+    hass.responses["reolink_viewer/playback/check_report"] = null;
+    hass.responses["reolink_viewer/playback/stats"] = { vod: { baichuan: { enabled: true, logged_in: 1, logins: 1, logouts: 0, cuts_running: 0 } } };
+    const users = [2, 3];
+    const base = hass.callWS.bind(hass);
+    hass.callWS = <T,>(message: Record<string, unknown>) =>
+      message.type === "reolink_viewer/playback/online_users"
+        ? Promise.resolve({ count: users.length > 1 ? users.shift() : users[0], error: null } as T)
+        : base<T>(message);
+    const { el } = await scrubMount(hass);
+    const Player = customElements.get("rv-player") as unknown as { prototype: { play: () => Promise<void> } };
+    vi.spyOn(Player.prototype, "play").mockImplementation(function (this: HTMLElement) {
+      setTimeout(() => this.dispatchEvent(new CustomEvent("rv-first-frame", { detail: { ms: 200 } })), 5);
+      return Promise.resolve();
+    });
+    const target = (el as unknown as { _checkTarget(): CheckTarget })._checkTarget();
+    const check = new PlaybackCheck(target, { setup: "test", soakMinutes: 0 });
+    check.timeScale = 0.01;
+    await (check as unknown as { _viewers(): Promise<void> })._viewers();
+    // 75 s at the test's speed (a hundredth).
+    expect(check.text).toContain("NOT back at rest after 1 s: the NVR lists 3 (2 at rest), 1 Reolink protocol login(s) left ✗");
+    expect(check.inShort(true).findings.find((f) => f.text.startsWith("When both viewers stopped"))?.grade).toBe("problem");
   });
 
   it("describes the pictures while dragging for the debug panel, with how they are painted", () => {
