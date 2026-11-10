@@ -25,8 +25,8 @@ put on it:
 | 6 | The Doorbell's events: a camera that records but cannot be played lists its events | Standard / High | 0.5–1 wk | **Done** (2026-11-02, v0.43.0). **Step 1 done** (v0.41.0–v0.41.1): run 2 found the Doorbell's event and day searches working, its zone Home Assistant's, and its pictures refused by reolink-aio (a `1002` header). **Step 2 built** (v0.42.0): the Doorbell's events in the feed, the Events view and the calendar, on wired power. **Step 3 built** (v0.43.0): its pictures read here, and its Playback tab shows each event as pictures. **The owner's check** (2026-11-02): the Doorbell's events show and open as pictures, and a press of the doorbell is listed as a "Doorbell" event at the right time, so step 4 (the fallback) was not needed. Phase 7 started meanwhile, at the owner's request. See "Phase 6" |
 | 7 | Live video on dashboards: a Reolink Viewer camera card | Standard | 1–1.5 wk | **Done** (2026-11-03, v0.45.2), closed on daily use by the owner. **Step 1 done** (v0.44.0): the Reolink camera card, `custom:reolink-viewer-camera`, with its editor, on any dashboard and for any user. The owner's check (2026-11-02): on the wall tablet (Galaxy Tab A9+, Fully Kiosk, a sections view) and the iPhone app's dashboard, the Doorbell's and the front-yard camera's cards show their picture at once and their video quickly, kept warm or not, and go full screen in HD and back. **Step 2 built** (v0.45.0): what the cards see is logged per device (Devices → Dashboard cards), they sleep while Fully Kiosk's screen is off or its screensaver on, and a doorbell's card can wake the screen and go full screen when it rings. **Step 2 done** (2026-11-03, v0.45.2): on the owner's tablet the cards sleep under Fully's screensaver (no frames decoded) and a ring wakes the screen and shows the Doorbell full screen, playing in 0.6 s (v0.45.1 fills the window from the top layer). Step 3 stays gated. Not measured: a warm camera's wake time and 8 visible hours; the wall page's cards are the owner's choice. See "Phase 7" |
 | 8 | Unusual events: learning what is normal | High | 2–3 wk, then a week of learning | **Started** (2026-11-03). **Step 1 built** (v0.46.0): the detection journal, opt-in ("Learn what is normal"), with a 10-day head start from Home Assistant's recorder; on at the owner's since 2026-11-02, all 7 cameras. v0.46.1 keeps motion as bursts and a year of history (the owner's choices, from the first 10 days' sizes). **Step 2 built** (v0.47.0): Stamina's model, ported with its tests (MIT, in `THIRD_PARTY.md`), with a daily cap for a busy property; the Devices page shows each camera's state and the week's marks with their sentences. The owner's check: 3.6 marks a day at Balanced (243 a week without the cap). v0.47.1, the owner's choices: motion never marked, time counted once, one mark per incident across cameras; 5.1 a day, the journal 1.1 MB (about 2.8 MB a month). v0.47.2: only long stands out, a kind seen 10 times is known, only detections fire first; 5.3 a day. v0.47.3: an incident's later events take what fired before it; a mark always says why; the model saved between restarts; 5.3 a day, 39 without the cap. v0.47.4: anything seen 10 times is known, only "nothing fired first" raises; 1.4 a day, all rare by count. v0.47.5: Balanced aims at a few a day (floor 0, at most 3 a day), More knows a value after 20. **Step 3 built** (v0.48.0–v0.49.0), the owner's choice: marks on the timetable's rows with why, and an Unusual filter on Events (v0.48.0; the owner's check: 2.6 a day at Balanced); "What it has learned" on each camera's Overview, and a mark's count as a total (v0.49.0). **House-wide signals built** (v0.50.0): chosen in the options, kept beside the detections, learned and said. **Step 4 built** (v0.51.0): each detection scored as it begins and ends; `reolink_viewer_unusual`, an "unusual activity" sensor per camera, and a device trigger per camera, on Reolink Viewer's own device. See "Phase 8" |
-| 9 | The Wall: the Live page as a security monitor, with layouts, arranging, HD large tiles and the detection strip | Standard / High | 2–3 wk | **Started** (2026-11-05). **Step 1 built** (v0.52.0): the Wall, its layouts (Auto by shape, 1, 2×2, 3×3, 4×4, 1+5, 1+7), saved per user on the server, `#wall/<id>`, each device remembering board or Wall; the owner's check: it works, nothing to scroll. **Step 2 built** (v0.53.0): swapping (drag, or Arrange and two taps), the large slot or alone by a double tap or Enter, the keyboard, pages and tours. **Step 3 built** (v0.54.0–v0.54.1): HD in the large tiles while a stream slot is spare, the NVR's budget 9 streams with 2 HD tiles (the capacity test). **Step 4 built** (v0.55.0): the detection strip, a tile lit at once by its sensor, and per layout the feeds' floodlight and siren buttons. **Step 5 built** (v0.56.0): the pointer hidden when still, the screen kept awake, the tiles asleep under Fully's screen off, and the Reolink Wall dashboard card. The owner's checks of v0.55.0 and v0.56.0 close the phase. See "Phase 9" |
-| 10 | Scrubbing that shows the picture while dragging | Very high | 2–4 wk | Planned. See "Phase 10" |
+| 9 | The Wall: the Live page as a security monitor, with layouts, arranging, HD large tiles and the detection strip | Standard / High | 2–3 wk | **Done** (2026-11-10, v0.56.0): the owner validated v0.55.0's and v0.56.0's checklists. Started 2026-11-05. **Step 1 built** (v0.52.0): the Wall, its layouts (Auto by shape, 1, 2×2, 3×3, 4×4, 1+5, 1+7), saved per user on the server, `#wall/<id>`, each device remembering board or Wall; the owner's check: it works, nothing to scroll. **Step 2 built** (v0.53.0): swapping (drag, or Arrange and two taps), the large slot or alone by a double tap or Enter, the keyboard, pages and tours. **Step 3 built** (v0.54.0–v0.54.1): HD in the large tiles while a stream slot is spare, the NVR's budget 9 streams with 2 HD tiles (the capacity test). **Step 4 built** (v0.55.0): the detection strip, a tile lit at once by its sensor, and per layout the feeds' floodlight and siren buttons. **Step 5 built** (v0.56.0): the pointer hidden when still, the screen kept awake, the tiles asleep under Fully's screen off, and the Reolink Wall dashboard card. The owner's checks of v0.55.0 and v0.56.0 passed (2026-11-10): the phase is done. See "Phase 9" |
+| 10 | Scrubbing that shows the picture while dragging | Very high | 2–4 wk | **Started** (2026-11-10). **Step 0 built** (v0.57.0): the gate's measurements, the probe's scrub cuts and key frames, and the playback check's K row (key frames decoded one at a time); the owner's runs decide step 1 or step 5. See "Phase 10" |
 | 11 | Playback and settings extras: zoom, event clips, filters, copying settings | Standard | 1–2 wk | Planned. See "Phase 11" |
 | 12 | Optional R&D: the Doorbell's recordings and talk | Very high | 3–5 wk, gated | Planned. See "Phase 12" |
 | 13 | Optional: live picture integrity and outside live sources | High | 1–1.5 wk, gated | Planned. See "Phase 13" |
@@ -6534,8 +6534,8 @@ large, arranged by the owner (PLAN.md §6.3). The owner named it "Wall" on
 | 1. The Wall, its layouts, saved | Built (v0.52.0) |
 | 2. Arranging, pages and tours | Built (v0.53.0); the owner's check passed (2026-11-05) |
 | 3. HD in large tiles | Built (v0.54.0); the capacity test run (2026-11-06): 9 streams, 2 HD tiles per NVR (v0.54.1); the owner's check passed (2026-11-09) |
-| 4. The detection strip and instant highlights | Built (v0.55.0), with the owner's ask: a layout may leave out the feeds' floodlight and siren buttons |
-| 5. Kiosk touches, and the Wall as a dashboard card | Built (v0.56.0) |
+| 4. The detection strip and instant highlights | Built (v0.55.0), with the owner's ask: a layout may leave out the feeds' floodlight and siren buttons; the owner's check passed (2026-11-10) |
+| 5. Kiosk touches, and the Wall as a dashboard card | Built (v0.56.0); the owner's check passed (2026-11-10) |
 
 #### Step 9.1: the Wall, its layouts, saved
 
@@ -6902,8 +6902,13 @@ device, and the hour's tour (the owner's v0.53.0 check, "approved and
 validated"); the budget (the capacity test of 2026-11-06: 10 streams kept up,
 the budget 9 with two HD tiles) and the first pictures (that day's live check:
 0.02 s median); the keyboard and axe (CI, every view). The strip's 2 s is met
-by design (a Now card from the sensor, at once) and waits for the owner's
-v0.55.0 check, with step 5's checklist above; then Phase 9 closes.
+by design (a Now card from the sensor, at once), and the owner's v0.55.0
+check passed with step 5's checklist above.
+
+**Phase 9 is done (2026-11-10):** the owner validated both checklists
+(v0.55.0: the strip, a tile lit at once, a card's tap, the Show switches;
+v0.56.0: the pointer, the screen kept awake, Fully's screen off, the Wall
+card), and every exit criterion is met.
 
 ---
 
@@ -6917,7 +6922,7 @@ download cut, then the thumbnail.
 
 | Step | Status |
 | --- | --- |
-| 0. Measure first (the gate) | Not started |
+| 0. Measure first (the gate) | Built (v0.57.0); waiting for the owner's runs |
 | 1. Key frames from the server | Not started |
 | 2. Painting while dragging | Not started |
 | 3. Press and release | Not started |
@@ -6940,6 +6945,62 @@ Added to the probe's Reolink protocol section and to the playback check:
 
 **Gate:** a median cut of 300 ms or less back to back, and decoding in 30 ms
 or less → step 1. Otherwise → step 5.
+
+**As built (v0.57.0), the owner's go-ahead ("proceed with Phase 10"):**
+
+- **Scrub cuts** (`probe_scrub.py`, the probe's Reolink protocol test, a box
+  of its own, "Scrub cuts"): on each sub recording the test finds, 2-second
+  cuts (143, then 144 once its key frame is in) at 20 moments from 5 % to
+  95 % through it, on one login and one stream slot of their own, asked
+  - one at a time (a second's pause after each end);
+  - back to back, the next asked as soon as the last one's key frame came;
+  - beside a playback cut of the same channel, taking turns as Phase 5c's
+    cuts do: the playback cut runs 2 s, ends its span (144), the scrub cut
+    runs, and the playback cut asks again from the newest key frame it had;
+    how long it went without data is its `without_data_ms`.
+
+  Each set asks moments of its own (a third of the spacing apart), so the
+  device's read cache helps none. A cut's time runs to its first key frame
+  within 10 s before or 5 s after the moment asked, by the key frame's own
+  clock (in the device's zone, as deep starts read it): a key frame of the cut
+  before, still arriving, counts as `stale`.
+  Each set reports the key frames' times (min, median, p90, max, and each),
+  the replies and ends, how far each key frame is from its moment, and, back
+  to back, how many a second; `gate` gives the back-to-back median against
+  300 ms.
+- **Key frames:** the stream analysis keeps each key frame's size
+  (`key_bytes`) and the median interval between them (`key_interval_s`), in
+  every stream's `media.video` (replay and download, sub and main).
+- **Decoding in the browser** (the playback check, v0.5.0, a K row after S,
+  and one for HD inside H): 20 s of the playing recording's fragments from
+  the play position, the same MSE path the player uses, read for their key
+  frames (`playback/keyframes.ts`: the init's avcC or hvcC, each fragment's
+  sync samples); each decoded on its own with WebCodecs' `VideoDecoder` and
+  flushed, as a scrub would (at most 12), from `decode()` to its frame, then
+  drawn on a canvas. It reports the key frames' count, interval and sizes,
+  the median decode after the first (the first, with the decoder's start,
+  apart), the drawing, and the gate's 30 ms; without `VideoDecoder`, that the
+  MSE fallback would be used.
+- **Checks:** the scrub cuts against a fake client whose cuts send key frames
+  on a timer, with the cut before's leftovers first (the three sets, stale
+  frames, the gate, a cut without a key frame, the any-channel bitmap, a lost
+  connection, a playback cut without a key frame), and through the probe (sub
+  only, its slot given back); the key frames read from the sample clip and
+  from built fragments (sync samples, trex defaults, another track, offsets
+  into a file); decoding with a stand-in decoder (each timed, the cap, slow,
+  refused, failing, absent); the check's K row with and without WebCodecs.
+
+**Hardware checklist (the owner, v0.57.0):**
+
+1. **The probe** (the panel's Devices → Hardware probe): tick **Test
+   replay over the Reolink app's own protocol**, **Only this test**, and
+   **Scrub cuts**; leave the cameras empty (every camera of the NVR, up to 8)
+   or name a few; run with the live board closed (a stream slot is needed).
+   Download the report: each camera's `sub.scrub`.
+2. **The playback check** on LAN Chrome, the iPhone app and the wall tablet
+   (Fully Kiosk): a camera's Playback tab → Details and playback check → Run
+   playback check, with HD on Chrome. Copy the report: its K lines (SD, and
+   HD inside H).
 
 #### Step 10.1: key frames from the server
 

@@ -354,6 +354,14 @@ def test_analysis_h264_with_b_frames_and_aac() -> None:
     assert video_part["header_unknown_field"] == ["12345678", "00000000"]
     assert video_part["ticks_per_second"] == 1_000_000
     assert video_part["fps_estimate"] == 10.0
+    # The key frames a scrub would fetch (Phase 10 step 0): size and interval.
+    key_size = len(frames[0])
+    assert video_part["key_bytes"] == {
+        "min": key_size,
+        "median": key_size,
+        "max": key_size,
+    }
+    assert video_part["key_interval_s"] == 1.0
     times = video_part["timestamps"]
     assert isinstance(times, dict)
     assert times["count"] == 20
@@ -422,6 +430,7 @@ def test_analysis_h265_adpcm_and_a_wrong_label() -> None:
     assert isinstance(times, dict)
     assert times["negative_steps"] == 1
     assert "ticks_per_second" not in video_part  # one key frame: no span
+    assert "key_interval_s" not in video_part
     audio_part = result["audio"]
     assert isinstance(audio_part, dict)
     assert audio_part["magics"] == {"01wb": 1, "07wb": 1}

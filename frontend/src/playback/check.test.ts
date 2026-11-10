@@ -4,6 +4,7 @@ import { parseInShort } from "../plain";
 import { makeHass, okDevices, type FakeHass } from "../test-fixtures";
 import type { TimelineDay } from "../types";
 import { PlaybackCheck, hdByDefault, noteInterruptedCheck, type CheckTarget } from "./check";
+import { MSE_SAMPLES } from "./mse-sample";
 import type { RvPlayer } from "./player";
 
 const T0 = Date.UTC(2026, 9, 17, 4, 0);
@@ -118,7 +119,7 @@ describe("PlaybackCheck", () => {
       changes.push(1),
     );
     const report = await check.run();
-    expect(report).toContain("Reolink Viewer playback check v0.4.5 · Desktop Chrome, LAN · Garage");
+    expect(report).toContain("Reolink Viewer playback check v0.5.0 · Desktop Chrome, LAN · Garage");
     expect(report).toContain("A1 Time to timeline, today (as the tab opened): 120 ms (server: memory, total 4 ms)");
     expect(report).toContain("A2/A3 skipped: no earlier recording day this month");
     expect(report).toContain("B  skipped: no events today");
@@ -127,6 +128,7 @@ describe("PlaybackCheck", () => {
     expect(report).toContain("R  skipped: no recording on this day");
     expect(report).toContain("L  skipped: nothing played");
     expect(report).toContain("S  skipped: nothing playing");
+    expect(report).toContain("K  SD skipped: nothing playing through MSE (the file player has no fragments to read)");
     expect(report).toContain('H  skipped: not asked for (tick "with HD")');
     expect(report).toContain("HD as the tab opened: this browser cannot decode hvc1 at 7680×2160");
     expect(report).toContain("Summary:");
@@ -299,6 +301,68 @@ describe("PlaybackCheck: scrubbing and HD", () => {
       text: "Dragging along the timeline shows the video at 4 of 5 points; elsewhere a thumbnail shows instead.",
     });
     expect(stream).toBe("sub");
+  });
+
+  it("decodes the key frames of the recording playing, one at a time (Phase 10's gate)", async () => {
+    vi.spyOn(PlaybackCheck.prototype as unknown as { _pause: () => Promise<void> }, "_pause").mockResolvedValue();
+    const bytes = (base64: string) => Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+    const sample = MSE_SAMPLES.h264;
+    const asked: string[] = [];
+    const player = fakePlayer();
+    const item = player.current as unknown as Record<string, unknown>;
+    item.mse = {
+      base: "/api/reolink_viewer/mse/tok1",
+      durationMs: 3_600_000,
+      fetch: (path: string) => {
+        asked.push(path);
+        const headers = { "X-RV-Mime": `video/mp4; codecs="${sample.codec}"`, "X-RV-Source": "cut" };
+        if (path.includes("/init")) return Promise.resolve(new Response(bytes(sample.init), { headers }));
+        const window = new Uint8Array([...bytes(sample.normalized), ...bytes(sample.mdat)]);
+        return Promise.resolve(new Response(window, { headers }));
+      },
+    };
+    const target = { ...stubTarget(reportingHass()), player };
+    // No WebCodecs here: said so.
+    let report = await new PlaybackCheck(target, { setup: "Desktop Chrome, LAN", soakMinutes: 0 }).run();
+    expect(asked).toEqual([
+      // From the play position, where S's previews left it (5 min 8 s in).
+      "/api/reolink_viewer/mse/tok1/frags?at=308000&ms=20000&bytes=8388608",
+      // The init of the source that served the window.
+      "/api/reolink_viewer/mse/tok1/init?source=cut",
+    ]);
+    expect(report).toContain(
+      "K  SD avc1.42C00A 64×64: 1 key frame, 1 KB–1 KB (median 1 KB) · VideoDecoder absent: a scrub would decode" +
+        " through a hidden MSE video here · from the cut",
+    );
+    expect(report).toContain("- Key frames: SD: no VideoDecoder");
+    // With WebCodecs: each decoded on its own.
+    const decoded: unknown[] = [];
+    class Decoder {
+      static isConfigSupported = () => Promise.resolve({ supported: true });
+      constructor(private readonly init: { output: (frame: unknown) => void }) {}
+      configure(): void {
+        // Nothing to set up.
+      }
+      decode(chunk: unknown): void {
+        decoded.push(chunk);
+        this.init.output({ displayWidth: 64, displayHeight: 64, close: () => undefined });
+      }
+      flush = () => Promise.resolve();
+      close(): void {
+        // Nothing held.
+      }
+    }
+    vi.stubGlobal("VideoDecoder", Decoder);
+    // As WebCodecs' chunk: its type, time and data.
+    vi.stubGlobal("EncodedVideoChunk", Object);
+    try {
+      report = await new PlaybackCheck(target, { setup: "Desktop Chrome, LAN", soakMinutes: 0 }).run();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+    expect(decoded).toHaveLength(1);
+    expect(report).toMatch(/K {2}SD avc1\.42C00A 64×64: 1 key frame, .* · VideoDecoder: one in \d+\.\d ms \(median of 1\)/);
+    expect(report).toMatch(/gate 30 ms: (passes|fails) · from the cut/);
   });
 
   it("reports an HD failure, and skips HD where it is not offered", async () => {

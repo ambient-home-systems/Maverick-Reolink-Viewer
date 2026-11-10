@@ -63,6 +63,13 @@ the recorder's logged-in users around each. **Session test** adds one replay
 held open beside a full-speed download, then two replays at once. Which cameras
 and streams to run, and how to read the report, are in
 [baichuan-playback.md §2.2](baichuan-playback.md#22-the-5b-measurement-step-1).
+**Scrub cuts** (Phase 10 step 0) adds, on each sub recording, 2-second cuts at
+20 moments through it: one at a time, back to back as a drag would ask, and
+taking turns with a playback cut of the same channel (each stream's `scrub`:
+the time to each cut's first key frame, the stale key frames of the cut before,
+and the gate's figure). Each stream's `media.video` gives its key frames' size
+(`key_bytes`) and interval (`key_interval_s`). The browser's half is the
+playback check's K row (below, and in the plan's step 10.0).
 
 For the Phase 2 recording playback measurements, tick **Test recording playback**
 (optionally **Only this test** to skip the Phase 0 checks, and **Test simultaneous

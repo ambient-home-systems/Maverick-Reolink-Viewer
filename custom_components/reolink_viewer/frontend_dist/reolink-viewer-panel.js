@@ -1,6 +1,6 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
 import { It as i, M as a, Ot as o, Pt as s, X as c, _ as l, d as u, g as d, it as f, j as p, nt as m, t as h, ut as g, v as _, y as v } from "./live-BazhJ5O3.js";
-import { $ as y, G as b, H as x, K as S, Q as C, U as w, X as T, Z as E, et as D, nt as O, o as k, rt as A, s as j, t as M, tt as N, z as P } from "./home-mL2889V7.js";
+import { $ as y, G as b, H as x, K as S, Q as C, U as w, X as T, Z as E, et as D, nt as O, o as k, rt as A, s as j, t as M, tt as N, z as P } from "./home-BMbYbMt5.js";
 //#region src/reolink-viewer-panel.ts
 var F = {
 	live: "Live",
@@ -35,6 +35,7 @@ var F = {
 		_baichuanMain: { state: !0 },
 		_baichuanDownload: { state: !0 },
 		_baichuanSession: { state: !0 },
+		_baichuanScrub: { state: !0 },
 		_baichuanCameras: { state: !0 },
 		_baichuanHold: { state: !0 },
 		_events: { state: !0 },
@@ -53,7 +54,7 @@ var F = {
 		this._route = b(window.location.hash);
 	};
 	constructor() {
-		super(), this.narrow = !1, this._now = Date.now(), this._board = [], this._probe = { status: "idle" }, this._includeBattery = !1, this._concurrency = !1, this._maxStreams = 4, this._playback = !1, this._playbackOnly = !1, this._playbackConcurrency = !1, this._playbackStreams = 4, this._baichuan = !1, this._baichuanOnly = !0, this._baichuanMain = !1, this._baichuanDownload = !0, this._baichuanSession = !1, this._baichuanCameras = "", this._baichuanHold = 5, this._events = !1, this._eventsOnly = !0, this._copied = !1, this._route = { view: "live" }, this.addEventListener(x, (e) => {
+		super(), this.narrow = !1, this._now = Date.now(), this._board = [], this._probe = { status: "idle" }, this._includeBattery = !1, this._concurrency = !1, this._maxStreams = 4, this._playback = !1, this._playbackOnly = !1, this._playbackConcurrency = !1, this._playbackStreams = 4, this._baichuan = !1, this._baichuanOnly = !0, this._baichuanMain = !1, this._baichuanDownload = !0, this._baichuanSession = !1, this._baichuanScrub = !1, this._baichuanCameras = "", this._baichuanHold = 5, this._events = !1, this._eventsOnly = !0, this._copied = !1, this._route = { view: "live" }, this.addEventListener(x, (e) => {
 			this.navigate(e.detail);
 		}), this.addEventListener(w, (e) => {
 			this.showToast(e.detail);
@@ -511,6 +512,21 @@ var F = {
           >
         </label>
         <label class="option nested">
+          <input
+            type="checkbox"
+            .checked=${this._baichuanScrub}
+            ?disabled=${e || !this._baichuan}
+            @change=${(e) => {
+			this._baichuanScrub = e.target.checked;
+		}}
+          />
+          <span
+            >Scrub cuts (Phase 10): 2-second cuts at 20 moments through each sub recording, one
+            at a time, back to back as a drag would ask, and taking turns with a playing cut.
+            A minute or two per camera</span
+          >
+        </label>
+        <label class="option nested">
           <span
             >Cameras:
             <input
@@ -647,6 +663,7 @@ var F = {
 			baichuan_streams: this._baichuanMain ? ["sub", "main"] : ["sub"],
 			baichuan_download: this._baichuanDownload,
 			baichuan_session: this._baichuanSession,
+			baichuan_scrub: this._baichuanScrub,
 			baichuan_cameras: this._baichuanCameras.trim(),
 			baichuan_hold: this._baichuanHold,
 			baichuan_cut: 20,

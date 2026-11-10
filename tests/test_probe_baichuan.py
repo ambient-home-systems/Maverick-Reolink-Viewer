@@ -16,6 +16,7 @@ from custom_components.reolink_viewer.baichuan_client import (
     BaichuanClientError,
     StreamStats,
 )
+from custom_components.reolink_viewer.baichuan_media import Block
 from custom_components.reolink_viewer.bridge import BaichuanEndpoint, VodFile
 from custom_components.reolink_viewer.media import FetchResult
 from custom_components.reolink_viewer.probe import ProbeOptions, Prober
@@ -149,12 +150,25 @@ class FakeClient:
         bitmap: int | None = None,
         support_sub: int = 1,
         on_chunk: Callable[[StreamStats], None] | None = None,
+        on_block: Callable[[Block], None] | None = None,
+        analyse: bool = True,
     ) -> tuple[float, StreamStats, dict[str, str]]:
         self.calls.append(
             ("download", (channel, stream, start, end, bitmap, support_sub))
         )
         if FakeClient.refuse_channel_bit and bitmap is None:
             raise BaichuanClientError("download refused with status 400")
+        if on_block is not None and FakeClient.key_frame:
+            # A scrub cut's key frame, a second before the moment asked.
+            on_block(
+                Block(
+                    kind="key",
+                    magic=b"",
+                    header=b"",
+                    payload=b"",
+                    unix_time=int((start - timedelta(seconds=1)).timestamp()),
+                )
+            )
         stats = self._stats(None)
         if FakeClient.cut_ends:
             stats.end_status = 300
@@ -373,6 +387,46 @@ async def test_check_main_stream_without_download(
     await scheduler.async_shutdown()
 
 
+async def test_scrub_cuts_on_the_sub_stream_only(
+    hass: HomeAssistant, loaded_reolink: MockConfigEntry, long_recording: None
+) -> None:
+    """Phase 10 step 0: scrub cuts on a login and a stream slot of their own."""
+    scheduler = Scheduler(default_limit=2)
+    options = BaichuanOptions(
+        enabled=True, hold_seconds=1, streams=("sub", "main"), scrub=True
+    )
+    check, host = _check(hass, scheduler, options)
+    info = host.info()
+    with patch.object(asyncio, "sleep", AsyncMock()):
+        result = await check.async_host(info, list(info.channels), TEST_NOW)
+    stats = scheduler.host(host.entry_id).streams.stats()
+    await scheduler.async_shutdown()
+    (entry,) = result["channels"]
+    scrub = entry["sub"]["scrub"]
+    assert scrub["ok"] is True
+    assert scrub["login"] == {"nonce_ms": 5.0, "login_ms": 40.0}
+    assert scrub["users_during"] == {"count": 2}
+    assert scrub["points"] == 20
+    for name in ("one_at_a_time", "back_to_back", "beside_playback"):
+        assert scrub[name]["answered"] == 20, name
+        assert scrub[name]["key_vs_asked_s"]["median"] == -1.0
+    assert scrub["gate"]["passes"] is True
+    assert "scrub" not in entry["main"]
+    assert stats["streams"] == 0  # its slot given back
+    # Its own client: a login, the cuts, each ended, a logout.
+    (client,) = [c for c in FakeClient.instances if len(c.calls) > 10]
+    calls = _calls(client)
+    assert calls[:2] == ["connect", "login"]
+    assert calls[-1] == "logout"
+    # Beside a playback cut: its start, then each scrub cut and its ask again.
+    assert calls.count("download") == 20 + 20 + (1 + 20 + 20)
+    assert calls.count("download_end") == calls.count("download")
+    # Each cut is 2 s of the sub stream; the playback cut runs to the end.
+    cuts = [c[1] for c in client.calls if c[0] == "download"]
+    assert all(c[1] == "subStream" and c[5] == 1 for c in cuts)
+    assert sum(1 for c in cuts if c[3] - c[2] == timedelta(seconds=2)) == 60
+
+
 async def test_check_records_failures(
     hass: HomeAssistant, loaded_reolink: MockConfigEntry, long_recording: None
 ) -> None:
@@ -492,6 +546,7 @@ async def test_prober_runs_the_check(
         "session": False,
         "cameras": "",
         "cut_seconds": 20.0,
+        "scrub": False,
     }
     text = json.dumps(report)
     for secret in SECRETS:

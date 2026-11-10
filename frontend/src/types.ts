@@ -301,6 +301,8 @@ export interface ProbeOptions {
   baichuan_streams?: Stream[];
   baichuan_download?: boolean;
   baichuan_session?: boolean;
+  /** Scrub cuts on the sub stream (Phase 10 step 0). */
+  baichuan_scrub?: boolean;
   baichuan_cameras?: string;
   baichuan_hold?: number;
   baichuan_cut?: number;

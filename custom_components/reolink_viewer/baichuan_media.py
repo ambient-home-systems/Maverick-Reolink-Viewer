@@ -604,6 +604,17 @@ def parse_adts(payload: bytes) -> dict[str, object] | None:
 # ---- The analysis ----
 
 
+def _spread(values: list[int]) -> dict[str, int] | None:
+    """Return the least, median and most of some sizes, or None without any."""
+    if not values:
+        return None
+    return {
+        "min": min(values),
+        "median": int(statistics.median(values)),
+        "max": max(values),
+    }
+
+
 @dataclass(slots=True)
 class _Timestamps:
     first: int | None = None
@@ -671,6 +682,8 @@ class StreamAnalysis:
     video_time: _Timestamps = field(default_factory=_Timestamps)
     key_time: _Timestamps = field(default_factory=_Timestamps)
     key_unix: _Timestamps = field(default_factory=_Timestamps)
+    # Each key frame's size (Phase 10 step 0: what a scrub fetches).
+    key_sizes: list[int] = field(default_factory=list)
     audio_magics: Counter[str] = field(default_factory=Counter)
     aac: dict[str, object] | None = None
     audio_sample_rates: Counter[int] = field(default_factory=Counter)
@@ -709,6 +722,8 @@ class StreamAnalysis:
             self.key_unix.add(block.unix_time)
         if key:
             self.extra_header_sizes[len(block.header) - FRAME_HEADER] += 1
+            if len(self.key_sizes) < MAX_DELTAS:
+                self.key_sizes.append(len(block.payload))
         else:
             self.frame_extra_header_sizes[len(block.header) - FRAME_HEADER] += 1
         if (
@@ -859,10 +874,18 @@ class StreamAnalysis:
             "timestamps": self.video_time.as_dict(),
             "key_timestamps": self.key_time.as_dict(),
             "key_unix_times": self.key_unix.as_dict(),
+            "key_bytes": _spread(self.key_sizes),
         }
         ticks = self.ticks_per_second()
         if ticks is not None:
             video["ticks_per_second"] = ticks
+            key_deltas = [d for d in self.key_time.deltas if d > 0]
+            if key_deltas:
+                # The key-frame interval (Phase 10 step 0: how far apart a
+                # scrub's pictures are, in media time).
+                video["key_interval_s"] = round(
+                    statistics.median(key_deltas) / ticks, 2
+                )
             first, last = self.video_time.first, self.video_time.last
             if first is not None and last is not None and last >= first:
                 video["span_s"] = round((last - first) / ticks, 2)
