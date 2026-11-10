@@ -6923,7 +6923,7 @@ download cut, then the thumbnail.
 | Step | Status |
 | --- | --- |
 | 0. Measure first (the gate) | Built (v0.57.0). **The gate passes** (2026-11-10): a cut's key frame in 166–182 ms back to back on all six cameras, and a key frame decoded in 1.7 ms on desktop Chrome; the iPhone app's and the wall tablet's K rows still to come (they choose step 2's way of painting, not whether step 1 is built) |
-| 1. Key frames from the server | Built (v0.58.0) |
+| 1. Key frames from the server | Built (v0.58.0); v0.58.1 from the owner's check |
 | 2. Painting while dragging | Not started |
 | 3. Press and release | Not started |
 | 4. The checks | Not started |
@@ -7149,6 +7149,38 @@ pictures 0 to 3 s before their moments; every one decodes. Then the iPhone
 app's and the wall tablet's checks (their K and F rows: `VideoDecoder` there or
 not decides step 2's way of painting). With a recording playing on the same
 camera in another tab while the check runs, it plays on without a stall.
+
+**The owner's check (2026-11-10, v0.58.0, the playback check v0.6.0, Chrome
+156 on Windows, Front Yard Right).** The first try ran the old panel (check
+v0.5.0, no F row): the browser kept it after Home Assistant's restart until a
+full reload. Then F: first pass 10 of 10, median **264 ms** (device 8, cache 1,
+cut 1); again 10 of 10, median 168 ms, but only 4 from the store (6 from the
+device again); the pictures 0.1 to 3.9 s before their moments; all 10 decode
+(4.4 ms each, each with its own decoder). The rest as before (deep starts
+0.77 s uncached, 0.40 s cached; K 1.8 ms).
+
+- **Too far from the moment:** the device starts a cut a few seconds before
+  the moment asked (step 0's probe: the first key frame 3 s before on the
+  CX410), and v0.58.0 kept that first key frame: up to 3.9 s off on a camera
+  with a key frame a second, where the plan asks for one interval.
+- **Not from the store the second time:** the store took a key frame only
+  from 3 s before a moment, and those pictures were up to 3.9 s before.
+
+**v0.58.1, from it:**
+
+- **The cut keeps the key frame showing the moment:** its key frames near the
+  moment are kept as they come, until one past the moment (or the cut's end,
+  or its time); the last at or before the moment is the picture, within one
+  key-frame interval of it (a second on the CX410, 4 s on the others). The
+  steps between them are the camera's interval
+  (`BaichuanSource.key_interval_ms`).
+- **The store answers as a cut would:** the latest key frame at or before the
+  moment, if within the camera's interval and half a second (4 s until a cut
+  has shown it); never one after the moment.
+- **Checks:** a cut's key frame at the moment from media keyed every second
+  (the interval learned, 1000 ms); a cut that ends, or goes quiet, before one
+  past the moment keeps its last; the store's reach (one before, never after;
+  a camera keyed every second asks again 2 s on).
 
 #### Step 10.2: painting while dragging
 

@@ -9,8 +9,10 @@ fastest first:
 
 1. **the scrub store** (:class:`KeyFrameStore`): key frames found earlier,
    kept on disk per camera, least recently used out above ``STORE_BYTES``.
-   One from ``NEAR_BEFORE_MS`` before to ``NEAR_AFTER_MS`` after the moment
-   answers it, as a cut's would (the owner's probe: 3 s before to 2 s after);
+   The latest one at or before the moment answers it if it is within the
+   camera's key-frame interval of it (as the cuts saw it, plus
+   ``INTERVAL_SLACK_MS``; ``DEFAULT_INTERVAL_MS`` until known): the key frame
+   a cut would give for that moment;
 2. **the disk cache** (``VodCache.async_key_frame``): the recording's
    original, or a cut of it, as on disk now: a file read, no device I/O;
 3. **a scrub cut** (``BaichuanSource.async_key_frame``): 2 s of the sub stream
@@ -49,9 +51,11 @@ from .vodcache import Recording, VodCache
 _LOGGER = logging.getLogger(__name__)
 
 STREAM = "sub"
-# A key frame found earlier answers a moment this close to it (ms).
-NEAR_BEFORE_MS = 3_000
-NEAR_AFTER_MS = 2_000
+# A key frame found earlier answers a moment up to the camera's key-frame
+# interval after it, and this much more; 4 s (five of the owner's six
+# cameras) until a cut has shown the camera's.
+DEFAULT_INTERVAL_MS = 4_000
+INTERVAL_SLACK_MS = 500
 # The scrub store's size on disk.
 STORE_BYTES = 64 * 1024**2
 STORE_SUFFIX = ".kf"
@@ -133,21 +137,17 @@ class KeyFrameStore:
         for path in self._dir.glob(f"*{STORE_SUFFIX}"):
             path.unlink(missing_ok=True)
 
-    def near(self, camera: str, at_ms: int) -> int | None:
+    def near(self, camera: str, at_ms: int, reach_ms: int) -> int | None:
         """Return the stored key frame's time that answers ``at_ms``, if any.
 
-        The latest at or before it (within ``NEAR_BEFORE_MS``), else the
-        first after it (within ``NEAR_AFTER_MS``).
+        The latest at or before it, if it is at most ``reach_ms`` before it.
         """
         times = self._times.get(camera)
         if not times:
             return None
         i = bisect_right(times, at_ms)
-        if i and at_ms - times[i - 1] <= NEAR_BEFORE_MS:
+        if i and at_ms - times[i - 1] <= reach_ms:
             return times[i - 1]
-        j = bisect_left(times, at_ms)
-        if j < len(times) and times[j] - at_ms <= NEAR_AFTER_MS:
-            return times[j]
         return None
 
     async def async_get(self, camera: str, time_ms: int) -> Picture | None:
@@ -255,7 +255,8 @@ class ScrubService:
         """
         began = time.monotonic()
         camera = source.key
-        if (near := self.store.near(camera, at_ms)) is not None and (
+        reach = self._reach_ms(source)
+        if (near := self.store.near(camera, at_ms, reach)) is not None and (
             stored := await self.store.async_get(camera, near)
         ) is not None:
             return self._done(stored, began)
@@ -294,6 +295,15 @@ class ScrubService:
         picture = _picture(sample, segment.start, "device")
         await self.store.async_put(camera, picture)
         return self._done(picture, began)
+
+    def _reach_ms(self, source: PlaybackSource) -> int:
+        """Return how far before a moment a stored key frame still shows it."""
+        known = (
+            self._baichuan.key_interval_ms(source.entry_id, source.channel)
+            if self._baichuan is not None
+            else None
+        )
+        return (known or DEFAULT_INTERVAL_MS) + INTERVAL_SLACK_MS
 
     async def _segment(self, source: PlaybackSource, day: date, at_ms: int) -> Segment:
         try:

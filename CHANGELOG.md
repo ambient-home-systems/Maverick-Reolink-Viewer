@@ -3,6 +3,18 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.58.1
+
+From the owner's check of 0.58.0 (the playback check's F row on Front Yard Right).
+
+- **A scrub's picture is the one at the moment:** the recorder starts a cut a few
+  seconds early, and 0.58.0 kept its first key frame, up to 3.9 s before the moment
+  on a camera with a key frame every second. The key frame at or before the moment
+  is kept now: within one key-frame interval of it.
+- **Pictures found before answer again:** the second pass over the same moments came
+  from the recorder again for 6 of 10; a picture found earlier now answers any moment
+  within the camera's key-frame interval after it.
+
 ## 0.58.0
 
 Pictures for scrubbing, from the server (Phase 10's step 1). Nothing changes on

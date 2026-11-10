@@ -157,12 +157,16 @@ async def test_the_store_answers_nearby_moments_and_lets_old_ones_go(
         await store.async_put("cam", picture)
     await store.async_put("cam", Picture(20_000, "thumbnail", jpeg=b"J"))  # not kept
     assert store.stats() == {"key_frames": 3, "bytes": 3 * 84}
-    # 3 s before to 2 s after a key frame finds it; the one at or before first.
-    assert store.near("cam", 21_500) == 20_000
-    assert store.near("cam", 23_000) == 20_000
-    assert store.near("cam", 18_000) == 20_000
-    assert store.near("cam", 25_000) is None
-    assert store.near("other", 20_000) is None
+    # The latest at or before a moment, within the reach given.
+    assert store.near("cam", 21_500, 4_500) == 20_000
+    assert store.near("cam", 24_500, 4_500) == 20_000
+    assert store.near("cam", 24_501, 4_500) is None
+    assert store.near("cam", 21_500, 1_000) is None  # a camera keyed every second
+    # Never one after the moment: the one before it, if within reach.
+    assert store.near("cam", 18_000, 9_000) == 10_000
+    assert store.near("cam", 18_000, 4_500) is None
+    assert store.near("cam", 9_000, 4_500) is None
+    assert store.near("other", 20_000, 4_500) is None
     got = await store.async_get("cam", 20_000)
     assert got is not None
     assert (got.source, got.init, got.fragment, got.codec) == (
@@ -175,13 +179,13 @@ async def test_the_store_answers_nearby_moments_and_lets_old_ones_go(
     await store.async_put(
         "cam", Picture(40_000, "cache", init=b"I" * 20, fragment=b"F" * 60)
     )
-    assert store.near("cam", 10_000) is None
-    assert store.near("cam", 20_000) == 20_000
+    assert store.near("cam", 10_000, 4_500) is None
+    assert store.near("cam", 20_000, 4_500) == 20_000
     assert len(list(left.glob("*.kf"))) == 3
     # Kept twice at once (two sessions): one copy.
     twice = Picture(50_000, "cut", init=b"I", fragment=b"F")
     await asyncio.gather(store.async_put("cam", twice), store.async_put("cam", twice))
-    assert store.near("cam", 50_000) == 50_000
+    assert store.near("cam", 50_000, 0) == 50_000
     assert sum(1 for k in store._files if k == ("cam", 50_000)) == 1
     assert store.stats()["bytes"] == sum(f.size for f in store._files.values())
     assert len(list(left.glob("*.kf"))) == store.stats()["key_frames"]
@@ -189,7 +193,7 @@ async def test_the_store_answers_nearby_moments_and_lets_old_ones_go(
     for path in left.glob("*.kf"):
         path.unlink()
     assert await store.async_get("cam", 20_000) is None
-    assert store.near("cam", 20_000) is None
+    assert store.near("cam", 20_000, 4_500) is None
 
 
 # ---- The service: store, cache, cut, thumbnail ----
@@ -224,9 +228,13 @@ class FakeSource:
         self.ok = True
         self.error: str | None = None
         self.asked: list[dict[str, Any]] = []
+        self.interval: int | None = None
 
     def usable(self, entry_id: str) -> bool:
         return self.ok
+
+    def key_interval_ms(self, entry_id: str, channel: int) -> int | None:
+        return self.interval
 
     async def async_key_frame(self, **kwargs: Any) -> KeySample:
         self.asked.append(kwargs)
@@ -332,7 +340,14 @@ async def test_a_picture_from_the_device_or_the_thumbnail(service: Any) -> None:
             "at_ms": 300_000,
         }
     ]
-    assert (await svc.async_picture(CAMERA, DAY_DATE, at + 500)).source == "store"
+    # Within the camera's interval of it (4 s until known, and half a second).
+    assert (await svc.async_picture(CAMERA, DAY_DATE, at + 3_500)).source == "store"
+    # A camera keyed every second: a moment 2 s after it is a new picture.
+    source.interval = 1_000
+    later = await svc.async_picture(CAMERA, DAY_DATE, at + 1_000)
+    assert later.source == "device"
+    assert later.time_ms == at
+    source.interval = None
     # The device's cut fails: no picture, said plainly; nothing kept.
     source.error = "no key frame within 1 s"
     with pytest.raises(ScrubError, match="no picture from the device: no key frame"):
@@ -353,7 +368,7 @@ async def test_a_picture_from_the_device_or_the_thumbnail(service: Any) -> None:
         await svc.async_picture(CAMERA, DAY_DATE, SEGMENT.end + 1)
     assert len(source.asked) == asked
     assert svc.stats()["answered"] == {
-        "device": 1,
+        "device": 2,
         "store": 1,
         "none": 2,
         "thumbnail": 1,
@@ -458,8 +473,10 @@ async def test_a_scrub_cut_gives_the_key_frame_near_the_moment(rig: Rig) -> None
     sample = await rig.source.async_key_frame(
         entry_id="entry1", channel=3, start_ms=START_MS, end_ms=END_MS, at_ms=AT_MS
     )
-    # The first key frame was 3 s before the moment (the fake NVR's media).
-    assert sample.time_ms == AT_MS - 3000
+    # The cut begins 3 s before the moment (the fake NVR's media): the key
+    # frame at the moment is the one kept, once one past it came.
+    assert sample.time_ms == AT_MS
+    assert rig.source.key_interval_ms("entry1", 3) == 1000
     assert sample.codec == "avc1.4D400C"
     assert set(init_tracks(sample.init)) == {1}
     # 2 s of the sub stream from the moment, in the device's local time; ended.
@@ -486,8 +503,26 @@ async def test_a_scrub_cut_passes_another_cuts_key_frames_by(rig: Rig) -> None: 
     sample = await rig.source.async_key_frame(
         entry_id="entry1", channel=3, start_ms=START_MS, end_ms=END_MS, at_ms=AT_MS
     )
-    assert sample.time_ms == AT_MS - 1000
+    assert sample.time_ms == AT_MS
     assert rig.source.stats()["scrub_cuts"]["stale"] == 2
+
+
+async def test_a_scrub_cut_that_ends_before_the_moment_keeps_its_last(
+    rig: Rig,  # noqa: F811
+) -> None:
+    # The cut ends (its end marker) 1 s before the moment: its last key frame.
+    rig.nvr.media = camera_blocks(CUT_ASKED - 3, seconds=3)
+    sample = await rig.source.async_key_frame(
+        entry_id="entry1", channel=3, start_ms=START_MS, end_ms=END_MS, at_ms=AT_MS
+    )
+    assert sample.time_ms == AT_MS - 1000
+    # The device goes quiet before one past the moment: what came is kept.
+    rig.nvr.silent = True
+    with patch.object(baichuan_source, "SCRUB_KEY_TIMEOUT_S", 0.3):
+        sample = await rig.source.async_key_frame(
+            entry_id="entry1", channel=3, start_ms=START_MS, end_ms=END_MS, at_ms=AT_MS
+        )
+    assert sample.time_ms == AT_MS - 1000
 
 
 async def test_a_scrub_cut_fails_plainly(rig: Rig) -> None:  # noqa: F811
@@ -543,7 +578,7 @@ async def test_a_scrub_takes_the_turn_of_a_playing_cut_which_goes_on(
         sample = await rig.source.async_key_frame(
             entry_id="entry1", channel=3, start_ms=START_MS, end_ms=END_MS, at_ms=AT_MS
         )
-    assert sample.time_ms == AT_MS - 3000
+    assert sample.time_ms == AT_MS
     assert playing.gave_way == 1
     rig.nvr.gate.set()
     assert playing.task is not None
