@@ -3,6 +3,28 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.62.0
+
+Dragging along the timeline, from the owner's playback check in Chrome through Nabu
+Casa, where a slow drag showed a new picture only every 0.65 s. Phase 5 is done: its
+two-viewer check passed in Safari and in Chrome.
+
+- **Dragging pauses the video:** the picture you drag to covers it anyway. Before,
+  the video played on underneath, and when the recorder was sending it, the recorder
+  had to take turns between that video and the pictures, so each picture waited
+  longer. Let go and it plays from the new place; if the browser takes the drag (a
+  page scroll, say), the video plays on where it was.
+- **Letting go plays from the picture you see:** the video now starts on the frame
+  shown, not up to a second or so after it. A picture that lags behind the pointer is
+  passed over, and the video starts at the pointer.
+- **Pictures come sooner when someone else is watching the same camera:** Home
+  Assistant now sends each picture as soon as it has it, before the short pause it
+  keeps so the other viewer's recording stays clean.
+- **The playback check (v0.8.0) measures the slow drag twice:** once alone, against
+  the 0.3 s target, and once while a second viewer plays another recording of the
+  camera, where it checks that viewer never stalls. It also checks that the drag
+  paused the video, and says where the video began after letting go.
+
 ## 0.61.3
 
 Ready for Home Assistant 2026.11.2, which brings reolink-aio 0.23.0. That

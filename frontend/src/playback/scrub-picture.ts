@@ -97,6 +97,11 @@ export class RvScrubPicture extends LitElement {
     return this.picture !== undefined && this._shown !== undefined;
   }
 
+  /** The picture on screen, if any: its time and its camera's key-frame interval. */
+  get shown(): { time: number; interval?: number } | undefined {
+    return this.picture === undefined ? undefined : this._shown;
+  }
+
   override disconnectedCallback(): void {
     super.disconnectedCallback();
     this.codecs.close();

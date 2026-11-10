@@ -65,7 +65,7 @@ import { ScrubClient, isPicture, type ScrubPicture, type SocketLike } from "./sc
 import { SHAPES, mseApi, mseSupports, pickSample, probeShape, type MseApi } from "./mse-probe";
 import type { RvPlayer } from "./player";
 
-export const CHECK_VERSION = "0.7.0";
+export const CHECK_VERSION = "0.8.0";
 export const SETUPS = [
   "Desktop Chrome, LAN",
   "Desktop Chrome, Tailscale",
@@ -105,10 +105,12 @@ const KEY_WINDOW_BYTES = 8 * 1024 * 1024;
 const SERVER_MOMENTS = 10;
 /**
  * P: the drags (Phase 10 step 4), as a pointer drags: a move every 50 ms; a
- * slow drag over 30 s of recording in 10 s, the same again, then a fast one
- * over 5 minutes in 5 s; the pointer rests 2 s after each, still pressed.
+ * slow drag over 30 s of recording in 10 s, the same again, the next 30 s
+ * (5 s on) beside a second viewer, then a fast one over 5 minutes in 5 s; the
+ * pointer rests 2 s after each, still pressed.
  */
 const DRAG_STEP_MS = 50;
+const DRAG_APART_MS = 5_000;
 const DRAG_SLOW = { spanMs: 30_000, ms: 10_000 };
 const DRAG_FAST = { spanMs: 300_000, ms: 5_000 };
 const DRAG_REST_MS = 2_000;
@@ -197,6 +199,8 @@ export interface SecondViewer {
   playAt(time: number): Promise<number | undefined>;
   /** Its video's position (s), to see it play. */
   readonly position: number | undefined;
+  /** What served its start (MSE): "cut" or "file". */
+  readonly source: string | undefined;
   /** Stop it as closing its tab does: it stops reading, and tells the server nothing. */
   close(): void;
 }
@@ -207,6 +211,14 @@ export interface CheckOptions {
   soakMinutes: number;
   /** Switch to HD and back (the server fetches a main recording). */
   hd?: boolean;
+}
+
+/** P's slow drag beside a second viewer: its start, its source, the drag, and how it played meanwhile. */
+interface DragBeside {
+  startMs: number | undefined;
+  source: string | undefined;
+  pass?: DragPass;
+  played?: PlayedWhile;
 }
 
 interface OnlineUsers {
@@ -996,13 +1008,15 @@ export class PlaybackCheck {
    * fractions of a millisecond), and times the pictures the tab paints:
    *
    * - over what the video has buffered: the video shows it, nothing is asked;
-   * - slowly over a recording not cached, then the same stretch again, then
-   *   fast: a new picture how often, how near its moment, how far behind the
-   *   moving pointer, and whether the last showed the resting pointer;
-   * - meanwhile another recording of the camera plays (a cut from the device
-   *   where it is not cached): its stalls;
-   * - the hover box shows the time alone; the release plays from there with
-   *   the picture held until the video's first frame; the NVR's logins.
+   * - slowly over a recording not cached (the tab's video paused by the
+   *   drag, step 3), then the same stretch again, then fast: a new picture
+   *   how often, how near its moment, how far behind the moving pointer, and
+   *   whether the last showed the resting pointer;
+   * - slowly over the next stretch while a second viewer of the camera plays
+   *   another recording (a cut from the device where it is not cached): its
+   *   stalls, and the pictures' pace beside it;
+   * - the hover box shows the time alone; the release plays from the picture
+   *   shown, held until the video's first frame; the NVR's logins.
    */
   private async _drag(): Promise<void> {
     const t = this._t;
@@ -1031,25 +1045,21 @@ export class PlaybackCheck {
       return;
     }
     const scale = this.timeScale;
-    const slowSpan = Math.min(DRAG_SLOW.spanMs, Math.max(5_000, stretch.end - stretch.start - 10_000));
-    const from = stretch.start + Math.min(5_000, (stretch.end - stretch.start) / 10);
-    // Another recording of this camera plays meanwhile (served by a cut where it is not cached).
-    let playing: { label: string; stop: () => { wallMs: number; playedMs: number; longestStallMs: number } } | undefined;
-    if (other) {
-      const played = await this._play(other.start + (other.end - other.start) * 0.6);
-      const video = activeVideo(t.player);
-      if (played.ok && video) {
-        const watch = sampleStalls(() => activeVideo(t.player)?.currentTime);
-        playing = { label: played.served ? `from ${sourceLabel(played.served)}` : "", stop: watch.stop };
-      }
-    }
+    const length = stretch.end - stretch.start;
+    // Two stretches of it, neither asked before: alone, then beside a second viewer.
+    const slowSpan = Math.min(DRAG_SLOW.spanMs, Math.max(5_000, (length - 15_000) / 2));
+    const from = stretch.start + Math.min(5_000, length / 10);
+    const hadVideo = t.player.current !== undefined;
     const slow = await this._dragPass(from, slowSpan, DRAG_SLOW.ms * scale);
     const bare = t.hover?.bare === true;
+    // Still pressed: the drag paused the tab's video (step 3).
+    const held = activeVideo(t.player)?.paused !== false;
     const again = await this._dragPass(from, slowSpan, DRAG_SLOW.ms * scale);
-    const fastFrom = from + slowSpan;
+    const besideFrom = from + slowSpan + DRAG_APART_MS;
+    const beside = other ? await this._dragBeside(other, besideFrom, slowSpan) : undefined;
+    const fastFrom = besideFrom + slowSpan;
     const fastEnd = restInside(day.segments, fastFrom, fastFrom + DRAG_FAST.spanMs);
     const fast = await this._dragPass(fastFrom, fastEnd - fastFrom, DRAG_FAST.ms * scale);
-    const whilePlaying = playing?.stop();
     const release = await this._dragRelease(fast.rest);
     const after = (await this._stats())?.vod.baichuan?.logins;
     const moreLogins = logins !== undefined && after !== undefined ? after - logins : undefined;
@@ -1061,7 +1071,8 @@ export class PlaybackCheck {
     const slowGrade = this._dragGrade(sSlow, firstTarget);
     const againGrade = this._dragGrade(sAgain, DRAG_CACHED_MS);
     const fastOk = caughtUp(sFast);
-    const stallOk = whilePlaying ? whilePlaying.longestStallMs < DRAG_STALL_MS : undefined;
+    const sBeside = beside?.pass ? summarizeDrag(beside.pass) : undefined;
+    const stallOk = beside?.played ? beside.played.longestStallMs < DRAG_STALL_MS : undefined;
     const mark = (ok: boolean | undefined) => (ok === undefined ? "" : ok ? " ✓" : " ✗");
     const good = (grade: string) => grade === "good" || grade === "fine";
     const minutes = (value: number) => `${(value / 60_000).toFixed(1)} min`;
@@ -1071,7 +1082,9 @@ export class PlaybackCheck {
         (t.scrub?.unavailable ? " · THE SCRUB SESSION DID NOT OPEN" : ""),
     );
     this._log(`   slow (${span(slowSpan)} of recording in ${span(DRAG_SLOW.ms)}): ${describeDrag(sSlow, slow)}${mark(good(slowGrade))}`);
+    if (hadVideo) this._log(`   this tab's video while dragging: ${held ? "paused" : "PLAYED ON"}${mark(held)}`);
     this._log(`   again over the same stretch: ${describeDrag(sAgain, again)}${mark(good(againGrade))}`);
+    this._log(`   ${this._besideText(beside, sBeside)}${mark(stallOk)}`);
     this._log(
       `   fast (${minutes(fastEnd - fastFrom)} in ${span(DRAG_FAST.ms)}): ${describeDrag(sFast, fast)}${mark(fastOk)}`,
     );
@@ -1086,19 +1099,16 @@ export class PlaybackCheck {
       this._log(`     ${await this._fillReport()}`);
     }
     this._log(`   over what the video has buffered: ${buffered.text}${mark(buffered.ok)}`);
-    this._log(
-      whilePlaying
-        ? `   another recording of this camera playing meanwhile${playing?.label ? ` (${playing.label})` : ""}: played ${span(whilePlaying.playedMs)} in ${span(whilePlaying.wallMs)}, longest stall ${span(whilePlaying.longestStallMs)}${mark(stallOk)}`
-        : "   another recording playing meanwhile: none (no second recording not cached on this day)",
-    );
     this._log(`   hovering while dragging: ${bare ? "the time alone, no thumbnail" : "a thumbnail was fetched"}${mark(bare)}`);
     if (moreLogins !== undefined) this._log(`   the NVR: ${count(moreLogins, "more login")} while dragging${mark(moreLogins <= 1)}`);
 
     const gapText = (s: DragSummary) => (s.gapMs === undefined ? "–" : secondsText(s.gapMs));
     this._summary.push(
       `Dragging (${path.how}): slow ${String(sSlow.pictures)} pictures every ${gapText(sSlow)}; again every ${gapText(sAgain)}; ` +
-        `fast ${fastOk ? "caught up" : "did not catch up"}; release ${release.ok ? "held the picture" : "NOT CLEAN"}` +
-        (whilePlaying ? `; the recording playing: longest stall ${span(whilePlaying.longestStallMs)}` : ""),
+        (sBeside && beside?.played
+          ? `beside another viewer every ${gapText(sBeside)}, its longest stall ${span(beside.played.longestStallMs)}; `
+          : "") +
+        `fast ${fastOk ? "caught up" : "did not catch up"}; release ${release.ok ? "held the picture" : "NOT CLEAN"}`,
     );
     this._plain.push({
       grade: "note",
@@ -1136,12 +1146,16 @@ export class PlaybackCheck {
           : "Over what the video has loaded, the server was asked anyway.",
       });
     }
-    if (whilePlaying) {
+    if (hadVideo && !held) {
+      this._plain.push({ grade: "problem", text: "The video played on while dragging (a drag pauses it)." });
+    }
+    if (beside?.played) {
+      const pace = sBeside?.pictures ? ` (a new picture every ${gapText(sBeside)} meanwhile)` : "";
       this._plain.push({
         grade: stallOk ? "good" : "problem",
         text: stallOk
-          ? "A recording playing on this camera played on while dragging."
-          : `A recording playing on this camera stalled ${secondsText(whilePlaying.longestStallMs)} while dragging.`,
+          ? `Another viewer of this camera played on while dragging${pace}.`
+          : `Another viewer of this camera stalled ${secondsText(beside.played.longestStallMs)} while dragging${pace}.`,
       });
     }
     if (moreLogins !== undefined && moreLogins > 1) {
@@ -1198,6 +1212,35 @@ export class PlaybackCheck {
     const missed = (after?.missed ?? 0) - (before?.missed ?? 0);
     const last = t.metrics.scrub?.last;
     return { movedMs, rest: pointer, paints, asked, missed, ...(missed && !paints.length && last ? { lastMiss: last } : {}) };
+  }
+
+  /**
+   * The slow drag beside a second viewer of this camera (step 3): it plays
+   * another recording deep in (a cut where it is not cached) while the drag
+   * goes over a stretch not asked before; its video is sampled for stalls.
+   */
+  private async _dragBeside(other: Segment, from: number, spanMs: number): Promise<DragBeside> {
+    const viewer = this._t.openViewer();
+    try {
+      const startMs = await viewer.playAt(other.start + (other.end - other.start) * 0.6);
+      if (startMs === undefined) return { startMs, source: viewer.source };
+      const watch = sampleStalls(() => viewer.position);
+      const pass = await this._dragPass(from, spanMs, DRAG_SLOW.ms * this.timeScale);
+      return { startMs, source: viewer.source, pass, played: watch.stop() };
+    } finally {
+      viewer.close();
+    }
+  }
+
+  private _besideText(beside: DragBeside | undefined, s: DragSummary | undefined): string {
+    if (!beside) return "beside another viewer: none (no second recording not cached on this day)";
+    const from = beside.source ? `, from ${sourceLabel(beside.source)}` : "";
+    if (!beside.pass || !beside.played || !s) return `beside another viewer: it did not start${from}`;
+    const { played } = beside;
+    return (
+      `beside another viewer (playing another recording${from}, started in ${ms(beside.startMs)}): ${describeDrag(s, beside.pass)}; ` +
+      `the viewer played ${span(played.playedMs)} in ${span(played.wallMs)}, longest stall ${span(played.longestStallMs)}`
+    );
   }
 
   /** Over what the video has buffered: a short drag around its time; the video shows it, nothing is asked. */
@@ -1258,6 +1301,7 @@ export class PlaybackCheck {
     const player = t.player;
     if (!timeline || !view || !player) return { text: "skipped", plain: "Letting go was not measured.", ok: false };
     const showing = view.showing;
+    const picture = view.shown;
     let framed = false;
     let goneMs: number | undefined;
     const began = performance.now();
@@ -1282,6 +1326,8 @@ export class PlaybackCheck {
     const ok = await frame;
     clearInterval(poll);
     const firstMs = performance.now() - began;
+    // Where the video began: at the picture shown (step 3), or at the pointer.
+    const startedAt = player.time;
     timeline.dispatchEvent(new CustomEvent("rv-hover-end"));
     if (!ok) {
       return { text: `no first frame in ${span(DRAG_RELEASE_MS)}`, plain: "Letting go did not start the video.", ok: false };
@@ -1302,8 +1348,13 @@ export class PlaybackCheck {
         firstMs,
       };
     }
+    const side = (a: number, b: number) => `${secondsText(Math.abs(a - b))} ${a <= b ? "before" : "after"}`;
+    const where =
+      picture && startedAt !== undefined
+        ? `; it began ${secondsText(Math.abs(startedAt - picture.time))} from the picture's own time (${side(picture.time, at)} the pointer)`
+        : "";
     return {
-      text: `the picture stayed until the video's first frame, ${secondsText(firstMs)} after letting go`,
+      text: `the picture stayed until the video's first frame, ${secondsText(firstMs)} after letting go${where}`,
       plain: `Letting go plays from there in ${secondsText(firstMs)}, the picture staying until the video shows.`,
       ok: true,
       firstMs,

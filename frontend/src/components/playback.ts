@@ -43,8 +43,7 @@ import {
 } from "../playback/player";
 import { ScrubClient, isPicture, type ScrubAnswer, type ScrubPicture, type SocketLike } from "../playback/scrub-client";
 import { ScrubController } from "../playback/scrub-controller";
-import "../playback/scrub-picture";
-import type { PaintPath, RvScrubPicture } from "../playback/scrub-picture";
+import { isLate, type PaintPath, type RvScrubPicture } from "../playback/scrub-picture";
 import { ThumbLoader } from "../playback/thumb-loader";
 import { dateIn, firstDayOfWeek, formatClock, formatStamp } from "../playback/time";
 import "../playback/timeline";
@@ -275,6 +274,8 @@ export class RvPlayback extends LitElement {
   private _scrubKey = "";
   /** A drag (or the arrow keys) is moving the time. */
   private _scrubbing = false;
+  /** The drag paused the video (a cancelled drag resumes it). */
+  private _heldForScrub = false;
   private _scrubHold: ReturnType<typeof setTimeout> | undefined;
   /** Opens a scrub session's socket (replaceable in tests). */
   scrubSocket = (url: string): SocketLike => new WebSocket(wsUrl(url, location.href)) as unknown as SocketLike;
@@ -814,10 +815,13 @@ export class RvPlayback extends LitElement {
   /**
    * Dragging the cursor: move it, and show the frame there. The video shows it
    * where it has it buffered; elsewhere the server's key frame (Phase 10) is
-   * painted over the video.
+   * painted over the video. The drag pauses the video (step 3): its picture is
+   * covered, and a recording the device sends would take the camera's channel
+   * in turns with the pictures' cuts.
    */
   private _onScrub(time: number): void {
     this._cursor = time;
+    if (!this._scrubbing) this._heldForScrub = this._player?.hold() ?? false;
     this._scrubbing = true;
     clearTimeout(this._scrubHold);
     const player = this._player;
@@ -874,12 +878,14 @@ export class RvPlayback extends LitElement {
   /**
    * The drag ended. Released (`play`), its picture stays until the video
    * starts there (its first frame), so the screen goes from the picture to
-   * the video; cancelled, it goes at once.
+   * the video; cancelled, it goes at once, and a video the drag paused plays on.
    */
   private _endScrub(play: boolean): void {
     this._scrubbing = false;
     this._scrubber?.end();
     clearTimeout(this._scrubHold);
+    if (this._heldForScrub && !play) this._player?.resume();
+    this._heldForScrub = false;
     if (!this._scrubPicture) return;
     if (!play) {
       this._scrubPicture = undefined;
@@ -896,12 +902,26 @@ export class RvPlayback extends LitElement {
     this._scrubPicture = undefined;
   }
 
+  /**
+   * Where a release plays from (Phase 10 step 3): the picture on screen when
+   * it is the pointer's (on time, in the same recording), so the video starts
+   * on the frame chosen; else the pointer.
+   */
+  private _releaseAt(time: number): number {
+    const shown = this._scrubbing ? this._scrubView?.shown : undefined;
+    const segments = this._day?.segments;
+    if (!shown || !segments || isLate(shown.time, time, shown.interval)) return time;
+    const recording = segmentAt(segments, time);
+    return recording && segmentAt(segments, shown.time) === recording ? shown.time : time;
+  }
+
   /** The day or camera changed, or the tab went: the session closes. */
   private _closeScrub(): void {
     this._scrubber?.close();
     this._scrubber = undefined;
     this._scrubKey = "";
     this._scrubbing = false;
+    this._heldForScrub = false;
     clearTimeout(this._scrubHold);
     this._scrubPicture = undefined;
   }
@@ -1156,6 +1176,9 @@ export class RvPlayback extends LitElement {
       },
       get position() {
         return player.renderRoot.querySelector<HTMLVideoElement>("video.active")?.currentTime;
+      },
+      get source() {
+        return player.mseStats?.atSource;
       },
       close: () => {
         player.stop();
@@ -1574,8 +1597,9 @@ export class RvPlayback extends LitElement {
                 this._view = e.detail.view;
               }}
               @rv-seek=${(e: CustomEvent<TimeDetail>) => {
+                const at = this._releaseAt(e.detail.time);
                 this._endScrub(true);
-                void this.playAt(e.detail.time);
+                void this.playAt(at);
               }}
               @rv-scrub=${(e: CustomEvent<TimeDetail>) => {
                 this._onScrub(e.detail.time);
