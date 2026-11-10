@@ -7297,6 +7297,11 @@ a full reload of the page (Ctrl+F5), on LAN Chrome:
   the video starts on the picture the viewer chose.
 - **Touch and keyboard too:** one finger scrubs; the arrow keys show frames as
   they step, then play after `KEY_SEEK_MS`, as now.
+- **The painting path in Technical details** (the owner's ask, 2026-11-10):
+  "Pictures while dragging" names how the pictures are shown in this browser,
+  WebCodecs or MSE (and why: MSE where there is no `VideoDecoder`, e.g. over
+  plain HTTP), so the iPhone app's and the wall tablet's drags say it without
+  the playback check. v0.59.0 shows the counts only.
 
 #### Step 10.4: the checks
 

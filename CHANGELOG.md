@@ -22,7 +22,8 @@ Dragging along the timeline shows the recording at the pointer (Phase 10's step 
 - **Where the browser cannot show them:** the picture is decoded with WebCodecs,
   or played through MSE where the browser has no WebCodecs. Where it has neither,
   or the session will not open, a drag shows what the video has buffered, as in
-  0.58. **Technical details** says which, and how many pictures were shown.
+  0.58. **Technical details** says how many pictures were shown, or why there
+  are none.
 
 ## 0.58.1
 
