@@ -45,6 +45,7 @@ from .const import (
     PANEL_TITLE,
     PANEL_URL_PATH,
     PREFETCH_STREAM_BUDGET,
+    SCRUB_CACHE_DIR,
     STATIC_URL_PATH,
     THUMB_CACHE_DIR,
     THUMB_CACHE_MAX_BYTES,
@@ -58,12 +59,13 @@ from .live.views import LiveFrameView, LiveImageView, LiveMseView
 from .live.websocket import async_register_live_commands
 from .models import ReolinkViewerConfigEntry, ReolinkViewerData
 from .scheduler import HostLimits, Scheduler
+from .scrub import STORE_BYTES as SCRUB_STORE_BYTES, KeyFrameStore, ScrubService
 from .thumbnails import ThumbnailService
 from .timeline import TimelineService
 from .unusual.const import DEFAULT_SCOPE, DEFAULT_SENSITIVITY
 from .unusual.live import UnusualWatch
 from .unusual.model import Unusual
-from .views import ClipView, MseView, ThumbView, VodView
+from .views import ClipView, MseView, ScrubView, ThumbView, VodView
 from .vodcache import VodCache
 from .wall import WallStore
 from .websocket_api import async_register_commands
@@ -88,6 +90,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     hass.http.register_view(ClipView())
     hass.http.register_view(MseView())
     hass.http.register_view(ThumbView())
+    hass.http.register_view(ScrubView())
     hass.http.register_view(LiveMseView())
     hass.http.register_view(LiveFrameView())
     hass.http.register_view(LiveImageView())
@@ -178,11 +181,21 @@ async def async_setup_entry(
         THUMB_CACHE_MAX_BYTES,
         get_ffmpeg_manager(hass).binary,
     )
+    timeline = TimelineService(hass, scheduler)
+    scrub = ScrubService(
+        hass,
+        timeline=timeline,
+        cache=vod_cache,
+        baichuan=baichuan,
+        thumbnails=thumbnails,
+        store=KeyFrameStore(hass, cache_dir / SCRUB_CACHE_DIR, SCRUB_STORE_BYTES),
+    )
     check_reports = CheckReports(hass)
     seen = SeenStore(hass)
     wall = WallStore(hass)
     await vod_cache.async_setup()
     await thumbnails.async_setup()
+    await scrub.store.async_setup()
     await check_reports.async_load()
     await seen.async_load()
     await wall.async_load()
@@ -218,7 +231,7 @@ async def async_setup_entry(
     )
     entry.runtime_data = ReolinkViewerData(
         scheduler=scheduler,
-        timeline=TimelineService(hass, scheduler),
+        timeline=timeline,
         vod_cache=vod_cache,
         baichuan=baichuan,
         thumbnails=thumbnails,
@@ -230,6 +243,7 @@ async def async_setup_entry(
         unusual=unusual,
         watch=watch,
         wall=wall,
+        scrub=scrub,
     )
     entry.async_on_unload(journal.listen_detections(watch.detected))
     entry.async_on_unload(watch.async_stop)

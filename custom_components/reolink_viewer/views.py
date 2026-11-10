@@ -23,18 +23,29 @@ the grant expire.
 - ``/api/reolink_viewer/clip/{token}`` serves the recording as a download
   (the plain copy if there is one).
 - ``/api/reolink_viewer/thumb/{token}`` serves a timeline thumbnail (JPEG).
+- ``/api/reolink_viewer/scrub/{token}`` is a scrub session (Phase 10), a
+  websocket behind a signed path (a browser's WebSocket cannot send HA's
+  token), for one camera's day: the browser sends ``{"seq": n, "at": <UTC
+  ms>}`` for the moment under the pointer; the server answers each with the
+  picture showing it (``scrub.py``) as one binary message (a 4-byte length,
+  a JSON header with ``seq``, ``at``, ``time``, ``source``, ``kind``,
+  ``codec``, ``init`` and ``data`` lengths, then the init segment and the
+  fragment, or a JPEG), or ``{"seq": n, "at": ..., "error": "..."}``. One
+  moment at a time: a newer one cancels the one in flight, which is not
+  answered.
 """
 
 import asyncio
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import date, timedelta
 from http import HTTPStatus
+import json
 import logging
 import secrets
 import time
 from typing import TYPE_CHECKING, Any
 
-from aiohttp import web
+from aiohttp import WSMsgType, web
 
 from homeassistant.components.http import HomeAssistantView
 from homeassistant.components.http.auth import async_sign_path
@@ -42,10 +53,12 @@ from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN
 from .scheduler import Priority
+from .scrub import ScrubError, cancelled_quietly
 from .thumbnails import ThumbKey, ThumbnailError
 from .vodcache import Entry, Recording, VodCache, VodCacheError, Window
 
 if TYPE_CHECKING:
+    from .devices import PlaybackSource
     from .live.streams import LiveStream
     from .models import ReolinkViewerData
 
@@ -55,12 +68,17 @@ VOD_PATH = "/api/reolink_viewer/vod"
 MSE_PATH = "/api/reolink_viewer/mse"
 CLIP_PATH = "/api/reolink_viewer/clip"
 THUMB_PATH = "/api/reolink_viewer/thumb"
+SCRUB_PATH = "/api/reolink_viewer/scrub"
 # A recording's URLs live this long plus the recording's length, so one
 # played through (and the next one, asked for near its end) does not expire
 # mid-way; the player asks again after a longer pause.
 VOD_TTL = timedelta(minutes=30)
 VOD_TTL_MAX = timedelta(hours=6)
 THUMB_TTL = timedelta(minutes=10)
+# A scrub session's path is good for this long (to open it; then it stays open).
+SCRUB_TTL = timedelta(minutes=10)
+# A scrub request: {"seq": n, "at": ms}.
+SCRUB_MAX_REQUEST = 1024
 COMPLETE_TIMEOUT = 600.0
 MAX_GRANTS = 5000
 # An MSE window: media time (ms) and bytes, by default and at most.
@@ -105,13 +123,21 @@ class LiveGrant:
 
 
 @dataclass(frozen=True, slots=True)
+class ScrubGrant:
+    """Permission to scrub one camera's day (the sub stream's key frames)."""
+
+    source: PlaybackSource
+    day: date
+
+
+@dataclass(frozen=True, slots=True)
 class LiveImageGrant:
     """Permission to fetch one camera's last picture (live/views)."""
 
     camera_id: str
 
 
-type Grant = VodGrant | MseGrant | ThumbGrant | LiveGrant | LiveImageGrant
+type Grant = VodGrant | MseGrant | ThumbGrant | LiveGrant | LiveImageGrant | ScrubGrant
 
 
 class Grants:
@@ -132,7 +158,7 @@ class Grants:
         self._items[token] = (now + ttl.total_seconds(), grant)
         return token
 
-    def get[T: (VodGrant, MseGrant, ThumbGrant, LiveGrant, LiveImageGrant)](
+    def get[T: (VodGrant, MseGrant, ThumbGrant, LiveGrant, LiveImageGrant, ScrubGrant)](
         self, token: str, kind: type[T]
     ) -> T | None:
         """Return a live grant of the given kind."""
@@ -379,6 +405,81 @@ async def _send_window(
         return response
     await response.write_eof()
     return response
+
+
+class ScrubView(HomeAssistantView):
+    """A scrub session: the picture at each moment the pointer passes."""
+
+    url = SCRUB_PATH + "/{token}"
+    name = "api:reolink_viewer:scrub"
+    requires_auth = True
+
+    async def get(self, request: web.Request, token: str) -> web.StreamResponse:
+        """Open the websocket and answer its moments, newest first."""
+        hass: HomeAssistant = request.app["hass"]
+        data = loaded_data(hass)
+        grant = data.grants.get(token, ScrubGrant) if data is not None else None
+        if data is None or grant is None or data.scrub is None:
+            return _not_found()
+        scrub = data.scrub
+        browser = web.WebSocketResponse(heartbeat=30.0, max_msg_size=SCRUB_MAX_REQUEST)
+        await browser.prepare(request)
+        newest = 0
+        task: asyncio.Task[None] | None = None
+
+        async def answer(seq: int, at_ms: int) -> None:
+            try:
+                picture = await scrub.async_picture(grant.source, grant.day, at_ms)
+            except ScrubError as err:
+                if seq == newest and not browser.closed:
+                    await browser.send_json(
+                        {"seq": seq, "at": at_ms, "error": str(err)}
+                    )
+                return
+            except Exception:  # said to the browser, and logged
+                _LOGGER.debug("A scrub failed", exc_info=True)
+                if seq == newest and not browser.closed:
+                    await browser.send_json(
+                        {"seq": seq, "at": at_ms, "error": "no picture (an error)"}
+                    )
+                return
+            if seq == newest and not browser.closed:
+                await browser.send_bytes(picture.message(seq, at_ms))
+
+        try:
+            async for msg in browser:
+                if msg.type is not WSMsgType.TEXT:
+                    continue
+                asked = _scrub_request(msg.data)
+                if asked is None:
+                    continue
+                seq, at_ms = asked
+                if seq <= newest:
+                    continue
+                newest = seq
+                if task is not None and not task.done():
+                    # A newer moment: the one in flight is not wanted any more.
+                    await cancelled_quietly(task)
+                task = asyncio.create_task(answer(seq, at_ms))
+        finally:
+            if task is not None and not task.done():
+                await cancelled_quietly(task)
+            await browser.close()
+        return browser
+
+
+def _scrub_request(text: str) -> tuple[int, int] | None:
+    """Return a scrub request's (seq, at), or None if it is not one."""
+    try:
+        request = json.loads(text)
+    except ValueError:
+        return None
+    if not isinstance(request, dict):
+        return None
+    seq, at_ms = request.get("seq"), request.get("at")
+    if not isinstance(seq, int) or not isinstance(at_ms, int):
+        return None
+    return seq, at_ms
 
 
 class ThumbView(HomeAssistantView):

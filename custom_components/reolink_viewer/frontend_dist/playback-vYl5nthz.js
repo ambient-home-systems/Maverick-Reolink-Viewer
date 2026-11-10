@@ -1,9 +1,9 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
-import { B as i, C as a, D as o, Dt as s, Et as c, Ft as l, O as u, Pt as d, T as f, X as p, _t as m, a as h, bt as g, c as _, d as v, et as y, gt as b, ht as ee, i as x, j as S, m as te, n as ne, o as re, p as ie, r as ae, s as oe, u as se, w as ce, xt as le, yt as C } from "./live-BazhJ5O3.js";
-import { $ as w, D as ue, E as de, F as fe, I as pe, L as me, M as he, N as ge, O as T, P as _e, R as E, T as ve, b as D, c as ye, g as O, h as k, j as A, k as be, l as xe, m as Se, q as j, u as M, v as Ce, w as we, x as Te, y as N } from "./home-BMbYbMt5.js";
-import { dayLabel as Ee, shortDay as De } from "./events-view-BswV0HD2.js";
-import { a as Oe, i as P, n as F, r as ke, s as Ae, t as je } from "./check-Doz95O1K.js";
-import { i as Me } from "./findings-DsjCt-Hh.js";
+import { B as i, C as a, D as o, It as s, Lt as c, O as l, Ot as u, St as d, T as f, Z as p, _t as m, a as h, bt as g, c as _, d as v, gt as ee, i as y, j as b, kt as te, m as ne, n as re, o as ie, p as ae, r as oe, s as se, tt as x, u as ce, vt as S, w as le, xt as C } from "./live-D6mEGytR.js";
+import { $ as w, D as ue, E as de, F as fe, I as pe, L as me, M as he, N as ge, O as T, P as _e, R as E, T as ve, b as D, c as ye, g as O, h as k, j as A, k as be, l as xe, m as Se, q as j, u as M, v as Ce, w as we, x as Te, y as N } from "./home-D2hbHRQT.js";
+import { dayLabel as Ee, shortDay as De } from "./events-view-BEHh2z4J.js";
+import { a as Oe, i as P, n as F, r as ke, s as Ae, t as je } from "./check-vnuvOAva.js";
+import { i as Me } from "./findings-0DTL4xoa.js";
 var Ne = class extends r {
 	static properties = {
 		events: { attribute: !1 },
@@ -72,7 +72,7 @@ var Ne = class extends r {
 			this._shown += 60;
 		}}>Show ${Math.min(e, 60)} more (${e} left)</button>` : t}`;
 	}
-	static styles = [S, e`
+	static styles = [b, e`
       :host {
         display: block;
       }
@@ -209,7 +209,7 @@ var Pe = [
 	}
 	disconnectedCallback() {
 		super.disconnectedCallback();
-		for (let e of [0, 1]) x(this._video(e)).catch(() => void 0);
+		for (let e of [0, 1]) y(this._video(e)).catch(() => void 0);
 	}
 	get pip() {
 		return this._pip;
@@ -217,8 +217,8 @@ var Pe = [
 	async togglePip() {
 		let e = this._video(this._active);
 		if (e) try {
-			if (this._pip) for (let e of [0, 1]) await x(this._video(e));
-			else await ae(e);
+			if (this._pip) for (let e of [0, 1]) await y(this._video(e));
+			else await oe(e);
 		} catch {}
 	}
 	_onPipChange = () => {
@@ -226,7 +226,7 @@ var Pe = [
 		e !== this._pip && (this._pip = e, this._emit("rv-pip", { pip: e }));
 	};
 	_carryPip(e, t) {
-		e && t && h(e) && re(e, t);
+		e && t && h(e) && ie(e, t);
 	}
 	updated(e) {
 		if (e.has("rate")) for (let e of [0, 1]) this._applyRate(this._video(e));
@@ -335,7 +335,7 @@ var Pe = [
 			return;
 		}
 		let r = this._video(e);
-		r && this._fail(n.message, r, n instanceof ce);
+		r && this._fail(n.message, r, n instanceof le);
 	}
 	_seekTo(e, t) {
 		let n = Math.max(0, t / 1e3);
@@ -810,7 +810,7 @@ var We = class extends r {
 		let c = this.view, l = (e) => fe(e, c, t);
 		r.font = `500 12px ${a("--rv-font", "sans-serif")}`, r.textBaseline = "top", r.fillStyle = s, r.strokeStyle = a("--rv-rule", "#e0e0e0"), r.lineWidth = 1;
 		let u = this.timeZone, d = ge(c, t) < k;
-		for (let e of _e(c, t, (e) => te(e, u))) {
+		for (let e of _e(c, t, (e) => ne(e, u))) {
 			let n = Math.round(l(e)) + .5;
 			r.beginPath(), r.moveTo(n, 14), r.lineTo(n, L), r.stroke();
 			let i = v(e, u, d);
@@ -1025,7 +1025,7 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
 	_eventsRetries = 0;
 	_refreshTimer;
 	_lastCursorPaint = 0;
-	_progressive = u();
+	_progressive = l();
 	_check;
 	_starting;
 	_preloadPending;
@@ -1101,7 +1101,7 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
 		let r = ++this._daySeq, i = performance.now(), a = !1;
 		t.quiet || (this._loading = !0);
 		try {
-			let o = await g(n, this.deviceId, e, t.quiet ? 0 : W);
+			let o = await C(n, this.deviceId, e, t.quiet ? 0 : W);
 			if (r !== this._daySeq) return;
 			let s = !this._day || this._day.date !== o.date;
 			if (this._day = o, this._error = void 0, s || !t.keepView) {
@@ -1118,7 +1118,7 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
 				timelineServer: o.timing
 			}), this._warmLongRecording(o), this._warmHdDay(o), a = !t.quiet && o.timing.cache === "stale", this._retryEventsSoon(o);
 		} catch (e) {
-			r === this._daySeq && (this._error = d(e).message);
+			r === this._daySeq && (this._error = s(e).message);
 		} finally {
 			r === this._daySeq && (this._loading = !1);
 		}
@@ -1144,7 +1144,7 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
 			month: t
 		}, this._monthLoading = !0;
 		try {
-			let i = await le(n, this.deviceId, e, t);
+			let i = await d(n, this.deviceId, e, t);
 			r === this._monthSeq && (this._monthDays = new Set(i.days));
 		} catch {
 			r === this._monthSeq && (this._monthDays = /* @__PURE__ */ new Set());
@@ -1169,7 +1169,7 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
 	}
 	_warmHdDay(e) {
 		let t = this.hass, n = `${this.deviceId}|${e.date}`;
-		t && this._hd.main && e.segments.length && !this._hdWarmed.has(n) && (this._hdWarmed.add(n), g(t, this.deviceId, e.date, 0, {
+		t && this._hd.main && e.segments.length && !this._hdWarmed.has(n) && (this._hdWarmed.add(n), C(t, this.deviceId, e.date, 0, {
 			stream: "main",
 			background: !0
 		}).catch(() => {
@@ -1178,7 +1178,7 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
 	}
 	_warmLongRecording(e) {
 		let t = this.hass, n = this._cursor === void 0 ? e.segments.at(-1) : T(e.segments, this._cursor);
-		!t || !n || n.end - n.start < Je || c(t, this._ref(n)).catch(() => void 0);
+		!t || !n || n.end - n.start < Je || u(t, this._ref(n)).catch(() => void 0);
 	}
 	_ref(e, t = this._stream) {
 		return {
@@ -1204,16 +1204,16 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
 			return;
 		}
 		this._starting = a;
-		let s = performance.now();
+		let c = performance.now();
 		try {
-			let e = this._useMse(this._stream), r = this._progressive && i.offset < 3e3, c = this._ref(i.segment), l = e ? await b(n, c, o) : await m(n, c, r, o);
+			let e = this._useMse(this._stream), r = this._progressive && i.offset < 3e3, s = this._ref(i.segment), l = e ? await m(n, s, o) : await S(n, s, r, o);
 			if (a !== this._playSeq) {
 				this._release(l);
 				return;
 			}
 			this._playing = l, this._metrics = {
 				...this._metrics,
-				urlMs: performance.now() - s,
+				urlMs: performance.now() - c,
 				firstFrameMs: void 0,
 				gapMs: void 0,
 				stream: l.stream,
@@ -1224,7 +1224,7 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
 			let u = Math.max(0, o - l.start);
 			await this._player?.play(this._toItem(l, i.segment), u, t), this._showDownload(l, a), this._schedulePreload(i.segment, a, o);
 		} catch (e) {
-			a === this._playSeq && this._playError(d(e).message);
+			a === this._playSeq && this._playError(s(e).message);
 		} finally {
 			this._starting === a && (this._starting = void 0);
 		}
@@ -1250,8 +1250,8 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
 		return this._mode === "auto" && f() !== void 0 && typeof this.hass?.fetchWithAuth == "function" && !this._mseFailed.has(e);
 	}
 	_release(e) {
-		let t = this.hass, n = l(e.base ?? e.url ?? "");
-		t && n && s(t, [n]).catch(() => void 0);
+		let t = this.hass, n = c(e.base ?? e.url ?? "");
+		t && n && te(t, [n]).catch(() => void 0);
 	}
 	_toItem(e, t) {
 		let n = {
@@ -1283,11 +1283,11 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
 		};
 	}
 	async _showDownload(e, t) {
-		let n = this.hass, r = l(e.base ?? e.url ?? "");
+		let n = this.hass, r = c(e.base ?? e.url ?? "");
 		if (!n || !r || e.cache.complete) return;
 		let i = () => t === this._playSeq && this._metrics.firstFrameMs === void 0 && !this._playFailure;
 		for (; i() && (await $e(q), i());) try {
-			let t = await y(n, r);
+			let t = await x(n, r);
 			if (!i() || !t.cache || t.cache.complete || t.cache.error) break;
 			let a = e.stream === "main" ? "HD " : "", o = t.cache.cut;
 			this._note = o && !o.error && t.cache.cut_error === void 0 ? `Asking the recorder for this moment${a ? " in HD" : ""}…` : `Fetching the ${a}recording from the recorder: ${Q(t.cache.bytes)} of about ${Q(t.expected_bytes)}`;
@@ -1296,7 +1296,7 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
 		}
 		t === this._playSeq && (this._note = void 0);
 		try {
-			let e = await y(n, r);
+			let e = await x(n, r);
 			t === this._playSeq && e.cache?.cut && (this._metrics = {
 				...this._metrics,
 				cache: e.cache
@@ -1306,7 +1306,7 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
 	_schedulePreload(e, t, n) {
 		this._preloadPending = void 0;
 		let r = this.hass, i = this._nextSegment(e);
-		!r || !i || e.end - n <= K ? this._preloadAfter(e, t) : (this._player?.preload(void 0), c(r, this._ref(i)).catch(() => void 0), this._preloadPending = {
+		!r || !i || e.end - n <= K ? this._preloadAfter(e, t) : (this._player?.preload(void 0), u(r, this._ref(i)).catch(() => void 0), this._preloadPending = {
 			segment: e,
 			seq: t
 		});
@@ -1319,7 +1319,7 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
 		let n = this.hass, r = this._nextSegment(e);
 		if (!n || !r) await this._player?.preload(void 0);
 		else if (!this._player?.preloaded?.recording.startsWith(`${this._stream}:${r.id}:`)) try {
-			let e = this._ref(r), i = this._useMse(this._stream) ? await b(n, e, r.start) : await m(n, e, this._progressive, r.start);
+			let e = this._ref(r), i = this._useMse(this._stream) ? await m(n, e, r.start) : await S(n, e, this._progressive, r.start);
 			if (t !== this._playSeq) {
 				this._release(i);
 				return;
@@ -1432,7 +1432,7 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
 		};
 		this._hover = r;
 		try {
-			let i = (await C(t, this.deviceId, [e.time], he(this._view.span))).urls[0]?.url;
+			let i = (await g(t, this.deviceId, [e.time], he(this._view.span))).urls[0]?.url;
 			n === this._hoverSeq && (this._hover = i ? {
 				...r,
 				url: i
@@ -1444,7 +1444,7 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
 		if (t && n.length) {
 			n.forEach((e) => this._thumbsRequested.add(e));
 			try {
-				let e = await C(t, this.deviceId, n, Ye), r = this._date;
+				let e = await g(t, this.deviceId, n, Ye), r = this._date;
 				e.urls.forEach((e, t) => {
 					let i = n[t] ?? e.time;
 					this.thumbLoader.load(e.url).then((t) => {
@@ -1533,11 +1533,11 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
 		if (this.hass) try {
 			this._reports = (await ke(this.hass)).reports.filter((e) => !e.setup.startsWith(i));
 		} catch (e) {
-			j(this, `Could not load the reports: ${d(e).message}`, "error");
+			j(this, `Could not load the reports: ${s(e).message}`, "error");
 		}
 	}
 	async _copy(e) {
-		await ne(e) ? j(this, "Report copied") : j(this, "Copying is blocked here: select the report text and copy it", "error");
+		await re(e) ? j(this, "Report copied") : j(this, "Copying is blocked here: select the report text and copy it", "error");
 	}
 	_renderCheck() {
 		let e = this._checkRunning, r = e ? this._check?.inShort() : Me(this._checkText);
@@ -1624,7 +1624,7 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
           </details>` : t}
       ${this._reports ? n`<ul class="reports">
             ${this._reports.length ? this._reports.map((e) => n`<li>
-                    <span class="when">${ie(Date.parse(e.updated), this._zone)} · ${e.setup}${e.done ? "" : " · running or cut short"}</span>
+                    <span class="when">${ae(Date.parse(e.updated), this._zone)} · ${e.setup}${e.done ? "" : " · running or cut short"}</span>
                     <button class="text" @click=${() => void this._copy(e.text)}>Copy</button>
                     <button
                       class="text"
@@ -1704,7 +1704,7 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
             ${Pe.map((e) => n`<option .value=${String(e)} ?selected=${e === this._rate}>${e}×</option>`)}
           </select></label
         >
-        ${this._playing && oe() ? n`<button
+        ${this._playing && se() ? n`<button
               class="pip"
               aria-pressed=${this._player?.pip ? "true" : "false"}
               title="Keep watching in a small window over other windows and apps"
@@ -1893,7 +1893,7 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
             .days=${this._monthDays}
             .selected=${this._date}
             .today=${this._today}
-            .firstDay=${se(this.hass?.locale?.language)}
+            .firstDay=${ce(this.hass?.locale?.language)}
             ?loading=${this._monthLoading}
             @rv-month=${(e) => void this._loadMonth(e.detail.year, e.detail.month)}
             @rv-day=${(e) => {
@@ -1922,7 +1922,7 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
       </div>
     `;
 	}
-	static styles = [S, e`
+	static styles = [b, e`
       .layout {
         display: grid;
         grid-template-columns: minmax(0, 1fr) 340px;

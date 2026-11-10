@@ -33,6 +33,14 @@ cut): after :meth:`BaichuanMuxer.pause` the open group of pictures is kept,
 and the next span, asked from a little before it, is joined by the counter:
 blocks the muxer already has are skipped, so the stream goes on seamlessly.
 
+The device tells a channel's cuts apart by channel only, so what another cut
+of the channel still sends after its end (144) can reach this one: a cut
+that gave way to a scrub (Phase 10) resumes while the scrub's last blocks
+arrive. So in the first ``FOREIGN_GUARD`` blocks of a span after a pause, a
+block whose counter steps more than ``FOREIGN_STEP_S`` either way is skipped
+(``foreign_skipped``), unless ``FOREIGN_RUN`` blocks in a row step so (then
+it is this stream's own jump).
+
 Parameter sets equal to the init segment's are taken out of the samples;
 changed ones stay in band. Audio follows on its own clock (1024 samples per
 AAC frame), started at the first key frame and moved back into line with the
@@ -76,6 +84,12 @@ AUDIO_RESYNC_S = 2.0
 # may take (a learned rate, a counter glitch): a tenth, about unseen.
 CORRECTION = 0.1
 AAC_FRAME = 1024
+# Early in a span that joins another, a block whose counter steps this far
+# (s at the nominal rate) from the last one taken is another cut's, still
+# arriving; this many in a row are not. Watched over a span's first blocks.
+FOREIGN_STEP_S = 20
+FOREIGN_RUN = 30
+FOREIGN_GUARD = 120
 # A frame's least duration (s), and the last frame's when nothing follows.
 MIN_FRAME_S = 0.001
 DEFAULT_FRAME_S = 1 / 15
@@ -122,6 +136,8 @@ class MuxStats:
     counter_steps_back: int = 0
     spans: int = 1
     overlap_skipped: int = 0
+    # Blocks of another cut of the channel, still arriving (skipped).
+    foreign_skipped: int = 0
 
     def as_dict(self) -> dict[str, object]:
         """Return the numbers (no media)."""
@@ -144,6 +160,7 @@ class MuxStats:
             "counter_steps_back": self.counter_steps_back,
             "spans": self.spans,
             "overlap_skipped": self.overlap_skipped,
+            "foreign_skipped": self.foreign_skipped,
         }
 
 
@@ -245,6 +262,14 @@ class BaichuanMuxer:
         # The open group's key frame's POSIX time; joining the next span.
         self._gop_unix: int | None = None
         self._joining = False
+        # Blocks in a row skipped as another cut's; blocks left to watch.
+        self._foreign_run = 0
+        self._guard = 0
+
+    @property
+    def asked_unix(self) -> float | None:
+        """Return the moment asked for (UTC POSIX s), if one was."""
+        return self._asked
 
     @property
     def resume_unix(self) -> float | None:
@@ -263,6 +288,7 @@ class BaichuanMuxer:
         """End a span without closing the open group; the next span joins it."""
         if self._started:
             self._joining = True
+            self._guard = FOREIGN_GUARD
             self.stats.spans += 1
 
     @property
@@ -295,6 +321,11 @@ class BaichuanMuxer:
         if block.micro is None or (not key and not self._started):
             self.stats.dropped_frames += 1
             return []
+        if self._guard:
+            self._guard -= 1
+            if self._foreign(block.micro):
+                self.stats.foreign_skipped += 1
+                return []
         if self._joining:
             # The next span starts at or before what the muxer has: skip to
             # the first block past the last one taken (by the counter).
@@ -341,6 +372,23 @@ class BaichuanMuxer:
             return out
         self._gop.append(_Video(sample, time, key))
         return out
+
+    def _foreign(self, micro: int) -> bool:
+        """Return whether a block's counter is too far from the stream's to be its."""
+        last = self._clock.last_micro
+        if last is None:
+            return False
+        step = (micro - last) & 0xFFFFFFFF
+        distance = min(step, (1 << 32) - step)
+        if distance <= FOREIGN_STEP_S * NOMINAL_RATE:
+            self._foreign_run = 0
+            return False
+        self._foreign_run += 1
+        if self._foreign_run > FOREIGN_RUN:
+            # Too many in a row for leftovers: the stream's own jump.
+            self._foreign_run = 0
+            return False
+        return True
 
     def _place(self, counter: int) -> float:
         """Return a frame's media time.

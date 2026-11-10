@@ -26,7 +26,7 @@ put on it:
 | 7 | Live video on dashboards: a Reolink Viewer camera card | Standard | 1–1.5 wk | **Done** (2026-11-03, v0.45.2), closed on daily use by the owner. **Step 1 done** (v0.44.0): the Reolink camera card, `custom:reolink-viewer-camera`, with its editor, on any dashboard and for any user. The owner's check (2026-11-02): on the wall tablet (Galaxy Tab A9+, Fully Kiosk, a sections view) and the iPhone app's dashboard, the Doorbell's and the front-yard camera's cards show their picture at once and their video quickly, kept warm or not, and go full screen in HD and back. **Step 2 built** (v0.45.0): what the cards see is logged per device (Devices → Dashboard cards), they sleep while Fully Kiosk's screen is off or its screensaver on, and a doorbell's card can wake the screen and go full screen when it rings. **Step 2 done** (2026-11-03, v0.45.2): on the owner's tablet the cards sleep under Fully's screensaver (no frames decoded) and a ring wakes the screen and shows the Doorbell full screen, playing in 0.6 s (v0.45.1 fills the window from the top layer). Step 3 stays gated. Not measured: a warm camera's wake time and 8 visible hours; the wall page's cards are the owner's choice. See "Phase 7" |
 | 8 | Unusual events: learning what is normal | High | 2–3 wk, then a week of learning | **Started** (2026-11-03). **Step 1 built** (v0.46.0): the detection journal, opt-in ("Learn what is normal"), with a 10-day head start from Home Assistant's recorder; on at the owner's since 2026-11-02, all 7 cameras. v0.46.1 keeps motion as bursts and a year of history (the owner's choices, from the first 10 days' sizes). **Step 2 built** (v0.47.0): Stamina's model, ported with its tests (MIT, in `THIRD_PARTY.md`), with a daily cap for a busy property; the Devices page shows each camera's state and the week's marks with their sentences. The owner's check: 3.6 marks a day at Balanced (243 a week without the cap). v0.47.1, the owner's choices: motion never marked, time counted once, one mark per incident across cameras; 5.1 a day, the journal 1.1 MB (about 2.8 MB a month). v0.47.2: only long stands out, a kind seen 10 times is known, only detections fire first; 5.3 a day. v0.47.3: an incident's later events take what fired before it; a mark always says why; the model saved between restarts; 5.3 a day, 39 without the cap. v0.47.4: anything seen 10 times is known, only "nothing fired first" raises; 1.4 a day, all rare by count. v0.47.5: Balanced aims at a few a day (floor 0, at most 3 a day), More knows a value after 20. **Step 3 built** (v0.48.0–v0.49.0), the owner's choice: marks on the timetable's rows with why, and an Unusual filter on Events (v0.48.0; the owner's check: 2.6 a day at Balanced); "What it has learned" on each camera's Overview, and a mark's count as a total (v0.49.0). **House-wide signals built** (v0.50.0): chosen in the options, kept beside the detections, learned and said. **Step 4 built** (v0.51.0): each detection scored as it begins and ends; `reolink_viewer_unusual`, an "unusual activity" sensor per camera, and a device trigger per camera, on Reolink Viewer's own device. See "Phase 8" |
 | 9 | The Wall: the Live page as a security monitor, with layouts, arranging, HD large tiles and the detection strip | Standard / High | 2–3 wk | **Done** (2026-11-10, v0.56.0): the owner validated v0.55.0's and v0.56.0's checklists. Started 2026-11-05. **Step 1 built** (v0.52.0): the Wall, its layouts (Auto by shape, 1, 2×2, 3×3, 4×4, 1+5, 1+7), saved per user on the server, `#wall/<id>`, each device remembering board or Wall; the owner's check: it works, nothing to scroll. **Step 2 built** (v0.53.0): swapping (drag, or Arrange and two taps), the large slot or alone by a double tap or Enter, the keyboard, pages and tours. **Step 3 built** (v0.54.0–v0.54.1): HD in the large tiles while a stream slot is spare, the NVR's budget 9 streams with 2 HD tiles (the capacity test). **Step 4 built** (v0.55.0): the detection strip, a tile lit at once by its sensor, and per layout the feeds' floodlight and siren buttons. **Step 5 built** (v0.56.0): the pointer hidden when still, the screen kept awake, the tiles asleep under Fully's screen off, and the Reolink Wall dashboard card. The owner's checks of v0.55.0 and v0.56.0 passed (2026-11-10): the phase is done. See "Phase 9" |
-| 10 | Scrubbing that shows the picture while dragging | Very high | 2–4 wk | **Started** (2026-11-10). **Step 0 built** (v0.57.0): the gate's measurements, the probe's scrub cuts and key frames, and the playback check's K row (key frames decoded one at a time); the owner's runs decide step 1 or step 5. See "Phase 10" |
+| 10 | Scrubbing that shows the picture while dragging | Very high | 2–4 wk | **Started** (2026-11-10). **Step 0 built** (v0.57.0): the gate's measurements, the probe's scrub cuts and key frames, and the playback check's K row (key frames decoded one at a time); the owner's runs passed it (2026-11-10). **Step 1 built** (v0.58.0): the picture at a moment, from the server: a scrub session (a signed websocket), answered from a store of key frames found, the disk cache or a 2-second cut the device sends, taking its channel's turn; the playback check's F row. See "Phase 10" |
 | 11 | Playback and settings extras: zoom, event clips, filters, copying settings | Standard | 1–2 wk | Planned. See "Phase 11" |
 | 12 | Optional R&D: the Doorbell's recordings and talk | Very high | 3–5 wk, gated | Planned. See "Phase 12" |
 | 13 | Optional: live picture integrity and outside live sources | High | 1–1.5 wk, gated | Planned. See "Phase 13" |
@@ -6923,7 +6923,7 @@ download cut, then the thumbnail.
 | Step | Status |
 | --- | --- |
 | 0. Measure first (the gate) | Built (v0.57.0). **The gate passes** (2026-11-10): a cut's key frame in 166–182 ms back to back on all six cameras, and a key frame decoded in 1.7 ms on desktop Chrome; the iPhone app's and the wall tablet's K rows still to come (they choose step 2's way of painting, not whether step 1 is built) |
-| 1. Key frames from the server | Not started |
+| 1. Key frames from the server | Built (v0.58.0) |
 | 2. Painting while dragging | Not started |
 | 3. Press and release | Not started |
 | 4. The checks | Not started |
@@ -7079,6 +7079,76 @@ hidden MSE video), not whether the server serves key frames (step 1).
     second;
   - scrubbing always uses the sub stream (H.264 on every owned camera), whichever
     stream plays.
+
+**As built (v0.58.0), the owner's go-ahead ("proceed with step 1"):**
+
+- **The session:** `reolink_viewer/playback/scrub` {device_id, date} gives a
+  signed path (10 minutes to open it) to `views.ScrubView`, a websocket for
+  that camera's day. The browser sends `{"seq", "at"}` (UTC ms); the server
+  answers each with one binary message (a 4-byte length, a JSON header: seq,
+  at, the picture's own time, source, kind, codec, the parts' lengths; then
+  an init segment of the video track alone and a fragment of that one sample,
+  or a JPEG) or `{"seq", "at", "error"}` in plain words. Newest wins: a newer
+  seq cancels the one in flight, which is not answered; an older one is
+  ignored.
+- **Where a picture comes from** (`scrub.py`), fastest first:
+  1. **the scrub store:** key frames found earlier, on disk (64 MB, least
+     recently used out, emptied at start), per camera; one 3 s before to 2 s
+     after the moment answers it, as a cut's would (step 0's -3 to +2 s);
+  2. **the disk cache** (`VodCache.async_key_frame`): the original, a copy
+     at another length, or a cut, as on disk now; it never starts, speeds up
+     or waits for a fill; a key frame more than 10 s before the moment is not
+     taken;
+  3. **a scrub cut** (`BaichuanSource.async_key_frame`): 2 s of the sub
+     stream **from the moment** (not one interval before, as planned: step 0's
+     cuts from the moment gave key frames 3 s before to 2 s after it), ended
+     (144) once its first key frame near the moment is in, muxed and taken
+     out alone (`fmp4.key_sample`). It takes the channel's turn as a cut's
+     first span does, a stream slot within 1 s (never the download's), the
+     host's one login, and gives up 1 s after the device's reply (13 of 343
+     sent none in step 0). A key frame more than 10 s before or 5 s after the
+     moment is another cut's, still arriving (`stale`), and passed by;
+  4. **the thumbnail** (`snapshot_past`), where the protocol cannot be used
+     (the option off, a device that refuses it).
+- **A playback cut on the same channel goes on unharmed.** The device tells
+  a channel's cuts apart by channel only, so the scrub cut's last blocks can
+  reach the cut that resumes after it. Before handing the turn back to a cut
+  that waits, the scrub lets them pass (0.3 s); and the muxer skips, in the
+  first 120 blocks of a resumed span, a block whose counter steps more than
+  20 s from the stream's (`foreign_skipped`; 30 in a row are the stream's own
+  jump). This also covers two playback cuts taking turns (Phase 5c).
+- **Always the sub stream; the day as the browser has it:** the recording is
+  found in the day the timeline holds (never a new search for a scrub); a
+  moment between recordings answers "no recording at that moment".
+- **Seen in:** `playback/stats` gains `scrub` (pictures by source, the
+  store's size), and the source's stats `scrub_cuts` (asked, answered,
+  failed, stale).
+- **The playback check v0.6.0, its F row:** 10 moments spread over the day's
+  recorded time, asked twice: first from the disk or the device, then from
+  the store; how many came, the median round trip and the sources, how far
+  each picture is before its moment, and each decoded on its own
+  (`VideoDecoder`).
+- **Checks:** the key frame out of the muxer's output and of an NVR file
+  made MSE-ready (video track alone, one sync sample; none from a fragment
+  not starting with one; an un-normalized fragment refused); the store (near
+  moments, the cap, a file gone); the service with stand-ins (cache then
+  store, a cut of the recording, the device, its failure, the thumbnail,
+  between recordings); the cache from a file of an earlier run without a
+  fill, and from a cut; the scrub cut on the fake NVR (the moment in the
+  device's local time, ended, its slot given back; another cut's key frames
+  passed by; no key frame in time, no slot, the option off; a playing cut
+  that gives way and resumes seamlessly); the muxer's leftovers skipped; a
+  session end to end (cache, store, an ignored older seq, a gap, a newer
+  moment cancelling one in flight); the client (newest wins, a late answer
+  not taken, misses, closing, not opening); the F row.
+
+**Hardware checklist (the owner, v0.58.0):** run the playback check on LAN
+Chrome on a camera whose day is not all cached: the F row's first pass mostly
+"device" or "cache", median about 0.2 s; again, all "store" in a few ms; the
+pictures 0 to 3 s before their moments; every one decodes. Then the iPhone
+app's and the wall tablet's checks (their K and F rows: `VideoDecoder` there or
+not decides step 2's way of painting). With a recording playing on the same
+camera in another tab while the check runs, it plays on without a stall.
 
 #### Step 10.2: painting while dragging
 

@@ -220,6 +220,7 @@ async def test_a_cut_is_muxed_to_fragments_and_the_login_ends_when_idle(
         "cuts_running": 0,
         "cuts_paused": 0,
         "unsupported": [],
+        "scrub_cuts": {"asked": 0, "answered": 0, "failed": 0, "stale": 0},
     }
 
 

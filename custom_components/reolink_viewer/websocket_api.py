@@ -35,10 +35,13 @@ from .unusual.shapes import profile_payload
 from .views import (
     CLIP_PATH,
     MSE_PATH,
+    SCRUB_PATH,
+    SCRUB_TTL,
     THUMB_PATH,
     THUMB_TTL,
     VOD_PATH,
     MseGrant,
+    ScrubGrant,
     ThumbGrant,
     VodGrant,
     sign,
@@ -78,6 +81,7 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_events_seen)
     websocket_api.async_register_command(hass, ws_playback_url)
     websocket_api.async_register_command(hass, ws_playback_mse)
+    websocket_api.async_register_command(hass, ws_playback_scrub)
     websocket_api.async_register_command(hass, ws_playback_prefetch)
     websocket_api.async_register_command(hass, ws_playback_release)
     websocket_api.async_register_command(hass, ws_thumbnail_urls)
@@ -824,6 +828,40 @@ async def ws_playback_mse(
     connection.send_result(msg["id"], result)
 
 
+@callback
+@websocket_api.websocket_command(
+    {
+        probatio.Required("type"): f"{DOMAIN}/playback/scrub",
+        probatio.Required("device_id"): str,
+        probatio.Required("date"): probatio.All(str, _date),
+    }
+)
+def ws_playback_scrub(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Open a scrub session for a camera's day (Phase 10): its signed path.
+
+    The browser opens it as a websocket and asks it for the picture at each
+    moment the pointer passes (``views.ScrubView``).
+    """
+    if (resolved := _playback_source(hass, connection, msg)) is None:
+        return
+    entry, source = resolved
+    if entry.runtime_data.scrub is None:
+        connection.send_error(msg["id"], ERR_NOT_LOADED, "Scrubbing is not available")
+        return
+    token = entry.runtime_data.grants.issue(ScrubGrant(source, msg["date"]), SCRUB_TTL)
+    connection.send_result(
+        msg["id"],
+        {
+            "url": sign(hass, SCRUB_PATH, token, SCRUB_TTL),
+            "expires_in": int(SCRUB_TTL.total_seconds()),
+        },
+    )
+
+
 @websocket_api.websocket_command(
     {probatio.Required("type"): f"{DOMAIN}/playback/prefetch", **_SEGMENT_SCHEMA}
 )
@@ -1021,6 +1059,7 @@ async def ws_playback_stats(
         {
             "vod": await data.vod_cache.async_stats(),
             "thumbnails": data.thumbnails.stats(),
+            "scrub": data.scrub.stats() if data.scrub is not None else None,
         },
     )
 

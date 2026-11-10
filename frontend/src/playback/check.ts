@@ -7,7 +7,8 @@
 // recordings) and saves its report on the server as it goes, so a run on a
 // phone can be copied on a desktop, and a run cut short by a page reload (iOS
 // under memory pressure) keeps what it measured.
-import { fetchCacheStatus, fetchMediaInfo, fetchTimelineDay, toError, urlToken } from "../api";
+import { fetchCacheStatus, fetchMediaInfo, fetchTimelineDay, openScrubSession, toError, urlToken } from "../api";
+import { wsUrl } from "../live/check-util";
 import { count, inShortLines, middle, secondsText, speed, worst, type Finding, type InShort } from "../plain";
 import type { CacheStatus, HomeAssistant, MediaInfo, PlaybackUrl, Segment, Stream, TimelineDay, Timing } from "../types";
 import {
@@ -16,6 +17,7 @@ import {
   classifyHost,
   cutReport,
   deepTarget,
+  describePass,
   describeRate,
   loginReport,
   longRecordings,
@@ -26,18 +28,21 @@ import {
   SMOOTH_RULE,
   sourceLabel,
   span,
+  spreadMoments,
   touchingPairs,
   within,
   type BaichuanStats,
   type CutStatus,
   type RateSample,
+  type ScrubPass,
 } from "./check-util";
 import type { StreamDecision } from "./codec";
 import { decodeKeyFrames, describeKeyFrames, keyFrames, videoCodec, videoTrack } from "./keyframes";
+import { ScrubClient, isPicture, type ScrubPicture, type SocketLike } from "./scrub-client";
 import { SHAPES, mseApi, mseSupports, pickSample, probeShape, type MseApi } from "./mse-probe";
 import type { RvPlayer } from "./player";
 
-export const CHECK_VERSION = "0.5.0";
+export const CHECK_VERSION = "0.6.0";
 export const SETUPS = [
   "Desktop Chrome, LAN",
   "Desktop Chrome, Tailscale",
@@ -73,6 +78,8 @@ const SCRUB_FAR_MS = 10 * 60_000;
 /** K reads this much media from the play position (Phase 10 step 0). */
 const KEY_WINDOW_MS = 20_000;
 const KEY_WINDOW_BYTES = 8 * 1024 * 1024;
+/** F asks the server for the picture at this many moments of the day (Phase 10). */
+const SERVER_MOMENTS = 10;
 /** The first HD frame may wait for the NVR's main recording up to the moment. */
 const HD_TIMEOUT_MS = 300_000;
 const PEEK_LIMIT = 15;
@@ -228,6 +235,7 @@ export class PlaybackCheck {
       await this._rates();
       await this._scrub();
       await this._keyFrames();
+      await this._serverPictures();
       await this._switchHd();
       await this._link();
       await this._capabilities();
@@ -855,6 +863,88 @@ export class PlaybackCheck {
     const key = await this._keyLine("SD");
     this._log(`K  ${key.text}`);
     this._summary.push(`Key frames: ${key.short}`);
+  }
+
+  /**
+   * F: pictures from the server (Phase 10 step 1): a scrub session asks for
+   * the picture at moments spread over the day's recordings, twice: first
+   * from the disk or a cut from the device, then from the server's store.
+   * Each picture is decoded on its own, as a scrub would paint it.
+   */
+  private async _serverPictures(): Promise<void> {
+    const t = this._t;
+    const moments = spreadMoments(t.day?.segments ?? [], SERVER_MOMENTS);
+    if (!moments.length) {
+      this._log("F  skipped: no recording on this day");
+      return;
+    }
+    let client: ScrubClient;
+    try {
+      const { url } = await openScrubSession(t.hass, t.deviceId, t.date);
+      client = new ScrubClient(new WebSocket(wsUrl(url, location.href)) as unknown as SocketLike);
+      await client.ready();
+    } catch (err) {
+      this._log(`F  the scrub session did not open: ${toError(err).message}`);
+      this._summary.push("Pictures from the server: the session did not open");
+      return;
+    }
+    try {
+      const pictures: ScrubPicture[] = [];
+      const first = await this._askPass(client, moments, pictures);
+      const again = await this._askPass(client, moments, []);
+      const decoded = await this._decodePictures(pictures);
+      const offsets = pictures.map((p) => (p.at - p.time) / 1000);
+      const offsetText = offsets.length
+        ? ` · each ${Math.min(...offsets).toFixed(1)} to ${Math.max(...offsets).toFixed(1)} s before its moment`
+        : "";
+      this._log(
+        `F  Pictures from the server (scrub, ${String(moments.length)} moments over the day): first ${describePass(first)}` +
+          ` · again ${describePass(again)}${offsetText}${decoded}`,
+      );
+      this._summary.push(`Pictures from the server: first ${describePass(first)}; again ${describePass(again)}`);
+    } finally {
+      client.close();
+    }
+  }
+
+  private async _askPass(client: ScrubClient, moments: readonly number[], keep: ScrubPicture[]): Promise<ScrubPass> {
+    const pass: ScrubPass = { answered: [], missed: [] };
+    for (const at of moments) {
+      this._checkStopped();
+      const answer = await client.ask(at);
+      if (isPicture(answer)) {
+        pass.answered.push({ ms: answer.ms, source: answer.source, offsetMs: answer.at - answer.time });
+        keep.push(answer);
+      } else {
+        pass.missed.push(answer.error);
+      }
+    }
+    return pass;
+  }
+
+  /** Decode each picture on its own (its own decoder): " · VideoDecoder: 10 of 10 decode, median 3.1 ms". */
+  private async _decodePictures(pictures: readonly ScrubPicture[]): Promise<string> {
+    const fmp4 = pictures.filter((p) => p.kind === "fmp4");
+    if (!fmp4.length) return "";
+    const times: number[] = [];
+    let available = true;
+    for (const picture of fmp4) {
+      const track = videoTrack(picture.init);
+      const codec = picture.codec ?? undefined;
+      const frames = track ? keyFrames(picture.data, track) : [];
+      if (!track || !codec || !frames.length) continue;
+      const result = await decodeKeyFrames(codec, track, frames);
+      available = result.available;
+      if (!available) break;
+      times.push(...result.decodeMs.slice(0, 1));
+    }
+    if (!available) return " · VideoDecoder absent";
+    const sorted = [...times].sort((a, b) => a - b);
+    const median = sorted.length ? sorted[Math.floor((sorted.length - 1) / 2)] : undefined;
+    return (
+      ` · VideoDecoder: ${String(times.length)} of ${String(fmp4.length)} decode` +
+      (median === undefined ? "" : `, median ${median.toFixed(1)} ms each with its own decoder`)
+    );
   }
 
   private async _keyLine(label: string): Promise<{ text: string; short: string }> {

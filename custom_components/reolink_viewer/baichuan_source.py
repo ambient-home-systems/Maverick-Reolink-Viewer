@@ -45,6 +45,20 @@ indexed like it (``fmp4.FragmentIndex``), so the MSE view serves both alike.
   end are sent in the device's local time (``timeconv``'s zone, from the
   bridge), as the device keeps them.
 
+Scrub cuts (Phase 10 step 1, :meth:`BaichuanSource.async_key_frame`): for a
+moment a drag passes that is not on disk, a 2-second cut of the sub stream
+from that moment, ended (144) as soon as its first key frame near the moment
+is in, and that key frame alone handed back (``fmp4.key_sample``). It takes
+its channel's turn as a cut's first span does (the cut downloading gives way
+at its next block, and asks again after it), a stream slot within
+``SCRUB_SLOT_WAIT_S`` (never the download's), and the host's connection; it
+gives up ``SCRUB_KEY_TIMEOUT_S`` after the device's reply (the owner's probe:
+13 of 343 cuts sent none within 5 s, the rest within 0.3 s). The device tells
+a channel's cuts apart by channel only, so a key frame of another cut, still
+arriving, is told apart by its time; and before handing the turn back to a
+cut that waits, the scrub lets its own last blocks pass (``SCRUB_DRAIN_S``;
+the muxer also skips them, see ``baichuan_mux``).
+
 The cache (``vodcache.py``) decides when to cut, reserves the disk space and
 falls back to the download on any failure here. Only ``bridge.py`` is asked
 for the host's address, credentials and time zone.
@@ -69,7 +83,7 @@ from .baichuan_client import BaichuanClientError, BaichuanReplayClient, StreamSt
 from .baichuan_media import Block
 from .baichuan_mux import BaichuanMuxer, MuxError
 from .bridge import BaichuanEndpoint
-from .fmp4 import FragmentIndex
+from .fmp4 import FragmentError, FragmentIndex, KeySample, key_sample
 from .scheduler import Priority, Scheduler
 
 _LOGGER = logging.getLogger(__name__)
@@ -103,6 +117,17 @@ UNSUPPORTED_RETRY_S = 6 * 3600.0
 KEEP_RATE_SPAN_S = 120
 RATES_STORE_KEY = "reolink_viewer.baichuan_rates"
 ANY_CHANNEL_BITMAP = 255
+# A scrub cut (Phase 10): this much from the moment; its key frame within
+# this long of the device's reply; a stream slot within this long.
+SCRUB_CUT_S = 2.0
+SCRUB_KEY_TIMEOUT_S = 1.0
+SCRUB_SLOT_WAIT_S = 1.0
+# A key frame this far before or after the moment (s) is the scrub's (the
+# probe: 3 s before to 2 s after); farther, another cut's still arriving.
+SCRUB_KEY_BEFORE_S = 10
+SCRUB_KEY_AFTER_S = 5
+# Before a waiting cut gets the turn back, a scrub's last blocks pass by.
+SCRUB_DRAIN_S = 0.3
 
 type ClientFactory = Callable[..., BaichuanReplayClient]
 type Reserve = Callable[[Path, int], Awaitable[None]]
@@ -157,6 +182,8 @@ class Cut:
     turn_fragments: int = 0
     # Wakes the span's pump (to give way at once).
     waker: asyncio.Event | None = None
+    # A scrub's cut (Phase 10): one key frame, never written to a file.
+    scrub: bool = False
     _more: asyncio.Event = field(default_factory=asyncio.Event)
 
     def extend(self) -> None:
@@ -316,11 +343,24 @@ class BaichuanSource:
         # Each camera's counter rate (entry|channel), as earlier cuts measured.
         self._rates_store: Store[dict[str, int]] = Store(hass, 1, RATES_STORE_KEY)
         self._rates: dict[str, int] | None = None
+        # Scrub cuts asked, answered, failed; key frames of other cuts passed by.
+        self._scrubs = {"asked": 0, "answered": 0, "failed": 0, "stale": 0}
 
     @property
     def enabled(self) -> bool:
         """Return True when the option is on."""
         return not self._closed and self._enabled()
+
+    def usable(self, entry_id: str) -> bool:
+        """Return whether a cut may be asked of a host (the option on, not refused)."""
+        if not self.enabled:
+            return False
+        host = self._hosts.get(entry_id)
+        return (
+            host is None
+            or host.unsupported is None
+            or time.monotonic() >= host.unsupported_until
+        )
 
     # ---- Cuts ----
 
@@ -365,6 +405,154 @@ class BaichuanSource:
             f"reolink_viewer baichuan cut ch{channel}",
         )
         return cut
+
+    async def async_key_frame(
+        self,
+        *,
+        entry_id: str,
+        channel: int,
+        start_ms: int,
+        end_ms: int,
+        at_ms: float,
+    ) -> KeySample:
+        """Cut the sub stream's key frame showing ``at_ms`` (a scrub, Phase 10).
+
+        Of the recording (UTC ``start_ms``-``end_ms``) at ``at_ms`` (ms of
+        media). Raises :class:`CutError` when there is none to give: the
+        option off, the device refusing the protocol, no stream slot, no key
+        frame in time. Cancelling it (a newer moment) ends the cut cleanly.
+        """
+        if not self.enabled:
+            raise CutError("the Reolink protocol is off for recordings")
+        host = self._hosts.get(entry_id)
+        if host is not None and host.unsupported is not None:
+            if time.monotonic() < host.unsupported_until:
+                raise CutError(f"not supported by this device ({host.unsupported})")
+            host.unsupported = None
+        self._scrubs["asked"] += 1
+        cut = Cut(entry_id, channel, "sub", Path(os.devnull), at_ms, scrub=True)
+        origin = start_ms / 1000
+        asked = origin + at_ms / 1000
+        end = min(asked + SCRUB_CUT_S, end_ms / 1000)
+        tz = bridge.async_get_host(self._hass, entry_id).timezone()
+        rates = await self._load_rates()
+        muxer = BaichuanMuxer(origin, asked, rate=rates.get(f"{entry_id}|{channel}"))
+        try:
+            async with self._slot(cut, SCRUB_SLOT_WAIT_S, first=True):
+                client = await self._acquire(cut)
+                try:
+                    async with self._turn(cut):
+                        sample = await self._scrub_cut(
+                            cut, client, muxer, (_local(asked, tz), _local(end, tz))
+                        )
+                finally:
+                    self._release(entry_id)
+        except CutError:
+            self._scrubs["failed"] += 1
+            raise
+        except (BaichuanClientError, OSError, TimeoutError, FragmentError) as err:
+            self._scrubs["failed"] += 1
+            raise CutError(_describe(err)) from err
+        self._hosts[entry_id].worked = True
+        self._scrubs["answered"] += 1
+        return sample
+
+    async def _scrub_cut(
+        self,
+        cut: Cut,
+        client: BaichuanReplayClient,
+        muxer: BaichuanMuxer,
+        times: tuple[datetime, datetime],
+    ) -> KeySample:
+        """Ask a scrub's cut, take its first key frame near the moment, end it."""
+        asked = muxer.asked_unix
+        pieces: list[bytes] = []
+        failures: list[str] = []
+        found = asyncio.Event()
+
+        def on_block(block: Block) -> None:
+            if found.is_set() or block.kind != "key":
+                return
+            unix = block.unix_time
+            if (
+                asked is not None
+                and unix is not None
+                and 1_500_000_000 < unix < 2_100_000_000
+                and not -SCRUB_KEY_BEFORE_S <= unix - asked <= SCRUB_KEY_AFTER_S
+            ):
+                # Another cut's, still arriving.
+                self._scrubs["stale"] += 1
+                return
+            try:
+                pieces.extend(muxer.feed(block))
+                pieces.extend(muxer.finish())
+            except Exception as err:  # noqa: BLE001 - the device's input
+                failures.append(f"cannot mux the key frame ({type(err).__name__})")
+            found.set()
+
+        options: dict[str, Any] = {
+            "support_sub": 1,
+            "on_block": on_block,
+            "analyse": False,
+        }
+        start, end = times
+        stream_type = STREAM_TYPES["sub"]
+        try:
+            try:
+                reply_ms, _stats, _fields = await client.download(
+                    cut.channel, stream_type, start, end, **options
+                )
+            except BaichuanClientError as err:
+                if "refused" not in str(err):
+                    raise
+                reply_ms, _stats, _fields = await client.download(
+                    cut.channel,
+                    stream_type,
+                    start,
+                    end,
+                    bitmap=ANY_CHANNEL_BITMAP,
+                    **options,
+                )
+            cut.timing["reply_ms"] = reply_ms
+            waiter = asyncio.ensure_future(found.wait())
+            lost = asyncio.ensure_future(client.lost.wait())
+            try:
+                done, _pending = await asyncio.wait(
+                    {waiter, lost},
+                    timeout=SCRUB_KEY_TIMEOUT_S,
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+            finally:
+                waiter.cancel()
+                lost.cancel()
+            if not found.is_set():
+                raise CutError(
+                    "connection lost"
+                    if done
+                    else f"no key frame within {SCRUB_KEY_TIMEOUT_S:g} s"
+                )
+        finally:
+            if client.connected:
+                ending = asyncio.ensure_future(_end_download(client, cut.channel))
+                self._closing.add(ending)
+                ending.add_done_callback(self._closing.discard)
+                with contextlib.suppress(TimeoutError):
+                    async with asyncio.timeout(END_TIMEOUT_S):
+                        await asyncio.shield(ending)
+            # A cut of the channel waits for the turn: what this one still
+            # sends would reach it; let that pass first.
+            if any(not waiting.scrub for waiting in self._channel(cut).waiting):
+                await asyncio.sleep(SCRUB_DRAIN_S)
+        if failures:
+            raise CutError(failures[0])
+        init = muxer.init
+        fragment = next((p for p in pieces if p[4:8] == b"moof"), None)
+        if init is None or fragment is None:
+            raise CutError("no picture in the key frame (no parameter sets)")
+        sample = key_sample(init, fragment)
+        if sample is None:
+            raise CutError("the cut's first sample is not a key frame")
+        return sample
 
     async def async_stop(self, cut: Cut) -> None:
         """Stop a cut (the viewer left, or the cache let it go)."""
@@ -847,6 +1035,7 @@ class BaichuanSource:
             "unsupported": [
                 h.unsupported for h in self._hosts.values() if h.unsupported is not None
             ],
+            "scrub_cuts": dict(self._scrubs),
         }
 
 
