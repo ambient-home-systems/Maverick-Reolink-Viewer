@@ -8,6 +8,7 @@ import {
   fetchThumbnailUrls,
   fetchTimelineDay,
   fetchTimelineDays,
+  openScrubSession,
   prefetchSegment,
   releasePlayback,
   toError,
@@ -39,6 +40,10 @@ import {
   type PlayerErrorDetail,
   type RvPlayer,
 } from "../playback/player";
+import { ScrubClient, isPicture, type ScrubAnswer, type ScrubPicture, type SocketLike } from "../playback/scrub-client";
+import { ScrubController } from "../playback/scrub-controller";
+import "../playback/scrub-picture";
+import type { RvScrubPicture } from "../playback/scrub-picture";
 import { ThumbLoader } from "../playback/thumb-loader";
 import { dateIn, firstDayOfWeek, formatClock, formatStamp } from "../playback/time";
 import "../playback/timeline";
@@ -67,7 +72,7 @@ import { parseInShort } from "../plain";
 import { problem } from "../problem";
 import { sharedStyles } from "../styles";
 import type { CacheStatus, HomeAssistant, PlaybackUrl, Segment, Stream, TimelineDay, Timing } from "../types";
-import { LIVE_REPORT_PREFIX } from "../live/check-util";
+import { LIVE_REPORT_PREFIX, wsUrl } from "../live/check-util";
 import { dayLabel, shortDay } from "./events-view";
 import "./findings";
 import { toast } from "./navigation";
@@ -139,7 +144,12 @@ export interface Metrics {
   /** HD failures (back to the sub stream), and why. */
   hdFailures?: number;
   lastHdFailure?: string;
+  /** Pictures from the server while dragging (Phase 10): asked, shown, missed, and the last. */
+  scrub?: { asked: number; shown: number; missed: number; last?: string };
 }
+
+/** After a drag's release, its picture stays until the video has a frame, at most this long. */
+export const SCRUB_HOLD_MS = 10_000;
 
 /**
  * The Playback tab of a camera with recordings (its playback source: the NVR
@@ -181,6 +191,7 @@ export class RvPlayback extends LitElement {
     _rate: { state: true },
     _note: { state: true },
     _mode: { state: true },
+    _scrubPicture: { state: true },
   };
 
   declare hass: HomeAssistant | undefined;
@@ -210,7 +221,7 @@ export class RvPlayback extends LitElement {
   declare _stream: Stream;
   declare _hd: StreamDecision;
   declare _playing: PlaybackUrl | undefined;
-  declare _hover: { x: number; time: number; url?: string; gap?: boolean } | undefined;
+  declare _hover: { x: number; time: number; url?: string; gap?: boolean; bare?: boolean } | undefined;
   declare _thumbs: ReadonlyMap<number, string>;
   declare _metrics: Metrics;
   declare _checkText: string;
@@ -226,6 +237,8 @@ export class RvPlayback extends LitElement {
   /** Over the video while a start waits (the recorder's download). */
   declare _note: string | undefined;
   declare _mode: PlayerMode;
+  /** The server's picture at the pointer while a drag passes what is not buffered. */
+  declare _scrubPicture: ScrubPicture | undefined;
 
   private _daySeq = 0;
   /** Days whose HD list was searched ahead (camera|date). */
@@ -253,6 +266,14 @@ export class RvPlayback extends LitElement {
   /** Streams whose recordings the MSE player could not play here. */
   private readonly _mseFailed = new Set<Stream>();
   private _lastPreview = 0;
+  /** Asks the server for pictures while dragging (one per camera and day). */
+  private _scrubber: ScrubController | undefined;
+  private _scrubKey = "";
+  /** A drag (or the arrow keys) is moving the time. */
+  private _scrubbing = false;
+  private _scrubHold: ReturnType<typeof setTimeout> | undefined;
+  /** Opens a scrub session's socket (replaceable in tests). */
+  scrubSocket = (url: string): SocketLike => new WebSocket(wsUrl(url, location.href)) as unknown as SocketLike;
 
   constructor() {
     super();
@@ -298,6 +319,10 @@ export class RvPlayback extends LitElement {
     return this.renderRoot.querySelector("rv-timeline");
   }
 
+  private get _scrubView(): RvScrubPicture | null {
+    return this.renderRoot.querySelector("rv-scrub-picture");
+  }
+
   private get _events() {
     return filterEvents(this._day?.events ?? [], this._only);
   }
@@ -319,6 +344,7 @@ export class RvPlayback extends LitElement {
     clearTimeout(this._thumbPause);
     clearTimeout(this._eventsRetry);
     this._check?.stop();
+    this._closeScrub();
   }
 
   protected override willUpdate(changed: PropertyValues<this>): void {
@@ -477,6 +503,7 @@ export class RvPlayback extends LitElement {
     if (!hass || !day) return;
     const target = playTarget(day.segments, time);
     if (!target) {
+      this._clearScrubPicture();
       toast(this, "No recording after this time on this day");
       return;
     }
@@ -745,6 +772,7 @@ export class RvPlayback extends LitElement {
 
   private _playError(message: string): void {
     this._resumeThumbs();
+    this._clearScrubPicture();
     if (this._stream === "main") {
       this._stream = "sub";
       this._metrics = {
@@ -761,8 +789,9 @@ export class RvPlayback extends LitElement {
   }
 
   private _onTime(time: number): void {
-    // While a new start is on its way, the old video's time is stale.
-    if (this._starting !== undefined) return;
+    // While a new start is on its way, the old video's time is stale; while a
+    // drag moves the time, the pointer is the time.
+    if (this._starting !== undefined || this._scrubbing) return;
     // Repaint the cursor a few times a second, not on every timeupdate.
     const now = performance.now();
     if (now - this._lastCursorPaint < 250) return;
@@ -778,13 +807,99 @@ export class RvPlayback extends LitElement {
     }
   }
 
-  /** Dragging the cursor: move it, and show the frame there if it is buffered. */
+  /**
+   * Dragging the cursor: move it, and show the frame there. The video shows it
+   * where it has it buffered; elsewhere the server's key frame (Phase 10) is
+   * painted over the video.
+   */
   private _onScrub(time: number): void {
     this._cursor = time;
-    const now = performance.now();
-    if (now - this._lastPreview < 80) return;
-    this._lastPreview = now;
-    this._player?.preview(time);
+    this._scrubbing = true;
+    clearTimeout(this._scrubHold);
+    const player = this._player;
+    if (player?.buffers(time)) {
+      this._scrubber?.end();
+      this._scrubPicture = undefined;
+      const now = performance.now();
+      if (now - this._lastPreview < 80) return;
+      this._lastPreview = now;
+      player.preview(time);
+      return;
+    }
+    const day = this._day;
+    if (!day || !segmentAt(day.segments, time) || !this._scrubView?.canShow) return;
+    this._scrubberNow().move(time);
+  }
+
+  /** The scrub controller for the camera's day on show (a new one when it changes). */
+  private _scrubberNow(): ScrubController {
+    const key = `${this.deviceId}|${this._date}`;
+    if (this._scrubber && this._scrubKey === key) return this._scrubber;
+    this._scrubber?.close();
+    const { deviceId, _date: date } = this;
+    const scrubber = new ScrubController({
+      open: async () => {
+        const hass = this.hass;
+        if (!hass) throw new Error("not connected");
+        const { url } = await openScrubSession(hass, deviceId, date);
+        return new ScrubClient(this.scrubSocket(url));
+      },
+      show: (picture) => {
+        if (scrubber === this._scrubber && this._scrubbing) this._scrubPicture = picture;
+        this._noteScrub(scrubber, picture);
+      },
+      miss: (answer) => {
+        this._noteScrub(scrubber, answer);
+      },
+    });
+    this._scrubber = scrubber;
+    this._scrubKey = key;
+    return scrubber;
+  }
+
+  private _noteScrub(scrubber: ScrubController, answer: ScrubAnswer): void {
+    if (scrubber !== this._scrubber) return;
+    const last = isPicture(answer)
+      ? `${answer.source}, ${Math.round(answer.ms)} ms, ${((answer.at - answer.time) / 1000).toFixed(1)} s before`
+      : answer.superseded
+        ? this._metrics.scrub?.last
+        : answer.error;
+    this._metrics = { ...this._metrics, scrub: { ...scrubber.counts, ...(last ? { last } : {}) } };
+  }
+
+  /**
+   * The drag ended. Released (`play`), its picture stays until the video
+   * starts there (its first frame), so the screen goes from the picture to
+   * the video; cancelled, it goes at once.
+   */
+  private _endScrub(play: boolean): void {
+    this._scrubbing = false;
+    this._scrubber?.end();
+    clearTimeout(this._scrubHold);
+    if (!this._scrubPicture) return;
+    if (!play) {
+      this._scrubPicture = undefined;
+      return;
+    }
+    this._scrubHold = setTimeout(() => {
+      this._scrubPicture = undefined;
+    }, SCRUB_HOLD_MS);
+  }
+
+  private _clearScrubPicture(): void {
+    if (this._scrubbing) return;
+    clearTimeout(this._scrubHold);
+    this._scrubPicture = undefined;
+  }
+
+  /** The day or camera changed, or the tab went: the session closes. */
+  private _closeScrub(): void {
+    this._scrubber?.close();
+    this._scrubber = undefined;
+    this._scrubKey = "";
+    this._scrubbing = false;
+    clearTimeout(this._scrubHold);
+    this._scrubPicture = undefined;
   }
 
   private _jump(direction: 1 | -1): void {
@@ -828,6 +943,7 @@ export class RvPlayback extends LitElement {
 
   private _selectDate(date: string): Promise<void> {
     this._date = date;
+    this._closeScrub();
     this._player?.stop();
     this._playing = undefined;
     this._preloadPending = undefined;
@@ -854,6 +970,11 @@ export class RvPlayback extends LitElement {
     const seq = ++this._hoverSeq;
     const hover = { x: detail.x, time: detail.time };
     this._hover = hover;
+    if (this._scrubbing && this._scrubView?.canShow && !this._scrubber?.unavailable) {
+      // The drag shows the picture in the player: the label alone here.
+      this._hover = { ...hover, bare: true };
+      return;
+    }
     try {
       const result = await fetchThumbnailUrls(hass, this.deviceId, [detail.time], thumbBucket(this._view.span));
       const url = result.urls[0]?.url;
@@ -1223,7 +1344,7 @@ export class RvPlayback extends LitElement {
     const hover = this._hover;
     if (!hover) return nothing;
     return html`<div class="hover" style="left: ${Math.max(0, hover.x - 80)}px">
-      ${hover.gap ? nothing : hover.url ? html`<img src=${hover.url} alt="" />` : html`<div class="noimg"></div>`}
+      ${hover.gap || hover.bare ? nothing : hover.url ? html`<img src=${hover.url} alt="" />` : html`<div class="noimg"></div>`}
       <span>${formatClock(hover.time, this._zone, true)}${hover.gap ? " · no recording" : ""}</span>
     </div>`;
   }
@@ -1280,6 +1401,8 @@ export class RvPlayback extends LitElement {
             <option value="file" ?selected=${this._mode === "file"}>File player only</option>
           </select>
         </dd>
+        <dt>Pictures while dragging</dt>
+        <dd>${describeScrub(m.scrub, this._scrubber?.unavailable === true, this._scrubView?.canShow)}</dd>
         <dt>Fell back to the file player</dt>
         <dd>${m.fallbacks ? `${m.fallbacks}× (last: ${m.lastFallback ?? "?"})` : "never"}</dd>
         <dt>Day</dt>
@@ -1307,6 +1430,7 @@ export class RvPlayback extends LitElement {
               const codec = this._metrics.codec ?? videoCodec(this._player?.mseStats?.mime);
               this._metrics = { ...this._metrics, firstFrameMs: e.detail.ms, codec };
               this._resumeThumbs();
+              this._clearScrubPicture();
             }}
             @rv-advanced=${(e: CustomEvent<AdvanceDetail>) => {
               this._onAdvanced(e.detail);
@@ -1323,7 +1447,14 @@ export class RvPlayback extends LitElement {
             @rv-pip=${() => {
               this.requestUpdate(); // the toolbar's button shows it
             }}
-          ></rv-player>
+          >
+            <rv-scrub-picture
+              slot="over"
+              .picture=${this._scrubPicture}
+              .pointer=${this._cursor}
+              .timeZone=${zone}
+            ></rv-scrub-picture>
+          </rv-player>
           <div class="dayline">
             <div class="day-nav" role="group" aria-label="Day">
               <button class="step" aria-label="Previous day" @click=${() => {
@@ -1369,6 +1500,7 @@ export class RvPlayback extends LitElement {
                 this._view = e.detail.view;
               }}
               @rv-seek=${(e: CustomEvent<TimeDetail>) => {
+                this._endScrub(true);
                 void this.playAt(e.detail.time);
               }}
               @rv-scrub=${(e: CustomEvent<TimeDetail>) => {
@@ -1378,6 +1510,8 @@ export class RvPlayback extends LitElement {
               @rv-hover-end=${() => {
                 this._hoverSeq += 1;
                 this._hover = undefined;
+                // A drag the browser took (no release): its picture goes.
+                if (this._scrubbing) this._endScrub(false);
               }}
             ></rv-timeline>
           </div>
@@ -1748,6 +1882,19 @@ export function describePlayer(player: RvPlayer | null): string {
       (stats.switches ? ` (${stats.switches} source switches)` : ""),
   ];
   return parts.join(" · ");
+}
+
+/** The debug panel's line on pictures from the server while dragging (Phase 10). */
+export function describeScrub(
+  scrub: Metrics["scrub"],
+  unavailable: boolean,
+  canShow: boolean | undefined,
+): string {
+  if (canShow === false) return "not here: this browser has neither WebCodecs nor MSE";
+  if (unavailable) return "the scrub session could not open: the buffer only";
+  if (!scrub) return "none yet";
+  const counts = `${String(scrub.shown)} shown of ${String(scrub.asked)} asked${scrub.missed ? `, ${String(scrub.missed)} missed` : ""}`;
+  return scrub.last ? `${counts} (last: ${scrub.last})` : counts;
 }
 
 /** How the last recording was delivered, for the debug panel. */

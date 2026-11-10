@@ -1,10 +1,10 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
-import { B as i, C as a, D as o, It as s, Lt as c, O as l, Ot as u, St as d, T as f, Z as p, _t as m, a as h, bt as g, c as _, d as v, gt as ee, i as y, j as b, kt as te, m as ne, n as re, o as ie, p as ae, r as oe, s as se, tt as x, u as ce, vt as S, w as le, xt as C } from "./live-D6mEGytR.js";
-import { $ as w, D as ue, E as de, F as fe, I as pe, L as me, M as he, N as ge, O as T, P as _e, R as E, T as ve, b as D, c as ye, g as O, h as k, j as A, k as be, l as xe, m as Se, q as j, u as M, v as Ce, w as we, x as Te, y as N } from "./home-DZHvBXAF.js";
-import { dayLabel as Ee, shortDay as De } from "./events-view-DOU4wHG6.js";
-import { a as Oe, i as P, n as F, r as ke, s as Ae, t as je } from "./check-vnuvOAva.js";
-import { i as Me } from "./findings-0DTL4xoa.js";
-var Ne = class extends r {
+import { B as i, C as a, D as o, Dt as s, It as c, Lt as l, O as u, Ot as d, St as f, T as p, X as ee, Z as m, _t as h, a as g, bt as _, c as v, d as y, gt as te, i as b, j as x, kt as ne, m as re, n as ie, o as ae, p as oe, r as se, s as ce, tt as le, u as ue, vt as S, w as de, xt as C } from "./live-D6mEGytR.js";
+import { $ as w, D as fe, E as pe, F as me, I as he, L as ge, M as _e, N as ve, O as T, P as ye, R as E, T as be, b as D, c as xe, g as O, h as k, j as A, k as Se, l as Ce, m as we, q as j, u as M, v as Te, w as Ee, x as De, y as N } from "./home-Ciew1Vor.js";
+import { dayLabel as Oe, shortDay as ke } from "./events-view-CSXrTTQg.js";
+import { a as Ae, c as je, f as Me, i as P, l as Ne, n as F, o as Pe, r as Fe, s as I, t as Ie, u as Le } from "./check-Bho42WiC.js";
+import { i as Re } from "./findings-0DTL4xoa.js";
+var ze = class extends r {
 	static properties = {
 		events: { attribute: !1 },
 		thumbs: { attribute: !1 },
@@ -36,7 +36,7 @@ var Ne = class extends r {
 		}));
 	}
 	_row(e) {
-		let r = this.thumbs.get(e.start), i = this.current !== void 0 && this.current >= e.start && this.current < e.end, a = ye(e.types), o = v(e.start, this.timeZone, !0);
+		let r = this.thumbs.get(e.start), i = this.current !== void 0 && this.current >= e.start && this.current < e.end, a = xe(e.types), o = y(e.start, this.timeZone, !0);
 		return n`<li>
       <button
         class="row ${i ? "active" : ""}"
@@ -51,11 +51,11 @@ var Ne = class extends r {
       >
         <span class="t">${o.slice(0, -3)}<small>${o.slice(-3)}</small></span>
         <span class="ev">
-          ${p(M(e.types))}<span class="label">${a}</span>
+          ${m(M(e.types))}<span class="label">${a}</span>
         </span>
         <span class="meta">
           ${i ? n`<span class="tag">${this.playing ? "Playing" : "Selected"}</span>` : t}
-          <span>${xe(e.end - e.start)}</span>
+          <span>${Ce(e.end - e.start)}</span>
           ${e.ambiguous ? n`<span title="Recorded in the hour repeated when clocks went back">time ±1 h</span>` : t}
         </span>
         <span class="thumb">${r ? n`<img src=${r} alt="" loading="lazy" decoding="async" />` : t}</span>
@@ -72,7 +72,7 @@ var Ne = class extends r {
 			this._shown += 60;
 		}}>Show ${Math.min(e, 60)} more (${e} left)</button>` : t}`;
 	}
-	static styles = [b, e`
+	static styles = [x, e`
       :host {
         display: block;
       }
@@ -177,16 +177,16 @@ var Ne = class extends r {
       }
     `];
 };
-customElements.get("rv-event-list") || customElements.define("rv-event-list", Ne);
+customElements.get("rv-event-list") || customElements.define("rv-event-list", ze);
 //#endregion
 //#region src/playback/player.ts
-var Pe = [
+var Be = [
 	.5,
 	1,
 	2,
 	4,
 	8
-], Fe = class extends r {
+], Ve = class extends r {
 	static properties = {
 		muted: { type: Boolean },
 		rate: { type: Number },
@@ -209,7 +209,7 @@ var Pe = [
 	}
 	disconnectedCallback() {
 		super.disconnectedCallback();
-		for (let e of [0, 1]) y(this._video(e)).catch(() => void 0);
+		for (let e of [0, 1]) b(this._video(e)).catch(() => void 0);
 	}
 	get pip() {
 		return this._pip;
@@ -217,16 +217,16 @@ var Pe = [
 	async togglePip() {
 		let e = this._video(this._active);
 		if (e) try {
-			if (this._pip) for (let e of [0, 1]) await y(this._video(e));
-			else await oe(e);
+			if (this._pip) for (let e of [0, 1]) await b(this._video(e));
+			else await se(e);
 		} catch {}
 	}
 	_onPipChange = () => {
-		let e = h(this._video(0)) || h(this._video(1));
+		let e = g(this._video(0)) || g(this._video(1));
 		e !== this._pip && (this._pip = e, this._emit("rv-pip", { pip: e }));
 	};
 	_carryPip(e, t) {
-		e && t && h(e) && ie(e, t);
+		e && t && g(e) && ae(e, t);
 	}
 	updated(e) {
 		if (e.has("rate")) for (let e of [0, 1]) this._applyRate(this._video(e));
@@ -284,12 +284,18 @@ var Pe = [
 		let n = this._video(this._active);
 		n && (this._requestedAt = t, this._firstOnSeeked = !0, this._seekTo(n, e), this._start(n));
 	}
+	buffers(e) {
+		return this._bufferedAt(e) !== void 0;
+	}
 	preview(e) {
+		let t = this._bufferedAt(e), n = this._video(this._active);
+		return t === void 0 || !n ? !1 : (typeof n.fastSeek == "function" ? n.fastSeek(t) : n.currentTime = t, !0);
+	}
+	_bufferedAt(e) {
 		let t = this.current, n = this._video(this._active);
-		if (!t || !n || e < t.start || e > t.end) return !1;
+		if (!t || !n || e < t.start || e > t.end) return;
 		let r = (e - t.start) / 1e3, i = n.buffered;
-		for (let e = 0; e < i.length; e += 1) if (r >= i.start(e) && r <= i.end(e)) return typeof n.fastSeek == "function" ? n.fastSeek(r) : n.currentTime = r, !0;
-		return !1;
+		for (let e = 0; e < i.length; e += 1) if (r >= i.start(e) && r <= i.end(e)) return r;
 	}
 	pause() {
 		this._video(this._active)?.pause();
@@ -335,7 +341,7 @@ var Pe = [
 			return;
 		}
 		let r = this._video(e);
-		r && this._fail(n.message, r, n instanceof le);
+		r && this._fail(n.message, r, n instanceof de);
 	}
 	_seekTo(e, t) {
 		let n = Math.max(0, t / 1e3);
@@ -469,6 +475,7 @@ var Pe = [
 		let e = this._waiting || this._requestedAt !== void 0 && this.note ? this.note : void 0;
 		return n`<div class="frame">
       ${this._renderVideo(0)}${this._renderVideo(1)}
+      <slot name="over"></slot>
       ${e ? n`<div class="note" role="status">${e}</div>` : t}
       ${this._started ? t : n`<p class="empty">Pick an event or a time on the timeline to play it.</p>`}
     </div>`;
@@ -519,6 +526,11 @@ var Pe = [
       font-size: 15px;
       text-align: center;
     }
+    /* What a scrub shows over the video (Phase 10, rv-scrub-picture). */
+    ::slotted([slot="over"]) {
+      position: absolute;
+      inset: 0;
+    }
     /* The hidden buffer stays laid out (some browsers do not load hidden video). */
     video.hidden {
       opacity: 0;
@@ -526,10 +538,356 @@ var Pe = [
     }
   `;
 };
-customElements.get("rv-player") || customElements.define("rv-player", Fe);
+customElements.get("rv-player") || customElements.define("rv-player", Ve);
+//#endregion
+//#region src/playback/scrub-controller.ts
+var He = 6e4, Ue = class {
+	_options;
+	_session;
+	_pending;
+	_asking = !1;
+	_active = !1;
+	_idle;
+	_failed = !1;
+	counts = {
+		asked: 0,
+		shown: 0,
+		missed: 0
+	};
+	constructor(e) {
+		this._options = e;
+	}
+	get unavailable() {
+		return this._failed;
+	}
+	move(e) {
+		this._failed || (this._active = !0, this._pending = e, clearTimeout(this._idle), this._asking || this._pump());
+	}
+	end() {
+		this._active = !1, this._pending = void 0, this._armIdle();
+	}
+	close() {
+		this.end(), clearTimeout(this._idle);
+		let e = this._session;
+		this._session = void 0, this._failed = !1, e?.then((e) => {
+			e.close();
+		}).catch(() => void 0);
+	}
+	async _pump() {
+		this._asking = !0;
+		try {
+			for (; this._pending !== void 0;) {
+				let e = this._pending;
+				this._pending = void 0;
+				let t;
+				try {
+					t = await this._client();
+				} catch {
+					this._failed = !0, this._session = void 0;
+					return;
+				}
+				this.counts.asked += 1;
+				let n = await t.ask(e);
+				I(n) ? this._active && (this.counts.shown += 1, this._options.show(n)) : (this.counts.missed += 1, this._options.miss?.(n), n.error === "the scrub session closed" && (this._session = void 0));
+			}
+		} finally {
+			this._asking = !1, this._armIdle();
+		}
+	}
+	_client() {
+		return this._session ??= this._options.open().then(async (e) => (await e.ready(), e)), this._session;
+	}
+	_armIdle() {
+		clearTimeout(this._idle), !this._asking && this._session && (this._idle = setTimeout(() => {
+			if (this._active || this._asking) return;
+			let e = this._session;
+			this._session = void 0, e?.then((e) => {
+				e.close();
+			}).catch(() => void 0);
+		}, He));
+	}
+}, L = 2e3;
+function R(e) {
+	if (e.kind !== "fmp4" || !e.codec) return;
+	let t = Ne(e.init), n = t ? je(e.data, t)[0] : void 0;
+	if (t && n) return {
+		track: t,
+		codec: e.codec,
+		data: n.data,
+		timeS: n.timeS
+	};
+}
+var We = class {
+	_codecs;
+	_decoder;
+	_config = "";
+	_waiting;
+	constructor(e = Le()) {
+		this._codecs = e;
+	}
+	get available() {
+		return this._codecs.VideoDecoder !== void 0;
+	}
+	async paint(e, t) {
+		let n = R(e), r = this._codecs.VideoDecoder;
+		if (!n || !r) return !1;
+		let i = n.track.description, a = `${n.codec}|${String(n.track.width)}x${String(n.track.height)}|${i ? [...i].join(",") : ""}`;
+		try {
+			if (!this._decoder || a !== this._config) {
+				this.close(), this._config = a;
+				let e = new r({
+					output: (e) => {
+						let t = this._waiting;
+						this._waiting = void 0, t ? t.resolve(e) : e.close();
+					},
+					error: (t) => {
+						this._waiting?.reject(t), this._decoder === e && (this._decoder = void 0, this._config = "");
+					}
+				});
+				this._decoder = e, e.configure({
+					codec: n.codec,
+					codedWidth: n.track.width,
+					codedHeight: n.track.height,
+					optimizeForLatency: !0,
+					...i ? { description: i } : {}
+				});
+			}
+			let e = this._decoder, o, s = new Promise((e, t) => {
+				this._waiting = {
+					resolve: e,
+					reject: t
+				}, o = setTimeout(() => {
+					t(/* @__PURE__ */ Error("no frame in time"));
+				}, L);
+			});
+			e.decode(new this._codecs.EncodedVideoChunk({
+				type: "key",
+				timestamp: Math.round(n.timeS * 1e6),
+				data: n.data
+			}));
+			let c = e.flush().catch(() => void 0), l;
+			try {
+				l = await s;
+			} finally {
+				clearTimeout(o), this._waiting = void 0;
+			}
+			try {
+				t(l);
+			} finally {
+				l.close();
+			}
+			return await c, !0;
+		} catch {
+			return this.close(), !1;
+		}
+	}
+	close() {
+		try {
+			this._decoder?.close();
+		} catch {}
+		this._decoder = void 0, this._config = "";
+	}
+};
+function Ge() {
+	let e = window, t = e.ManagedMediaSource ?? e.MediaSource;
+	return typeof t == "function" ? t : void 0;
+}
+function z(e, t, n) {
+	return new Promise((r) => {
+		let i = setTimeout(() => {
+			e.removeEventListener(t, a), r(!1);
+		}, n), a = () => {
+			clearTimeout(i), e.removeEventListener(t, a), r(!0);
+		};
+		e.addEventListener(t, a);
+	});
+}
+async function B(e, t) {
+	let n = z(e, "updateend", L);
+	if (t(), !await n) throw Error("the buffer did not take it");
+}
+var Ke = class {
+	_ctor;
+	_buffer;
+	_codec = "";
+	_init;
+	_url;
+	constructor(e = Ge()) {
+		this._ctor = e;
+	}
+	get available() {
+		return this._ctor !== void 0;
+	}
+	async paint(e, t) {
+		let n = R(e), r = this._ctor;
+		if (!n || !r) return !1;
+		try {
+			if (!this._buffer || n.codec !== this._codec) {
+				this.close(t);
+				let e = new r();
+				t.disableRemotePlayback = !0, this._url = URL.createObjectURL(e);
+				let i = z(e, "sourceopen", L);
+				if (t.src = this._url, !await i) throw Error("the source did not open");
+				this._buffer = e.addSourceBuffer(`video/mp4; codecs="${n.codec}"`), this._codec = n.codec, this._init = void 0;
+			}
+			let i = this._buffer;
+			i.buffered.length && await B(i, () => {
+				i.remove(0, Infinity);
+			}), (!this._init || !qe(this._init, e.init)) && (await B(i, () => {
+				i.appendBuffer(e.init);
+			}), this._init = e.init), await B(i, () => {
+				i.appendBuffer(e.data);
+			});
+			let a = z(t, "seeked", L);
+			return t.currentTime = n.timeS + .001, await a;
+		} catch {
+			return this.close(t), !1;
+		}
+	}
+	close(e) {
+		e && this._url && (e.removeAttribute("src"), e.load()), this._url && URL.revokeObjectURL(this._url), this._url = void 0, this._buffer = void 0, this._codec = "", this._init = void 0;
+	}
+};
+function qe(e, t) {
+	if (e.length !== t.length) return !1;
+	for (let n = 0; n < e.length; n += 1) if (e[n] !== t[n]) return !1;
+	return !0;
+}
+function Je(e, t, n) {
+	return t !== void 0 && Math.abs(t - e) > (n ?? 4e3) + 500;
+}
+var Ye = class extends r {
+	static properties = {
+		picture: { attribute: !1 },
+		pointer: { attribute: !1 },
+		timeZone: { attribute: !1 },
+		_shown: { state: !0 },
+		_jpeg: { state: !0 }
+	};
+	codecs = new We();
+	mse = new Ke();
+	_painting = !1;
+	_next;
+	constructor() {
+		super(), this._shown = void 0;
+	}
+	get canShow() {
+		return this.codecs.available || this.mse.available;
+	}
+	disconnectedCallback() {
+		super.disconnectedCallback(), this.codecs.close(), this.mse.close(this._video ?? void 0), this._revoke();
+	}
+	updated(e) {
+		if (!e.has("picture")) return;
+		let t = this.picture;
+		t ? (this._next = t, this._painting || this._paintNext()) : (this._next = void 0, this._shown = void 0);
+	}
+	get _canvas() {
+		return this.renderRoot.querySelector("canvas");
+	}
+	get _video() {
+		return this.renderRoot.querySelector("video");
+	}
+	async _paintNext() {
+		this._painting = !0;
+		try {
+			for (; this._next;) {
+				let e = this._next;
+				this._next = void 0, await this._paint(e);
+			}
+		} finally {
+			this._painting = !1;
+		}
+	}
+	async _paint(e) {
+		if (e.kind === "jpeg") {
+			this._revoke(), this._jpeg = URL.createObjectURL(new Blob([e.data], { type: "image/jpeg" })), this._shown = V(e, "jpeg");
+			return;
+		}
+		if (this.codecs.available) {
+			await this.codecs.paint(e, (e) => {
+				this._draw(e);
+			}) && this.picture && (this._shown = V(e, "canvas"));
+			return;
+		}
+		let t = this._video;
+		t && this.mse.available && await this.mse.paint(e, t) && this.picture && (this._shown = V(e, "video"));
+	}
+	_draw(e) {
+		let t = this._canvas, n = t?.getContext("2d");
+		t && n && ((t.width !== e.displayWidth || t.height !== e.displayHeight) && (t.width = e.displayWidth, t.height = e.displayHeight), n.drawImage(e, 0, 0));
+	}
+	_revoke() {
+		this._jpeg && URL.revokeObjectURL(this._jpeg), this._jpeg = void 0;
+	}
+	render() {
+		let e = this.picture ? this._shown : void 0, r = e && Je(e.time, this.pointer, e.interval);
+		return n`<div class="frame ${e ? "on" : ""} ${r ? "late" : ""}" aria-hidden="true">
+      <canvas class=${e?.how === "canvas" ? "on" : ""}></canvas>
+      <video class=${e?.how === "video" ? "on" : ""} muted playsinline></video>
+      ${e?.how === "jpeg" && this._jpeg ? n`<img class="on" src=${this._jpeg} alt="" />` : t}
+      ${e ? n`<span class="time">${y(e.time, this.timeZone, !0)}</span>` : t}
+    </div>`;
+	}
+	static styles = e`
+    :host {
+      display: block;
+      pointer-events: none;
+    }
+    .frame {
+      position: absolute;
+      inset: 0;
+      visibility: hidden;
+      background: var(--rv-board, #000);
+    }
+    .frame.on {
+      visibility: visible;
+    }
+    canvas,
+    video,
+    img {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      visibility: hidden;
+    }
+    canvas.on,
+    video.on,
+    img.on {
+      visibility: visible;
+    }
+    .frame.late canvas,
+    .frame.late video,
+    .frame.late img {
+      opacity: 0.6;
+    }
+    .time {
+      position: absolute;
+      left: 12px;
+      top: 12px;
+      padding: 4px 8px;
+      background: rgba(17, 20, 24, 0.82);
+      color: var(--rv-on-board, #fff);
+      font-family: var(--rv-font, sans-serif);
+      font-size: 14px;
+      font-weight: 500;
+      font-variant-numeric: tabular-nums;
+    }
+  `;
+};
+function V(e, t) {
+	return {
+		time: e.time,
+		how: t,
+		...e.interval === void 0 ? {} : { interval: e.interval }
+	};
+}
+customElements.get("rv-scrub-picture") || customElements.define("rv-scrub-picture", Ye);
 //#endregion
 //#region src/playback/thumb-loader.ts
-var Ie = class {
+var Xe = class {
 	_concurrency;
 	_create;
 	_queue = [];
@@ -577,7 +935,7 @@ var Ie = class {
 			}, this._active.add(n), t.src = e.url;
 		}
 	}
-}, Le = 4, I = 24, Re = .01, L = 76, R = 18, z = 22, ze = 26, Be = 52, Ve = 16, He = [
+}, Ze = 4, H = 24, Qe = .01, U = 76, W = 18, $e = 22, et = 26, tt = 52, nt = 16, rt = [
 	1e4,
 	3e4,
 	k,
@@ -587,10 +945,10 @@ var Ie = class {
 	30 * k,
 	60 * k
 ];
-function Ue(e) {
-	return He.find((t) => t >= e / 48) ?? 36e5;
+function it(e) {
+	return rt.find((t) => t >= e / 48) ?? 36e5;
 }
-var We = class extends r {
+var at = class extends r {
 	static properties = {
 		day: { attribute: !1 },
 		events: { attribute: !1 },
@@ -637,7 +995,7 @@ var We = class extends r {
 		};
 	}
 	timeAt(e) {
-		return me(e, this.view, this._width || 1);
+		return ge(e, this.view, this._width || 1);
 	}
 	updated() {
 		this._draw();
@@ -675,7 +1033,7 @@ var We = class extends r {
 	}
 	_onWheel(e) {
 		if (e.preventDefault(), e.ctrlKey) {
-			let t = this._span(this.view.span * Math.exp(e.deltaY * Re));
+			let t = this._span(this.view.span * Math.exp(e.deltaY * Qe));
 			this._setView(E(this.view, t, this.timeAt(this._x(e)), this._bounds));
 		} else if (e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
 			let t = e.shiftKey ? e.deltaY : e.deltaX;
@@ -686,7 +1044,7 @@ var We = class extends r {
 		if (e.button !== 0) return;
 		e.isPrimary && (this._pointers.clear(), this._pinch = void 0, this._pinched = !1);
 		let t = this._x(e);
-		this._pointers.set(e.pointerId, t), B(this._canvas, e.pointerId, !0), this._pointers.size === 2 ? this._startPinch() : this._pinched || this._pointers.size > 2 || (this._drag = {
+		this._pointers.set(e.pointerId, t), G(this._canvas, e.pointerId, !0), this._pointers.size === 2 ? this._startPinch() : this._pinched || this._pointers.size > 2 || (this._drag = {
 			pointerId: e.pointerId,
 			x: t,
 			moved: !1
@@ -711,7 +1069,7 @@ var We = class extends r {
 	_movePinch() {
 		let e = this._pinch, t = [...this._pointers.values()];
 		if (!e || t.length < 2) return;
-		let [n = 0, r = 0] = t, i = Math.abs(n - r), a = e.dist >= I && i >= I ? this._span(e.span * e.dist / i) : this.view.span, o = (n + r) / 2;
+		let [n = 0, r = 0] = t, i = Math.abs(n - r), a = e.dist >= H && i >= H ? this._span(e.span * e.dist / i) : this.view.span, o = (n + r) / 2;
 		this._setView({
 			start: e.anchor - o / (this._width || 1) * a,
 			span: a
@@ -725,14 +1083,14 @@ var We = class extends r {
 		}
 		let n = this._drag;
 		if (n && n.pointerId === e.pointerId) {
-			if (Math.abs(t - n.x) > Le && (n.moved = !0), n.moved) {
+			if (Math.abs(t - n.x) > Ze && (n.moved = !0), n.moved) {
 				let e = this.timeAt(t);
 				n.time = e, this._emit("rv-scrub", { time: e }), this._scheduleHover(e, t);
 			}
 		} else e.pointerType === "mouse" && this._scheduleHover(this.timeAt(t), t);
 	}
 	_onPointerUp(e) {
-		if (this._pointers.delete(e.pointerId), B(this._canvas, e.pointerId, !1), this._pinched) {
+		if (this._pointers.delete(e.pointerId), G(this._canvas, e.pointerId, !1), this._pinched) {
 			this._pinch = void 0, this._pointers.size || (this._pinched = !1);
 			return;
 		}
@@ -754,7 +1112,7 @@ var We = class extends r {
 		clearTimeout(this._hoverTimer), this._emit("rv-hover-end", {});
 	}
 	_onKey(e) {
-		let t = this._keyTime ?? this.cursor ?? this.view.start + this.view.span / 2, n = Ue(this.view.span), { start: r, end: i } = this._bounds, a = {
+		let t = this._keyTime ?? this.cursor ?? this.view.start + this.view.span / 2, n = it(this.view.span), { start: r, end: i } = this._bounds, a = {
 			ArrowLeft: t - n,
 			ArrowDown: t - n,
 			ArrowRight: t + n,
@@ -801,19 +1159,19 @@ var We = class extends r {
 		let t = this._observed || Math.max(1, Math.round(this.getBoundingClientRect().width || e.clientWidth || 300));
 		this._width = t;
 		let n = window.devicePixelRatio || 1;
-		e.width !== t * n && (e.width = t * n, e.height = L * n);
+		e.width !== t * n && (e.width = t * n, e.height = U * n);
 		let r = e.getContext("2d");
 		if (!r) return;
 		r.setTransform(n, 0, 0, n, 0, 0);
 		let i = getComputedStyle(this), a = (e, t) => i.getPropertyValue(e).trim() || t, o = a("--rv-text", "#111418"), s = a("--rv-muted", "#5d6370");
-		r.clearRect(0, 0, t, L);
-		let c = this.view, l = (e) => fe(e, c, t);
+		r.clearRect(0, 0, t, U);
+		let c = this.view, l = (e) => me(e, c, t);
 		r.font = `500 12px ${a("--rv-font", "sans-serif")}`, r.textBaseline = "top", r.fillStyle = s, r.strokeStyle = a("--rv-rule", "#e0e0e0"), r.lineWidth = 1;
-		let u = this.timeZone, d = ge(c, t) < k;
-		for (let e of _e(c, t, (e) => ne(e, u))) {
+		let u = this.timeZone, d = ve(c, t) < k;
+		for (let e of ye(c, t, (e) => re(e, u))) {
 			let n = Math.round(l(e)) + .5;
-			r.beginPath(), r.moveTo(n, 14), r.lineTo(n, L), r.stroke();
-			let i = v(e, u, d);
+			r.beginPath(), r.moveTo(n, 14), r.lineTo(n, U), r.stroke();
+			let i = y(e, u, d);
 			n + 3 + r.measureText(i).width <= t && r.fillText(i, n + 3, 2);
 		}
 		let f = this.day;
@@ -821,24 +1179,24 @@ var We = class extends r {
 			if (f.now < f.end) {
 				r.fillStyle = a("--rv-ground-2", "#f2f2f2");
 				let e = Math.max(0, l(f.now));
-				r.fillRect(e, z, t - e, 54);
+				r.fillRect(e, $e, t - e, 54);
 			}
 			r.fillStyle = a("--rv-recording", "#1b2a6e");
-			for (let e of Ce(f.segments, c, t)) {
+			for (let e of Te(f.segments, c, t)) {
 				let n = Math.max(0, l(e.start)), i = Math.min(t, l(e.end));
-				r.fillRect(n, z, Math.max(1, i - n), ze);
+				r.fillRect(n, $e, Math.max(1, i - n), et);
 			}
 			r.fillStyle = o;
 			for (let e of this.events) {
 				if (e.end < c.start || e.start > c.start + c.span) continue;
 				let t = l(e.start), n = Math.max(3, l(e.end) - t);
-				r.fillRect(t, Be, n, Ve);
+				r.fillRect(t, tt, n, nt);
 			}
-			f.now < f.end && f.now >= c.start && f.now <= c.start + c.span && (r.fillStyle = a("--rv-red", "#e10600"), r.fillRect(Math.round(l(f.now)) - 1, R, 2, 58));
+			f.now < f.end && f.now >= c.start && f.now <= c.start + c.span && (r.fillStyle = a("--rv-red", "#e10600"), r.fillRect(Math.round(l(f.now)) - 1, W, 2, 58));
 		}
 		if (this.cursor !== void 0) {
 			let e = Math.round(l(this.cursor));
-			r.fillStyle = o, r.fillRect(e - 1, R, 2, 58), r.beginPath(), r.moveTo(e - 6, 14), r.lineTo(e + 6, 14), r.lineTo(e, 21), r.closePath(), r.fill();
+			r.fillStyle = o, r.fillRect(e - 1, W, 2, 58), r.beginPath(), r.moveTo(e - 6, 14), r.lineTo(e + 6, 14), r.lineTo(e, 21), r.closePath(), r.fill();
 		}
 	}
 	render() {
@@ -888,7 +1246,7 @@ var We = class extends r {
 		let e = this._keyTime ?? this.cursor;
 		if (e === void 0) return "no time chosen";
 		let t = this.day?.segments.some((t) => t.start <= e && e < t.end) ?? !1;
-		return `${v(e, this.timeZone, this._keyTime !== void 0)}, ${t ? "recorded" : "nothing recorded"}`;
+		return `${y(e, this.timeZone, this._keyTime !== void 0)}, ${t ? "recorded" : "nothing recorded"}`;
 	}
 	static styles = e`
     :host {
@@ -907,7 +1265,7 @@ var We = class extends r {
     canvas {
       display: block;
       width: 100%;
-      height: ${L}px;
+      height: ${U}px;
       /* One finger scrolls the page up and down; the rest is the timeline's. */
       touch-action: pan-y;
       cursor: pointer;
@@ -923,15 +1281,15 @@ var We = class extends r {
     }
   `;
 };
-function B(e, t, n) {
+function G(e, t, n) {
 	try {
 		n ? e?.setPointerCapture(t) : e?.releasePointerCapture(t);
 	} catch {}
 }
-customElements.get("rv-timeline") || customElements.define("rv-timeline", We);
+customElements.get("rv-timeline") || customElements.define("rv-timeline", at);
 //#endregion
 //#region src/playback/explain.ts
-function Ge(e, t) {
+function ot(e, t) {
 	return t.offline ? {
 		text: `${t.name} is offline, so the recordings on its SD card cannot be read.`,
 		advice: "They come back when it does."
@@ -946,7 +1304,7 @@ function Ge(e, t) {
 		advice: "Try again in a moment."
 	};
 }
-function V(e) {
+function K(e) {
 	return /not enough free disk space/i.test(e) ? {
 		text: "Home Assistant's disk is too full to fetch this recording.",
 		advice: "Free some space on it, then play the recording again."
@@ -975,7 +1333,7 @@ function V(e) {
 }
 //#endregion
 //#region src/components/playback.ts
-var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3, K = 3 * k, Xe = 6e4, Ze = 60, q = 1e3, Qe = 6e4, J = "reolink-viewer-check-setup", Y = "reolink-viewer-player", X = !1, Z = class extends r {
+var q = 6e4, st = 3e3, J = 1e4, ct = 3, Y = 86400, lt = 10 * k, ut = 10, X = 8e3, Z = 3 * k, dt = 6e4, ft = 60, Q = 1e3, pt = 6e4, mt = "reolink-viewer-check-setup", ht = "reolink-viewer-player", gt = !1, _t = 1e4, vt = class extends r {
 	static properties = {
 		hass: { attribute: !1 },
 		deviceId: { attribute: !1 },
@@ -1010,7 +1368,8 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
 		_reports: { state: !0 },
 		_rate: { state: !0 },
 		_note: { state: !0 },
-		_mode: { state: !0 }
+		_mode: { state: !0 },
+		_scrubPicture: { state: !0 }
 	};
 	_daySeq = 0;
 	_hdWarmed = /* @__PURE__ */ new Set();
@@ -1019,23 +1378,28 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
 	_hoverSeq = 0;
 	_monthSeq = 0;
 	_thumbsRequested = /* @__PURE__ */ new Set();
-	thumbLoader = new Ie();
+	thumbLoader = new Xe();
 	_thumbPause;
 	_eventsRetry;
 	_eventsRetries = 0;
 	_refreshTimer;
 	_lastCursorPaint = 0;
-	_progressive = l();
+	_progressive = u();
 	_check;
 	_starting;
 	_preloadPending;
 	_recoveredAt = -Infinity;
 	_mseFailed = /* @__PURE__ */ new Set();
 	_lastPreview = 0;
+	_scrubber;
+	_scrubKey = "";
+	_scrubbing = !1;
+	_scrubHold;
+	scrubSocket = (e) => new WebSocket(ee(e, location.href));
 	constructor() {
 		super(), this.deviceId = "", this.cameraName = "", this._date = "", this._loading = !1, this._view = {
 			start: 0,
-			span: Se
+			span: we
 		}, this.offline = !1, this.storage = null, this.recorder = "camera", this._only = /* @__PURE__ */ new Set();
 		let e = /* @__PURE__ */ new Date();
 		this._month = {
@@ -1044,13 +1408,13 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
 		}, this._monthDays = /* @__PURE__ */ new Set(), this._monthLoading = !1, this._stream = "sub", this._hd = {
 			main: !1,
 			reason: "checking…"
-		}, this._thumbs = /* @__PURE__ */ new Map(), this._metrics = {}, this._checkText = "", this._checkRunning = !1, this._checkSetup = rt(), this._checkSession = !1, this._checkHdPart = P(this._checkSetup), this._rate = 1, this._mode = it();
+		}, this._thumbs = /* @__PURE__ */ new Map(), this._metrics = {}, this._checkText = "", this._checkRunning = !1, this._checkSetup = Tt(), this._checkSession = !1, this._checkHdPart = P(this._checkSetup), this._rate = 1, this._mode = Et();
 	}
 	get _zone() {
 		return this.hass?.config?.time_zone;
 	}
 	get _today() {
-		return _(Date.now(), this._zone);
+		return v(Date.now(), this._zone);
 	}
 	get _player() {
 		return this.renderRoot.querySelector("rv-player");
@@ -1058,8 +1422,11 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
 	get _timeline() {
 		return this.renderRoot.querySelector("rv-timeline");
 	}
+	get _scrubView() {
+		return this.renderRoot.querySelector("rv-scrub-picture");
+	}
 	get _events() {
-		return Te(this._day?.events ?? [], this._only);
+		return De(this._day?.events ?? [], this._only);
 	}
 	connectedCallback() {
 		super.connectedCallback(), this._refreshTimer = setInterval(() => {
@@ -1067,25 +1434,25 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
 				keepView: !0,
 				quiet: !0
 			});
-		}, H);
+		}, q);
 	}
 	disconnectedCallback() {
-		super.disconnectedCallback(), clearInterval(this._refreshTimer), this._player?.stop(), this.thumbLoader.clear(), clearTimeout(this._thumbPause), clearTimeout(this._eventsRetry), this._check?.stop();
+		super.disconnectedCallback(), clearInterval(this._refreshTimer), this._player?.stop(), this.thumbLoader.clear(), clearTimeout(this._thumbPause), clearTimeout(this._eventsRetry), this._check?.stop(), this._closeScrub();
 	}
 	willUpdate(e) {
 		if ((e.has("deviceId") || e.has("hass")) && this.hass && this.deviceId && !this._date) {
-			this._date = this.at === void 0 ? this._today : _(this.at, this._zone);
+			this._date = this.at === void 0 ? this._today : v(this.at, this._zone);
 			let [e, t] = this._date.split("-").map(Number);
 			e && t && (this._month = {
 				year: e,
 				month: t
 			}), this._loadDay(this._date).then(() => {
 				this._openAt();
-			}), this._loadMonth(this._month.year, this._month.month), this._checkHd(), X || (X = !0, Oe(this.hass).then((e) => {
+			}), this._loadMonth(this._month.year, this._month.month), this._checkHd(), gt || (gt = !0, Ae(this.hass).then((e) => {
 				this._checkNote = e;
 			}));
 		} else if (e.has("at") && this.at !== void 0 && this._date) {
-			let e = _(this.at, this._zone);
+			let e = v(this.at, this._zone);
 			e === this._date ? this._openAt() : this._selectDate(e).then(() => {
 				this._openAt();
 			});
@@ -1093,7 +1460,7 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
 	}
 	_openAt() {
 		let e = this.at, t = this._day;
-		e !== void 0 && e !== this._openedAt && t && _(e, this._zone) === t.date && (this._openedAt = e, this._cursor = e, this._view = N(this._view, e, t), this.playAt(e));
+		e !== void 0 && e !== this._openedAt && t && v(e, this._zone) === t.date && (this._openedAt = e, this._cursor = e, this._view = N(this._view, e, t), this.playAt(e));
 	}
 	async _loadDay(e, t = {}) {
 		let n = this.hass;
@@ -1101,7 +1468,7 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
 		let r = ++this._daySeq, i = performance.now(), a = !1;
 		t.quiet || (this._loading = !0);
 		try {
-			let o = await C(n, this.deviceId, e, t.quiet ? 0 : W);
+			let o = await C(n, this.deviceId, e, t.quiet ? 0 : Y);
 			if (r !== this._daySeq) return;
 			let s = !this._day || this._day.date !== o.date;
 			if (this._day = o, this._error = void 0, s || !t.keepView) {
@@ -1118,7 +1485,7 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
 				timelineServer: o.timing
 			}), this._warmLongRecording(o), this._warmHdDay(o), a = !t.quiet && o.timing.cache === "stale", this._retryEventsSoon(o);
 		} catch (e) {
-			r === this._daySeq && (this._error = s(e).message);
+			r === this._daySeq && (this._error = c(e).message);
 		} finally {
 			r === this._daySeq && (this._loading = !1);
 		}
@@ -1133,7 +1500,7 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
 				keepView: !0,
 				quiet: !0
 			});
-		}, U));
+		}, J));
 	}
 	async _loadMonth(e, t) {
 		let n = this.hass;
@@ -1144,7 +1511,7 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
 			month: t
 		}, this._monthLoading = !0;
 		try {
-			let i = await d(n, this.deviceId, e, t);
+			let i = await f(n, this.deviceId, e, t);
 			r === this._monthSeq && (this._monthDays = new Set(i.days));
 		} catch {
 			r === this._monthSeq && (this._monthDays = /* @__PURE__ */ new Set());
@@ -1155,7 +1522,7 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
 	async _checkHd() {
 		let e = this.hass;
 		if (e) try {
-			let t = await ee(e, this.deviceId);
+			let t = await te(e, this.deviceId);
 			this._hd = await o(t.main), this._metrics = {
 				...this._metrics,
 				hd: this._hd.reason
@@ -1178,7 +1545,7 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
 	}
 	_warmLongRecording(e) {
 		let t = this.hass, n = this._cursor === void 0 ? e.segments.at(-1) : T(e.segments, this._cursor);
-		!t || !n || n.end - n.start < Je || u(t, this._ref(n)).catch(() => void 0);
+		!t || !n || n.end - n.start < lt || d(t, this._ref(n)).catch(() => void 0);
 	}
 	_ref(e, t = this._stream) {
 		return {
@@ -1191,9 +1558,9 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
 	async playAt(e, t = performance.now()) {
 		let n = this.hass, r = this._day;
 		if (!n || !r) return;
-		let i = ve(r.segments, e);
+		let i = be(r.segments, e);
 		if (!i) {
-			j(this, "No recording after this time on this day");
+			this._clearScrubPicture(), j(this, "No recording after this time on this day");
 			return;
 		}
 		let a = ++this._playSeq;
@@ -1204,42 +1571,42 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
 			return;
 		}
 		this._starting = a;
-		let c = performance.now();
+		let s = performance.now();
 		try {
-			let e = this._useMse(this._stream), r = this._progressive && i.offset < 3e3, s = this._ref(i.segment), l = e ? await m(n, s, o) : await S(n, s, r, o);
+			let e = this._useMse(this._stream), r = this._progressive && i.offset < 3e3, c = this._ref(i.segment), l = e ? await h(n, c, o) : await S(n, c, r, o);
 			if (a !== this._playSeq) {
 				this._release(l);
 				return;
 			}
 			this._playing = l, this._metrics = {
 				...this._metrics,
-				urlMs: performance.now() - c,
+				urlMs: performance.now() - s,
 				firstFrameMs: void 0,
 				gapMs: void 0,
 				stream: l.stream,
 				cache: l.cache,
 				codec: l.media?.codec ?? null,
-				delivery: e ? `MSE (${f() ?? "?"})${l.cache.complete ? ", cached" : ""}` : tt(r, this._progressive, l.cache.complete)
+				delivery: e ? `MSE (${p() ?? "?"})${l.cache.complete ? ", cached" : ""}` : wt(r, this._progressive, l.cache.complete)
 			};
 			let u = Math.max(0, o - l.start);
 			await this._player?.play(this._toItem(l, i.segment), u, t), this._showDownload(l, a), this._schedulePreload(i.segment, a, o);
 		} catch (e) {
-			a === this._playSeq && this._playError(s(e).message);
+			a === this._playSeq && this._playError(c(e).message);
 		} finally {
 			this._starting === a && (this._starting = void 0);
 		}
 	}
 	_seekWithin(e, t, n) {
 		let r = this._player, i = r?.current;
-		return !r?.mse || !this._useMse(this._stream) || !i || i.segmentId !== e.id || this._playing?.stream !== this._stream || i.end < e.end && t > i.end - Qe ? !1 : (this._metrics = {
+		return !r?.mse || !this._useMse(this._stream) || !i || i.segmentId !== e.id || this._playing?.stream !== this._stream || i.end < e.end && t > i.end - pt ? !1 : (this._metrics = {
 			...this._metrics,
 			urlMs: 0,
 			firstFrameMs: void 0,
-			delivery: `MSE (${f() ?? "?"}), same recording`
+			delivery: `MSE (${p() ?? "?"}), same recording`
 		}, r.seekWithin(Math.max(0, t - i.start), n), !0);
 	}
 	_describeMode() {
-		let e = f();
+		let e = p();
 		if (this._mode === "file") return "file player only (set under Details)";
 		if (!e) return "file player (this browser has no MSE)";
 		if (typeof this.hass?.fetchWithAuth != "function") return "file player (no authenticated fetch)";
@@ -1247,11 +1614,11 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
 		return `MSE (${e})${t.length ? `, file player for ${t.join(", ")} after a failure` : ""}`;
 	}
 	_useMse(e) {
-		return this._mode === "auto" && f() !== void 0 && typeof this.hass?.fetchWithAuth == "function" && !this._mseFailed.has(e);
+		return this._mode === "auto" && p() !== void 0 && typeof this.hass?.fetchWithAuth == "function" && !this._mseFailed.has(e);
 	}
 	_release(e) {
-		let t = this.hass, n = c(e.base ?? e.url ?? "");
-		t && n && te(t, [n]).catch(() => void 0);
+		let t = this.hass, n = l(e.base ?? e.url ?? "");
+		t && n && ne(t, [n]).catch(() => void 0);
 	}
 	_toItem(e, t) {
 		let n = {
@@ -1283,20 +1650,20 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
 		};
 	}
 	async _showDownload(e, t) {
-		let n = this.hass, r = c(e.base ?? e.url ?? "");
+		let n = this.hass, r = l(e.base ?? e.url ?? "");
 		if (!n || !r || e.cache.complete) return;
 		let i = () => t === this._playSeq && this._metrics.firstFrameMs === void 0 && !this._playFailure;
-		for (; i() && (await $e(q), i());) try {
-			let t = await x(n, r);
+		for (; i() && (await yt(Q), i());) try {
+			let t = await le(n, r);
 			if (!i() || !t.cache || t.cache.complete || t.cache.error) break;
 			let a = e.stream === "main" ? "HD " : "", o = t.cache.cut;
-			this._note = o && !o.error && t.cache.cut_error === void 0 ? `Asking the recorder for this moment${a ? " in HD" : ""}…` : `Fetching the ${a}recording from the recorder: ${Q(t.cache.bytes)} of about ${Q(t.expected_bytes)}`;
+			this._note = o && !o.error && t.cache.cut_error === void 0 ? `Asking the recorder for this moment${a ? " in HD" : ""}…` : `Fetching the ${a}recording from the recorder: ${bt(t.cache.bytes)} of about ${bt(t.expected_bytes)}`;
 		} catch {
 			break;
 		}
 		t === this._playSeq && (this._note = void 0);
 		try {
-			let e = await x(n, r);
+			let e = await le(n, r);
 			t === this._playSeq && e.cache?.cut && (this._metrics = {
 				...this._metrics,
 				cache: e.cache
@@ -1306,7 +1673,7 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
 	_schedulePreload(e, t, n) {
 		this._preloadPending = void 0;
 		let r = this.hass, i = this._nextSegment(e);
-		!r || !i || e.end - n <= K ? this._preloadAfter(e, t) : (this._player?.preload(void 0), u(r, this._ref(i)).catch(() => void 0), this._preloadPending = {
+		!r || !i || e.end - n <= Z ? this._preloadAfter(e, t) : (this._player?.preload(void 0), d(r, this._ref(i)).catch(() => void 0), this._preloadPending = {
 			segment: e,
 			seq: t
 		});
@@ -1319,7 +1686,7 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
 		let n = this.hass, r = this._nextSegment(e);
 		if (!n || !r) await this._player?.preload(void 0);
 		else if (!this._player?.preloaded?.recording.startsWith(`${this._stream}:${r.id}:`)) try {
-			let e = this._ref(r), i = this._useMse(this._stream) ? await m(n, e, r.start) : await S(n, e, this._progressive, r.start);
+			let e = this._ref(r), i = this._useMse(this._stream) ? await h(n, e, r.start) : await S(n, e, this._progressive, r.start);
 			if (t !== this._playSeq) {
 				this._release(i);
 				return;
@@ -1341,7 +1708,7 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
 	_pauseThumbs() {
 		this.thumbLoader.pause(), clearTimeout(this._thumbPause), this._thumbPause = setTimeout(() => {
 			this._resumeThumbs();
-		}, G);
+		}, X);
 	}
 	_resumeThumbs() {
 		clearTimeout(this._thumbPause), this.thumbLoader.resume();
@@ -1365,37 +1732,87 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
 		}, this.playAt(t)) : this._playError(e.message);
 	}
 	_playError(e) {
-		this._resumeThumbs(), this._stream === "main" ? (this._stream = "sub", this._metrics = {
+		this._resumeThumbs(), this._clearScrubPicture(), this._stream === "main" ? (this._stream = "sub", this._metrics = {
 			...this._metrics,
 			hdFailures: (this._metrics.hdFailures ?? 0) + 1,
 			lastHdFailure: e
-		}, j(this, `HD could not play: ${V(e).text} Back to SD.`, "error"), this._cursor !== void 0 && this.playAt(this._cursor)) : (this._playFailure = e, j(this, V(e).text, "error"));
+		}, j(this, `HD could not play: ${K(e).text} Back to SD.`, "error"), this._cursor !== void 0 && this.playAt(this._cursor)) : (this._playFailure = e, j(this, K(e).text, "error"));
 	}
 	_onTime(e) {
-		if (this._starting !== void 0) return;
+		if (this._starting !== void 0 || this._scrubbing) return;
 		let t = performance.now();
 		if (t - this._lastCursorPaint < 250) return;
 		this._lastCursorPaint = t;
 		let n = this._preloadPending;
-		n && n.seq === this._playSeq && n.segment.end - e <= K && (this._preloadPending = void 0, this._preloadAfter(n.segment, n.seq)), this._cursor = e, (e > this._view.start + this._view.span || e < this._view.start) && (this._view = N(this._view, e, this._day ?? {
+		n && n.seq === this._playSeq && n.segment.end - e <= Z && (this._preloadPending = void 0, this._preloadAfter(n.segment, n.seq)), this._cursor = e, (e > this._view.start + this._view.span || e < this._view.start) && (this._view = N(this._view, e, this._day ?? {
 			start: e,
 			end: e + this._view.span
 		}));
 	}
 	_onScrub(e) {
-		this._cursor = e;
-		let t = performance.now();
-		t - this._lastPreview < 80 || (this._lastPreview = t, this._player?.preview(e));
+		this._cursor = e, this._scrubbing = !0, clearTimeout(this._scrubHold);
+		let t = this._player;
+		if (t?.buffers(e)) {
+			this._scrubber?.end(), this._scrubPicture = void 0;
+			let n = performance.now();
+			if (n - this._lastPreview < 80) return;
+			this._lastPreview = n, t.preview(e);
+			return;
+		}
+		let n = this._day;
+		n && T(n.segments, e) && this._scrubView?.canShow && this._scrubberNow().move(e);
+	}
+	_scrubberNow() {
+		let e = `${this.deviceId}|${this._date}`;
+		if (this._scrubber && this._scrubKey === e) return this._scrubber;
+		this._scrubber?.close();
+		let { deviceId: t, _date: n } = this, r = new Ue({
+			open: async () => {
+				let e = this.hass;
+				if (!e) throw Error("not connected");
+				let { url: r } = await s(e, t, n);
+				return new Pe(this.scrubSocket(r));
+			},
+			show: (e) => {
+				r === this._scrubber && this._scrubbing && (this._scrubPicture = e), this._noteScrub(r, e);
+			},
+			miss: (e) => {
+				this._noteScrub(r, e);
+			}
+		});
+		return this._scrubber = r, this._scrubKey = e, r;
+	}
+	_noteScrub(e, t) {
+		if (e !== this._scrubber) return;
+		let n = I(t) ? `${t.source}, ${Math.round(t.ms)} ms, ${((t.at - t.time) / 1e3).toFixed(1)} s before` : t.superseded ? this._metrics.scrub?.last : t.error;
+		this._metrics = {
+			...this._metrics,
+			scrub: {
+				...e.counts,
+				...n ? { last: n } : {}
+			}
+		};
+	}
+	_endScrub(e) {
+		this._scrubbing = !1, this._scrubber?.end(), clearTimeout(this._scrubHold), this._scrubPicture && (e ? this._scrubHold = setTimeout(() => {
+			this._scrubPicture = void 0;
+		}, _t) : this._scrubPicture = void 0);
+	}
+	_clearScrubPicture() {
+		this._scrubbing || (clearTimeout(this._scrubHold), this._scrubPicture = void 0);
+	}
+	_closeScrub() {
+		this._scrubber?.close(), this._scrubber = void 0, this._scrubKey = "", this._scrubbing = !1, clearTimeout(this._scrubHold), this._scrubPicture = void 0;
 	}
 	_jump(e) {
-		let t = this._cursor ?? this._view.start, n = e > 0 ? we(this._events, t) : ue(this._events, t);
+		let t = this._cursor ?? this._view.start, n = e > 0 ? Ee(this._events, t) : fe(this._events, t);
 		n ? (this._cursor = n.start, this._day && (this._view = N(this._view, n.start, this._day)), this.playAt(n.start)) : j(this, e > 0 ? "No later event" : "No earlier event");
 	}
 	_setRate(e) {
 		this._rate = e;
 	}
 	_setMode(e) {
-		this._mode = e, this._mseFailed.clear(), at(e);
+		this._mode = e, this._mseFailed.clear(), Dt(e);
 		let t = this._player?.time ?? this._cursor;
 		this._playing && t !== void 0 && this.playAt(t);
 	}
@@ -1412,7 +1829,7 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
 		i > this._today || this._selectDate(i);
 	}
 	_selectDate(e) {
-		this._date = e, this._player?.stop(), this._playing = void 0, this._preloadPending = void 0, this.thumbLoader.clear(), this._thumbs = /* @__PURE__ */ new Map(), this._thumbsRequested.clear();
+		this._date = e, this._closeScrub(), this._player?.stop(), this._playing = void 0, this._preloadPending = void 0, this.thumbLoader.clear(), this._thumbs = /* @__PURE__ */ new Map(), this._thumbsRequested.clear();
 		let t = this._loadDay(e), [n, r] = e.split("-").map(Number);
 		return n && r && (n !== this._month.year || r !== this._month.month) && this._loadMonth(n, r), t;
 	}
@@ -1430,9 +1847,12 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
 			x: e.x,
 			time: e.time
 		};
-		this._hover = r;
-		try {
-			let i = (await g(t, this.deviceId, [e.time], he(this._view.span))).urls[0]?.url;
+		if (this._hover = r, this._scrubbing && this._scrubView?.canShow && !this._scrubber?.unavailable) this._hover = {
+			...r,
+			bare: !0
+		};
+		else try {
+			let i = (await _(t, this.deviceId, [e.time], _e(this._view.span))).urls[0]?.url;
 			n === this._hoverSeq && (this._hover = i ? {
 				...r,
 				url: i
@@ -1444,7 +1864,7 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
 		if (t && n.length) {
 			n.forEach((e) => this._thumbsRequested.add(e));
 			try {
-				let e = await g(t, this.deviceId, n, Ye), r = this._date;
+				let e = await _(t, this.deviceId, n, ut), r = this._date;
 				e.urls.forEach((e, t) => {
 					let i = n[t] ?? e.time;
 					this.thumbLoader.load(e.url).then((t) => {
@@ -1458,7 +1878,7 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
 	}
 	async runCheck(e) {
 		if (this._check?.running) return this._check.text;
-		let t = new je(this._checkTarget(), e, () => {
+		let t = new Ie(this._checkTarget(), e, () => {
 			this._checkText = t.text;
 		});
 		this._check = t, this._checkRunning = !0, this._checkText = "";
@@ -1531,16 +1951,16 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
 	}
 	async _loadReports() {
 		if (this.hass) try {
-			this._reports = (await ke(this.hass)).reports.filter((e) => !e.setup.startsWith(i));
+			this._reports = (await Fe(this.hass)).reports.filter((e) => !e.setup.startsWith(i));
 		} catch (e) {
-			j(this, `Could not load the reports: ${s(e).message}`, "error");
+			j(this, `Could not load the reports: ${c(e).message}`, "error");
 		}
 	}
 	async _copy(e) {
-		await re(e) ? j(this, "Report copied") : j(this, "Copying is blocked here: select the report text and copy it", "error");
+		await ie(e) ? j(this, "Report copied") : j(this, "Copying is blocked here: select the report text and copy it", "error");
 	}
 	_renderCheck() {
-		let e = this._checkRunning, r = e ? this._check?.inShort() : Me(this._checkText);
+		let e = this._checkRunning, r = e ? this._check?.inShort() : Re(this._checkText);
 		return n`<div class="check">
       <h3>Playback check</h3>
       <p class="small">
@@ -1556,7 +1976,7 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
             aria-labelledby="check-setup"
             ?disabled=${e}
             @change=${(e) => {
-			this._checkSetup = e.target.value, this._checkHdPart = P(this._checkSetup), ot(this._checkSetup);
+			this._checkSetup = e.target.value, this._checkHdPart = P(this._checkSetup), Ot(this._checkSetup);
 		}}
           >
             ${F.map((e) => n`<option .value=${e} ?selected=${e === this._checkSetup}>${e}</option>`)}
@@ -1616,7 +2036,7 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
         ${r ? n`<rv-findings .summary=${r}></rv-findings>` : t}
       </div>
       ${this._checkText ? n`<details class="support">
-            <summary class="small">Details for support${p("chevronDown")}</summary>
+            <summary class="small">Details for support${m("chevronDown")}</summary>
             <div class="actions">
               <button @click=${() => void this._copy(this._checkText)}>Copy report</button>
             </div>
@@ -1624,7 +2044,7 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
           </details>` : t}
       ${this._reports ? n`<ul class="reports">
             ${this._reports.length ? this._reports.map((e) => n`<li>
-                    <span class="when">${ae(Date.parse(e.updated), this._zone)} · ${e.setup}${e.done ? "" : " · running or cut short"}</span>
+                    <span class="when">${oe(Date.parse(e.updated), this._zone)} · ${e.setup}${e.done ? "" : " · running or cut short"}</span>
                     <button class="text" @click=${() => void this._copy(e.text)}>Copy</button>
                     <button
                       class="text"
@@ -1652,7 +2072,7 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
       <div class="group transport">
         <button aria-label="Previous event" title="Previous event" @click=${() => {
 			this._jump(-1);
-		}}>${p("previous")}</button>
+		}}>${m("previous")}</button>
         <button
           class="play"
           aria-label=${this._player?.paused === !1 ? "Pause" : "Play"}
@@ -1660,19 +2080,19 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
 			let e = this._player;
 			e?.current ? e.paused ? e.resume() : e.pause() : this._cursor !== void 0 && this.playAt(this._cursor), this.requestUpdate();
 		}}
-        >${p(this._player?.paused === !1 ? "pause" : "play")}</button>
+        >${m(this._player?.paused === !1 ? "pause" : "play")}</button>
         <button aria-label="Next event" title="Next event" @click=${() => {
 			this._jump(1);
-		}}>${p("next")}</button>
+		}}>${m("next")}</button>
       </div>
       <div class="group" role="group" aria-label="Zoom">
-        <button aria-label="Zoom out" ?disabled=${A(e, -1) === void 0} @click=${() => this._timeline?.zoom(-1)}>${p("minus")}</button>
-        <span class="zoom">${st(this._view.span)}</span>
+        <button aria-label="Zoom out" ?disabled=${A(e, -1) === void 0} @click=${() => this._timeline?.zoom(-1)}>${m("minus")}</button>
+        <span class="zoom">${kt(this._view.span)}</span>
         <button
           aria-label="Zoom in"
           ?disabled=${A(e, 1) === void 0}
           @click=${() => this._timeline?.zoom(1)}
-        >${p("plus")}</button>
+        >${m("plus")}</button>
       </div>
       <div class="group quality" role="group" aria-label="Quality">
         <button
@@ -1701,23 +2121,23 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
 			this._setRate(Number(e.target.value));
 		}}
           >
-            ${Pe.map((e) => n`<option .value=${String(e)} ?selected=${e === this._rate}>${e}×</option>`)}
+            ${Be.map((e) => n`<option .value=${String(e)} ?selected=${e === this._rate}>${e}×</option>`)}
           </select></label
         >
-        ${this._playing && se() ? n`<button
+        ${this._playing && ce() ? n`<button
               class="pip"
               aria-pressed=${this._player?.pip ? "true" : "false"}
               title="Keep watching in a small window over other windows and apps"
               @click=${() => void this._player?.togglePip()}
             >
-              ${p("pip")}Picture in picture
+              ${m("pip")}Picture in picture
             </button>` : t}
-        ${this._playing ? n`<a class="download" href=${this._playing.clip_url} download>${p("download")}Download clip</a>` : t}
+        ${this._playing ? n`<a class="download" href=${this._playing.clip_url} download>${m("download")}Download clip</a>` : t}
       </div>
     </div>`;
 	}
 	_renderFilters() {
-		let e = this._day?.events ?? [], r = [.../* @__PURE__ */ new Set([...de(e), ...this._only])];
+		let e = this._day?.events ?? [], r = [.../* @__PURE__ */ new Set([...pe(e), ...this._only])];
 		return r.length ? n`<div class="chips" role="group" aria-label="What was detected">
       ${r.map((t) => {
 			let r = this._only.has(t);
@@ -1729,8 +2149,8 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
 				e.delete(t) || e.add(t), this._only = e;
 			}}
         >
-          ${p(M([t]))}${pe(t)}
-          <span class="count">${e.filter((e) => be(e.types).includes(t)).length}</span>
+          ${m(M([t]))}${he(t)}
+          <span class="count">${e.filter((e) => Se(e.types).includes(t)).length}</span>
         </button>`;
 		})}
       ${this._only.size ? n`<button class="text clear" @click=${() => {
@@ -1741,17 +2161,17 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
 	_renderHover() {
 		let e = this._hover;
 		return e ? n`<div class="hover" style="left: ${Math.max(0, e.x - 80)}px">
-      ${e.gap ? t : e.url ? n`<img src=${e.url} alt="" />` : n`<div class="noimg"></div>`}
-      <span>${v(e.time, this._zone, !0)}${e.gap ? " · no recording" : ""}</span>
+      ${e.gap || e.bare ? t : e.url ? n`<img src=${e.url} alt="" />` : n`<div class="noimg"></div>`}
+      <span>${y(e.time, this._zone, !0)}${e.gap ? " · no recording" : ""}</span>
     </div>` : t;
 	}
 	_renderDebug() {
 		let e = this._metrics, r = (e) => e === void 0 ? "–" : `${Math.round(e)} ms`, i = e.timelineServer;
 		return n`<details class="debug">
-      <summary class="small">Details and playback check${p("chevronDown")}</summary>
+      <summary class="small">Details and playback check${m("chevronDown")}</summary>
       ${this._renderCheck()}
       <details class="tech">
-        <summary class="small">Technical details${p("chevronDown")}</summary>
+        <summary class="small">Technical details${m("chevronDown")}</summary>
         <dl class="facts">
         <dt>Time to timeline</dt>
         <dd>
@@ -1767,7 +2187,7 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
         <dt>Stream</dt>
         <dd>${e.stream ?? this._stream}${e.codec ? ` · ${e.codec}` : ""}</dd>
         <dt>Cache</dt>
-        <dd>${e.cache ? nt(e.cache) : "–"}</dd>
+        <dd>${e.cache ? $(e.cache) : "–"}</dd>
         <dt>HD</dt>
         <dd>${this._hd.reason}</dd>
         <dt>HD failures</dt>
@@ -1778,7 +2198,7 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
         </dd>
         <dt>Player</dt>
         <dd>
-          ${et(this._player)}
+          ${St(this._player)}
           <select
             aria-label="Player"
             @change=${(e) => {
@@ -1789,6 +2209,8 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
             <option value="file" ?selected=${this._mode === "file"}>File player only</option>
           </select>
         </dd>
+        <dt>Pictures while dragging</dt>
+        <dd>${Ct(e.scrub, this._scrubber?.unavailable === !0, this._scrubView?.canShow)}</dd>
         <dt>Fell back to the file player</dt>
         <dd>${e.fallbacks ? `${e.fallbacks}× (last: ${e.lastFallback ?? "?"})` : "never"}</dd>
         <dt>Day</dt>
@@ -1808,12 +2230,12 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
             .rate=${this._rate}
             .note=${this._note}
             @rv-first-frame=${(e) => {
-			let t = this._metrics.codec ?? $(this._player?.mseStats?.mime);
+			let t = this._metrics.codec ?? xt(this._player?.mseStats?.mime);
 			this._metrics = {
 				...this._metrics,
 				firstFrameMs: e.detail.ms,
 				codec: t
-			}, this._resumeThumbs();
+			}, this._resumeThumbs(), this._clearScrubPicture();
 		}}
             @rv-advanced=${(e) => {
 			this._onAdvanced(e.detail);
@@ -1830,14 +2252,21 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
             @rv-pip=${() => {
 			this.requestUpdate();
 		}}
-          ></rv-player>
+          >
+            <rv-scrub-picture
+              slot="over"
+              .picture=${this._scrubPicture}
+              .pointer=${this._cursor}
+              .timeZone=${r}
+            ></rv-scrub-picture>
+          </rv-player>
           <div class="dayline">
             <div class="day-nav" role="group" aria-label="Day">
               <button class="step" aria-label="Previous day" @click=${() => {
 			this._changeDay(-1);
-		}}>${p("chevronBack")}</button>
-              <span class="day" title=${Ee(this._date)}>
-                ${this._date === this._today ? "Today" : De(this._date)}
+		}}>${m("chevronBack")}</button>
+              <span class="day" title=${Oe(this._date)}>
+                ${this._date === this._today ? "Today" : ke(this._date)}
               </span>
               <button
                 class="step"
@@ -1846,19 +2275,19 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
                 @click=${() => {
 			this._changeDay(1);
 		}}
-              >${p("chevron")}</button>
+              >${m("chevron")}</button>
             </div>
             ${this._loading ? n`<span class="muted small">Loading…</span>` : t}
             <span class="clock">
-              ${this._cursor === void 0 ? "--:--:--" : v(this._cursor, r, !0)}
+              ${this._cursor === void 0 ? "--:--:--" : y(this._cursor, r, !0)}
             </span>
           </div>
           ${this._renderStorage()}
-          ${this._error ? w(Ge(this._error, {
+          ${this._error ? w(ot(this._error, {
 			name: this.cameraName || "This camera",
 			offline: this.offline
 		}), `Could not load recordings: ${this._error}`, { help: "recordings" }) : t}
-          ${this._playFailure ? w(V(this._playFailure), `Playback failed: ${this._playFailure}`, { help: "recordings" }) : t}
+          ${this._playFailure ? w(K(this._playFailure), `Playback failed: ${this._playFailure}`, { help: "recordings" }) : t}
           <div class="timeline-wrap">
             ${this._renderHover()}
             <rv-timeline
@@ -1871,14 +2300,14 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
 			this._view = e.detail.view;
 		}}
               @rv-seek=${(e) => {
-			this.playAt(e.detail.time);
+			this._endScrub(!0), this.playAt(e.detail.time);
 		}}
               @rv-scrub=${(e) => {
 			this._onScrub(e.detail.time);
 		}}
               @rv-hover=${(e) => void this._onHover(e.detail)}
               @rv-hover-end=${() => {
-			this._hoverSeq += 1, this._hover = void 0;
+			this._hoverSeq += 1, this._hover = void 0, this._scrubbing && this._endScrub(!1);
 		}}
             ></rv-timeline>
           </div>
@@ -1893,7 +2322,7 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
             .days=${this._monthDays}
             .selected=${this._date}
             .today=${this._today}
-            .firstDay=${ce(this.hass?.locale?.language)}
+            .firstDay=${ue(this.hass?.locale?.language)}
             ?loading=${this._monthLoading}
             @rv-month=${(e) => void this._loadMonth(e.detail.year, e.detail.month)}
             @rv-day=${(e) => {
@@ -1922,7 +2351,7 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
       </div>
     `;
 	}
-	static styles = [b, e`
+	static styles = [x, e`
       .layout {
         display: grid;
         grid-template-columns: minmax(0, 1fr) 340px;
@@ -2206,13 +2635,13 @@ var H = 6e4, Ke = 3e3, U = 1e4, qe = 3, W = 86400, Je = 10 * k, Ye = 10, G = 8e3
         font-size: 15px;
       }
     `];
-}, $e = (e) => new Promise((t) => {
+}, yt = (e) => new Promise((t) => {
 	setTimeout(t, e);
-}), Q = (e) => `${Math.round(e / 1e6)} MB`;
-function $(e) {
+}), bt = (e) => `${Math.round(e / 1e6)} MB`;
+function xt(e) {
 	return /codecs="?([^",]+)/.exec(e ?? "")?.[1] ?? null;
 }
-function et(e) {
+function St(e) {
 	let t = e?.mseStats;
 	return t ? [
 		t.api,
@@ -2223,10 +2652,17 @@ function et(e) {
 		`from ${t.source === "cut" ? "Reolink protocol cut" : "download"}` + (t.switches ? ` (${t.switches} source switches)` : "")
 	].join(" · ") : e?.current ? "file player" : "–";
 }
-function tt(e, t, n) {
+function Ct(e, t, n) {
+	if (n === !1) return "not here: this browser has neither WebCodecs nor MSE";
+	if (t) return "the scrub session could not open: the buffer only";
+	if (!e) return "none yet";
+	let r = `${String(e.shown)} shown of ${String(e.asked)} asked${e.missed ? `, ${String(e.missed)} missed` : ""}`;
+	return e.last ? `${r} (last: ${e.last})` : r;
+}
+function wt(e, t, n) {
 	return n ? "cached file (Range)" : e ? "progressive" : t ? "whole file first (to seek)" : "whole file first (WebKit)";
 }
-function nt(e) {
+function $(e) {
 	let t = `${(e.bytes / 1e6).toFixed(1)} MB`;
 	if (e.error) return `failed: ${e.error}`;
 	let n = typeof e.stopped_ms == "number" ? `copied to ${(e.stopped_ms / 6e4).toFixed(1)} min (${t})` : void 0, r = e.complete ? `cached (${t})` : n ?? `filling (${t} so far)`;
@@ -2236,33 +2672,33 @@ function nt(e) {
 	let a = typeof i.first_fragment_ms == "number" ? `first fragment ${Math.round(i.first_fragment_ms)} ms` : "no fragment", o = i.login === "new" ? ", new login" : i.login ? ", shared login" : "";
 	return `${r} · Reolink protocol cut: ${i.error ? `failed (${i.error})` : `${a}${o}`}`;
 }
-function rt() {
+function Tt() {
 	try {
-		let e = window.localStorage.getItem(J);
+		let e = window.localStorage.getItem(mt);
 		if (e && F.includes(e)) return e;
 	} catch {}
-	return Ae(navigator.userAgent);
+	return Me(navigator.userAgent);
 }
-function it() {
+function Et() {
 	try {
-		return window.localStorage.getItem(Y) === "file" ? "file" : "auto";
+		return window.localStorage.getItem(ht) === "file" ? "file" : "auto";
 	} catch {
 		return "auto";
 	}
 }
-function at(e) {
+function Dt(e) {
 	try {
-		window.localStorage.setItem(Y, e);
+		window.localStorage.setItem(ht, e);
 	} catch {}
 }
-function ot(e) {
+function Ot(e) {
 	try {
-		window.localStorage.setItem(J, e);
+		window.localStorage.setItem(mt, e);
 	} catch {}
 }
-function st(e) {
+function kt(e) {
 	return e >= 36e5 ? `${Math.round(e / 36e5)} h` : `${Math.round(e / k)} min`;
 }
-customElements.get("rv-playback") || customElements.define("rv-playback", Z);
+customElements.get("rv-playback") || customElements.define("rv-playback", vt);
 //#endregion
-export { Ze as CHECK_SESSION_MIN, qe as EVENTS_RETRIES, U as EVENTS_RETRY_MS, K as PRELOAD_LEAD_MS, Ke as PROGRESSIVE_SEEK_LIMIT_MS, q as PROGRESS_EVERY_MS, Xe as RECOVER_EVERY_MS, Z as RvPlayback, W as STALE_TODAY_S, G as THUMB_PAUSE_MAX_MS, H as TODAY_REFRESH_MS, tt as deliveryOf, nt as describeCache, et as describePlayer, $ as videoCodec };
+export { ft as CHECK_SESSION_MIN, ct as EVENTS_RETRIES, J as EVENTS_RETRY_MS, Z as PRELOAD_LEAD_MS, st as PROGRESSIVE_SEEK_LIMIT_MS, Q as PROGRESS_EVERY_MS, dt as RECOVER_EVERY_MS, vt as RvPlayback, _t as SCRUB_HOLD_MS, Y as STALE_TODAY_S, X as THUMB_PAUSE_MAX_MS, q as TODAY_REFRESH_MS, wt as deliveryOf, $ as describeCache, St as describePlayer, Ct as describeScrub, xt as videoCodec };

@@ -81,6 +81,9 @@ class Picture:
     codec: str | None = None
     jpeg: bytes = b""
     timing: dict[str, Any] = field(default_factory=dict)
+    # The camera's key-frame interval (ms) as the server knows it: a picture
+    # this far from the pointer still shows it (the browser dims one further).
+    interval_ms: int | None = None
 
     @property
     def kind(self) -> str:
@@ -101,6 +104,7 @@ class Picture:
                 "init": len(self.init),
                 "data": len(data),
                 "timing": self.timing,
+                "interval": self.interval_ms,
             },
             separators=(",", ":"),
         ).encode()
@@ -259,7 +263,7 @@ class ScrubService:
         if (near := self.store.near(camera, at_ms, reach)) is not None and (
             stored := await self.store.async_get(camera, near)
         ) is not None:
-            return self._done(stored, began)
+            return self._done(stored, began, reach)
         segment = await self._segment(source, day, at_ms)
         recording = Recording(
             source=source,
@@ -277,10 +281,10 @@ class ScrubService:
                 sample, segment.start, "cache" if where == "file" else "cut"
             )
             await self.store.async_put(camera, picture)
-            return self._done(picture, began)
+            return self._done(picture, began, reach)
         baichuan = self._baichuan
         if baichuan is None or not baichuan.usable(source.entry_id):
-            return self._done(await self._thumbnail(source, at_ms), began)
+            return self._done(await self._thumbnail(source, at_ms), began, reach)
         try:
             sample = await baichuan.async_key_frame(
                 entry_id=source.entry_id,
@@ -294,7 +298,7 @@ class ScrubService:
             raise ScrubError(f"no picture from the device: {err}") from err
         picture = _picture(sample, segment.start, "device")
         await self.store.async_put(camera, picture)
-        return self._done(picture, began)
+        return self._done(picture, began, reach)
 
     def _reach_ms(self, source: PlaybackSource) -> int:
         """Return how far before a moment a stored key frame still shows it."""
@@ -327,7 +331,7 @@ class ScrubService:
             raise ScrubError(str(err)) from err
         return Picture(key.bucket_ms, "thumbnail", jpeg=jpeg)
 
-    def _done(self, picture: Picture, began: float) -> Picture:
+    def _done(self, picture: Picture, began: float, reach_ms: int) -> Picture:
         self._count(picture.source)
         timing = {"ms": round((time.monotonic() - began) * 1000, 1)}
         return Picture(
@@ -338,6 +342,7 @@ class ScrubService:
             codec=picture.codec,
             jpeg=picture.jpeg,
             timing=timing,
+            interval_ms=reach_ms - INTERVAL_SLACK_MS,
         )
 
     def _count(self, what: str) -> None:

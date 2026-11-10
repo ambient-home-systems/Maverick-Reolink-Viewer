@@ -182,14 +182,14 @@ export function videoCodec(mime: string): string | undefined {
 
 // ---- Decoding, one key frame at a time ----
 
-interface DecoderLike {
+export interface DecoderLike {
   configure(config: Record<string, unknown>): void;
   decode(chunk: unknown): void;
   flush(): Promise<void>;
   close(): void;
 }
 
-interface FrameLike {
+export interface FrameLike {
   displayWidth: number;
   displayHeight: number;
   close(): void;
@@ -224,6 +224,15 @@ export interface Decoded {
 /** At most this many key frames are decoded. */
 export const DECODE_MAX = 12;
 const FRAME_TIMEOUT_MS = 3000;
+
+/** WebCodecs as this browser has it (VideoDecoder undefined where it has none). */
+export function webCodecs(): Pick<Codecs, "VideoDecoder" | "EncodedVideoChunk"> {
+  const w = window as unknown as Record<string, unknown>;
+  return {
+    VideoDecoder: typeof w.VideoDecoder === "function" ? (w.VideoDecoder as Codecs["VideoDecoder"]) : undefined,
+    EncodedVideoChunk: w.EncodedVideoChunk as Codecs["EncodedVideoChunk"],
+  };
+}
 
 function browserCodecs(): Codecs {
   const w = window as unknown as Record<string, unknown>;

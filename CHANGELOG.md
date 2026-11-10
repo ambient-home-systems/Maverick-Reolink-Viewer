@@ -3,6 +3,27 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.59.0
+
+Dragging along the timeline shows the recording at the pointer (Phase 10's step 2).
+
+- **The picture under the pointer while you drag:** where the video on screen has
+  the moment, it shows it as before; elsewhere the panel asks Home Assistant for the
+  key frame there and shows it over the video, with its own time in the corner. One
+  picture is asked for at a time, always the newest place the pointer reached, so a
+  steady drag keeps showing pictures. The arrow keys show them too as they step.
+- **Release plays from there:** the picture stays until the video's first frame,
+  so the screen goes from the picture straight to the video.
+- **A picture that lags is dimmed:** one further from the pointer than the camera's
+  key-frame interval (a second on Front Yard Right, 4 s on the others) is shown
+  dimmed until the next one comes.
+- **Hovering is as before:** without a press, the thumbnail above the timeline.
+  While dragging, that box shows only the time, and no thumbnail is fetched.
+- **Where the browser cannot show them:** the picture is decoded with WebCodecs,
+  or played through MSE where the browser has no WebCodecs. Where it has neither,
+  or the session will not open, a drag shows what the video has buffered, as in
+  0.58. **Technical details** says which, and how many pictures were shown.
+
 ## 0.58.1
 
 From the owner's check of 0.58.0 (the playback check's F row on Front Yard Right).
