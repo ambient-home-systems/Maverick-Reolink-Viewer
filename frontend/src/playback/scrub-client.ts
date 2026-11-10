@@ -142,7 +142,7 @@ export class ScrubClient {
 
   /**
    * Ask for the picture at `at` (UTC ms, sent as whole milliseconds: a drag's
-   * time has fractions, which the server does not take before v0.59.1); a
+   * time has fractions, which the server did not take before v0.60.0); a
    * newer ask supersedes this one, and one unanswered in `timeoutMs` is a miss.
    */
   async ask(time: number, timeoutMs = ASK_TIMEOUT_MS): Promise<ScrubAnswer> {

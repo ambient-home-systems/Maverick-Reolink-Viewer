@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fakePip, makeHass, okDevices, type FakeHass } from "../test-fixtures";
 import type { PlaybackUrl, TimelineDay } from "../types";
 import { playsProgressive } from "../playback/codec";
+import { PlaybackCheck, type CheckTarget } from "../playback/check";
 import type { ScrubPicture, SocketLike } from "../playback/scrub-client";
 import type { KeyFramePainter } from "../playback/scrub-paint";
 import { ThumbLoader } from "../playback/thumb-loader";
@@ -1009,13 +1010,81 @@ describe("rv-playback while dragging (Phase 10)", () => {
     expect(sentOf(hass, "reolink_viewer/thumbnail/urls").length).toBeGreaterThan(0);
   });
 
-  it("describes the pictures while dragging for the debug panel", () => {
-    expect(describeScrub(undefined, false, true)).toBe("none yet");
-    expect(describeScrub(undefined, false, false)).toContain("neither WebCodecs nor MSE");
-    expect(describeScrub(undefined, true, true)).toContain("could not open");
-    expect(describeScrub({ asked: 5, shown: 4, missed: 1, last: "device, 270 ms, 0.4 s before" }, false, true)).toBe(
-      "4 shown of 5 asked, 1 missed (last: device, 270 ms, 0.4 s before)",
+  it("the playback check's P row drags the timeline itself, and reports what it showed", async () => {
+    const hass = playbackHass();
+    hass.responses["reolink_viewer/playback/peek"] = { segment_id: "s", cache: null };
+    hass.responses["reolink_viewer/playback/stats"] = { vod: { baichuan: { enabled: true, logged_in: 1, logins: 3, logouts: 2, cuts_running: 0 } } };
+    hass.responses["reolink_viewer/playback/check_report"] = null;
+    const { el, sockets, player } = await scrubMount(hass);
+    // The player starts a recording at once: its first frame.
+    vi.spyOn(player, "play").mockImplementation(() => {
+      setTimeout(() => player.dispatchEvent(new CustomEvent("rv-first-frame", { detail: { ms: 200 } })), 5);
+      return Promise.resolve();
+    });
+    const target = (el as unknown as { _checkTarget(): CheckTarget })._checkTarget();
+    const check = new PlaybackCheck(target, { setup: "test", soakMinutes: 0 });
+    check.dragScale = 0.02;
+    await (check as unknown as { _drag(): Promise<void> })._drag();
+    const report = check.text;
+    expect(report).toContain("P  Pictures while dragging (Phase 10): painted with WebCodecs");
+    expect(report).toMatch(/ {3}slow \(30 s of recording in 10 s\): \d+ pictures, the first after/);
+    expect(report).toContain("within the camera's 4.0 s of their moment (0.5 to 0.5 s before)");
+    expect(report).toContain("   release: the picture stayed until the video's first frame");
+    expect(report).toContain("   hovering while dragging: the time alone, no thumbnail ✓");
+    expect(report).toContain("   the NVR: 0 more logins while dragging ✓");
+    // Every moment asked in whole milliseconds; the fast drag rested inside a recording.
+    const asked = sockets.flatMap((socket) => socket.asked);
+    expect(asked.length).toBeGreaterThan(3);
+    expect(asked.every((at) => Number.isInteger(at))).toBe(true);
+    // The fast drag rests inside the last recording, and the last picture shows it.
+    expect(report).toMatch(/ {3}fast \(3\.4 min in 5 s\): .*at rest, 0\.5 s from the pointer.* ✓/);
+    expect(report).toContain("   another recording of this camera playing meanwhile");
+    expect(report).toContain("   over what the video has buffered: skipped, nothing playing");
+    expect(check.inShort(true).findings.map((f) => f.text)).toContain("While dragging, pictures are decoded with WebCodecs.");
+  });
+
+  it("the P row's drag over what the video has buffered asks the server nothing", async () => {
+    const hass = playbackHass();
+    hass.responses["reolink_viewer/playback/peek"] = { segment_id: "s", cache: null };
+    hass.responses["reolink_viewer/playback/stats"] = { vod: {} };
+    hass.responses["reolink_viewer/playback/check_report"] = null;
+    const { el, sockets, player } = await scrubMount(hass);
+    // s1 plays, at its 60th second, with 4 s either side buffered.
+    const now = T0 + 61 * MIN;
+    Object.defineProperty(player, "current", { get: () => ({ segmentId: "s1", start: T0 + 60 * MIN, end: T0 + 62 * MIN }) });
+    Object.defineProperty(player, "time", { get: () => now });
+    player.buffers = (time: number) => Math.abs(time - now) < 4000;
+    const preview = vi.spyOn(player, "preview").mockReturnValue(true);
+    vi.spyOn(player, "play").mockImplementation(() => {
+      setTimeout(() => player.dispatchEvent(new CustomEvent("rv-first-frame", { detail: { ms: 200 } })), 5);
+      return Promise.resolve();
+    });
+    const target = (el as unknown as { _checkTarget(): CheckTarget })._checkTarget();
+    const check = new PlaybackCheck(target, { setup: "test", soakMinutes: 0 });
+    check.dragScale = 0.02;
+    await (check as unknown as { _drag(): Promise<void> })._drag();
+    const report = check.text;
+    expect(report).toContain("   over what the video has buffered: 8 of 8 moments shown by the video, 0 pictures asked of the server ✓");
+    expect(preview).toHaveBeenCalled();
+    // The drag went over s2, the other recording; none was left to play meanwhile.
+    expect(Math.min(...sockets.flatMap((socket) => socket.asked))).toBeGreaterThanOrEqual(T0 + 62 * MIN);
+    expect(report).toContain("   another recording playing meanwhile: none");
+  });
+
+  it("describes the pictures while dragging for the debug panel, with how they are painted", () => {
+    const webCodecs = { how: "WebCodecs" as const };
+    expect(describeScrub(undefined, false, webCodecs)).toBe("painted with WebCodecs · none yet");
+    expect(describeScrub(undefined, false, { how: "none", why: "this browser has neither WebCodecs nor MSE" })).toBe(
+      "not here: this browser has neither WebCodecs nor MSE",
     );
+    expect(describeScrub(undefined, true, webCodecs)).toContain("could not open");
+    expect(
+      describeScrub({ asked: 5, shown: 4, missed: 1, last: "device, 270 ms, 0.4 s before" }, false, {
+        how: "MSE",
+        why: "this browser has no VideoDecoder",
+      }),
+    ).toBe("painted with MSE (this browser has no VideoDecoder) · 4 shown of 5 asked, 1 missed (last: device, 270 ms, 0.4 s before)");
+    expect(describeScrub(undefined, false, undefined)).toBe("none yet");
   });
 });
 

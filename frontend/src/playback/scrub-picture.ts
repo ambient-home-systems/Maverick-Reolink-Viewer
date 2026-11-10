@@ -18,6 +18,27 @@ export const DEFAULT_INTERVAL_MS = 4000;
 /** A picture further than its camera's interval and this (ms) from the pointer is late, and dimmed. */
 export const LATE_SLACK_MS = 500;
 
+/** How this browser shows the pictures: decoded with WebCodecs, played through MSE, or not at all. */
+export interface PaintPath {
+  how: "WebCodecs" | "MSE" | "none";
+  /** Why not WebCodecs, in words. */
+  why?: string;
+}
+
+/** A picture painted (the `rv-scrub-painted` event): the playback check times them. */
+export interface PaintedDetail {
+  /** The picture's own time, and the moment asked (UTC ms). */
+  time: number;
+  at: number;
+  source: string;
+  how: "canvas" | "video" | "jpeg";
+  /** The ask's round trip, and from the picture's arrival to its painting (ms). */
+  ms: number;
+  paintMs: number;
+  /** The camera's key-frame interval, as the server knows it (ms). */
+  interval?: number;
+}
+
 /** Whether a picture of `time` is late for the pointer at `pointer`. */
 export function isLate(time: number, pointer: number | undefined, interval: number | undefined): boolean {
   return pointer !== undefined && Math.abs(pointer - time) > (interval ?? DEFAULT_INTERVAL_MS) + LATE_SLACK_MS;
@@ -55,6 +76,25 @@ export class RvScrubPicture extends LitElement {
   /** Whether this browser can show a key frame (WebCodecs, or MSE). */
   get canShow(): boolean {
     return this.codecs.available || this.mse.available;
+  }
+
+  /** How the pictures are shown here, and why not WebCodecs. */
+  get path(): PaintPath {
+    if (this.codecs.available) return { how: "WebCodecs" };
+    if (this.mse.available) {
+      return {
+        how: "MSE",
+        why: window.isSecureContext
+          ? "this browser has no VideoDecoder"
+          : "no VideoDecoder: WebCodecs needs a secure page (HTTPS), and this one is plain HTTP",
+      };
+    }
+    return { how: "none", why: "this browser has neither WebCodecs nor MSE" };
+  }
+
+  /** Whether a picture is on screen now. */
+  get showing(): boolean {
+    return this.picture !== undefined && this._shown !== undefined;
   }
 
   override disconnectedCallback(): void {
@@ -98,23 +138,38 @@ export class RvScrubPicture extends LitElement {
   }
 
   private async _paint(picture: ScrubPicture): Promise<void> {
+    const began = performance.now();
     if (picture.kind === "jpeg") {
       this._revoke();
       this._jpeg = URL.createObjectURL(new Blob([picture.data as Uint8Array<ArrayBuffer>], { type: "image/jpeg" }));
-      this._shown = shown(picture, "jpeg");
+      this._show(picture, "jpeg", began);
       return;
     }
     if (this.codecs.available) {
       const painted = await this.codecs.paint(picture, (frame) => {
         this._draw(frame);
       });
-      if (painted && this.picture) this._shown = shown(picture, "canvas");
+      if (painted && this.picture) this._show(picture, "canvas", began);
       return;
     }
     const video = this._video;
     if (video && this.mse.available && (await this.mse.paint(picture, video)) && this.picture) {
-      this._shown = shown(picture, "video");
+      this._show(picture, "video", began);
     }
+  }
+
+  private _show(picture: ScrubPicture, how: "canvas" | "video" | "jpeg", began: number): void {
+    this._shown = shown(picture, how);
+    const detail: PaintedDetail = {
+      time: picture.time,
+      at: picture.at,
+      source: picture.source,
+      how,
+      ms: picture.ms,
+      paintMs: performance.now() - began,
+      ...(picture.interval !== undefined ? { interval: picture.interval } : {}),
+    };
+    this.dispatchEvent(new CustomEvent<PaintedDetail>("rv-scrub-painted", { detail, bubbles: true, composed: true }));
   }
 
   private _draw(frame: FrameLike): void {

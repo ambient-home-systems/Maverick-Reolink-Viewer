@@ -1,24 +1,31 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { Segment, TimelineEvent } from "../types";
 import {
+  DRAG_INTERVAL_MS,
   browserLabel,
   bufferedSeconds,
+  caughtUp,
   classifyHost,
   cutReport,
   deepTarget,
+  describeDrag,
   describeRate,
   deviceSetup,
   loginReport,
   longRecordings,
   mb,
+  restInside,
+  sampleStalls,
   setupMismatch,
   slope,
   smooth,
   sourceLabel,
   span,
+  summarizeDrag,
   touchingPairs,
   within,
+  type DragPass,
   type RateSample,
 } from "./check-util";
 
@@ -256,5 +263,94 @@ describe("Phase 5b reports", () => {
     expect(loginReport({ enabled: true, logged_in: 1, logins: 2, logouts: 1, cuts_running: 1 })).toBe(
       "Reolink protocol: 1 host(s) logged in now, 2 logins, 1 logouts, 1 cuts running",
     );
+  });
+});
+
+describe("the P row: pictures while dragging", () => {
+  const paint = (wall: number, pointer: number, at: number, time: number, source = "device", interval = 1000) => ({
+    wall,
+    pointer,
+    at,
+    time,
+    source,
+    interval,
+  });
+
+  it("times the pictures of a drag: how often, how near their moment, how far behind the pointer", () => {
+    const pass: DragPass = {
+      movedMs: 1000,
+      rest: 10_000,
+      asked: 5,
+      missed: 1,
+      paints: [
+        paint(300, 3000, 2900, 2500),
+        paint(600, 6000, 5800, 5200, "store"),
+        paint(850, 8500, 8400, 7500),
+        // After the pointer stopped: the catch-up.
+        paint(1300, 10_000, 10_000, 9600),
+      ],
+    };
+    const s = summarizeDrag(pass);
+    expect(s).toMatchObject({ pictures: 4, firstMs: 300, gapMs: 250, onTime: 4, interval: 1000, sources: { device: 3, store: 1 } });
+    expect(s.before).toEqual([0.4, 0.9]);
+    expect(s.lagMs).toBe(800);
+    expect(s.restMs).toBe(400);
+    expect(caughtUp(s)).toBe(true);
+    expect(describeDrag(s, pass)).toBe(
+      "4 pictures, the first after 0.30 s, a new one every 0.25 s (median), 4 of 4 within the camera's 1.0 s of their moment" +
+        " (0.4 to 0.9 s before), 0.8 s behind the moving pointer; at rest, 0.4 s from the pointer · device 3, store 1 · 1 of 5 asked missed",
+    );
+  });
+
+  it("counts a picture too far before its moment as not on time, and a far last picture as not caught up", () => {
+    const pass: DragPass = { movedMs: 500, rest: 20_000, asked: 2, missed: 0, paints: [paint(200, 5000, 5000, 2000)] };
+    const s = summarizeDrag(pass);
+    expect(s.onTime).toBe(0);
+    expect(s.gapMs).toBeUndefined();
+    expect(caughtUp(s)).toBe(false);
+    // Without the camera's interval from the server: 4 s.
+    expect(summarizeDrag({ ...pass, paints: [{ wall: 1, pointer: 1, at: 5000, time: 2000, source: "cache" }] }).interval).toBe(
+      DRAG_INTERVAL_MS,
+    );
+  });
+
+  it("says a drag that showed nothing, with the last answer", () => {
+    const pass: DragPass = { movedMs: 500, rest: 0, asked: 3, missed: 3, lastMiss: "no picture from the device: busy", paints: [] };
+    expect(describeDrag(summarizeDrag(pass), pass)).toBe("no picture in 3 asked (3 missed, last: no picture from the device: busy)");
+  });
+
+  it("rests a drag's pointer inside a recording", () => {
+    const segments = [
+      { start: 0, end: 60_000 },
+      { start: 120_000, end: 180_000 },
+    ];
+    expect(restInside(segments, 10_000, 50_000)).toBe(50_000);
+    // Past the first recording, in the gap: just before its end.
+    expect(restInside(segments, 10_000, 100_000)).toBe(58_000);
+    expect(restInside(segments, 10_000, 150_000)).toBe(150_000);
+    // Past the last: just before its end.
+    expect(restInside(segments, 130_000, 400_000)).toBe(178_000);
+  });
+
+  it("samples a video's progress for its longest stall", () => {
+    vi.useFakeTimers();
+    try {
+      let time = 10;
+      const watch = sampleStalls(() => time, 250);
+      for (let i = 0; i < 4; i += 1) {
+        time += 0.25;
+        vi.advanceTimersByTime(250);
+      }
+      // Stuck for a second.
+      vi.advanceTimersByTime(1000);
+      time += 0.5;
+      vi.advanceTimersByTime(250);
+      const played = watch.stop();
+      expect(played.playedMs).toBe(1500);
+      expect(played.longestStallMs).toBeGreaterThanOrEqual(1000);
+      expect(played.longestStallMs).toBeLessThan(1500);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

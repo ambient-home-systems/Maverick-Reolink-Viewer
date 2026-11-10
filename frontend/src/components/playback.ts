@@ -43,7 +43,7 @@ import {
 import { ScrubClient, isPicture, type ScrubAnswer, type ScrubPicture, type SocketLike } from "../playback/scrub-client";
 import { ScrubController } from "../playback/scrub-controller";
 import "../playback/scrub-picture";
-import type { RvScrubPicture } from "../playback/scrub-picture";
+import type { PaintPath, RvScrubPicture } from "../playback/scrub-picture";
 import { ThumbLoader } from "../playback/thumb-loader";
 import { dateIn, firstDayOfWeek, formatClock, formatStamp } from "../playback/time";
 import "../playback/timeline";
@@ -1083,6 +1083,19 @@ export class RvPlayback extends LitElement {
       get playing() {
         return el._playing;
       },
+      get timeline() {
+        return el._timeline;
+      },
+      get scrubView() {
+        return el._scrubView;
+      },
+      get scrub() {
+        const scrubber = el._scrubber;
+        return scrubber ? { counts: { ...scrubber.counts }, unavailable: scrubber.unavailable } : undefined;
+      },
+      get hover() {
+        return el._hover;
+      },
       selectDate: (date: string) => {
         void el._selectDate(date);
       },
@@ -1402,7 +1415,7 @@ export class RvPlayback extends LitElement {
           </select>
         </dd>
         <dt>Pictures while dragging</dt>
-        <dd>${describeScrub(m.scrub, this._scrubber?.unavailable === true, this._scrubView?.canShow)}</dd>
+        <dd>${describeScrub(m.scrub, this._scrubber?.unavailable === true, this._scrubView?.path)}</dd>
         <dt>Fell back to the file player</dt>
         <dd>${m.fallbacks ? `${m.fallbacks}× (last: ${m.lastFallback ?? "?"})` : "never"}</dd>
         <dt>Day</dt>
@@ -1884,17 +1897,18 @@ export function describePlayer(player: RvPlayer | null): string {
   return parts.join(" · ");
 }
 
-/** The debug panel's line on pictures from the server while dragging (Phase 10). */
-export function describeScrub(
-  scrub: Metrics["scrub"],
-  unavailable: boolean,
-  canShow: boolean | undefined,
-): string {
-  if (canShow === false) return "not here: this browser has neither WebCodecs nor MSE";
-  if (unavailable) return "the scrub session could not open: the buffer only";
-  if (!scrub) return "none yet";
+/**
+ * The debug panel's line on pictures from the server while dragging (Phase
+ * 10): how this browser paints them (step 3, the owner's ask), then what a
+ * drag showed.
+ */
+export function describeScrub(scrub: Metrics["scrub"], unavailable: boolean, path: PaintPath | undefined): string {
+  if (path?.how === "none") return `not here: ${path.why ?? "no way to paint them"}`;
+  const how = path ? `painted with ${path.how}${path.why ? ` (${path.why})` : ""} · ` : "";
+  if (unavailable) return `${how}the scrub session could not open: the buffer only`;
+  if (!scrub) return `${how}none yet`;
   const counts = `${String(scrub.shown)} shown of ${String(scrub.asked)} asked${scrub.missed ? `, ${String(scrub.missed)} missed` : ""}`;
-  return scrub.last ? `${counts} (last: ${scrub.last})` : counts;
+  return `${how}${scrub.last ? `${counts} (last: ${scrub.last})` : counts}`;
 }
 
 /** How the last recording was delivered, for the debug panel. */

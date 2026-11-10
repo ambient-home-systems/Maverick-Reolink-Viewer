@@ -3,16 +3,27 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
-## 0.59.1
+## 0.60.0
 
-From the owner's first drag on 0.59.0: no picture came.
+Dragging along the timeline works, and the playback check now tests it for you.
 
-- **Dragging shows the pictures:** a drag's time comes from the pointer's position,
-  in fractions of a millisecond, and Home Assistant took such a time for no
-  request and never answered; the panel then waited on that first picture for the
-  rest of the day. The panel now asks in whole milliseconds, Home Assistant takes
-  fractions too, and a picture not answered within 5 s no longer holds up the next.
-  (The playback check's F row asked in whole milliseconds, so it passed.)
+- **Dragging shows the pictures** (from the owner's first drag on 0.59.0: no picture
+  came): a drag's time comes from the pointer's position, in fractions of a
+  millisecond, and Home Assistant took such a time for no request and never
+  answered; the panel then waited on that first picture for the rest of the day.
+  The panel now asks in whole milliseconds, Home Assistant takes fractions too, and
+  a picture not answered within 5 s no longer holds up the next. (The playback
+  check's F row asked in whole milliseconds, so it passed.)
+- **The playback check drags the timeline itself (its new P row):** over what the
+  video has loaded, then slowly over a recording not cached, the same stretch again,
+  and fast, with another recording of the camera playing meanwhile; then it lets
+  go. It reports, each with ✓ or ✗: how often a new picture came and how near the
+  pointer, whether a fast drag catches up when the pointer stops, whether the
+  picture stays until the video starts, whether the recording playing stalled, that
+  hovering fetched no thumbnail, and the NVR's logins. Run it from Details →
+  playback check, as before; on the iPhone app and the wall tablet too.
+- **Technical details says how pictures are painted** while dragging: WebCodecs,
+  or MSE and why (e.g. a page over plain HTTP).
 
 ## 0.59.0
 

@@ -6924,9 +6924,9 @@ download cut, then the thumbnail.
 | --- | --- |
 | 0. Measure first (the gate) | Built (v0.57.0). **The gate passes** (2026-11-10): a cut's key frame in 166–182 ms back to back on all six cameras, and a key frame decoded in 1.7 ms on desktop Chrome; the iPhone app's and the wall tablet's K rows still to come (they choose step 2's way of painting, not whether step 1 is built) |
 | 1. Key frames from the server | Built (v0.58.0–v0.58.1); the owner's check passed on desktop Chrome (2026-11-10); the iPhone app's and the wall tablet's still to run |
-| 2. Painting while dragging | Built (v0.59.0–v0.59.1: 0.59.0's drags were never answered); the owner's check to come |
+| 2. Painting while dragging | Built (v0.59.0; v0.60.0 answers a drag's asks, which 0.59.0 never did); the owner's check: the playback check's P row |
 | 3. Press and release | Not started |
-| 4. The checks | Not started |
+| 4. The checks | The playback check's P row built (v0.60.0, the owner's ask: "add automated validation for all these checks"); the CI drag check (`scrub_check.cjs` against a fake key-frame endpoint) not yet |
 | 5. Optional: storyboards | Not started; only if step 0's gate fails |
 
 #### Step 10.0: measure first (the gate)
@@ -7269,7 +7269,7 @@ while F runs.
   ask between recordings, a cancelled drag, the hold's limit, a session that
   cannot open); the interval in the server's message.
 
-**v0.59.1, from the owner's first drag ("I don't believe the scrubbing slow drag
+**v0.60.0, from the owner's first drag ("I don't believe the scrubbing slow drag
 is working"):** nothing was painted. A drag's time comes from the pointer's
 pixel (`xToTime`), with fractions of a millisecond; `views._scrub_request` took
 only an integer `at`, so it ignored the request without an answer, and the
@@ -7314,7 +7314,8 @@ a full reload of the page (Ctrl+F5), on LAN Chrome:
   "Pictures while dragging" names how the pictures are shown in this browser,
   WebCodecs or MSE (and why: MSE where there is no `VideoDecoder`, e.g. over
   plain HTTP), so the iPhone app's and the wall tablet's drags say it without
-  the playback check. v0.59.0 shows the counts only.
+  the playback check. **Done early, in v0.60.0** (`RvScrubPicture.path`), with
+  the playback check's P row.
 
 #### Step 10.4: the checks
 
@@ -7323,6 +7324,49 @@ a full reload of the page (Ctrl+F5), on LAN Chrome:
 - **On the hardware:** the playback check's S row measures frames shown per
   second of drag and their lag behind the pointer, cached and uncached, on
   Chrome and the iPhone.
+
+**As built (v0.60.0), the owner's ask ("can you add a automated validation for
+all these checks? It's confusing for me to follow with the steps provided"):
+the playback check v0.7.0's P row** replaces step 10.2's hand checklist. It
+drags the tab's own timeline as a pointer does (`rv-scrub` every 50 ms, times
+with fractions of a millisecond, the hover box's `rv-hover` every 250 ms) and
+times each picture the tab paints (`rv-scrub-painted`, a new event of
+`rv-scrub-picture`), on the camera and day on screen:
+
+1. **Over what the video has buffered:** 8 moments within 3 s of the recording
+   playing; ✓ if the video shows each and the server is asked nothing.
+2. **Another recording plays meanwhile:** the second-longest recording not
+   cached starts 60 % in (a cut from the device), and its video is sampled
+   every 250 ms through the drags below: ✓ if it never stops 1 s or more
+   (the exit criterion's "a playback cut on the same camera plays on").
+3. **Slow:** 30 s of the longest recording not cached, in 10 s, then 2 s at
+   rest: pictures, the first's wait, the median between them (✓ at 0.3 s or
+   less, fine to 0.6 s: the iPhone's allowance), how many are within the
+   camera's key-frame interval (and 0.5 s) of their moment (✓ at 80 %), how
+   far behind the moving pointer, sources, misses.
+4. **Again** over the same stretch: ✓ at 0.1 s or less between pictures (the
+   cached criterion; the store answers).
+5. **Fast:** up to 5 minutes in 5 s, resting inside a recording (`restInside`):
+   ✓ if the last picture is within the interval of the resting pointer.
+6. **Release:** `rv-seek` there: ✓ if the picture stays on screen until the
+   video's first frame (sampled every 25 ms), with the time to it.
+7. **Hovering while dragging:** ✓ if the hover box showed the time alone.
+8. **The NVR:** its Reolink protocol logins before and after: ✓ at most one
+   more.
+
+Each line ends ✓ or ✗; "In short" says each in plain words with its grade,
+and the painting path (WebCodecs, or MSE and why) as a note. About 35 s.
+Checks: the summary and its words, `restInside`, the stall sampler; the row
+against the real tab with stand-ins for the session and the decoder (a drag
+over two recordings with the other playing: pictures, release held, hover,
+logins, every moment in whole milliseconds; a drag over the buffer asking
+nothing).
+
+**The owner's check (v0.60.0):** after Home Assistant's restart and a full
+reload (Ctrl+F5), run the playback check on desktop Chrome on a camera whose
+day is not all cached (Front Yard Right, then Garage), then on the iPhone app
+and the wall tablet; every P line ✓. The report is saved on the server, so the
+phone's and tablet's runs can be copied from the desktop.
 
 #### Step 10.5: optional, storyboards
 
