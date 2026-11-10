@@ -6922,7 +6922,7 @@ download cut, then the thumbnail.
 
 | Step | Status |
 | --- | --- |
-| 0. Measure first (the gate) | Built (v0.57.0); waiting for the owner's runs |
+| 0. Measure first (the gate) | Built (v0.57.0); the probe's half passed on all six cameras (2026-11-10): a cut's key frame in 166–182 ms back to back; waiting for the playback check's K rows |
 | 1. Key frames from the server | Not started |
 | 2. Painting while dragging | Not started |
 | 3. Press and release | Not started |
@@ -7001,6 +7001,45 @@ or less → step 1. Otherwise → step 5.
    (Fully Kiosk): a camera's Playback tab → Details and playback check → Run
    playback check, with HD on Chrome. Copy the report: its K lines (SD, and
    HD inside H).
+
+**The owner's probe run (2026-11-10, v0.57.0, RLN36, all six cameras, sub
+streams).** The first try stopped at once ("not a valid option ...
+'baichuan_scrub'"): Home Assistant had not restarted since the update, so the
+new panel asked the old server. After the restart (time from a cut's 143 to
+its first key frame near the moment, median and p90, ms):
+
+| Camera (sub) | Key frames | One at a time | Back to back | Beside playback | Playback cut without data (median, p90) |
+| --- | --- | --- | --- | --- | --- |
+| Back Yard (Duo 3, 1536×432) | every 4 s, 23 KB | 181, 219 | **173**, 248 | 171, 221 | 448, 1152 |
+| Garage Camera (RLC-520A, 640×480) | every 4 s, 38 KB | 185, 236 | **171**, 232 | 165 (3 cuts) | 1023 |
+| Hallway Camera (E1 Pro, 640×360) | every 4 s, 34 KB | 194, 204 | **170**, 198 | 160, 208 | 366, 972 |
+| Front Yard Right (CX410, 640×360) | every 1 s, 43 KB | 182, 210 | **172**, 218 | 162, 197 | 367, 707 |
+| Dogs (RLC-520A, 640×480) | every 4 s, 86 KB | 167, 198 | **166**, 213 | 166, 193 | 445, 504 |
+| Front Yard Left (CX810, 640×360) | every 4 s, 16 KB | 203, 294 | **182**, 242 | 180, 219 | 797, 5296 |
+
+- **The server's half of the gate passes on every camera:** back to back, the
+  median is 166–182 ms against 300 ms, the p90 198–248 ms. A drag would get
+  a new picture every 170–220 ms uncached, inside the exit criterion (300 ms).
+  Taking turns with a playback cut costs the scrub nothing (160–180 ms).
+- **Where the picture lands:** each cut's first key frame was 3 s before to 2
+  s after its moment (the interval is 4 s on five cameras, 1 s on the CX410),
+  so a scrub's picture is within one interval of the pointer, as planned.
+- **Not every cut answered:** 13 of 343 sent no key frame near their moment
+  within the probe's 5 s (what came instead is not recorded); one took 1.8 s
+  (Garage, back to back). Step 1 gives a cut up about 1 s after asking and
+  lets the next move ask (newest wins), rather than wait.
+- **A playback cut of the same channel** went without data a median 0.37–0.80
+  s per scrub cut (p90 up to 1.15 s), and about 5.3 s where the scrub cut did
+  not answer (the probe's wait). Step 1's cut gives the turn back within its
+  1 s, whatever comes; a viewer playing has 30 s and more buffered.
+- **Garage:** the channel's own bit was refused once (the any-channel bitmap
+  then served), and a cut was refused (400) after 3 turns beside playback,
+  which ended that set. Its longest recording is an 18-minute clip (motion
+  recording): not explained yet, to watch in step 1.
+- **The NVR:** 3 logged-in users during the cuts, 2 before and after: one more
+  login, within the exit criterion.
+- **Key frames:** 16–86 KB on the sub streams, so a scrub's picture is a small
+  read on the LAN.
 
 #### Step 10.1: key frames from the server
 
