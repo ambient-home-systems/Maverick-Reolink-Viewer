@@ -3,6 +3,21 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.61.2
+
+From the owner's run of the playback check in Safari on a Mac.
+
+- **The check says why Safari failed, so it can be fixed:** in that run Safari did
+  not move on to the next recording at the end of one, and going back from HD to SD
+  failed ("media error 4"). Where either fails now, the report gives the video's
+  state (where it stopped, what it had loaded, its error) and what the panel had
+  fetched for it. Run it once more in Safari to find the cause.
+- **Speeds not measured are not called a stutter:** with the window behind another,
+  the browser plays nothing, and the check said "Playback stutters at 2×, 4×, 8×".
+  It now says those speeds were not measured, and to keep the page in front.
+- **A failed return from HD to SD is in "In short"** as a problem, where it was only
+  in the lines below.
+
 ## 0.61.1
 
 From the owner's first run of the new playback check (0.61.0's page on a Home

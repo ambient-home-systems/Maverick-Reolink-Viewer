@@ -464,6 +464,45 @@ describe("PlaybackCheck: scrubbing and HD", () => {
     expect(report).toMatch(/- Pictures from the server: first 9 of 10, median \d+ ms \(device 9\)/);
   });
 
+  it("says in plain words when going back from HD to SD fails, with the video's state", async () => {
+    vi.spyOn(PlaybackCheck.prototype as unknown as { _pause: () => Promise<void> }, "_pause").mockResolvedValue();
+    const hass = reportingHass();
+    const player = fakePlayer();
+    let stream: "sub" | "main" = "sub";
+    let failure: string | undefined;
+    const metrics: Record<string, unknown> = { timelineMs: 120 };
+    const target: CheckTarget = {
+      ...stubTarget(hass),
+      hd: { main: true, reason: "avc1.640033 at 2560×1440 is supported" },
+      metrics,
+      player,
+      get stream() {
+        return stream;
+      },
+      get playFailure() {
+        return failure;
+      },
+      setStream: (next) => {
+        stream = next;
+        metrics.firstFrameMs = undefined;
+        setTimeout(() => {
+          // As Safari did (v0.61.1, the owner's Mac): HD plays, SD again fails.
+          if (next === "sub") failure = "media error 4";
+          else Object.assign(metrics, { stream: next, firstFrameMs: 744, codec: "avc1.640033" });
+        }, 5);
+      },
+    };
+    const report = await new PlaybackCheck(target, { setup: "Desktop Safari, LAN", soakMinutes: 0, hd: true }).run();
+    expect(report).toMatch(/Back to SD at .*: FAILED: media error 4 \(back on the sub stream\)/);
+    expect(report).toMatch(/ {5}video: at 0\.0 s of NaN s, ready state 0, network 0, paused, buffered \[nothing\] · not through MSE/);
+    expect(parseInShort(report)?.findings).toContainEqual(
+      expect.objectContaining({
+        grade: "problem",
+        text: "Going back from HD to SD failed (media error 4).",
+      }),
+    );
+  });
+
   it("reports an HD failure, and skips HD where it is not offered", async () => {
     vi.spyOn(PlaybackCheck.prototype as unknown as { _pause: () => Promise<void> }, "_pause").mockResolvedValue();
     const hass = reportingHass();

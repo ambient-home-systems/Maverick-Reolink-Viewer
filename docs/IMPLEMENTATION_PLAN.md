@@ -7271,9 +7271,10 @@ while F runs.
   - **MSE** where the browser has no `VideoDecoder` (`MsePainter`, the
     browser's `ManagedMediaSource` or `MediaSource`): a video element of its
     own, its buffer holding the one picture (the one before removed, the init
-    appended only when it changes), set to the picture's time. WebCodecs
-    exists only in a secure context, so Home Assistant opened over plain HTTP
-    (not HTTPS, not localhost) paints this way too.
+    appended only when it changes), set to the picture's time. Chrome offers
+    WebCodecs only in a secure context, so Home Assistant opened in Chrome over
+    plain HTTP paints this way too; Safari 26 offers it over plain HTTP (the
+    owner's Mac, v0.61.1).
   - **In Chromium** (a scratch run before the PR, the sample clips' key frames,
     H.264 and VP9, 64×64): WebCodecs decoded and drew each in 5 ms, 1 ms or
     less with the decoder kept; MSE showed each in 2 to 3 ms.
@@ -7427,6 +7428,33 @@ through Nabu Casa, Front Yard Right; the page 0.61.0, Home Assistant still
   command.": Home Assistant had not restarted since the update, so it still
   ran 0.60.0, without `playback/online_users`. The row passed "back at rest"
   on the login alone.
+
+**The owner's Safari run (2026-11-10, v0.61.1 on both sides, Safari 26.5.2 on
+macOS over plain HTTP on the LAN, Front Yard Right):**
+
+- **P, all ✓, painted with WebCodecs** (Safari has it over plain HTTP): slow,
+  137 pictures, one every 0.06 s (device 30, store 107); again, every 0.06 s;
+  fast, caught up at rest; **the release in 0.5 s** (the cut's first fragment
+  233 ms, its slot 0 ms): the Nabu Casa run's 4.7 s is not the LAN's; the
+  recording playing on the camera played 1.4 min in 1.4 min.
+- **V, all ✓:** the NVR's users 2 at rest, 2 with one viewer, 3 with two, 2
+  again 32 s after both stopped; the first viewer never stalled; the second
+  started in 0.9 s and in 0.4 s far into the first one's recording. This is
+  Phase 5's v0.40.1 check, passed.
+- **Safari's problems:** C did not move on (the video sat at 12:59:51, 9 s
+  before the recording's end, for the 45 s waited; Chrome: 6 ms); H's return
+  to SD failed ("media error 4", Safari gave no message); a past day's
+  timeline 1.5 s the first time (the server 1 ms); a deep start into the
+  recording on screen 1.6 s (the server answered its first window in 1.3 s).
+  2× to 8× were not measured (the window was behind), but the check said they
+  stutter.
+
+**v0.61.2, from it:** the C and H rows give, on a failure, the video's state
+(position, duration, ready and network state, buffered ranges, error) and the
+MSE feed's (windows, bytes, source, fetching, seconds ahead), for the next
+Safari run to show the cause; rates measured with the page behind are said as
+not measured (`rateFindings`), never as a stutter; a failed return to SD is a
+problem in "In short".
 
 **v0.61.1, from it:** the device list says the version Home Assistant runs;
 the panel shows a note over every page when it and the page differ (restart

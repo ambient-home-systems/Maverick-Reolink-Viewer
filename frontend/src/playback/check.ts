@@ -38,6 +38,7 @@ import {
   mb,
   ms,
   slope,
+  rateFindings,
   smooth,
   SMOOTH_RULE,
   sourceLabel,
@@ -808,6 +809,7 @@ export class PlaybackCheck {
         `C  Moved on by itself at ${clock(a.end)} (from a ${span(a.end - a.start)} recording): ${how}` +
           (t.playFailure ? ` FAILED: ${t.playFailure}` : ""),
       );
+      if (!moved) this._log(`     ${videoState(t.player)}`);
       this._summary.push(`Auto-advance: ${moved && seen.includes("advanced") ? `gap ${ms(t.metrics.gapMs)}` : how}`);
       const gap = t.metrics.gapMs ?? 0;
       this._plain.push(
@@ -866,19 +868,9 @@ export class PlaybackCheck {
       if (video) video.playbackRate = 1;
     }
     this._summary.push(
-      `Rates: ${results.map((r) => `${r.rate}× ${smooth(r) ? "✓" : "✗"}`).join(" ") || "not measured"} (smooth = ${SMOOTH_RULE})`,
+      `Rates: ${results.map((r) => `${r.rate}× ${!r.focused ? "– (not in front)" : smooth(r) ? "✓" : "✗"}`).join(" ") || "not measured"} (smooth = ${SMOOTH_RULE})`,
     );
-    const rough = results.filter((r) => !smooth(r));
-    if (results.length) {
-      this._plain.push(
-        rough.length
-          ? { grade: "slow", text: `Playback stutters at ${rough.map((r) => `${String(r.rate)}×`).join(", ")} speed.` }
-          : {
-              grade: "good",
-              text: `Slow motion and fast forward (${String(results[0]?.rate)}× to ${String(results.at(-1)?.rate)}×) play smoothly.`,
-            },
-      );
-    }
+    this._plain.push(...rateFindings(results));
   }
 
   /**
@@ -1594,7 +1586,15 @@ export class PlaybackCheck {
     await this._pause(5000);
     const sd = await this._switchTo("sub");
     this._log(`     Back to SD at ${clock(sd.at)}: ${sd.line}`);
+    if (!sd.ok) this._log(`     ${videoState(t.player)}`);
     this._summary.push(`HD switch: to HD ${hd.short}; back to SD ${sd.short}`);
+    if (!sd.ok) {
+      this._plain.push({
+        grade: "problem",
+        text: `Going back from HD to SD failed (${sd.line.replace(/^FAILED: /, "").replace(/ \(back on the sub stream\)$/, "")}).`,
+        advice: "Pressing SD again, or playing another moment, plays it. Include the details below if you report it.",
+      });
+    }
     this._plain.push({
       grade: worst([speed(hd.ms, 3000, 8000), hd.kept ? "good" : "fine"]),
       text:
@@ -1978,6 +1978,30 @@ function bufferedEnd(video: HTMLVideoElement): number {
     if (ranges.start(i) <= video.currentTime + 0.5 && ranges.end(i) >= video.currentTime) return ranges.end(i);
   }
   return video.currentTime;
+}
+
+/**
+ * The video on screen and its MSE feed, for a failure's report: what the
+ * browser has (ready state, buffered ranges in the recording, its end) and
+ * what was fetched.
+ */
+export function videoState(player: RvPlayer | null): string {
+  const video = activeVideo(player);
+  if (!video) return "video: none on screen";
+  const ranges: string[] = [];
+  for (let i = 0; i < video.buffered.length; i += 1) {
+    ranges.push(`${video.buffered.start(i).toFixed(1)}–${video.buffered.end(i).toFixed(1)} s`);
+  }
+  const error = video.error ? `, error ${String(video.error.code)}${video.error.message ? ` (${video.error.message})` : ""}` : "";
+  const feed = player?.mseStats;
+  return (
+    `video: at ${video.currentTime.toFixed(1)} s of ${Number.isFinite(video.duration) ? video.duration.toFixed(1) : String(video.duration)} s, ` +
+    `ready state ${String(video.readyState)}, network ${String(video.networkState)}, ${video.paused ? "paused" : "not paused"}` +
+    `${video.ended ? ", ended" : ""}${video.seeking ? ", seeking" : ""}, buffered [${ranges.join(", ") || "nothing"}]${error}` +
+    (feed
+      ? ` · MSE (${feed.api}): ${String(feed.windows)} windows, ${mb(feed.bytes)}, from the ${feed.source}, ${feed.fetching ? "fetching" : "not fetching"}, ${feed.ahead.toFixed(1)} s ahead`
+      : " · not through MSE")
+  );
 }
 
 function activeVideo(player: RvPlayer | null): HTMLVideoElement | null {
