@@ -6924,7 +6924,7 @@ download cut, then the thumbnail.
 | --- | --- |
 | 0. Measure first (the gate) | Built (v0.57.0). **The gate passes** (2026-11-10): a cut's key frame in 166–182 ms back to back on all six cameras, and a key frame decoded in 1.7 ms on desktop Chrome; the iPhone app's and the wall tablet's K rows still to come (they choose step 2's way of painting, not whether step 1 is built) |
 | 1. Key frames from the server | Built (v0.58.0–v0.58.1); the owner's check passed on desktop Chrome (2026-11-10); the iPhone app's and the wall tablet's still to run |
-| 2. Painting while dragging | Built (v0.59.0); the owner's check to come |
+| 2. Painting while dragging | Built (v0.59.0–v0.59.1: 0.59.0's drags were never answered); the owner's check to come |
 | 3. Press and release | Not started |
 | 4. The checks | Not started |
 | 5. Optional: storyboards | Not started; only if step 0's gate fails |
@@ -7268,6 +7268,19 @@ while F runs.
   picture until the first frame, a buffered moment from the video alone, no
   ask between recordings, a cancelled drag, the hold's limit, a session that
   cannot open); the interval in the server's message.
+
+**v0.59.1, from the owner's first drag ("I don't believe the scrubbing slow drag
+is working"):** nothing was painted. A drag's time comes from the pointer's
+pixel (`xToTime`), with fractions of a millisecond; `views._scrub_request` took
+only an integer `at`, so it ignored the request without an answer, and the
+controller, one ask at a time, waited on it for the rest of the day. The F row
+passed because its moments are rounded (`spreadMoments`), and the tab's tests
+because their stand-in session answered anything. Now: `ScrubClient.ask` sends
+whole milliseconds; the server takes a finite number and rounds it (never a
+boolean, NaN or infinity); an ask unanswered in 5 s (`ASK_TIMEOUT_MS`) is a
+miss, so a lost answer cannot hold up the next. Checks: the stand-in session
+refuses a fractional moment as the server did, and the tab's drag sends one;
+the server's request parsing; a fractional moment end to end; the timeout.
 
 **Hardware checklist (the owner, v0.59.0):** after Home Assistant's restart and
 a full reload of the page (Ctrl+F5), on LAN Chrome:

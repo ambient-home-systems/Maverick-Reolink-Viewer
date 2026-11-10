@@ -843,6 +843,8 @@ describe("rv-playback while dragging (Phase 10)", () => {
     send(data: string): void {
       const { seq, at } = JSON.parse(data) as { seq: number; at: number };
       this.asked.push(at);
+      // As the server (views._scrub_request): a moment is whole milliseconds.
+      if (!Number.isInteger(at)) return;
       const header = { seq, at, time: at - 500, source: "store", kind: "fmp4", codec: "avc1", timing: { ms: 2 }, interval: 4000 };
       const json = new TextEncoder().encode(JSON.stringify({ ...header, init: 1, data: 1 }));
       const out = new Uint8Array(4 + json.length + 2);
@@ -900,7 +902,9 @@ describe("rv-playback while dragging (Phase 10)", () => {
   it("paints the server's picture where the video has none, until the video starts there", async () => {
     const { el, hass, sockets, picture, painted, timeline, player, send } = await scrubMount();
     const at = T0 + 61 * MIN;
-    send(timeline, "rv-scrub", { time: at });
+    // A drag's time comes from the pointer's pixel: a fraction of a millisecond.
+    const pointer = at + 0.37;
+    send(timeline, "rv-scrub", { time: pointer });
     await settle(el);
     expect(sentOf(hass, "reolink_viewer/playback/scrub")).toEqual([
       expect.objectContaining({ device_id: "dev-cam", date: "2026-10-17" }),
@@ -913,7 +917,7 @@ describe("rv-playback while dragging (Phase 10)", () => {
     expect(picture.renderRoot.querySelector(".frame")?.classList.contains("on")).toBe(true);
     // The pointer is the time while dragging, whatever the playing video says.
     send(player, "rv-time", { time: T0 + 60 * MIN });
-    expect(el._cursor).toBe(at);
+    expect(el._cursor).toBe(pointer);
     // The hover shows the time alone: the picture is in the player.
     const thumbs = sentOf(hass, "reolink_viewer/thumbnail/urls").length;
     send(timeline, "rv-hover", { time: at, x: 200 });

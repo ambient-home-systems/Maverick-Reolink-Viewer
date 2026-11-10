@@ -89,7 +89,15 @@ interface Waiting {
   at: number;
   began: number;
   resolve: (answer: ScrubAnswer) => void;
+  timer: ReturnType<typeof setTimeout>;
 }
+
+/**
+ * An ask unanswered this long (ms) is given up as a miss, so a lost answer
+ * cannot hold up the asks after it (the server's slowest, a cut from the
+ * device, gives up within about 2 s).
+ */
+export const ASK_TIMEOUT_MS = 5000;
 
 export class ScrubClient {
   private _seq = 0;
@@ -132,8 +140,13 @@ export class ScrubClient {
     });
   }
 
-  /** Ask for the picture at `at` (UTC ms); a newer ask supersedes this one. */
-  async ask(at: number): Promise<ScrubAnswer> {
+  /**
+   * Ask for the picture at `at` (UTC ms, sent as whole milliseconds: a drag's
+   * time has fractions, which the server does not take before v0.59.1); a
+   * newer ask supersedes this one, and one unanswered in `timeoutMs` is a miss.
+   */
+  async ask(time: number, timeoutMs = ASK_TIMEOUT_MS): Promise<ScrubAnswer> {
+    const at = Math.round(time);
     await this._ready;
     const began = this._now();
     if (this._closed || this._socket.readyState !== OPEN) {
@@ -143,7 +156,10 @@ export class ScrubClient {
     this._seq += 1;
     const seq = this._seq;
     const answer = new Promise<ScrubAnswer>((resolve) => {
-      this._waiting = { seq, at, began, resolve };
+      const timer = setTimeout(() => {
+        if (this._waiting?.seq === seq) this._settle({ error: "no answer in time" });
+      }, timeoutMs);
+      this._waiting = { seq, at, began, resolve, timer };
     });
     this._socket.send(JSON.stringify({ seq, at }));
     return answer;
@@ -156,10 +172,16 @@ export class ScrubClient {
   }
 
   private _settle(miss: { error: string; superseded?: boolean }): void {
+    const waiting = this._take();
+    waiting?.resolve({ at: waiting.at, ms: this._now() - waiting.began, ...miss });
+  }
+
+  /** The ask waiting, now answered: it waits no more. */
+  private _take(): Waiting | undefined {
     const waiting = this._waiting;
-    if (!waiting) return;
     this._waiting = undefined;
-    waiting.resolve({ at: waiting.at, ms: this._now() - waiting.began, ...miss });
+    clearTimeout(waiting?.timer);
+    return waiting;
   }
 
   private _message(data: unknown): void {
@@ -169,7 +191,7 @@ export class ScrubClient {
     if (data instanceof ArrayBuffer) {
       const { seq, ...picture } = readPicture(data, ms);
       if (seq !== waiting.seq) return;
-      this._waiting = undefined;
+      this._take();
       waiting.resolve(picture);
       return;
     }
@@ -181,7 +203,7 @@ export class ScrubClient {
       return;
     }
     if (reply.seq !== waiting.seq) return;
-    this._waiting = undefined;
+    this._take();
     waiting.resolve({ at: waiting.at, error: reply.error ?? "no picture", ms });
   }
 }

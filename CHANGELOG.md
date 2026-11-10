@@ -3,6 +3,17 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.59.1
+
+From the owner's first drag on 0.59.0: no picture came.
+
+- **Dragging shows the pictures:** a drag's time comes from the pointer's position,
+  in fractions of a millisecond, and Home Assistant took such a time for no
+  request and never answered; the panel then waited on that first picture for the
+  rest of the day. The panel now asks in whole milliseconds, Home Assistant takes
+  fractions too, and a picture not answered within 5 s no longer holds up the next.
+  (The playback check's F row asked in whole milliseconds, so it passed.)
+
 ## 0.59.0
 
 Dragging along the timeline shows the recording at the pointer (Phase 10's step 2).
