@@ -36,6 +36,7 @@ from homeassistant.util import dt as dt_util
 
 from .baichuan_media import BlockReader
 from .const import REOLINK_DOMAIN
+from .remux import async_jpeg_from_frame
 from .timeconv import device_timezone
 
 if TYPE_CHECKING:
@@ -324,6 +325,31 @@ class DaySearch:
 
 def _reolink_time_id(value: datetime) -> str:
     return value.strftime("%Y%m%d%H%M%S")
+
+
+def _time_xml(tag: str, value: datetime) -> str:
+    units = ("year", "month", "day", "hour", "minute", "second")
+    parts = "".join(f"<{unit}>{getattr(value, unit)}</{unit}>\n" for unit in units)
+    return f"<{tag}>\n{parts}</{tag}>\n"
+
+
+def _cover_preview_xml(channel: int, stream: str, start: datetime) -> str:
+    """Return a past-picture request's body (298), byte for byte reolink-aio's.
+
+    Written here, not formatted from reolink-aio's ``xmls.CoverPreview``: 0.23.0
+    changed that template's fields (the request it sends did not change), and a
+    test compares the two on the reolink-aio installed.
+    """
+    end = start + timedelta(seconds=10)
+    return (
+        '\n<?xml version="1.0" encoding="UTF-8" ?>\n<body>\n'
+        '<CoverPreview version="1.1">\n'
+        f"<channelId>{channel}</channelId>\n<desc>0</desc>\n"
+        f"<streamType>{stream}Stream</streamType>\n"
+        f"{_time_xml('startTime', start)}{_time_xml('endTime', end)}"
+        "<frameList>\n<frameNo>1</frameNo>\n</frameList>\n"
+        "</CoverPreview>\n</body>"
+    )
 
 
 @functools.cache
@@ -1252,11 +1278,13 @@ class ReolinkHostHandle:
     ) -> bytes:
         """Return a JPEG frame from a past recording (Baichuan cmd 298).
 
-        reolink-aio reads the answer only when its stream header is ``1001``;
-        the battery Doorbell answers ``1002`` (Phase 6 run 2). So a Baichuan-only
-        device's answer is read here, with this integration's own media reader
-        (``baichuan_media``, which takes any ``100x`` header), and an answer
-        reolink-aio refuses from any other device is asked again and read here.
+        reolink-aio before 0.23.0 reads the answer only when its stream header
+        is ``1001``; the battery Doorbell answers ``1002`` (Phase 6 run 2). So a
+        Baichuan-only device's answer is read here, with this integration's own
+        media reader (``baichuan_media``, which takes any ``100x`` header), and
+        an answer reolink-aio refuses from any other device is asked again and
+        read here. Reading here uses nothing of reolink-aio but ``send_payload``,
+        so it works on every release.
         """
         if (camera_tz := self.timezone()) is not None and when.tzinfo is not None:
             when = when.astimezone(camera_tz)
@@ -1278,38 +1306,18 @@ class ReolinkHostHandle:
         self, channel: int, when: datetime, stream: str, ffmpeg_binary: str
     ) -> bytes:
         """Ask for a past picture (298) as reolink-aio does, and read it here."""
-        from reolink_aio.baichuan import xmls  # noqa: PLC0415 - only on this path
-        from reolink_aio.baichuan.util import i_frame_to_jpeg  # noqa: PLC0415
-
         send_payload = getattr(self._api.baichuan, "send_payload", None)
-        template = getattr(xmls, "CoverPreview", None)
-        if send_payload is None or not isinstance(template, str):
+        if send_payload is None:
             raise NotApplicableError("reolink-aio cannot send a picture request")
         kind = "main" if "main" in stream else stream if stream == "ext" else "sub"
-        end = when + timedelta(seconds=10)
-        body = template.format(
-            channel=channel,
-            stream=kind,
-            start_year=when.year,
-            start_month=when.month,
-            start_day=when.day,
-            start_hour=when.hour,
-            start_minute=when.minute,
-            start_second=when.second,
-            end_year=end.year,
-            end_month=end.month,
-            end_day=end.day,
-            end_hour=end.hour,
-            end_minute=end.minute,
-            end_second=end.second,
-        )
+        body = _cover_preview_xml(channel, kind, when)
         _message, payload = await send_payload(cmd_id=298, body=body)
         reader = BlockReader()
         blocks = [*reader.feed(bytes(payload)), *reader.finish()]
         frame = next((b.payload for b in blocks if b.kind == "key" and b.payload), None)
         if frame is None:
             raise BridgeError("the picture's answer holds no key frame")
-        return bytes(await i_frame_to_jpeg(frame, ffmpeg_binary))
+        return await async_jpeg_from_frame(ffmpeg_binary, frame)
 
 
 class DeviceRole(StrEnum):

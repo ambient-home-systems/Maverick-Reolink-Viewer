@@ -44,9 +44,9 @@ def _prober(hass: HomeAssistant, scheduler: Scheduler, options: ProbeOptions) ->
 
 @pytest.fixture(autouse=True)
 def jpeg() -> Generator[AsyncMock]:
-    """reolink-aio's key frame to JPEG (ffmpeg), for pictures read here."""
+    """The key frame to JPEG (ffmpeg), for pictures read here."""
     convert = AsyncMock(return_value=b"\xff\xd8jpegdata")
-    with patch("reolink_aio.baichuan.util.i_frame_to_jpeg", convert):
+    with patch.object(bridge, "async_jpeg_from_frame", convert):
         yield convert
 
 
@@ -148,7 +148,7 @@ async def test_events_check_on_the_wired_doorbell(
     for field in ("<hour>11</hour>", "<second>2</second>", "<streamType>sub"):
         assert field in request.kwargs["body"]
     reolink_host.baichuan.snapshot_past.assert_not_awaited()
-    jpeg.assert_awaited_once_with(PICTURE_FRAME, "ffmpeg")
+    jpeg.assert_awaited_once_with("ffmpeg", PICTURE_FRAME)
     # Never the HTTP Search, which a Baichuan-only device does not have.
     reolink_host.request_vod_files.assert_not_awaited()
     # No event's time of day in the report.

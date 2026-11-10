@@ -55,6 +55,12 @@ jobs:
             harness: "0.13.372"
           # The weekly run also tries the newest HA release, non-blocking.
           - ha: ${{ github.event_name == 'schedule' && 'latest' || 'pinned' }}
+          # The reolink-aio Home Assistant's dev branch pins, on the pinned
+          # release, blocking: what it takes out fails here before a release
+          # ships it (0.23.0, for HA 2026.11.2, took out i_frame_to_jpeg). Move
+          # it on when dev pins a newer one; drop it once the pin catches up.
+          - ha: "pinned + reolink-aio 0.23.0"
+            reolink_aio: "0.23.0"
     continue-on-error: ${{ matrix.ha == 'latest' }}
     steps:
       - uses: actions/checkout@v7
@@ -73,8 +79,11 @@ jobs:
         if: matrix.ha == 'latest'
         run: pip install --upgrade pytest-homeassistant-custom-component
       - name: Install what that release pins for the Reolink, ffmpeg, frontend, camera and stream components
-        if: matrix.ha != 'pinned'
+        if: matrix.ha != 'pinned' && !matrix.reolink_aio
         run: pip install $(python -m scripts.ha_requirements)
+      - name: Install reolink-aio ${{ matrix.reolink_aio }}
+        if: matrix.reolink_aio
+        run: pip install "reolink-aio==${{ matrix.reolink_aio }}"
       - name: Fetch the pinned go2rtc (checksum verified) for the live tests
         run: echo "RV_GO2RTC=$(python -m scripts.fetch_go2rtc "$RUNNER_TEMP/go2rtc")" >> "$GITHUB_ENV"
       - run: python -m pytest --cov --cov-report=term-missing --cov-fail-under=90
