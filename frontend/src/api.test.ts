@@ -101,5 +101,10 @@ describe("api", () => {
     expect(toError(new Error("x")).message).toBe("x");
     expect(toError({ code: "c", message: "from ws" }).message).toBe("from ws");
     expect(toError("plain").message).toBe("plain");
+    // A command the connection gave up on: the result, with its error inside.
+    expect(toError({ type: "result", success: false, error: { code: 3, message: "Connection lost" } }).message).toBe(
+      "Connection lost",
+    );
+    expect(toError({ code: 7 }).message).toBe('{"code":7}');
   });
 });

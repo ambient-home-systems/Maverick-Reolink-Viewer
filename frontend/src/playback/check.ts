@@ -66,7 +66,7 @@ import { ScrubClient, isPicture, type ScrubPicture, type SocketLike } from "./sc
 import { SHAPES, mseApi, mseSupports, pickSample, probeShape, type MseApi } from "./mse-probe";
 import type { RvPlayer } from "./player";
 
-export const CHECK_VERSION = "0.8.1";
+export const CHECK_VERSION = "0.8.2";
 export const SETUPS = [
   "Desktop Chrome, LAN",
   "Desktop Chrome, Tailscale",
@@ -220,6 +220,8 @@ export interface CheckOptions {
 interface DragBeside {
   startMs: number | undefined;
   source: string | undefined;
+  /** Why it did not start, when its start failed. */
+  why?: string;
   pass?: DragPass;
   played?: PlayedWhile;
 }
@@ -328,6 +330,18 @@ export class PlaybackCheck {
     this._stopped = true;
   }
 
+  /** Run one row; a failure is said (in its line and "In short") and the check goes on. */
+  private async _row(name: string, part: () => Promise<void>): Promise<void> {
+    try {
+      await part();
+    } catch (err) {
+      if (err instanceof Stopped) throw err;
+      const why = toError(err).message;
+      this._log(`${name}  FAILED: ${why}`);
+      this._plain.push({ grade: "problem", text: `The check's ${name} row could not finish: ${why}.` });
+    }
+  }
+
   /** Run every part; resolves with the report. */
   async run(): Promise<string> {
     this.running = true;
@@ -337,20 +351,22 @@ export class PlaybackCheck {
       this._sd();
       // Reading the statistics starts the server's loop timer for the starts below (v0.62.2).
       await this._stats();
-      await this._timelines();
-      await this._events();
-      await this._deep();
-      await this._advance();
-      await this._rates();
-      await this._scrub();
-      await this._keyFrames();
-      await this._serverPictures();
-      await this._drag();
-      await this._switchHd();
-      await this._link();
-      await this._capabilities();
-      if (this.options.soakMinutes > 0) await this._soak();
-      await this._viewers();
+      // Each row on its own: one that fails is said, and the rest run (v0.63.2:
+      // a lost connection in P ended the whole check).
+      await this._row("A", () => this._timelines());
+      await this._row("B", () => this._events());
+      await this._row("D", () => this._deep());
+      await this._row("C", () => this._advance());
+      await this._row("R", () => this._rates());
+      await this._row("S", () => this._scrub());
+      await this._row("K", () => this._keyFrames());
+      await this._row("F", () => this._serverPictures());
+      await this._row("P", () => this._drag());
+      await this._row("H", () => this._switchHd());
+      await this._row("L", () => this._link());
+      await this._row("MSE", () => this._capabilities());
+      if (this.options.soakMinutes > 0) await this._row("Soak", () => this._soak());
+      await this._row("V", () => this._viewers());
       for (const line of inShortLines(this.inShort(true))) this._log(line);
       this._log("");
       this._log("Summary:");
@@ -543,7 +559,7 @@ export class PlaybackCheck {
     const ok = await this._wait(() => t.metrics.firstFrameMs !== undefined || Boolean(t.playFailure), 120_000);
     watch.stop();
     // How busy Home Assistant was meanwhile, read at once (its last 10 s).
-    const busy = await this._busy();
+    const { text: busy, heldMs } = await this._busy();
     const m = t.metrics;
     // Where it really started (a start at the wrong place looks fast too).
     const shown = t.player?.time;
@@ -563,7 +579,8 @@ export class PlaybackCheck {
     const line =
       `first frame ${ok && !t.playFailure ? ms(m.firstFrameMs) : "none"}` +
       ` [URL ${ms(m.urlMs)}${urlServer === undefined ? "" : ` (server ${ms(urlServer)})`} · metadata ${ms(watch.seen.loadedmetadata)} · seeked ${ms(watch.seen.seeked)} · playing ${ms(watch.seen.playing)}]` +
-      ` ${m.delivery ?? "?"}${file}${from} · ${m.stream ?? "?"} ${m.codec ?? ""}${where}${t.playFailure ? ` FAILED: ${t.playFailure}` : ""}`;
+      ` ${m.delivery ?? "?"}${file}${from} · ${m.stream ?? "?"} ${m.codec ?? ""}${where}${t.playFailure ? ` FAILED: ${t.playFailure}` : ""}` +
+      (heldMs !== undefined && heldMs >= BUSY_NOTE_MS ? ` · HOME ASSISTANT HELD UP ${ms(heldMs)}` : "");
     return {
       ok: ok && !t.playFailure && !where,
       line,
@@ -1254,7 +1271,12 @@ export class PlaybackCheck {
   private async _dragBeside(other: Segment, from: number, spanMs: number): Promise<DragBeside> {
     const viewer = this._t.openViewer();
     try {
-      const startMs = await viewer.playAt(other.start + (other.end - other.start) * 0.6);
+      let startMs: number | undefined;
+      try {
+        startMs = await viewer.playAt(other.start + (other.end - other.start) * 0.6);
+      } catch (err) {
+        return { startMs: undefined, source: viewer.source, why: toError(err).message };
+      }
       if (startMs === undefined) return { startMs, source: viewer.source };
       const watch = sampleStalls(() => viewer.position);
       const pass = await this._dragPass(from, spanMs, DRAG_SLOW.ms * this.timeScale);
@@ -1267,7 +1289,9 @@ export class PlaybackCheck {
   private _besideText(beside: DragBeside | undefined, s: DragSummary | undefined): string {
     if (!beside) return "beside another viewer: none (no second recording not cached on this day)";
     const from = beside.source ? `, from ${sourceLabel(beside.source)}` : "";
-    if (!beside.pass || !beside.played || !s) return `beside another viewer: it did not start${from}`;
+    if (!beside.pass || !beside.played || !s) {
+      return `beside another viewer: it did not start${from}${beside.why ? ` (${beside.why})` : ""}`;
+    }
     const { played } = beside;
     return (
       `beside another viewer (playing another recording${from}, started in ${ms(beside.startMs)}): ${describeDrag(s, beside.pass)}; ` +
@@ -1361,7 +1385,8 @@ export class PlaybackCheck {
     // Where the video began: at the picture shown (step 3), or at the pointer.
     const startedAt = player.time;
     timeline.dispatchEvent(new CustomEvent("rv-hover-end"));
-    this._releaseBusy = await this._busy();
+    const busy = await this._busy();
+    this._releaseBusy = busy.text + (busy.heldMs !== undefined && busy.heldMs >= BUSY_NOTE_MS ? " · HOME ASSISTANT HELD UP" : "");
     if (!ok) {
       return { text: `no first frame in ${span(DRAG_RELEASE_MS)}`, plain: "Letting go did not start the video.", ok: false };
     }
@@ -2009,7 +2034,7 @@ export class PlaybackCheck {
    * recorder and plain-copy rewrites running then. A held loop answers every
    * request late; it is noted in "In short" from half a second.
    */
-  private async _busy(): Promise<string> {
+  private async _busy(): Promise<{ text: string; heldMs: number | undefined }> {
     const stats = await this._stats();
     const held = stats?.loop?.held_10s_ms ?? undefined;
     const vod = stats?.vod;
@@ -2026,14 +2051,14 @@ export class PlaybackCheck {
     }
     if (vod?.rewriting) parts.push(count(vod.rewriting, "plain-copy rewrite"));
     if (held !== undefined && held >= BUSY_NOTE_MS) this._noteBusy(held);
-    return `Home Assistant: ${parts.join(" · ")}`;
+    return { text: `Home Assistant: ${parts.join(" · ")}`, heldMs: held };
   }
 
   /** "In short" says once that Home Assistant was busy, with the longest hold seen. */
   private _noteBusy(heldMs: number): void {
     if (this._busyNote && heldMs <= this._busiest) return;
     this._busiest = heldMs;
-    const text = `Home Assistant itself was busy during some starts: its event loop was held up to ${secondsText(heldMs)}, so it answered late (see the "Home Assistant:" lines).`;
+    const text = `Home Assistant itself was busy during some starts: its event loop was held up to ${secondsText(heldMs)}, so it answered late (those starts say "HOME ASSISTANT HELD UP").`;
     if (this._busyNote) {
       this._busyNote.text = text;
     } else {

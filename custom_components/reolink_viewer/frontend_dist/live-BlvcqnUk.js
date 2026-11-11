@@ -47,7 +47,17 @@ function u(e, t, n) {
 	};
 }
 function d(e) {
-	return e instanceof Error ? e : typeof e == "object" && e && "message" in e ? Error(String(e.message)) : Error(String(e));
+	if (e instanceof Error) return e;
+	if (typeof e == "object" && e) {
+		if ("message" in e && typeof e.message == "string") return Error(e.message);
+		if ("error" in e && typeof e.error == "object" && e.error !== null && "message" in e.error) return Error(String(e.error.message));
+		try {
+			return Error(JSON.stringify(e));
+		} catch {
+			return Error(Object.prototype.toString.call(e));
+		}
+	}
+	return Error(String(e));
 }
 var ee = (e, t, n, r) => e.callWS({
 	type: "reolink_viewer/timeline/days",

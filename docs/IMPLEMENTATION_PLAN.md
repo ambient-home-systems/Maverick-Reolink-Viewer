@@ -7641,6 +7641,46 @@ Yard Right):**
   answered as late; a start's cut window reaching past the moment. Each new
   test fails on the code before.
 
+**The owner's runs of v0.63.1 (2026-11-11, just after 1 AM, Chrome 156 through
+Nabu Casa):**
+
+- **Front Yard Right:** every row ✓. The deep start not cached in 0.71 s
+  (0.87–1.0 s before: the fuller first window), placed by key frame time;
+  everything after it played. Not exercised at that hour: no events yet (B
+  skipped, so no cut was left running before D1), and the day's one recording
+  was cached (P dragged over the store; no second viewer). "In short" said
+  Home Assistant was held 0.9 s during a start whose line did not say so.
+- **Front Yard Left (a key frame every 4.1 s):** A to F ✓, then "Check failed:
+  [object Object]" in P. Home Assistant's connection rejects a command it
+  gave up on ("Connection lost") with the whole result, which `toError` read
+  as "[object Object]"; the second viewer's start in P (v0.62.0) did not
+  catch it, so the check ended. And D1 from a cut took 1.09 s: its first
+  window held one 4 s group of pictures with the moment 2 s in it, and the
+  video showed only once the next window came (one-group windows from the
+  download showed at once).
+
+**v0.63.2, from them:**
+
+- **A row that fails no longer ends the check** (`PlaybackCheck._row`): it is
+  said ("P  FAILED: Connection lost", and as a problem in "In short") and the
+  rows after it run.
+- **Errors read plainly:** `toError` takes the message from inside a result
+  Home Assistant's connection gave up on; anything else unreadable is shown as
+  its JSON, never "[object Object]".
+- **The second viewer's start is guarded** in P: "it did not start (why)".
+- **A start held up says so on its own line**: "HOME ASSISTANT HELD UP N ms"
+  where the event loop was held half a second or more; the note in "In short"
+  points there.
+- **A start's window from a cut holds the fragment after the moment's**
+  (`_cut_window`): with the 2 s reach of v0.63.1, it waits (up to 1 s) for a
+  fragment that starts after the moment, so a camera keyed every 4 s is sent
+  the group after the moment's too.
+- The playback check is v0.8.2. Checks: a check whose P row fails as the
+  connection did, the rows after it run; the error's wording; the guarded
+  viewer; the held start's line; a hand-made cut of 4 s groups whose window
+  waits for the group after the moment, or goes alone within a second. Each
+  new test fails on the code before.
+
 #### Step 10.4: the checks
 
 - **In CI:** `scrub_check.cjs` drags against a fake key-frame endpoint,

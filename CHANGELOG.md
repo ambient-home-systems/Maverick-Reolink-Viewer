@@ -3,6 +3,23 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.63.2
+
+From the owner's playback checks of 0.63.1 through Nabu Casa, on Front Yard Right and
+Front Yard Left.
+
+- **The check carries on when a row fails:** on Front Yard Left the page lost its
+  connection to Home Assistant partway through, and the whole check ended with
+  "Check failed: [object Object]". Now that row is reported as failed, with the reason
+  in plain words ("Connection lost"), and the rest of the check runs.
+- **A slow start says when Home Assistant was busy:** if Home Assistant was held up
+  for half a second or more while a video started, that start's own line now says so.
+  Before, only the summary said it, without saying which start.
+- **Cameras with a full picture only every few seconds start sooner:** for a video the
+  recorder sends directly, the first stretch now also includes the part after the
+  moment you asked for. On Front Yard Left, which has a full picture every 4 s, the
+  video had waited for a second stretch.
+
 ## 0.63.1
 
 From the owner's playback check of 0.63.0 in Chrome through Nabu Casa. Partway through,

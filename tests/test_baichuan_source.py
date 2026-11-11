@@ -33,6 +33,7 @@ from custom_components.reolink_viewer.baichuan_source import (
 )
 from custom_components.reolink_viewer.bridge import BaichuanEndpoint
 from custom_components.reolink_viewer.devices import PlaybackSource
+from custom_components.reolink_viewer.fmp4 import Fragment
 from custom_components.reolink_viewer.scheduler import Priority, Scheduler
 from custom_components.reolink_viewer.vodcache import (
     CUT_FIRST,
@@ -484,14 +485,61 @@ async def test_a_start_asks_its_init_and_first_window_together_and_one_cut_serve
     assert init.startswith(b"\x00\x00\x00\x1cftyp")
     assert window.source == "cut"
     assert window.first == CUT_FIRST + 3
-    # It reaches past the moment (or holds all the cut has): the video can show it.
+    # It reaches past the moment, with a fragment after the moment's (or holds
+    # all the cut has): the video can show it.
     assert window.end_ms is not None
     assert window.end_ms >= AT_MS + vodcache.START_AHEAD_MS or window.last
+    assert window.fragments[-1].start_ms > AT_MS or window.last
     # One cut, not one for each.
     assert entry.cuts == 1
     assert entry.cut is not None
     assert not entry.old_cuts
     await _done(entry.cut)
+
+
+async def test_a_starts_window_of_long_groups_holds_the_one_after_the_moment(
+    cached: tuple[VodCache, Rig],
+) -> None:
+    """A 4 s group of pictures holds the moment and 2 s more: one more is awaited.
+
+    v0.63.2: on Front Yard Left, a first window of the moment's group alone
+    had the video wait a round trip for the next.
+    """
+    cache, rig = cached
+    never = asyncio.Event()
+
+    async def receiving() -> None:
+        await never.wait()
+
+    cut = Cut("entry1", 0, "sub", rig.dir / "hand.cut.mp4", AT_MS)
+    cut.task = asyncio.ensure_future(receiving())
+
+    def fragment(start: float) -> Fragment:
+        return Fragment(0, 0, 0, ((1, 0),), start, 4_000.0, True)
+
+    cut.index.fragments.append(fragment(AT_MS - 1_000))
+    asked = asyncio.ensure_future(
+        cache._cut_window(cut, at_ms=AT_MS, max_ms=10_000, max_bytes=10**7)
+    )
+    await asyncio.sleep(0.1)
+    # The moment's group reaches 3 s past it, but nothing after it: still waiting.
+    assert not asked.done()
+    async with cut.changed:
+        cut.index.fragments.append(fragment(AT_MS + 3_000))
+        cut.changed.notify_all()
+    window = await asyncio.wait_for(asked, 2)
+    assert [f.start_ms for f in window.fragments] == [AT_MS - 1_000, AT_MS + 3_000]
+    # Nothing more comes: the window goes with what there is, in at most a second.
+    alone = Cut("entry1", 0, "sub", rig.dir / "alone.cut.mp4", AT_MS)
+    alone.task = asyncio.ensure_future(receiving())
+    alone.index.fragments.append(fragment(AT_MS - 1_000))
+    with patch.object(vodcache, "START_AHEAD_WAIT_S", 0.05):
+        lone = await cache._cut_window(
+            alone, at_ms=AT_MS, max_ms=10_000, max_bytes=10**7
+        )
+    assert [f.start_ms for f in lone.fragments] == [AT_MS - 1_000]
+    never.set()
+    await asyncio.gather(cut.task, alone.task)
 
 
 async def test_a_deep_start_is_served_from_the_cut_while_the_download_goes_on(

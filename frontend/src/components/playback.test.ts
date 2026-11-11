@@ -1123,10 +1123,10 @@ describe("rv-playback while dragging (Phase 10)", () => {
     expect(report).toMatch(/ {5}\[URL \d+ ms( \(server [\d.]+ ms\))?\] /);
     // How busy Home Assistant was as the release started, and the note in "In short".
     expect(report).toContain(
-      "     Home Assistant: its event loop held up to 1320 ms in the last 10 s · 2 downloads from the recorder (1 for no viewer: next files, warm hours) · 1 plain-copy rewrite",
+      "     Home Assistant: its event loop held up to 1320 ms in the last 10 s · 2 downloads from the recorder (1 for no viewer: next files, warm hours) · 1 plain-copy rewrite · HOME ASSISTANT HELD UP",
     );
     expect(check.inShort(true).findings.map((f) => f.text)).toContain(
-      'Home Assistant itself was busy during some starts: its event loop was held up to 1.3 s, so it answered late (see the "Home Assistant:" lines).',
+      'Home Assistant itself was busy during some starts: its event loop was held up to 1.3 s, so it answered late (those starts say "HOME ASSISTANT HELD UP").',
     );
     expect(report).toContain("     server: ");
     expect(report).toContain("   hovering while dragging: the time alone, no thumbnail ✓");

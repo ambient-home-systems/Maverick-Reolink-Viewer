@@ -141,8 +141,19 @@ export function runProbe(
 /** HA websocket errors arrive as {code, message} objects. */
 export function toError(err: unknown): Error {
   if (err instanceof Error) return err;
-  if (typeof err === "object" && err !== null && "message" in err) {
-    return new Error(String(err.message));
+  if (typeof err === "object" && err !== null) {
+    if ("message" in err && typeof err.message === "string") return new Error(err.message);
+    // A command Home Assistant's connection gave up on (e.g. "Connection
+    // lost"): the whole result, its error inside (v0.63.2: it read
+    // "[object Object]").
+    if ("error" in err && typeof err.error === "object" && err.error !== null && "message" in err.error) {
+      return new Error(String(err.error.message));
+    }
+    try {
+      return new Error(JSON.stringify(err));
+    } catch {
+      return new Error(Object.prototype.toString.call(err));
+    }
   }
   return new Error(String(err));
 }
