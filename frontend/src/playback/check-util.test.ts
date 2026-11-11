@@ -12,6 +12,9 @@ import {
   describeDrag,
   describeRate,
   deviceSetup,
+  heldByName,
+  heldByUs,
+  holdsDuring,
   loginReport,
   longRecordings,
   mb,
@@ -372,5 +375,40 @@ describe("the P row: pictures while dragging", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("whose code held Home Assistant (v0.63.5)", () => {
+  it("names the integration in plain words", () => {
+    expect(heldByName("custom_components/spook")).toBe("the Spook integration");
+    expect(heldByName("custom_components/frigate_proxy")).toBe("the Frigate Proxy integration");
+    expect(heldByName("homeassistant/components/recorder")).toBe("Home Assistant's Recorder integration");
+    expect(heldByName("homeassistant")).toBe("Home Assistant's own code");
+    expect(heldByName("custom_components/reolink_viewer")).toBe("Reolink Viewer itself");
+    expect(heldByName(null)).toBeUndefined();
+    expect(heldByName(undefined)).toBeUndefined();
+    expect(heldByName("site-packages/jinja2")).toBeUndefined();
+    expect(heldByUs("custom_components/reolink_viewer")).toBe(true);
+    expect(heldByUs("custom_components/spook")).toBe(false);
+  });
+
+  it("counts the holds that touched a start, not those before or after it", () => {
+    const hold = (ago: number, held: number) => ({ ago_s: ago, seen_ms: held, where: ["x.py:1 in f"] });
+    // The start began 3 s ago and showed its first frame 0.5 s ago.
+    const { totalMs, longest } = holdsDuring(
+      [
+        hold(1, 1100), // during it
+        hold(2.5, 400), // during it
+        hold(8, 1300), // over before it began
+        hold(0.1, 300), // after its first frame: began 0.4 s ago, ended 0.1 s ago
+      ],
+      3,
+      0.5,
+    );
+    expect(totalMs).toBe(1500);
+    expect(longest?.seen_ms).toBe(1100);
+    // A hold that began before the start and ended in it counts.
+    expect(holdsDuring([hold(2.9, 2000)], 3, 0.5).totalMs).toBe(2000);
+    expect(holdsDuring([], 3, 0.5)).toEqual({ totalMs: 0, longest: undefined });
   });
 });

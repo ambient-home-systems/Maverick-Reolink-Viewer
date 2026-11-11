@@ -4,6 +4,7 @@ import asyncio
 import re
 import sys
 import time
+from typing import Any
 from unittest.mock import patch
 
 from custom_components.reolink_viewer import loopwatch
@@ -106,6 +107,73 @@ async def test_a_hold_of_a_fifth_of_a_second_is_noted(hass: HomeAssistant) -> No
     assert holds
     assert 150 <= holds[0]["seen_ms"] < 300
     assert holds[0]["where"][0].endswith(" in _hold_the_loop")
+
+
+# Code as an integration's file holds it: compiled under its path (v0.63.5).
+_SPOOK = "/config/custom_components/spook/template_extraction.py"
+_JINJA = "/usr/local/lib/python3.13/site-packages/jinja2/lexer.py"
+
+
+def _as_file(path: str, source: str) -> dict[str, Any]:
+    space: dict[str, Any] = {"time": time, "sys": sys, "loopwatch": loopwatch}
+    exec(compile(source, path, "exec"), space)
+    return space
+
+
+_lexer = _as_file(_JINJA, "def tokeniter(work):\n    return work()\n")
+_spook = _as_file(_SPOOK, "def _lexed(tokeniter, work):\n    return tokeniter(work)\n")
+
+
+async def test_a_hold_says_whose_code_held_it_and_how_long(hass: HomeAssistant) -> None:
+    """Spook's template scan held the owner's loop 1.3 s, under Jinja (v0.63.5).
+
+    The hold names the integration however deep in a library it is held,
+    follows the hold to its end, and counts in the last 10 s's sum.
+    """
+    watch = LoopWatch(hass)
+    with patch.object(loopwatch, "PERIOD_S", 0.05):
+        watch.watch()
+        await _ticks(watch, 2)
+        _spook["_lexed"](_lexer["tokeniter"], lambda: _hold_the_loop(0.6))
+        await _ticks(watch, 4)
+        await _ticks(watch, 6)
+        snapshot = watch.snapshot()
+        watch.stop()
+    (hold,) = snapshot["held_by"]
+    assert hold["by"] == "custom_components/spook"
+    # Innermost first: the work, the library under it, the integration's call.
+    assert hold["where"][0].endswith(" in _hold_the_loop")
+    assert hold["where"][2] == "site-packages/jinja2/lexer.py:2 in tokeniter"
+    assert hold["where"][3] == (
+        "custom_components/spook/template_extraction.py:2 in _lexed"
+    )
+    # Followed to its end: about the whole 0.6 s, not the 0.15 s first seen.
+    assert hold["seen_ms"] >= 400
+    assert hold["ago_s"] < 5
+    assert snapshot["held_10s_count"] == 1
+    assert snapshot["held_10s_total_ms"] >= 400
+
+
+def test_whose_code_a_stack_is_in() -> None:
+    """The innermost integration; Home Assistant's own code; or none."""
+
+    def here() -> Any:
+        return loopwatch._owner(sys._getframe())
+
+    assert _spook["_lexed"](_lexer["tokeniter"], here) == "custom_components/spook"
+    core = _as_file(
+        "/usr/lib/python3.13/site-packages/homeassistant/core.py",
+        "def run(work):\n    return work()\n",
+    )
+    recorder = _as_file(
+        "/usr/lib/python3.13/site-packages/homeassistant/components/recorder/core.py",
+        "def commit(work):\n    return work()\n",
+    )
+    assert core["run"](here) == "homeassistant"
+    assert core["run"](lambda: recorder["commit"](here)) == (
+        "homeassistant/components/recorder"
+    )
+    assert here() is None or here() == "homeassistant"
 
 
 def test_a_frame_says_its_file_line_and_function() -> None:

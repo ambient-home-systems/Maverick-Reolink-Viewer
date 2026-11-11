@@ -3,6 +3,26 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.63.5
+
+From the owner's playback check of 0.63.4 in Chrome through Nabu Casa, on Front Yard
+Right. The check named what had held Home Assistant up in earlier runs: Spook,
+another integration, reading through templates for over a second at a time. During
+one hold a cached jump that took Home Assistant 2 ms reached the browser after 2.5 s,
+and the check marked it as failed.
+
+- **The check names the integration in plain words:** "held by the Spook
+  integration", "Reolink Viewer itself", or "Home Assistant's Recorder integration",
+  then the file and line. "In short" says whether it was Reolink Viewer or not. Home
+  Assistant now finds the integration however deep in a library the work is, and
+  times each hold to its end instead of to when it was first noticed.
+- **It adds up the holds:** the line after a start gives how many times Home Assistant
+  was held up in the last 10 s and for how long in all, as well as the longest.
+- **A start another integration slowed isn't failed:** if it took longer than it
+  should while another integration held Home Assistant up, the check gives its time
+  as "slowed by the Spook integration" and doesn't judge it. If Reolink Viewer itself
+  held Home Assistant up, it's reported as a problem.
+
 ## 0.63.4
 
 From the owner's playback check of 0.63.3 in Chrome through Nabu Casa, on Front Yard

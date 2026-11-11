@@ -33,6 +33,9 @@ import {
   describeDrag,
   describePass,
   describeRate,
+  heldByName,
+  heldByUs,
+  holdsDuring,
   loginReport,
   longRecordings,
   mb,
@@ -55,6 +58,7 @@ import {
   type DragPaint,
   type DragPass,
   type DragSummary,
+  type LoopHold,
   type PlayedWhile,
   type RateSample,
   type ScrubPass,
@@ -66,7 +70,7 @@ import { ScrubClient, isPicture, type ScrubPicture, type SocketLike } from "./sc
 import { SHAPES, mseApi, mseSupports, pickSample, probeShape, type MseApi } from "./mse-probe";
 import type { RvPlayer } from "./player";
 
-export const CHECK_VERSION = "0.8.3";
+export const CHECK_VERSION = "0.8.4";
 export const SETUPS = [
   "Desktop Chrome, LAN",
   "Desktop Chrome, Tailscale",
@@ -261,10 +265,34 @@ interface PlaybackStats {
    */
   loop?: {
     held_10s_ms: number | null;
+    /** Holds (a timer 0.1 s late or more) in the last 10 s, and their sum (v0.63.5). */
+    held_10s_count?: number;
+    held_10s_total_ms?: number;
     held_60s_ms: number | null;
     period_ms: number;
-    held_by?: { ago_s: number; seen_ms: number; where: string[] }[];
+    held_by?: LoopHold[];
   } | null;
+}
+
+/**
+ * A start that another integration held Home Assistant up during (v0.63.5):
+ * its time is said, not judged (the owner's run of v0.63.4 failed a cached
+ * jump of 2.5 s whose server work took 2 ms, Spook holding the loop).
+ */
+interface Slowed {
+  /** Whose code held it, in plain words ("the Spook integration"). */
+  who: string;
+  /** How long the holds that touched the start lasted in all (ms). */
+  heldMs: number;
+}
+
+/** How busy Home Assistant was around a start (v0.62.2). */
+interface Busy {
+  text: string;
+  /** The longest hold of its last 10 s (ms). */
+  heldMs: number | undefined;
+  /** Who held it up during the start, if not Reolink Viewer (v0.63.5). */
+  slowed: Slowed | undefined;
 }
 
 interface Played {
@@ -278,11 +306,24 @@ interface Played {
   held: CacheStatus | undefined;
   /** How busy Home Assistant was around the start (v0.62.2). */
   busy: string;
+  /** Another integration held Home Assistant up during it (v0.63.5). */
+  slowed: Slowed | undefined;
 }
 
 class Stopped extends Error {}
 
 const sleep = (time: number) => new Promise<void>((resolve) => setTimeout(resolve, time));
+
+/** Where Home Assistant's thread was in a hold: its two innermost frames. */
+const frames = (hold: LoopHold): string => hold.where.slice(0, 2).join(" ← ");
+
+/** A start over `budget` that another integration held Home Assistant up during: said, not judged (v0.63.5). */
+const exempt = (value: number | undefined, budget: number, slowed: Slowed | undefined): slowed is Slowed =>
+  value !== undefined && value >= budget && slowed !== undefined;
+
+/** A start's time: judged against `budget`, or said as slowed by another integration. */
+const judged = (value: number | undefined, budget: number, slowed: Slowed | undefined): string =>
+  exempt(value, budget, slowed) ? `${ms(value ?? 0)} (slowed by ${slowed.who})` : within(value, budget);
 
 /** The player's time, read afresh (a call: not narrowed across awaits). */
 const timeOf = (player: RvPlayer): number | undefined => player.time;
@@ -319,7 +360,7 @@ export class PlaybackCheck {
   private _busiest = 0;
   /** The rows whose starts found Home Assistant held, and what held it at the longest (v0.63.3). */
   private readonly _busyRows = new Set<string>();
-  private _busiestBy: string | undefined;
+  private _busiestBy: LoopHold | undefined;
   /** The row running now (each hold is said with it). */
   private _rowName = "";
   /** How busy Home Assistant was as the drag's release started (P). */
@@ -573,8 +614,8 @@ export class PlaybackCheck {
     const ok = await this._wait(() => t.metrics.firstFrameMs !== undefined || Boolean(t.playFailure), 120_000);
     watch.stop();
     // How busy Home Assistant was meanwhile, read at once (its last 10 s).
-    const { text: busy, heldMs } = await this._busy();
     const m = t.metrics;
+    const { text: busy, heldMs, slowed } = await this._busy({ began, firstMs: m.firstFrameMs });
     // Where it really started (a start at the wrong place looks fast too).
     const shown = t.player?.time;
     const off = shown === undefined ? undefined : shown - time;
@@ -594,7 +635,9 @@ export class PlaybackCheck {
       `first frame ${ok && !t.playFailure ? ms(m.firstFrameMs) : "none"}` +
       ` [URL ${ms(m.urlMs)}${urlServer === undefined ? "" : ` (server ${ms(urlServer)})`} · metadata ${ms(watch.seen.loadedmetadata)} · seeked ${ms(watch.seen.seeked)} · playing ${ms(watch.seen.playing)}]` +
       ` ${m.delivery ?? "?"}${file}${from} · ${m.stream ?? "?"} ${m.codec ?? ""}${where}${t.playFailure ? ` FAILED: ${t.playFailure}` : ""}` +
-      (heldMs !== undefined && heldMs >= BUSY_NOTE_MS ? ` · HOME ASSISTANT HELD UP ${ms(heldMs)}` : "");
+      (heldMs !== undefined && heldMs >= BUSY_NOTE_MS
+        ? ` · HOME ASSISTANT HELD UP ${ms(heldMs)}${slowed ? ` (by ${slowed.who})` : ""}`
+        : "");
     return {
       ok: ok && !t.playFailure && !where,
       line,
@@ -603,6 +646,7 @@ export class PlaybackCheck {
       source: t.playing?.base ?? t.playing?.url,
       held,
       busy,
+      slowed,
     };
   }
 
@@ -617,14 +661,22 @@ export class PlaybackCheck {
     }
     const times: string[] = [];
     const starts: number[] = [];
+    // Starts another integration held Home Assistant up during: said, not judged (v0.63.5).
+    const slowedStarts: number[] = [];
+    let slowedBy: Slowed | undefined;
     for (const ev of events) {
       const seg = day.segments.find((s) => ev.start >= s.start && ev.start < s.end);
       const where = seg ? `${span(ev.start - seg.start)} into a ${span(seg.end - seg.start)} recording` : "no recording";
       const played = await this._play(ev.start);
       if (played.ok && t.metrics.firstFrameMs !== undefined) {
         // Not on disk yet: the start waited for the recorder's download.
-        times.push(`${within(t.metrics.firstFrameMs, 2000)}${played.held?.complete === false ? " (not cached)" : ""}`);
-        starts.push(t.metrics.firstFrameMs);
+        times.push(`${judged(t.metrics.firstFrameMs, 2000, played.slowed)}${played.held?.complete === false ? " (not cached)" : ""}`);
+        if (exempt(t.metrics.firstFrameMs, 2000, played.slowed)) {
+          slowedStarts.push(t.metrics.firstFrameMs);
+          slowedBy = played.slowed;
+        } else {
+          starts.push(t.metrics.firstFrameMs);
+        }
       }
       this._log(`B  ${ev.types.join("+")} at ${clock(ev.start)} (${where}): ${played.line}`);
       await sleep(300);
@@ -635,19 +687,31 @@ export class PlaybackCheck {
     }
     this._summary.push(`Events → first frame (sub): ${times.join(", ") || "none played"}`);
     const typical = middle(starts);
+    const playedCount = starts.length + slowedStarts.length;
+    const missed =
+      playedCount < events.length ? `; ${String(events.length - playedCount)} of ${count(events.length, "event")} did not play` : "";
+    const slowedTypical = middle(slowedStarts);
     this._plain.push(
-      typical === undefined
+      typical === undefined && (slowedTypical === undefined || !slowedBy)
         ? {
             grade: "problem",
             text: "Events would not play.",
             advice: "Run the check again; if it happens again, include the details below in a report.",
           }
-        : {
-            grade: speed(typical, 2000, 4000),
-            text:
-              `Opening an event starts its video in ${starts.length > 1 ? "about " : ""}${secondsText(typical)}` +
-              `${starts.length < events.length ? `; ${String(events.length - starts.length)} of ${count(events.length, "event")} did not play` : ""}.`,
-          },
+        : typical === undefined && slowedTypical !== undefined && slowedBy
+          ? {
+              grade: "note",
+              text:
+                `Opening an event starts its video in ${slowedStarts.length > 1 ? "about " : ""}${secondsText(slowedTypical)}, ` +
+                `but ${slowedBy.who} held Home Assistant up meanwhile (not judged)${missed}.`,
+            }
+          : {
+              grade: speed(typical ?? 0, 2000, 4000),
+              text:
+                `Opening an event starts its video in ${starts.length > 1 ? "about " : ""}${secondsText(typical ?? 0)}${missed}` +
+                (slowedBy ? ` (not counting ${count(slowedStarts.length, "start")} ${slowedBy.who} held Home Assistant up during)` : "") +
+                ".",
+            },
     );
   }
 
@@ -775,6 +839,7 @@ export class PlaybackCheck {
       (target.event ? ` (event ${target.event.types.join("+")} at ${clock(target.event.start)})` : " (no event there: a point)");
     let uncachedMs: number | undefined;
     let uncachedFrom: string | undefined;
+    let uncachedSlowed: Slowed | undefined;
     if (!long.cached) {
       const target = deepTarget(seg, long.day.events, 0.5, 0.95, 0.75);
       const played = await this._play(target.time);
@@ -784,6 +849,7 @@ export class PlaybackCheck {
       if (played.ok && held?.complete === false) {
         uncachedMs = t.metrics.firstFrameMs;
         uncachedFrom = played.served;
+        uncachedSlowed = played.slowed;
       }
       const label = held?.complete
         ? "Not cached when chosen, but on disk when played (not counted)"
@@ -808,10 +874,16 @@ export class PlaybackCheck {
     this._log(`D2 ${fetched ? `${notCounted} (not counted)` : "Cached"}, ${describe(target)}: ${played.line}`);
     await sleep(300);
     this._log(`     ${requestReport(played.began, played.source)}`);
+    const slowedNote = (slowed: Slowed | undefined) => (exempt(uncachedMs, 2000, slowed) ? ` (slowed by ${slowed.who})` : "");
     this._summary.push(
-      `Deep start (sub, ${length} recording): not cached ${uncachedMs === undefined ? "not measured" : `${ms(uncachedMs)}${uncachedFrom ? ` from ${sourceLabel(uncachedFrom)}` : ""}`}` +
-        `, cached ${within(cachedMs, 2000)}`,
+      `Deep start (sub, ${length} recording): not cached ${uncachedMs === undefined ? "not measured" : `${ms(uncachedMs)}${uncachedFrom ? ` from ${sourceLabel(uncachedFrom)}` : ""}${slowedNote(uncachedSlowed)}`}` +
+        `, cached ${judged(cachedMs, 2000, played.slowed)}`,
     );
+    const firstTime =
+      uncachedMs === undefined
+        ? "."
+        : `; the first time, ${secondsText(uncachedMs)}, while the recorder sends it over${slowedNote(uncachedSlowed)}.`;
+    const cachedGrade = cachedMs === undefined ? undefined : speed(cachedMs, 2000, 4000);
     this._plain.push(
       cachedMs === undefined
         ? played.ok
@@ -820,14 +892,17 @@ export class PlaybackCheck {
               text: `Jumping into the middle of a long recording starts in ${secondsText(t.metrics.firstFrameMs ?? 0)} (not judged: its copy was still being made).`,
             }
           : { grade: "problem", text: "Jumping into the middle of a long recording did not play." }
-        : {
-            grade: speed(cachedMs, 2000, 4000),
-            text:
-              `Jumping into the middle of a long recording starts in ${secondsText(cachedMs)}` +
-              (uncachedMs === undefined
-                ? "."
-                : `; the first time, ${secondsText(uncachedMs)}, while the recorder sends it over.`),
-          },
+        : exempt(cachedMs, 2000, played.slowed)
+          ? {
+              grade: "note",
+              text:
+                `Jumping into the middle of a long recording starts in ${secondsText(cachedMs)}, but ${played.slowed.who} ` +
+                `held Home Assistant up ${secondsText(played.slowed.heldMs)} meanwhile (not judged)${firstTime}`,
+            }
+          : {
+              grade: cachedGrade ?? "good",
+              text: `Jumping into the middle of a long recording starts in ${secondsText(cachedMs)}${firstTime}`,
+            },
     );
   }
 
@@ -2048,14 +2123,23 @@ export class PlaybackCheck {
    * recorder and plain-copy rewrites running then. A held loop answers every
    * request late; it is noted in "In short" from half a second.
    */
-  private async _busy(): Promise<{ text: string; heldMs: number | undefined }> {
+  private async _busy(start?: { began: number; firstMs: number | undefined }): Promise<Busy> {
+    const asked = performance.now();
     const stats = await this._stats();
-    const held = stats?.loop?.held_10s_ms ?? undefined;
+    const loop = stats?.loop;
+    const held = loop?.held_10s_ms ?? undefined;
     const vod = stats?.vod;
+    // How many holds, and how long in all (v0.63.5: one of 1.1 s did not
+    // explain a wait of 2.4 s).
+    const holdCount = loop?.held_10s_count ?? 0;
+    const allHeld =
+      holdCount > 1 && loop?.held_10s_total_ms !== undefined
+        ? ` (${String(holdCount)} holds, ${ms(loop.held_10s_total_ms)} in all)`
+        : "";
     const parts = [
       held === undefined
         ? "its event loop not measured (Home Assistant runs an older Reolink Viewer)"
-        : `its event loop held up to ${ms(held)} in the last 10 s`,
+        : `its event loop held up to ${ms(held)} in the last 10 s${allHeld}`,
     ];
     if (vod?.filling !== undefined) {
       parts.push(
@@ -2064,13 +2148,25 @@ export class PlaybackCheck {
       );
     }
     if (vod?.rewriting) parts.push(count(vod.rewriting, "plain-copy rewrite"));
-    // Where its thread was when held (the watchdog's longest of the last 10 s).
-    const holds = (stats?.loop?.held_by ?? []).filter((h) => h.ago_s <= 10 && h.where.length);
-    const longest = holds.reduce<(typeof holds)[number] | undefined>((a, h) => (a && a.seen_ms >= h.seen_ms ? a : h), undefined);
-    const by = longest ? longest.where.slice(0, 2).join(" ← ") : undefined;
-    if (by) parts.push(`held by ${by}`);
-    if (held !== undefined && held >= BUSY_NOTE_MS) this._noteBusy(held, by);
-    return { text: `Home Assistant: ${parts.join(" · ")}`, heldMs: held };
+    // Where its thread was when held (the watchdog's longest of the last
+    // 10 s), and whose code that is, in words (v0.63.5).
+    const holds = (loop?.held_by ?? []).filter((h) => h.ago_s <= 10 && h.where.length);
+    const longest = holds.reduce<LoopHold | undefined>((a, h) => (a && a.seen_ms >= h.seen_ms ? a : h), undefined);
+    if (longest) {
+      const who = heldByName(longest.by);
+      parts.push(`held by ${who ? `${who}: ` : ""}${frames(longest)}`);
+    }
+    if (held !== undefined && held >= BUSY_NOTE_MS) this._noteBusy(held, longest);
+    // A start slowed by another integration (its holds touched the start).
+    let slowed: Slowed | undefined;
+    if (start) {
+      const sinceStartS = (asked - start.began) / 1000;
+      const sinceFrameS = start.firstMs === undefined ? 0 : Math.max(0, sinceStartS - start.firstMs / 1000);
+      const during = holdsDuring(holds, sinceStartS, sinceFrameS);
+      const who = heldByName(during.longest?.by);
+      if (who && during.totalMs >= BUSY_NOTE_MS && !heldByUs(during.longest?.by)) slowed = { who, heldMs: during.totalMs };
+    }
+    return { text: `Home Assistant: ${parts.join(" · ")}`, heldMs: held, slowed };
   }
 
   /**
@@ -2078,21 +2174,29 @@ export class PlaybackCheck {
    * found it so (a start's own line is not printed in every row: v0.63.3),
    * the longest hold, and what held it, when the watchdog saw.
    */
-  private _noteBusy(heldMs: number, by: string | undefined): void {
+  private _noteBusy(heldMs: number, hold: LoopHold | undefined): void {
     if (this._rowName) this._busyRows.add(this._rowName);
     if (heldMs > this._busiest) {
       this._busiest = heldMs;
-      this._busiestBy = by;
+      this._busiestBy = hold;
     }
     const rows = [...this._busyRows];
     const where = rows.length ? ` in ${rows.length === 1 ? "row" : "rows"} ${rows.join(", ")}` : "";
+    const by = this._busiestBy;
+    const who = heldByName(by?.by);
+    const ours = heldByUs(by?.by);
+    // Whose code, in words, then where (v0.63.5); where alone before.
+    const culprit = !by ? "" : who ? `, by ${who}${ours ? "" : ", not Reolink Viewer"} (${frames(by)})` : `, by ${frames(by)}`;
     const text =
       `Home Assistant itself was busy during starts${where}: ` +
-      `its event loop was held up to ${secondsText(this._busiest)}${this._busiestBy ? `, by ${this._busiestBy}` : ""}, so it answered late.`;
+      `its event loop was held up to ${secondsText(this._busiest)}${culprit}, so it answered late.`;
+    // Reolink Viewer holding Home Assistant up is its own fault to fix.
+    const grade: Grade = ours ? "problem" : "note";
     if (this._busyNote) {
       this._busyNote.text = text;
+      this._busyNote.grade = grade;
     } else {
-      this._busyNote = { grade: "note", text };
+      this._busyNote = { grade, text };
       this._plain.push(this._busyNote);
     }
   }
