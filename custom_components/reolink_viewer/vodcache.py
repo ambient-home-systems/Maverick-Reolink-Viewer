@@ -1746,6 +1746,10 @@ class VodCache:
         return {
             "entries": len(self._entries),
             "filling": sum(1 for e in self._entries.values() if e.filling),
+            # Of those, the ones no viewer waits for (next files, warm hours).
+            "prefetching": sum(
+                1 for e in self._entries.values() if e.filling and not _clicked(e)
+            ),
             "leased": sum(1 for e in self._entries.values() if e.leased(now)),
             "max_bytes": self._max_bytes,
             # As of the last time room was made: on disk, still to be written.

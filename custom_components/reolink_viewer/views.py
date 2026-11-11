@@ -317,6 +317,7 @@ class MseView(HomeAssistantView):
         there, ``init?source=`` that source's; ``X-RV-Source`` names it on
         both answers ("file", or "cut" for the device's cut, Phase 5b).
         """
+        began = time.monotonic()
         hass: HomeAssistant = request.app["hass"]
         if (data := loaded_data(hass)) is None or part not in ("init", "frags"):
             return _not_found()
@@ -342,6 +343,7 @@ class MseView(HomeAssistantView):
                     headers["X-RV-Source"] = source
                     if mime:
                         headers["X-RV-Mime"] = mime
+                    headers["Server-Timing"] = _server_timing(began)
                     return web.Response(
                         body=init, content_type="video/mp4", headers=headers
                     )
@@ -352,7 +354,17 @@ class MseView(HomeAssistantView):
             return web.Response(
                 status=HTTPStatus.GATEWAY_TIMEOUT, text="Recording not ready"
             )
+        headers["Server-Timing"] = _server_timing(began)
         return await _send_window(request, cache, entry, window, headers)
+
+
+def _server_timing(began: float) -> str:
+    """Return the ``Server-Timing`` of an answer: the handler's time to it (ms).
+
+    The browser's resource timing gives it beside the answer's own time, so
+    the playback check tells the server's work from the trip (v0.62.2).
+    """
+    return f"rv;dur={(time.monotonic() - began) * 1000:.1f}"
 
 
 def _window_query(request: web.Request) -> dict[str, Any]:

@@ -1086,7 +1086,16 @@ describe("rv-playback while dragging (Phase 10)", () => {
   it("the playback check's P row drags the timeline itself, and reports what it showed", async () => {
     const hass = playbackHass();
     hass.responses["reolink_viewer/playback/peek"] = { segment_id: "s", cache: null };
-    hass.responses["reolink_viewer/playback/stats"] = { vod: { baichuan: { enabled: true, logged_in: 1, logins: 3, logouts: 2, cuts_running: 0 } } };
+    hass.responses["reolink_viewer/playback/stats"] = {
+      vod: {
+        filling: 2,
+        prefetching: 1,
+        rewriting: 1,
+        baichuan: { enabled: true, logged_in: 1, logins: 3, logouts: 2, cuts_running: 0 },
+      },
+      // Home Assistant's event loop held 1.3 s (v0.62.2's diagnostics).
+      loop: { held_10s_ms: 1320, held_60s_ms: 1320, period_ms: 250 },
+    };
     hass.responses["reolink_viewer/playback/check_report"] = null;
     const { el, sockets, player } = await scrubMount(hass);
     // Every player (the tab's and the second viewer's) starts a recording at once: its first frame.
@@ -1111,7 +1120,14 @@ describe("rv-playback while dragging (Phase 10)", () => {
     expect(report).toContain("   release: the picture stayed until the video's first frame");
     expect(report).toMatch(/; it began under 0\.1 s from the picture's own time \(0\.5 s before the pointer\) ✓/);
     // Where the release's start spent its time: the page's steps, then the server's.
-    expect(report).toMatch(/ {5}\[URL \d+ ms\] /);
+    expect(report).toMatch(/ {5}\[URL \d+ ms( \(server [\d.]+ ms\))?\] /);
+    // How busy Home Assistant was as the release started, and the note in "In short".
+    expect(report).toContain(
+      "     Home Assistant: its event loop held up to 1320 ms in the last 10 s · 2 downloads from the recorder (1 for no viewer: next files, warm hours) · 1 plain-copy rewrite",
+    );
+    expect(check.inShort(true).findings.map((f) => f.text)).toContain(
+      'Home Assistant itself was busy during some starts: its event loop was held up to 1.3 s, so it answered late (see the "Home Assistant:" lines).',
+    );
     expect(report).toContain("     server: ");
     expect(report).toContain("   hovering while dragging: the time alone, no thumbnail ✓");
     expect(report).toContain("   the NVR: 0 more logins while dragging ✓");

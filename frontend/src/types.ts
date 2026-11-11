@@ -425,7 +425,8 @@ export interface PlaybackUrl {
   /** The file the URL serves: the plain copy (made on demand) or the original. */
   file?: "plain" | "original";
   expires_in: number;
-  timing: Timing;
+  /** The server's time to the answer (``total_ms``). */
+  timing?: Timing;
 }
 
 export interface CacheStatusResult {
