@@ -7738,6 +7738,62 @@ viewer" (at 3 AM the day's other recordings were cached by B, D1 and V).
   bytes); a cut window's init is its cut's; a hold of about 0.27 s, missed at
   0.3 s, is noted. The feeder test fails on the code before.
 
+**The owner's run of v0.63.4 (2026-11-11, just before 4 AM, Chrome 156 through
+Nabu Casa, Front Yard Right):** every row passed but D2.
+- **The culprit was named:** "held by site-packages/jinja2/lexer.py:706 in
+  tokeniter ← custom_components/spook/template_extraction.py:195 in _lexed".
+  That is Spook, another integration. Its repairs read every template in the
+  install with Jinja's lexer, on the event loop. It held the loop 1.3 s around
+  D1 and 1.1 s around D2.
+- **D2 shows v0.63.4's fix at work:** two requests, with no `init?source=`.
+  But the window's answer reached the browser after 2.45 s, against 2 ms of
+  server work. So it was 2457 ms ✗, with "Fine: … 2.5 s" in "In short".
+- **Reolink Viewer does not set Spook off:** Spook rescans when an entity is
+  added or removed, on registry writes, reloads, config entry changes, and
+  daily. Reolink Viewer only reads the registries, and writes no config entry
+  during playback.
+- **Spook's own fixes:** 5.11.1 (14 Oct) stops registry writes rescanning
+  everything. The owner is to check their version, and to run once without
+  Spook.
+- **Other times:** B 0.51 s; D1 0.73 s despite the hold; the release 0.7 s;
+  V passed.
+
+**v0.63.5, from it:**
+
+- **Whose code held the loop** (`loopwatch._owner`): the innermost
+  integration on the loop thread's stack, looked for up to 80 frames out
+  (past Jinja under Spook, past Home Assistant's helpers). It is
+  `custom_components/<domain>` or `homeassistant/components/<domain>`, else
+  `homeassistant`, else none, and is given as each hold's `by`.
+- **How long a hold went on:** the watchdog follows a hold until the timer
+  runs. `seen_ms` is its length and `ago_s` the time since its end, where
+  before they were when it was first seen.
+- **How many holds, and how long in all:** the statistics count the last
+  10 s's holds (a timer 0.1 s late or more) and add them up
+  (`held_10s_count`, `held_10s_total_ms`).
+- **The check (v0.8.4) says it in words:**
+  - "held by the Spook integration: <frames>"; the start's line says
+    "HOME ASSISTANT HELD UP 1083 ms (by the Spook integration)".
+  - "In short" says "by the Spook integration, not Reolink Viewer (<frames>)",
+    or "by Reolink Viewer itself" graded as a problem.
+  - The Home Assistant line gives "(N holds, T in all)".
+- **A start slowed by another integration is not judged:** a start over its
+  budget during holds by another integration lasting 0.5 s or more in all
+  (holds that ended after it began and began before its first frame) is
+  given as "N ms (slowed by the Spook integration)", graded as a note. This
+  applies to B (left out of the median) and D2, and to D1's mention. Starts
+  within budget are judged as before, and holds by Reolink Viewer itself are
+  never excused.
+- **Checks:**
+  - A hold under a library under an integration names the integration, with
+    its frames, and is followed to its end (about 0.6 s, not 0.15 s).
+  - Owners: an integration, Home Assistant's own code, a core integration
+    called from it.
+  - The plain-words names, and the holds that touched a start.
+  - The check's lines for a start Spook held up, one Reolink Viewer held up,
+    and one under budget.
+  - The new tests fail on the code before.
+
 #### Step 10.4: the checks
 
 - **In CI:** `scrub_check.cjs` drags against a fake key-frame endpoint,

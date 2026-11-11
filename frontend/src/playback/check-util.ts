@@ -544,3 +544,57 @@ export function restInside(segments: readonly { start: number; end: number }[], 
   if (!last || end < last.end) return end;
   return Math.max(from, Math.min(end, last.end - 2_000));
 }
+
+/** Our own code, as the server names whose code held Home Assistant (loopwatch.py `by`). */
+const OUR_CODE = "custom_components/reolink_viewer";
+
+/**
+ * Whose code held Home Assistant's event loop, in plain words (v0.63.5):
+ * the server's `by` is `custom_components/<domain>`, `homeassistant/
+ * components/<domain>`, `homeassistant` (its own code), or none. The
+ * owner's run of v0.63.4 found Spook's template scan, named only as files.
+ */
+export function heldByName(by: string | null | undefined): string | undefined {
+  if (!by) return undefined;
+  if (by === OUR_CODE) return "Reolink Viewer itself";
+  if (by === "homeassistant") return "Home Assistant's own code";
+  const custom = by.startsWith("custom_components/");
+  const core = by.startsWith("homeassistant/components/");
+  if (!custom && !core) return undefined;
+  const domain = by.slice(by.lastIndexOf("/") + 1);
+  if (!domain) return undefined;
+  const name = domain
+    .split("_")
+    .map((word) => (word ? word.charAt(0).toUpperCase() + word.slice(1) : word))
+    .join(" ");
+  return custom ? `the ${name} integration` : `Home Assistant's ${name} integration`;
+}
+
+/** Whether Reolink Viewer's own code held Home Assistant. */
+export const heldByUs = (by: string | null | undefined): boolean => by === OUR_CODE;
+
+/** A hold of Home Assistant's event loop the server's watchdog saw (v0.63.3; `by` v0.63.5). */
+export interface LoopHold {
+  /** Since it was last seen held (s). */
+  ago_s: number;
+  /** How long it was held (ms; v0.63.4 and before: when first seen). */
+  seen_ms: number;
+  where: string[];
+  by?: string | null;
+}
+
+/**
+ * The holds that touched a start: those that ended after it began and began
+ * before its first frame (`sinceStartS`, `sinceFrameS`: seconds from each
+ * to when the server was asked). Their total (ms), and the longest.
+ */
+export function holdsDuring(
+  holds: LoopHold[],
+  sinceStartS: number,
+  sinceFrameS: number,
+): { totalMs: number; longest: LoopHold | undefined } {
+  // The server reads its clock up to a trip later than the browser asked.
+  const during = holds.filter((h) => h.ago_s <= sinceStartS + 0.25 && h.ago_s + h.seen_ms / 1000 >= sinceFrameS);
+  const longest = during.reduce<LoopHold | undefined>((a, h) => (a && a.seen_ms >= h.seen_ms ? a : h), undefined);
+  return { totalMs: during.reduce((sum, h) => sum + h.seen_ms, 0), longest };
+}

@@ -16,6 +16,12 @@ that moment (the innermost frames of its stack: file, line and function).
 v0.63.4 looks twice as often and from half the delay: the owner's run of
 v0.63.3 found a hold of 0.2 s, short of the 0.3 s it then waited for.
 
+The owner's run of v0.63.4 named the Spook integration, its template scan
+holding the loop 1.3 s, as two lines of stack. So (v0.63.5) a hold also says
+whose code held it (``by``: the innermost integration on the loop's stack,
+however deep), and how long it went on (the watchdog follows it until the
+timer runs); the statistics count the last 10 s's holds and add them up.
+
 Both run only while someone looks: each read of the playback statistics (the
 check, the debug panel) keeps them running ``WATCH_S`` longer.
 """
@@ -43,8 +49,14 @@ CAPTURE_AFTER_S = 0.15
 # Frames noted per hold (the innermost), and holds kept.
 FRAMES = 4
 HOLDS = 20
+# Frames looked through, from the innermost out, for the integration holding it.
+OWNER_DEPTH = 80
+# A timer this late (s) counts as a hold in the last 10 s's count and sum.
+HELD_MIN_S = 0.1
 # A file's path is shown from the first of these on (the rest is the install's).
 _ROOTS = ("custom_components/", "homeassistant/", "site-packages/", "lib/python")
+# An integration's code: its path from here (the integration's folder next).
+_OWNERS = ("custom_components/", "homeassistant/components/")
 
 
 class LoopWatch:
@@ -59,12 +71,12 @@ class LoopWatch:
         self._handle: asyncio.TimerHandle | None = None
         self._began: float | None = None
         # The watchdog: when the timer last ran (monotonic s), the loop's
-        # thread, and the holds it saw (monotonic s, seen held ms, frames).
+        # thread, and the holds it saw.
         self._beat = time.monotonic()
         self._loop_thread: int | None = None
         self._thread: threading.Thread | None = None
         self._stopping = threading.Event()
-        self._holds: deque[tuple[float, float, list[str]]] = deque(maxlen=HOLDS)
+        self._holds: deque[_Hold] = deque(maxlen=HOLDS)
         self._lock = threading.Lock()
 
     @callback
@@ -117,21 +129,33 @@ class LoopWatch:
         self._handle = loop.call_at(nxt, self._tick, nxt)
 
     def _watchdog(self) -> None:
-        """Note where the loop's thread is when the timer runs late (in its own thread)."""
+        """Note where the loop's thread is when the timer runs late (in its own thread).
+
+        A hold is noted once, where it is first seen; while the timer stays
+        late, the hold's length and when it was last seen follow it.
+        """
         seen = None
+        current: _Hold | None = None
         while not self._stopping.wait(POLL_S):
             beat = self._beat
-            late = time.monotonic() - beat - PERIOD_S
-            if late < CAPTURE_AFTER_S or beat == seen:
+            now = time.monotonic()
+            late = now - beat - PERIOD_S
+            if late < CAPTURE_AFTER_S:
+                continue
+            if beat == seen:
+                if current is not None:
+                    with self._lock:
+                        current.last = now
+                        current.held_ms = round(late * 1000, 1)
                 continue
             seen = beat
+            current = None
             frame = sys._current_frames().get(self._loop_thread or 0)  # noqa: SLF001
             if frame is None:
                 continue
+            current = _Hold(now, round(late * 1000, 1), _where(frame), _owner(frame))
             with self._lock:
-                self._holds.append(
-                    (time.monotonic(), round(late * 1000, 1), _where(frame))
-                )
+                self._holds.append(current)
 
     def held_ms(self, seconds: float) -> float | None:
         """Return the longest delay (ms) in the last ``seconds``; None if not watched then."""
@@ -139,21 +163,40 @@ class LoopWatch:
         late = [lag for when, lag in self._samples if when >= now - seconds]
         return round(max(late) * 1000, 1) if late else None
 
+    def held_total(self, seconds: float) -> tuple[int, float]:
+        """Return the holds (a timer ``HELD_MIN_S`` late) in the last ``seconds``, and their sum (ms)."""
+        now = self._hass.loop.time()
+        late = [
+            lag
+            for when, lag in self._samples
+            if when >= now - seconds and lag >= HELD_MIN_S
+        ]
+        return len(late), round(sum(late) * 1000, 1)
+
     def held_by(self, seconds: float) -> list[dict[str, Any]]:
-        """Return the holds the watchdog saw in the last ``seconds``, newest first."""
+        """Return the holds the watchdog saw in the last ``seconds``, newest first.
+
+        ``ago_s``: since it was last seen held (its end, within ``POLL_S``);
+        ``seen_ms``: how long the timer was late by then; ``by``: whose code
+        held it (``custom_components/<domain>``, ``homeassistant/components/
+        <domain>``, ``homeassistant`` for its own code, or None).
+        """
         now = time.monotonic()
         with self._lock:
-            holds = list(self._holds)
+            holds = [(h.last, h.held_ms, list(h.where), h.by) for h in self._holds]
         return [
-            {"ago_s": round(now - when, 1), "seen_ms": seen, "where": where}
-            for when, seen, where in reversed(holds)
-            if when >= now - seconds
+            {"ago_s": round(now - last, 1), "seen_ms": held, "where": where, "by": by}
+            for last, held, where, by in reversed(holds)
+            if last >= now - seconds
         ]
 
     def snapshot(self) -> dict[str, Any]:
         """Return the longest delays of the last 10 s and minute, what held it, the period."""
+        count, total = self.held_total(10.0)
         return {
             "held_10s_ms": self.held_ms(10.0),
+            "held_10s_count": count,
+            "held_10s_total_ms": total,
             "held_60s_ms": self.held_ms(KEEP_S),
             "held_by": self.held_by(KEEP_S),
             "period_ms": PERIOD_S * 1000,
@@ -161,6 +204,46 @@ class LoopWatch:
             if self._began is None
             else round(time.time() - self._began, 1),
         }
+
+
+class _Hold:
+    """A hold the watchdog saw: when last seen, how long, where, whose code."""
+
+    __slots__ = ("by", "held_ms", "last", "where")
+
+    def __init__(
+        self, last: float, held_ms: float, where: list[str], by: str | None
+    ) -> None:
+        self.last = last
+        self.held_ms = held_ms
+        self.where = where
+        self.by = by
+
+
+def _owner(frame: FrameType | None) -> str | None:
+    """Return whose code a stack is in: the innermost integration on it.
+
+    Looked for from the innermost frame out, past libraries (Jinja under
+    Spook's template scan) and Home Assistant's helpers an integration
+    called: ``custom_components/<domain>`` or ``homeassistant/components/
+    <domain>``; else ``homeassistant`` where its own code is on the stack;
+    else None.
+    """
+    core = False
+    depth = 0
+    while frame is not None and depth < OWNER_DEPTH:
+        path = frame.f_code.co_filename.replace("\\", "/")
+        for marker in _OWNERS:
+            at = path.find(marker)
+            if at >= 0 and (at == 0 or path[at - 1] == "/"):
+                domain = path[at + len(marker) :].split("/", 1)[0]
+                if domain and not domain.endswith(".py"):
+                    return marker + domain
+        if "/homeassistant/" in path:
+            core = True
+        frame = frame.f_back
+        depth += 1
+    return "homeassistant" if core else None
 
 
 def _where(frame: FrameType) -> list[str]:

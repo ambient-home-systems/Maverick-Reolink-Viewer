@@ -125,7 +125,7 @@ describe("PlaybackCheck", () => {
       changes.push(1),
     );
     const report = await check.run();
-    expect(report).toContain("Reolink Viewer playback check v0.8.3 · Desktop Chrome, LAN · Garage");
+    expect(report).toContain("Reolink Viewer playback check v0.8.4 · Desktop Chrome, LAN · Garage");
     expect(report).toContain("A1 Time to timeline, today (as the tab opened): 120 ms (server: memory, total 4 ms)");
     expect(report).toContain("A2/A3 skipped: no earlier recording day this month");
     expect(report).toContain("B  skipped: no events today");
@@ -552,7 +552,7 @@ describe("PlaybackCheck: starts that waited for the recorder", () => {
   }
 
   /** Each start opens the recording as the next of `held` says the server had it (then whole). */
-  async function run(held: { complete: boolean; bytes: number }[], stats?: unknown): Promise<string> {
+  async function run(held: { complete: boolean; bytes: number; firstMs?: number }[], stats?: unknown): Promise<string> {
     vi.spyOn(PlaybackCheck.prototype as unknown as { _pause: () => Promise<void> }, "_pause").mockResolvedValue();
     const hass = reportingHass();
     const answer = hass.callWS.bind(hass);
@@ -575,7 +575,7 @@ describe("PlaybackCheck: starts that waited for the recorder", () => {
         const cache = held.shift() ?? { complete: true, bytes: 1 };
         metrics.firstFrameMs = undefined;
         playing = { cache: { ...cache, error: null } } as CheckTarget["playing"];
-        setTimeout(() => (metrics.firstFrameMs = cache.complete ? 70 : 2250), 1);
+        setTimeout(() => (metrics.firstFrameMs = cache.firstMs ?? (cache.complete ? 70 : 2250)), 1);
         return Promise.resolve();
       },
     };
@@ -603,6 +603,66 @@ describe("PlaybackCheck: starts that waited for the recorder", () => {
     expect(report).toMatch(/^B {2}MOTION at .*: first frame 70 ms .* · HOME ASSISTANT HELD UP 900 ms$/m);
     // The note names the rows whose starts found it held (a row's own start line is not always printed: v0.63.3).
     expect(report).toMatch(/Home Assistant itself was busy during starts in rows B, D(, [A-Z]+)*: its event loop was held up to 0\.9 s, so it answered late\./);
+  });
+
+  /** Home Assistant held up during each start (it just ended), by whose code. */
+  const heldBy = (by: string) => ({
+    vod: { filling: 0 },
+    loop: {
+      held_10s_ms: 1083,
+      held_10s_count: 2,
+      held_10s_total_ms: 2150,
+      held_60s_ms: 1292,
+      period_ms: 250,
+      held_by: [
+        {
+          ago_s: 0.1,
+          seen_ms: 1083,
+          by,
+          where: ["site-packages/jinja2/lexer.py:706 in tokeniter", "custom_components/spook/template_extraction.py:195 in _lexed"],
+        },
+      ],
+    },
+  });
+
+  it("says a start another integration held Home Assistant up during, and does not fail it (v0.63.5)", async () => {
+    // The owner's run of v0.63.4: a cached jump of 2.5 s, its server work 2 ms, Spook's template scan holding the loop.
+    const slow = { complete: true, bytes: 1, firstMs: 2457 };
+    const report = await run([slow, slow, slow], heldBy("custom_components/spook"));
+    // Who, on the start's own line and its Home Assistant line, with the holds counted and added up.
+    expect(report).toMatch(/^B {2}MOTION at .*: first frame 2457 ms .* · HOME ASSISTANT HELD UP 1083 ms \(by the Spook integration\)$/m);
+    expect(report).toContain("     Home Assistant: its event loop held up to 1083 ms in the last 10 s (2 holds, 2150 ms in all)");
+    expect(report).toContain(
+      "held by the Spook integration: site-packages/jinja2/lexer.py:706 in tokeniter ← custom_components/spook/template_extraction.py:195 in _lexed",
+    );
+    // Said, not failed.
+    expect(report).toContain("- Events → first frame (sub): 2457 ms (slowed by the Spook integration)");
+    expect(report).toContain("cached 2457 ms (slowed by the Spook integration)");
+    expect(report).not.toContain("2457 ms ✗");
+    const findings = report.split("\n");
+    expect(findings).toContain(
+      "- Note: Opening an event starts its video in 2.5 s, but the Spook integration held Home Assistant up meanwhile (not judged).",
+    );
+    expect(findings).toContain(
+      "- Note: Jumping into the middle of a long recording starts in 2.5 s, but the Spook integration held Home Assistant up 1.1 s meanwhile (not judged).",
+    );
+    expect(report).toMatch(
+      /- Note: Home Assistant itself was busy during starts in rows B, D[^:]*: its event loop was held up to 1\.1 s, by the Spook integration, not Reolink Viewer \(site-packages\/jinja2\/lexer\.py:706 in tokeniter ← custom_components\/spook\/template_extraction\.py:195 in _lexed\), so it answered late\./,
+    );
+  });
+
+  it("fails a slow start Reolink Viewer itself held Home Assistant up during (v0.63.5)", async () => {
+    const slow = { complete: true, bytes: 1, firstMs: 2457 };
+    const report = await run([slow, slow, slow], heldBy("custom_components/reolink_viewer"));
+    expect(report).toContain("- Events → first frame (sub): 2457 ms ✗");
+    expect(report).toContain("cached 2457 ms ✗");
+    expect(report).toMatch(/- Problem: Home Assistant itself was busy during starts in rows B, D[^:]*: its event loop was held up to 1\.1 s, by Reolink Viewer itself \(/);
+  });
+
+  it("judges a start under its budget as ever, Home Assistant held up or not (v0.63.5)", async () => {
+    const report = await run([{ complete: true, bytes: 1 }], heldBy("custom_components/spook"));
+    expect(report).toContain("- Events → first frame (sub): 70 ms ✓");
+    expect(report).toContain("cached 70 ms ✓");
   });
 
   it("says a row that fails, and runs the rest (v0.63.2: a lost connection ended the check)", async () => {
