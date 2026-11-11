@@ -131,59 +131,59 @@ var de = (e, t) => e.callWS({
 }), xe = (e, t) => e.callWS({
 	type: "reolink_viewer/unusual/profile",
 	camera_id: t
-}), Se = (e) => e.callWS({ type: "reolink_viewer/live/card_log" }), Ce = (e) => e.callWS({ type: "reolink_viewer/live/card_log/clear" }), f = (e) => e.callWS({ type: "reolink_viewer/live/cameras" }), p = (e) => ({
+}), Se = (e) => e.callWS({ type: "reolink_viewer/live/card_log" }), Ce = (e) => e.callWS({ type: "reolink_viewer/live/card_log/clear" }), we = (e) => e.callWS({ type: "reolink_viewer/live/cameras" }), f = (e) => ({
 	connection_id: e.connectionId,
 	stream: e.stream
-}), we = (e) => ({
-	...p(e),
+}), Te = (e) => ({
+	...f(e),
 	...e.spare ? { spare: !0 } : {}
-}), Te = (e, t) => e.callWS({
-	type: "reolink_viewer/live/mse",
-	...we(t)
 }), Ee = (e, t) => e.callWS({
-	type: "reolink_viewer/live/frame",
-	...p(t)
+	type: "reolink_viewer/live/mse",
+	...Te(t)
 }), De = (e, t) => e.callWS({
+	type: "reolink_viewer/live/frame",
+	...f(t)
+}), Oe = (e, t) => e.callWS({
 	type: "reolink_viewer/live/state",
-	...p(t)
-}), Oe = (e) => e.callWS({ type: "reolink_viewer/live/soak" }), ke = (e, t, n) => e.callWS({
+	...f(t)
+}), ke = (e) => e.callWS({ type: "reolink_viewer/live/soak" }), Ae = (e, t, n) => e.callWS({
 	type: "reolink_viewer/live/soak/count",
 	device: t,
 	...n
-}), Ae = (e, t, n) => e.callWS({
+}), je = (e, t, n) => e.callWS({
 	type: "reolink_viewer/live/soak/start",
 	device: t,
 	grid_open: n
-}), je = (e, t, n) => e.callWS({
+}), Me = (e, t, n) => e.callWS({
 	type: "reolink_viewer/live/preload",
-	...p(t),
+	...f(t),
 	enabled: n
-}), Me = (e) => e.callWS({ type: "web_rtc/ice_servers" }), Ne = (e, t, n, r) => e.connection.subscribeMessage(r, {
+}), Ne = (e) => e.callWS({ type: "web_rtc/ice_servers" }), Pe = (e, t, n, r) => e.connection.subscribeMessage(r, {
 	type: "reolink_viewer/live/webrtc",
-	...we(t),
+	...Te(t),
 	offer: n
-}), Pe = (e, t, n) => e.callWS({
+}), Fe = (e, t, n) => e.callWS({
 	type: "reolink_viewer/live/candidate",
 	session_id: t,
 	candidate: n
-}), Fe = (e, t, n) => e.connection.subscribeMessage(t, {
+}), Ie = (e, t, n) => e.connection.subscribeMessage(t, {
 	type: "reolink_viewer/live/images",
 	...n ? { camera_ids: [...n] } : {}
-}), Ie = (e, t, n, r = {}) => e.connection.subscribeMessage(n, {
+}), Le = (e, t, n, r = {}) => e.connection.subscribeMessage(n, {
 	type: "reolink_viewer/live/capacity",
 	host_id: t,
 	...r
-}), Le = (e) => e.callWS({ type: "reolink_viewer/wall/layouts" }), Re = (e, t) => {
+}), Re = (e) => e.callWS({ type: "reolink_viewer/wall/layouts" }), ze = (e, t) => {
 	let { id: n, ...r } = t;
 	return e.callWS({
 		type: "reolink_viewer/wall/layouts/save",
 		...r,
 		...n ? { layout_id: n } : {}
 	});
-}, ze = (e, t) => e.callWS({
+}, Be = (e, t) => e.callWS({
 	type: "reolink_viewer/wall/layouts/delete",
 	layout_id: t
-}), Be = {
+}), Ve = {
 	person: t`<circle cx="12" cy="7" r="3.2" /><path d="M5.5 20.5v-1.8a6.5 6.5 0 0 1 13 0v1.8" />`,
 	visitor: t`<path d="M6.2 16.5v-5.3a5.8 5.8 0 0 1 11.6 0v5.3l1.7 1.8H4.5z" /><path d="M10 21a2.1 2.1 0 0 0 4 0" />`,
 	vehicle: t`<path d="M3.5 16.5v-3.8l2.1-5a1.6 1.6 0 0 1 1.5-1h9.8a1.6 1.6 0 0 1 1.5 1l2.1 5v3.8z" /><path d="M3.8 12.5h16.4" /><circle cx="7.6" cy="16.6" r="1.9" /><circle cx="16.4" cy="16.6" r="1.9" />`,
@@ -210,12 +210,12 @@ var de = (e, t) => e.callWS({
 	pip: t`<rect x="3.5" y="5.5" width="17" height="13" rx="1.5" /><rect x="11.5" y="11.5" width="6" height="4.5" fill="currentColor" />`,
 	external: t`<path d="M13.5 4.5h6v6M19.5 4.5l-8 8" /><path d="M17.5 13.5v5a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1v-11a1 1 0 0 1 1-1h5" />`
 };
-function m(e) {
-	return r`<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${Be[e]}</svg>`;
+function p(e) {
+	return r`<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${Ve[e]}</svg>`;
 }
 //#endregion
 //#region src/live/check-util.ts
-var Ve = "Live check · ", h = [
+var He = "Live check · ", m = [
 	"avc1.640029",
 	"avc1.64002A",
 	"avc1.640033",
@@ -225,25 +225,25 @@ var Ve = "Live check · ", h = [
 	"flac",
 	"opus"
 ];
-function g(e, t = !1) {
-	return h.filter((n) => (!t || /^(avc1|hvc1)\./.test(n)) && e(`video/mp4; codecs="${n}"`)).join(",");
+function Ue(e, t = !1) {
+	return m.filter((n) => (!t || /^(avc1|hvc1)\./.test(n)) && e(`video/mp4; codecs="${n}"`)).join(",");
 }
-function He(e) {
+function We(e) {
 	return [/live check (v[\w.-]+)/.exec(e)?.[1], /^Browser: (.+?)(?: · |$)/m.exec(e)?.[1]].filter((e) => e !== void 0).join(" · ");
 }
-function Ue(e) {
+function Ge(e) {
 	let t = 0, n = 0, r = !1;
 	for (let i of e) for (let e of Array.isArray(i.urls) ? i.urls : [i.urls]) /^turns?:/i.test(e) ? n += 1 : /^stun:/i.test(e) && (t += 1), /nabucasa|nabu\.casa/i.test(e) && (r = !0);
 	return [`${t} STUN`, `${n} TURN${r && n ? " (Nabu Casa)" : ""}`].join(", ");
 }
-function We(e) {
+function h(e) {
 	return e.map((e) => ({
 		urls: e.urls,
 		...e.username ? { username: e.username } : {},
 		...e.credential ? { credential: e.credential } : {}
 	}));
 }
-function Ge(e) {
+function Ke(e) {
 	let t = /* @__PURE__ */ new Map();
 	e.forEach((e) => {
 		t.set(String(e.id), e);
@@ -265,26 +265,26 @@ function Ge(e) {
 	}
 	return r;
 }
-function _(e) {
+function g(e) {
 	return e === void 0 ? "–" : `${(e / 1e3).toFixed(2)} s`;
 }
-function Ke(e) {
+function qe(e) {
 	if (!e.length) return;
 	let t = [...e].sort((e, t) => e - t), n = Math.floor(t.length / 2);
 	return t.length % 2 ? t[n] : ((t[n - 1] ?? 0) + (t[n] ?? 0)) / 2;
 }
-function qe(e) {
+function Je(e) {
 	if (!e) return "";
 	let t = [
-		e.key_interval_ms === null ? void 0 : `key frames every ${_(e.key_interval_ms)}`,
+		e.key_interval_ms === null ? void 0 : `key frames every ${g(e.key_interval_ms)}`,
 		e.parameter_sets === null ? void 0 : `parameter sets: ${e.parameter_sets}`,
 		e.frame_order ? `frame order: ${e.frame_order}` : void 0,
 		e.ends ? `feed ended ${String(e.ends)}× (${e.last_end ?? "?"})` : void 0,
-		`feed opened ${_(e.age_ms)} before`
+		`feed opened ${g(e.age_ms)} before`
 	].filter(Boolean);
 	return t.length ? `; ${t.join("; ")}` : "";
 }
-function Je(e, t) {
+function Ye(e, t) {
 	if (!t) return e;
 	let n = [
 		t.codec,
@@ -294,7 +294,7 @@ function Je(e, t) {
 	].filter(Boolean);
 	return n.length ? `${e} (${n.join(", ")})` : e;
 }
-function Ye(e) {
+function Xe(e) {
 	let t = [], n = typeof e.fill == "string" ? e.fill : e.fill ? `ch${e.fill.channel + 1}, ${Math.round(e.fill.duration_s / 60)} min recording` : "not run";
 	e.warm_set_aside && t.push(`  cameras kept warm, set aside while it ran: ${String(e.warm_set_aside)}`), t.push(`  logged-in clients (GetOnline) before: ${e.online_users_before}, after: ${e.online_users_after}`), t.push(`  download: ${n}${e.fill_alone_mbit_s == null ? "" : `, alone ${e.fill_alone_mbit_s} Mbit/s`}`);
 	for (let { camera: n, why: r } of e.main_left_out ?? []) t.push(`  main left out: ${n} main (${r}, on its own)`);
@@ -310,7 +310,7 @@ function Ye(e) {
 	let r = e.verdict;
 	return t.push(r.first_failing_level === null ? "  verdict: every level kept up" : `  verdict: level ${r.first_failing_level} fails or slows down: ${r.reasons.join("; ")}`), t;
 }
-function Xe(e, t) {
+function _(e, t) {
 	let n = new URL(e, t);
 	return n.protocol = n.protocol === "https:" ? "wss:" : "ws:", n.toString();
 }
@@ -350,16 +350,16 @@ var Ze = class {
 		this._hass && this._connected && !this._started && (this._started = !0, this._load(this._hass, this._run));
 	}
 	async _load(e, t) {
-		let n = Fe(e, (e) => {
+		let n = Ie(e, (e) => {
 			t === this._run && (this.images = {
 				...this.images,
 				...e.images
 			}, this._host.requestUpdate());
-		}, this.cameraIds), r = Me(e).then(We, () => []);
+		}, this.cameraIds), r = Ne(e).then(h, () => []);
 		try {
 			let [i, { cameras: a }, o] = await Promise.all([
 				n,
-				f(e),
+				we(e),
 				r
 			]);
 			if (t !== this._run) {
@@ -440,7 +440,7 @@ var nt = 6e4, rt = new class {
 		this._accrue();
 		let t = this._take();
 		if (t) try {
-			await ke(e, this._device(), t);
+			await Ae(e, this._device(), t);
 		} catch {
 			this._putBack(t);
 		}
@@ -892,20 +892,20 @@ var at = e`
 }, ht = {
 	text: "The camera's video stopped.",
 	advice: "It starts again by itself."
-}, gt = /did not give its stream address|i\/o timeout|timed? ?out|connection refused|no route to host|unreachable|dial tcp|\bEOF\b/i;
-function y(e, t = !1) {
-	return /every stream slot|slots? .*in use/i.test(e) ? st : /go2rtc (is not running|is not installed|did not start)|did not start within|exited with code/i.test(e) ? ct : /refused (video|audio)|MSE refused|codec|no MediaSource|append failed|not supported/i.test(e) ? lt : /\b401\b|unauthori[sz]ed|wrong (user|password)|password/i.test(e) ? ut : t && (gt.test(e) || /no frame|closed the stream/i.test(e)) ? dt : gt.test(e) ? ft : /ICE failed|no path/i.test(e) ? pt : /no frame within|no new frame/i.test(e) ? mt : /closed the stream|stream ended/i.test(e) ? ht : {
+}, y = /did not give its stream address|i\/o timeout|timed? ?out|connection refused|no route to host|unreachable|dial tcp|\bEOF\b/i;
+function b(e, t = !1) {
+	return /every stream slot|slots? .*in use/i.test(e) ? st : /go2rtc (is not running|is not installed|did not start)|did not start within|exited with code/i.test(e) ? ct : /refused (video|audio)|MSE refused|codec|no MediaSource|append failed|not supported/i.test(e) ? lt : /\b401\b|unauthori[sz]ed|wrong (user|password)|password/i.test(e) ? ut : t && (y.test(e) || /no frame|closed the stream/i.test(e)) ? dt : y.test(e) ? ft : /ICE failed|no path/i.test(e) ? pt : /no frame within|no new frame/i.test(e) ? mt : /closed the stream|stream ended/i.test(e) ? ht : {
 		text: "Live video stopped.",
 		advice: "It tries again by itself. The ⓘ view has the details."
 	};
 }
 //#endregion
 //#region src/playback/codec.ts
-function b() {
+function x() {
 	let e = navigator.mediaCapabilities, t = e?.decodingInfo;
 	return t ? t.bind(e) : void 0;
 }
-async function _t(e, t = b()) {
+async function gt(e, t = x()) {
 	if (!e) return {
 		main: !0,
 		reason: "not tried yet: falls back to SD if this browser cannot play it"
@@ -947,13 +947,13 @@ async function _t(e, t = b()) {
 		};
 	}
 }
-function vt(e = navigator.userAgent) {
+function _t(e = navigator.userAgent) {
 	return !(/AppleWebKit/.test(e) && !/Chrome|Chromium|CriOS|Edg|Android|FxiOS/.test(e));
 }
 //#endregion
 //#region src/live/hd.ts
-var yt = 4096, bt = h.find((e) => e.startsWith("hvc1.")) ?? "hvc1.1.6.L153.B0";
-async function x(e, t = b()) {
+var vt = 4096, yt = m.find((e) => e.startsWith("hvc1.")) ?? "hvc1.1.6.L153.B0";
+async function bt(e, t = x()) {
 	let n = (t) => e.streams.ext ? {
 		stream: "ext",
 		reason: `ext: ${t}`
@@ -963,7 +963,7 @@ async function x(e, t = b()) {
 	}, r = e.streams.main;
 	if (!r) return n("no main stream");
 	let i = r.encoding, a = i?.width ?? void 0, o = i?.height ?? void 0, s = a && o ? `${a}×${o}` : void 0;
-	if (a && a > 4096) return n(`the main stream's ${s ?? `${a} pixels`} is wider than ${yt} pixels`);
+	if (a && a > 4096) return n(`the main stream's ${s ?? `${a} pixels`} is wider than ${vt} pixels`);
 	let c = i?.codec?.toLowerCase();
 	if (c === "h264") return {
 		stream: "main",
@@ -976,7 +976,7 @@ async function x(e, t = b()) {
 		let e = await t({
 			type: "media-source",
 			video: {
-				contentType: `video/mp4; codecs="${bt}"`,
+				contentType: `video/mp4; codecs="${yt}"`,
 				width: a,
 				height: o,
 				bitrate: (i?.bit_rate ?? 8e3) * 1e3,
@@ -1071,27 +1071,37 @@ var kt = class {
 		let t = w();
 		if (!t) throw new S("this browser has no MediaSource");
 		this.stats.api = t;
-		let n = Et(t), r = new n();
-		this._source = r, this._video.disableRemotePlayback = !0, this._url = URL.createObjectURL(r);
-		let i = new Promise((e) => {
-			r.addEventListener("sourceopen", () => {
-				e();
-			}, { once: !0 });
-		});
-		if (this._video.src = this._url, await i, this._gone()) return;
-		let a = await this._get(`init?at=${Math.round(e)}`), o = a.headers.get("X-RV-Mime") ?? "";
-		if (this.stats.mime = o, this.stats.source = a.headers.get("X-RV-Source") ?? "file", !o || !n.isTypeSupported(o)) throw new S(`MSE cannot play ${o || "this recording"}`);
-		let s = new Uint8Array(await a.arrayBuffer());
-		if (!this._gone()) {
-			this._buffer = r.addSourceBuffer(o), this._src.durationMs > 0 && (r.duration = this._src.durationMs / 1e3);
+		let n = Et(t), r = this._get(`init?at=${Math.round(e)}`), i = new AbortController(), a = this._ask({ at: e }, C, i);
+		r.catch(() => void 0), a.catch(() => void 0);
+		let o = !1;
+		try {
+			let t = new n();
+			this._source = t, this._video.disableRemotePlayback = !0, this._url = URL.createObjectURL(t);
+			let s = new Promise((e) => {
+				t.addEventListener("sourceopen", () => {
+					e();
+				}, { once: !0 });
+			});
+			if (this._video.src = this._url, await s, this._gone()) return;
+			let c = await r, l = c.headers.get("X-RV-Mime") ?? "";
+			if (this.stats.mime = l, this.stats.source = c.headers.get("X-RV-Source") ?? "file", !l || !n.isTypeSupported(l)) throw new S(`MSE cannot play ${l || "this recording"}`);
+			let u = new Uint8Array(await c.arrayBuffer());
+			if (this._gone()) return;
+			this._buffer = t.addSourceBuffer(l), this._src.durationMs > 0 && (t.duration = this._src.durationMs / 1e3);
 			for (let e of [
 				"timeupdate",
 				"seeking",
 				"ratechange",
 				"progress"
 			]) this._listen(this._video, e, this._pump);
-			this._listen(this._video, "waiting", this._jumpGap), this._listen(r, "startstreaming", this._pump), this._listen(this._buffer, "updateend", this._pump), this._listen(this._buffer, "bufferedchange", this._pump), await this._append(s), await this._fetch({ at: e }, C, !0), e > 0 && this._video.currentTime === 0 && (this._video.currentTime = e / 1e3), this._ready = !0, this._pump();
+			this._listen(this._video, "waiting", this._jumpGap), this._listen(t, "startstreaming", this._pump), this._listen(this._buffer, "updateend", this._pump), this._listen(this._buffer, "bufferedchange", this._pump), await this._append(u), o = !0, await this._fetch({ at: e }, C, !0, {
+				asked: a,
+				controller: i
+			});
+		} finally {
+			o || i.abort();
 		}
+		e > 0 && this._video.currentTime === 0 && (this._video.currentTime = e / 1e3), this._ready = !0, this._pump();
 	}
 	destroy() {
 		this._closed = !0, this._pending?.controller.abort(), this._pending = void 0;
@@ -1144,46 +1154,53 @@ var kt = class {
 		let i = this._next, a = i && Math.abs(i.atS - n.end) < .5 ? { first: i.index } : { at: n.end * 1e3 }, o = Math.min(xt * Math.max(1, this._video.playbackRate), St);
 		this._fetch(a, o, !1);
 	};
-	async _fetch(e, t, n) {
-		let r = new AbortController(), i = e.at === void 0 ? this._next?.atS ?? 0 : e.at / 1e3;
+	async _ask(e, t, n) {
+		let r = performance.now(), i = e.first === void 0 ? `at=${Math.round(e.at ?? 0)}` : `first=${e.first}`, a = await this._get(`frags?${i}&ms=${Math.round(t)}&bytes=${Ct}`, n.signal);
+		return {
+			response: a,
+			data: new Uint8Array(await a.arrayBuffer()),
+			began: r
+		};
+	}
+	async _fetch(e, t, n, r) {
+		let i = r?.controller ?? new AbortController(), a = e.at === void 0 ? this._next?.atS ?? 0 : e.at / 1e3;
 		this._pending = {
-			controller: r,
-			fromS: i,
-			toS: i + t / 1e3
+			controller: i,
+			fromS: a,
+			toS: a + t / 1e3
 		}, this.stats.fetching = !0;
-		let a = performance.now(), o = e.first === void 0 ? `at=${Math.round(e.at ?? 0)}` : `first=${e.first}`;
 		try {
-			let n = await this._get(`frags?${o}&ms=${Math.round(t)}&bytes=${Ct}`, r.signal), i = new Uint8Array(await n.arrayBuffer());
-			if (this._closed || r.signal.aborted) return;
+			let { response: n, data: a, began: o } = await (r?.asked ?? this._ask(e, t, i));
+			if (this._closed || i.signal.aborted) return;
 			let s = (e) => Number(n.headers.get(`X-RV-${e}`)), [c, l, u, d] = [
 				s("First"),
 				s("Count"),
 				s("Start"),
 				s("End")
 			];
-			if (this.stats.windows += 1, this.stats.bytes += i.length, this.stats.lastWaitMs = performance.now() - a, l > 0) {
+			if (this.stats.windows += 1, this.stats.bytes += a.length, this.stats.lastWaitMs = performance.now() - o, l > 0) {
 				let t = n.headers.get("X-RV-Source") ?? "file";
-				if (t !== this.stats.source && (await this._switch(t, r.signal), this._gone() || E(r.signal))) return;
-				await this._append(i), this.stats.firstSource ??= t, e.at !== void 0 && (this.stats.atSource = t), (e.first === void 0 || this._runStartS === void 0) && (this._runStartS = u / 1e3), this._next = {
+				if (t !== this.stats.source && (await this._switch(t, i.signal), this._gone() || E(i.signal))) return;
+				await this._append(a), this.stats.firstSource ??= t, e.at !== void 0 && (this.stats.atSource = t), (e.first === void 0 || this._runStartS === void 0) && (this._runStartS = u / 1e3), this._next = {
 					index: c + l,
 					atS: d / 1e3
-				}, d > u && (this._bytesPerSecond = i.length * 1e3 / (d - u));
+				}, d > u && (this._bytesPerSecond = a.length * 1e3 / (d - u));
 			}
 			if (n.headers.get("X-RV-Last") === "1") {
 				let t = e.first === void 0 ? void 0 : this._next?.atS;
 				this._endS = l > 0 ? d / 1e3 : t ?? this._video.duration, this._endOfStream();
 			}
 			if (l === 0) {
-				this._settle(r), setTimeout(this._pump, Tt);
+				this._settle(i), setTimeout(this._pump, Tt);
 				return;
 			}
 		} catch (e) {
-			if (this._closed || r.signal.aborted) return;
+			if (this._closed || i.signal.aborted) return;
 			if (n) throw e;
 			this._closed = !0, this._onError(e instanceof Error ? e : Error(String(e)));
 			return;
 		} finally {
-			this._settle(r);
+			this._settle(i);
 		}
 		this._pump();
 	}
@@ -1366,7 +1383,7 @@ var D = class {
 		return await t.setLocalDescription(n), this.step("offer"), n;
 	}
 	async describe() {
-		return this.pc ? { pair: Ge(await this.pc.getStats()) } : {};
+		return this.pc ? { pair: Ke(await this.pc.getStats()) } : {};
 	}
 	close() {
 		super.close(), this.pc?.close();
@@ -1385,7 +1402,7 @@ var D = class {
 			this.pc?.addEventListener("icecandidate", (e) => {
 				let t = e.candidate?.candidate;
 				t && (this._session ? this._send(t) : this._early.push(t));
-			}), this._unsubscribe = await Ne(this._hass, e, n.sdp ?? "", (e) => {
+			}), this._unsubscribe = await Pe(this._hass, e, n.sdp ?? "", (e) => {
 				this._signal(e);
 			}), this.closed && this._unsubscribe();
 		} catch (e) {
@@ -1393,7 +1410,7 @@ var D = class {
 		}
 	}
 	async _send(e) {
-		this._session && !this.closed && await Pe(this._hass, this._session, e).catch(() => void 0);
+		this._session && !this.closed && await Fe(this._hass, this._session, e).catch(() => void 0);
 	}
 	async _signal(e) {
 		let t = this.pc;
@@ -1520,12 +1537,12 @@ var D = class {
 		this._api = t;
 		let n = window[t];
 		try {
-			let { path: t } = await Te(this._hass, e);
+			let { path: t } = await Ee(this._hass, e);
 			if (this.step("url"), this.closed) return;
-			let r = new WebSocket(Xe(t, this._base));
+			let r = new WebSocket(_(t, this._base));
 			r.binaryType = "arraybuffer", this._ws = r, r.addEventListener("open", () => {
 				this.step("open");
-				let e = g((e) => n.isTypeSupported(e), this._videoOnly);
+				let e = Ue((e) => n.isTypeSupported(e), this._videoOnly);
 				r.send(JSON.stringify({
 					type: "mse",
 					value: e
@@ -2133,7 +2150,7 @@ var Zt = 5e3, Qt = [
 			this._step(e, -1, t);
 		}}
         >
-          ${m("minus")}
+          ${p("minus")}
         </button>
         <span class="small">${n}</span>
         <button
@@ -2143,13 +2160,13 @@ var Zt = 5e3, Qt = [
 			this._step(e, 1, t);
 		}}
         >
-          ${m("plus")}
+          ${p("plus")}
         </button>
       </span>`;
 		return r`<div class="zoom">
       ${o ? s(o, "focus", "Focus") : n}
       ${i ? r`<span class="stepper" role="group" aria-label="Zoom">
-            ${this._holdButton("zoom_out", m("minus"))}<span class="small">Zoom</span>${this._holdButton("zoom_in", m("plus"))}
+            ${this._holdButton("zoom_out", p("minus"))}<span class="small">Zoom</span>${this._holdButton("zoom_in", p("plus"))}
           </span>` : a ? s(a, "zoom", "Zoom") : n}
     </div>`;
 	}
@@ -2424,7 +2441,7 @@ var ln = 2e3, un = "rv-live-debug-close", dn = class extends i {
 		if (!e || !t || !n) return;
 		let r = async (t) => {
 			try {
-				return await De(e, {
+				return await Oe(e, {
 					connectionId: n.connection_id,
 					stream: t
 				});
@@ -2708,7 +2725,7 @@ var fn = 3e3, pn = 6e4, mn = "rv-live-open", hn = "rv-live-full", gn = "rv-live-
 	_driveHd() {
 		if (this.playsHd) return;
 		let e = this.connection, t = this._full && this.shouldPlay, n = this._hdInTile, r = t && this._hdWanted || this._pip === "hd" || n;
-		(t || n) && e && !this._hd && this._hdChoosing !== e && (this._hdChoosing = e, x(e).then((t) => {
+		(t || n) && e && !this._hd && this._hdChoosing !== e && (this._hdChoosing = e, bt(e).then((t) => {
 			this.connection === e && (this._hd = t);
 		}));
 		let i = this._ensureHdPlayer();
@@ -2819,7 +2836,7 @@ var fn = 3e3, pn = 6e4, mn = "rv-live-open", hn = "rv-live-full", gn = "rv-live-
             ></button>` : n}
         ${this.number !== void 0 && !this._full ? r`<span class="num" aria-hidden="true">${this.number}</span>` : n}
         <div class="label">
-          ${this.detecting ? r`<span class="detecting">${m(this.detecting.icon)}${this.detecting.label}</span>` : n}
+          ${this.detecting ? r`<span class="detecting">${p(this.detecting.icon)}${this.detecting.label}</span>` : n}
           ${this.hideName ? n : r`<span class="name">${i}</span>`}
           ${this._wanted ? n : r`<span class="hint">
                 ${this.connection?.is_battery ? "Tap to wake it and watch" : "Tap to watch live"}
@@ -2846,7 +2863,7 @@ var fn = 3e3, pn = 6e4, mn = "rv-live-open", hn = "rv-live-full", gn = "rv-live-
 			this._debug = !this._debug;
 		}}
       >
-        ${m("info")}
+        ${p("info")}
       </button>
       ${this.controls && (this._full || o) ? r`<rv-live-controls
             .hass=${this.hass}
@@ -2860,7 +2877,7 @@ var fn = 3e3, pn = 6e4, mn = "rv-live-open", hn = "rv-live-full", gn = "rv-live-
             title=${this._pip ? "Leave picture in picture" : "Picture in picture: keep watching in a small window"}
             @click=${() => void this._togglePip()}
           >
-            ${m("pip")}
+            ${p("pip")}
           </button>` : n}
       <button
         class="corner-button full"
@@ -2870,7 +2887,7 @@ var fn = 3e3, pn = 6e4, mn = "rv-live-open", hn = "rv-live-full", gn = "rv-live-
 			this._full ? this.exitFull() : this.enterFull();
 		}}
       >
-        ${m(this._full ? "exitFull" : "enterFull")}
+        ${p(this._full ? "exitFull" : "enterFull")}
       </button>
     </div>`;
 	}
@@ -2909,7 +2926,7 @@ var fn = 3e3, pn = 6e4, mn = "rv-live-open", hn = "rv-live-full", gn = "rv-live-
         ${this.compact ? n : r`<span class="small">${e ? e.reason : "Choosing the HD stream…"}</span>`}
       </div>`;
 		let t = this._hdState, i;
-		return i = this._hdWanted ? this.hdShown ? void 0 : t.kind === "waiting" ? `HD cannot play: ${y(t.error).text}` : "HD starting…" : this._link.chosen ? "SD, as chosen on this device. Tap HD for full quality." : `Lighter SD ${this._link.why}. Tap HD for full quality.`, r`<div class="hd-status" title=${e.reason}>
+		return i = this._hdWanted ? this.hdShown ? void 0 : t.kind === "waiting" ? `HD cannot play: ${b(t.error).text}` : "HD starting…" : this._link.chosen ? "SD, as chosen on this device. Tap HD for full quality." : `Lighter SD ${this._link.why}. Tap HD for full quality.`, r`<div class="hd-status" title=${e.reason}>
       <button
         class="hd-toggle"
         aria-pressed=${this._hdWanted ? "true" : "false"}
@@ -2936,14 +2953,14 @@ var fn = 3e3, pn = 6e4, mn = "rv-live-open", hn = "rv-live-full", gn = "rv-live-
 		if (!this._wanted) {
 			if (this.connection?.is_battery) return $("Asleep");
 			let e = this.image ? K(this.image.taken, this.hass?.config?.time_zone) : void 0;
-			return $(e ? `Picture ${e}` : "No picture yet", m("picture"));
+			return $(e ? `Picture ${e}` : "No picture yet", p("picture"));
 		}
 		if (!this.connection?.streams[this.stream]) return $(`No ${this.stream} stream`);
 		switch (e.kind) {
 			case "playing": return this.hdShown ? $("Live HD", r`<i class="dot"></i>`) : $("Live", r`<i class="dot"></i>`);
 			case "starting": return $("Starting");
 			case "waiting": {
-				let t = y(e.error, this.connection.is_battery);
+				let t = b(e.error, this.connection.is_battery);
 				return r`${$("Retrying")}
           <div class="status center" id="status" role="status">
             <span class="what">${t.text}</span>
@@ -3428,4 +3445,4 @@ function Cn(e, t = document) {
 	n.id = Sn, n.textContent = xn.map(([t, n, r]) => `@font-face{font-family:"${t}";font-style:normal;font-weight:${n};font-display:swap;src:url("${new URL(`fonts/${r}`, e).href}") format("woff2");}`).join("\n"), t.head.appendChild(n);
 }
 //#endregion
-export { ze as $, at as A, de as At, Ve as B, kt as C, ye as Ct, _t as D, ae as Dt, x as E, oe as Et, Ze as F, Ie as Ft, g as G, Ye as H, tt as I, Fe as It, _ as J, He as K, Qe as L, d as Lt, ot as M, Re as Mt, it as N, je as Nt, vt as O, ge as Ot, rt as P, Ae as Pt, Ce as Q, et as R, ue as Rt, Ft as S, ee as St, w as T, Le as Tt, Ue as U, qe as V, Ke as W, Xe as X, Je as Y, m as Z, Bt as _, le as _t, Y as a, a as at, A as b, me as bt, Gt as c, ve as ct, K as d, f as dt, l as et, Wt as f, Ee as ft, U as g, he as gt, z as h, _e as ht, Z as i, o as it, v as j, u as jt, y as k, pe as kt, Kt as l, re as lt, q as m, De as mt, nn as n, Se as nt, Xt as o, ie as ot, Ut as p, Oe as pt, We as q, X as r, c as rt, Yt as s, Me as st, Cn as t, fe as tt, qt as u, xe as ut, W as v, ce as vt, S as w, be as wt, k as x, te as xt, Vt as y, ne as yt, $e as z, se as zt };
+export { Be as $, at as A, de as At, He as B, kt as C, ye as Ct, gt as D, ae as Dt, bt as E, oe as Et, Ze as F, Le as Ft, Ue as G, Xe as H, tt as I, Ie as It, g as J, We as K, Qe as L, d as Lt, ot as M, ze as Mt, it as N, Me as Nt, _t as O, ge as Ot, rt as P, je as Pt, Ce as Q, et as R, ue as Rt, Ft as S, ee as St, w as T, Re as Tt, Ge as U, Je as V, qe as W, _ as X, Ye as Y, p as Z, Bt as _, le as _t, Y as a, a as at, A as b, me as bt, Gt as c, ve as ct, K as d, we as dt, l as et, Wt as f, De as ft, U as g, he as gt, z as h, _e as ht, Z as i, o as it, v as j, u as jt, b as k, pe as kt, Kt as l, re as lt, q as m, Oe as mt, nn as n, Se as nt, Xt as o, ie as ot, Ut as p, ke as pt, h as q, X as r, c as rt, Yt as s, Ne as st, Cn as t, fe as tt, qt as u, xe as ut, W as v, ce as vt, S as w, be as wt, k as x, te as xt, Vt as y, ne as yt, $e as z, se as zt };

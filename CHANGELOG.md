@@ -3,6 +3,20 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.63.0
+
+From the owner's playback check of 0.62.2 in Chrome through Nabu Casa. Every check
+passed, and the slow starts of the run before did not come back. The new figures show
+that Home Assistant did its own part of each start in milliseconds. The rest was the
+trip through Nabu Casa: 0.2 to 0.5 s for each request.
+
+- **Videos start one round trip sooner:** to start a video, the panel asks Home
+  Assistant for its header and then for its first stretch. It used to ask for the
+  first stretch only once the header had arrived. Now it asks for both at once,
+  which saves about 0.2 to 0.4 s on each start that isn't already loaded through
+  Nabu Casa or the iPhone app away from home. On the home network the saving is
+  small.
+
 ## 0.62.2
 
 From the owner's playback check of 0.62.1 in Chrome through Nabu Casa. Several video

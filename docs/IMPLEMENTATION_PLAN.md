@@ -7560,6 +7560,38 @@ to answer.
   init and windows carry their Server-Timing; the request lines and the
   "Home Assistant:" line and note.
 
+**The owner's run of v0.62.2 (2026-11-10, Chrome 156 through Nabu Casa, Front
+Yard Right):** every row ✓, "plays well"; the slow starts did not come back.
+Events 0.5–1.0 s, the deep start 0.87 s not cached, the release 0.6 s; P
+alone a picture every 0.06 s, beside a second viewer 0.18 s with no stall.
+What the diagnostics showed:
+
+- **Home Assistant was not busy:** its loop held at most 0.22 s; the first
+  event started in 1.0 s while two downloads ran (one a prefetch), so a
+  download alone does not make a start slow. v0.62.1's 1.4–2.2 s stay
+  unexplained; a run that shows them again now says on which side.
+- **Its own work was quick:** URLs 1–6 ms; windows 0–19 ms; a start's init
+  0.2–0.3 s, the cut's first fragment.
+- **The rest was the trip through Nabu Casa, 0.2–0.5 s a request:** e.g. a
+  window answered in 424 ms that the server sent in 16 ms. A start from a
+  cut took the URL (0.06 s), then the init (0.48 s), then, only after it,
+  the first window (0.42 s): two round trips in a row.
+
+**v0.63.0, from it: the first window is asked beside the init.**
+
+- **The MSE player asks for a start's init and its first window at once**
+  (`MseFeeder.start`, `_ask`), not the window after the init's answer: one
+  round trip less, 0.2–0.4 s off each start that is not buffered through a
+  relay. Both are asked before the media source opens. The server decides
+  both the same way: whichever comes first starts the cut under the
+  recording's `cut_lock`, and the other is served by it (`_covers`: a cut
+  just started covers its own moment). A window from another source than
+  the init's still brings that source's init (`_switch`). A start refused
+  (no MSE for the codec) or abandoned lets the window asked go.
+- Checks: the window asked while the init has not answered, the start then
+  completing; a refused start aborting the window; on the server, an init
+  and a window asked together, in either order, served by one cut.
+
 #### Step 10.4: the checks
 
 - **In CI:** `scrub_check.cjs` drags against a fake key-frame endpoint,

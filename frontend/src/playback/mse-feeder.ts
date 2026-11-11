@@ -112,6 +112,19 @@ function isQuota(err: unknown): boolean {
   return err instanceof DOMException && err.name === "QuotaExceededError";
 }
 
+/** A window asked for: by time, or from a fragment's index. */
+interface WindowQuery {
+  at?: number;
+  first?: number;
+}
+
+/** A window's answer, its body, and when it was asked (performance.now()). */
+interface Asked {
+  response: Response;
+  data: Uint8Array<ArrayBuffer>;
+  began: number;
+}
+
 export class MseFeeder {
   readonly stats: FeederStats;
   private _source: MediaSource | undefined;
@@ -177,38 +190,56 @@ export class MseFeeder {
     if (!api) throw new MseUnsupported("this browser has no MediaSource");
     this.stats.api = api;
     const Ctor = ctorOf(api);
-    const source = new Ctor();
-    this._source = source;
-    // ManagedMediaSource plays only with remote playback (AirPlay) off.
-    this._video.disableRemotePlayback = true;
-    this._url = URL.createObjectURL(source);
-    const opened = new Promise<void>((resolve) => {
-      source.addEventListener("sourceopen", () => {
-        resolve();
-      }, { once: true });
-    });
-    this._video.src = this._url;
-    await opened;
-    if (this._gone()) return;
-    // The init of the source that will serve this start (Phase 5b: a cut).
-    const init = await this._get(`init?at=${Math.round(offsetMs)}`);
-    const mime = init.headers.get("X-RV-Mime") ?? "";
-    this.stats.mime = mime;
-    this.stats.source = init.headers.get("X-RV-Source") ?? "file";
-    if (!mime || !Ctor.isTypeSupported(mime)) {
-      throw new MseUnsupported(`MSE cannot play ${mime || "this recording"}`);
+    // The init of the source that will serve this start (Phase 5b: a cut),
+    // and its first window, asked together (v0.63.0): through a relay such as
+    // Nabu Casa each request is a round trip of 0.2-0.5 s, and the window
+    // waited for the init's. The server decides both the same way (a cut it
+    // starts serves both); a window from another source brings that source's
+    // init (`_switch`).
+    const initAsked = this._get(`init?at=${Math.round(offsetMs)}`);
+    const firstWindow = new AbortController();
+    const windowAsked = this._ask({ at: offsetMs }, FIRST_WINDOW_MS, firstWindow);
+    // Their failures are the start's (below), never unhandled.
+    initAsked.catch(() => undefined);
+    windowAsked.catch(() => undefined);
+    let taken = false;
+    try {
+      const source = new Ctor();
+      this._source = source;
+      // ManagedMediaSource plays only with remote playback (AirPlay) off.
+      this._video.disableRemotePlayback = true;
+      this._url = URL.createObjectURL(source);
+      const opened = new Promise<void>((resolve) => {
+        source.addEventListener("sourceopen", () => {
+          resolve();
+        }, { once: true });
+      });
+      this._video.src = this._url;
+      await opened;
+      if (this._gone()) return;
+      const init = await initAsked;
+      const mime = init.headers.get("X-RV-Mime") ?? "";
+      this.stats.mime = mime;
+      this.stats.source = init.headers.get("X-RV-Source") ?? "file";
+      if (!mime || !Ctor.isTypeSupported(mime)) {
+        throw new MseUnsupported(`MSE cannot play ${mime || "this recording"}`);
+      }
+      const data = new Uint8Array(await init.arrayBuffer());
+      if (this._gone()) return;
+      this._buffer = source.addSourceBuffer(mime);
+      if (this._src.durationMs > 0) source.duration = this._src.durationMs / 1000;
+      for (const name of ["timeupdate", "seeking", "ratechange", "progress"]) this._listen(this._video, name, this._pump);
+      this._listen(this._video, "waiting", this._jumpGap);
+      this._listen(source, "startstreaming", this._pump);
+      this._listen(this._buffer, "updateend", this._pump);
+      this._listen(this._buffer, "bufferedchange", this._pump);
+      await this._append(data);
+      taken = true;
+      await this._fetch({ at: offsetMs }, FIRST_WINDOW_MS, true, { asked: windowAsked, controller: firstWindow });
+    } finally {
+      // Not used (gone, refused, failed): the window asked is not wanted.
+      if (!taken) firstWindow.abort();
     }
-    const data = new Uint8Array(await init.arrayBuffer());
-    if (this._gone()) return;
-    this._buffer = source.addSourceBuffer(mime);
-    if (this._src.durationMs > 0) source.duration = this._src.durationMs / 1000;
-    for (const name of ["timeupdate", "seeking", "ratechange", "progress"]) this._listen(this._video, name, this._pump);
-    this._listen(this._video, "waiting", this._jumpGap);
-    this._listen(source, "startstreaming", this._pump);
-    this._listen(this._buffer, "updateend", this._pump);
-    this._listen(this._buffer, "bufferedchange", this._pump);
-    await this._append(data);
-    await this._fetch({ at: offsetMs }, FIRST_WINDOW_MS, true);
     // The player moves the video to the offset once it has metadata; if that
     // has not happened yet, do it now, so the next window follows the start.
     if (offsetMs > 0 && this._video.currentTime === 0) this._video.currentTime = offsetMs / 1000;
@@ -298,16 +329,27 @@ export class MseFeeder {
     void this._fetch(query, ms, false);
   };
 
-  private async _fetch(query: { at?: number; first?: number }, ms: number, starting: boolean): Promise<void> {
-    const controller = new AbortController();
+  /** Ask for a window: its answer and body, and when it was asked (`_fetch` appends it). */
+  private async _ask(query: WindowQuery, ms: number, controller: AbortController): Promise<Asked> {
+    const began = performance.now();
+    const where = query.first !== undefined ? `first=${query.first}` : `at=${Math.round(query.at ?? 0)}`;
+    const response = await this._get(`frags?${where}&ms=${Math.round(ms)}&bytes=${WINDOW_MAX_BYTES}`, controller.signal);
+    return { response, data: new Uint8Array(await response.arrayBuffer()), began };
+  }
+
+  /** Fetch a window and append it; `early` is one asked already (the start's, beside its init). */
+  private async _fetch(
+    query: WindowQuery,
+    ms: number,
+    starting: boolean,
+    early?: { asked: Promise<Asked>; controller: AbortController },
+  ): Promise<void> {
+    const controller = early?.controller ?? new AbortController();
     const fromS = query.at !== undefined ? query.at / 1000 : (this._next?.atS ?? 0);
     this._pending = { controller, fromS, toS: fromS + ms / 1000 };
     this.stats.fetching = true;
-    const began = performance.now();
-    const where = query.first !== undefined ? `first=${query.first}` : `at=${Math.round(query.at ?? 0)}`;
     try {
-      const response = await this._get(`frags?${where}&ms=${Math.round(ms)}&bytes=${WINDOW_MAX_BYTES}`, controller.signal);
-      const data = new Uint8Array(await response.arrayBuffer());
+      const { response, data, began } = await (early?.asked ?? this._ask(query, ms, controller));
       if (this._closed || controller.signal.aborted) return;
       const header = (name: string) => Number(response.headers.get(`X-RV-${name}`));
       const [first, count, start, end] = [header("First"), header("Count"), header("Start"), header("End")];
