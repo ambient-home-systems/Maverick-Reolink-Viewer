@@ -687,8 +687,9 @@ export class PlaybackCheck {
     }
     this._summary.push(`Events → first frame (sub): ${times.join(", ") || "none played"}`);
     const typical = middle(starts);
-    const played = starts.length + slowedStarts.length;
-    const missed = played < events.length ? `; ${String(events.length - played)} of ${count(events.length, "event")} did not play` : "";
+    const playedCount = starts.length + slowedStarts.length;
+    const missed =
+      playedCount < events.length ? `; ${String(events.length - playedCount)} of ${count(events.length, "event")} did not play` : "";
     const slowedTypical = middle(slowedStarts);
     this._plain.push(
       typical === undefined && (slowedTypical === undefined || !slowedBy)
