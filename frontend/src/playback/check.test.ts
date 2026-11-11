@@ -125,7 +125,7 @@ describe("PlaybackCheck", () => {
       changes.push(1),
     );
     const report = await check.run();
-    expect(report).toContain("Reolink Viewer playback check v0.8.1 · Desktop Chrome, LAN · Garage");
+    expect(report).toContain("Reolink Viewer playback check v0.8.2 · Desktop Chrome, LAN · Garage");
     expect(report).toContain("A1 Time to timeline, today (as the tab opened): 120 ms (server: memory, total 4 ms)");
     expect(report).toContain("A2/A3 skipped: no earlier recording day this month");
     expect(report).toContain("B  skipped: no events today");
@@ -552,14 +552,16 @@ describe("PlaybackCheck: starts that waited for the recorder", () => {
   }
 
   /** Each start opens the recording as the next of `held` says the server had it (then whole). */
-  async function run(held: { complete: boolean; bytes: number }[]): Promise<string> {
+  async function run(held: { complete: boolean; bytes: number }[], stats?: unknown): Promise<string> {
     vi.spyOn(PlaybackCheck.prototype as unknown as { _pause: () => Promise<void> }, "_pause").mockResolvedValue();
     const hass = reportingHass();
     const answer = hass.callWS.bind(hass);
     hass.callWS = <T,>(message: Record<string, unknown>) =>
       message.type === "reolink_viewer/playback/peek"
         ? Promise.resolve({ segment_id: String(message.segment_id), cache: null } as T)
-        : answer<T>(message);
+        : message.type === "reolink_viewer/playback/stats" && stats !== undefined
+          ? Promise.resolve(stats as T)
+          : answer<T>(message);
     const metrics: Record<string, unknown> = { timelineMs: 120 };
     let playing: CheckTarget["playing"];
     const target: CheckTarget = {
@@ -593,6 +595,33 @@ describe("PlaybackCheck: starts that waited for the recorder", () => {
     expect(report).toContain("- Deep start (sub, 60.0 min recording): not cached not measured, cached 70 ms ✓");
   });
 
+  it("says on a start's own line that Home Assistant was held up during it (v0.63.2)", async () => {
+    const report = await run([{ complete: true, bytes: 1 }], {
+      vod: { filling: 0 },
+      loop: { held_10s_ms: 900, held_60s_ms: 900, period_ms: 250 },
+    });
+    expect(report).toMatch(/^B {2}MOTION at .*: first frame 70 ms .* · HOME ASSISTANT HELD UP 900 ms$/m);
+    expect(report).toContain(
+      'Home Assistant itself was busy during some starts: its event loop was held up to 0.9 s, so it answered late (those starts say "HOME ASSISTANT HELD UP").',
+    );
+  });
+
+  it("says a row that fails, and runs the rest (v0.63.2: a lost connection ended the check)", async () => {
+    // Home Assistant's connection gave up on a command: the result, its error inside.
+    vi.spyOn(PlaybackCheck.prototype as unknown as { _drag: () => Promise<void> }, "_drag").mockRejectedValue({
+      type: "result",
+      success: false,
+      error: { code: 3, message: "Connection lost" },
+    });
+    const report = await run([{ complete: true, bytes: 1 }]);
+    expect(report).toContain("P  FAILED: Connection lost");
+    expect(report).not.toContain("[object Object]");
+    // The rows after it ran, and the report ends as ever.
+    expect(report).toMatch(/^V {2}/m);
+    expect(report).toContain("Summary:");
+    expect(report).toContain("- Problem: The check's P row could not finish: Connection lost.");
+  });
+
   it("counts a deep start that waited, with what was fetched already", async () => {
     const report = await run([
       { complete: true, bytes: 1 },
@@ -602,6 +631,29 @@ describe("PlaybackCheck: starts that waited for the recorder", () => {
     expect(report).toContain("- Events → first frame (sub): 70 ms ✓");
     expect(report).toContain("D1 Not cached (12.0 MB already fetched when played), 55.0 min into a 60.0 min recording");
     expect(report).toContain("- Deep start (sub, 60.0 min recording): not cached 2250 ms, cached 70 ms ✓");
+  });
+});
+
+describe("the drag beside a second viewer", () => {
+  it("says why the viewer did not start, and leaves the row to go on (v0.63.2)", async () => {
+    const hass = reportingHass();
+    const target: CheckTarget = {
+      ...stubTarget(hass),
+      openViewer: () => ({
+        // As Home Assistant's connection rejects a command it gave up on: not an Error.
+        // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- the shape under test
+        playAt: () => Promise.reject({ type: "result", success: false, error: { code: 3, message: "Connection lost" } }),
+        position: undefined,
+        source: undefined,
+        close: () => undefined,
+      }),
+    };
+    const check = new PlaybackCheck(target, { setup: "test", soakMinutes: 0 }) as unknown as {
+      _dragBeside(other: { start: number; end: number }, from: number, spanMs: number): Promise<unknown>;
+      _besideText(beside: unknown, s: undefined): string;
+    };
+    const beside = await check._dragBeside({ start: T0, end: T0 + 3_600_000 }, T0, 30_000);
+    expect(check._besideText(beside, undefined)).toBe("beside another viewer: it did not start (Connection lost)");
   });
 });
 

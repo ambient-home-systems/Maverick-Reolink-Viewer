@@ -1163,14 +1163,24 @@ class VodCache:
             raise VodCacheError(f"cut failed: {err}") from err
         if first is None and at_ms is not None:
             # A start or a seek: the window reaches a little past the moment,
-            # so the video shows it without asking again (v0.63.1: asked
-            # beside the init, a cut's first window held only the fragment of
-            # the moment, and the video waited a round trip for the next).
+            # and holds the fragment after the moment's, so the video shows
+            # it without asking again (v0.63.1: asked beside the init, a cut's
+            # first window held only the fragment of the moment, and the video
+            # waited a round trip for the next; v0.63.2: so did a window of
+            # one 4-second group of pictures on Front Yard Left).
+            moment = at_ms
             ahead = at_ms + START_AHEAD_MS
-            with contextlib.suppress(CutError):
-                await self._await_cut(
-                    cut, lambda i: i.duration_ms >= ahead, START_AHEAD_WAIT_S
+
+            def past(index: FragmentIndex) -> bool:
+                fragments = index.fragments
+                return (
+                    index.duration_ms >= ahead
+                    and bool(fragments)
+                    and fragments[-1].start_ms > moment
                 )
+
+            with contextlib.suppress(CutError):
+                await self._await_cut(cut, past, START_AHEAD_WAIT_S)
         index = cut.index
         begin = start(index)
         base = CUT_FIRST * cut.generation
