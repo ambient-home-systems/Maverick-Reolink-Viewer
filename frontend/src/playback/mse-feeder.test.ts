@@ -241,7 +241,7 @@ describe("MseFeeder", () => {
 
   it("asks for the first window beside the init, not after it (one round trip less)", async () => {
     const server = fakeServer(60);
-    let release = () => undefined as void;
+    let release: () => void = () => undefined;
     server.state.holdInit = new Promise<void>((resolve) => {
       release = resolve;
     });
