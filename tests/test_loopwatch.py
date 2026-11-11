@@ -89,6 +89,25 @@ async def test_the_watchdog_notes_what_held_the_loop(hass: HomeAssistant) -> Non
         assert not thread.is_alive()
 
 
+async def test_a_hold_of_a_fifth_of_a_second_is_noted(hass: HomeAssistant) -> None:
+    """The shipped watchdog notes a hold the 0.3 s of v0.63.3 missed (v0.63.4).
+
+    The owner's run of v0.63.3 found the loop held 211 ms, without a culprit.
+    """
+    watch = LoopWatch(hass)
+    with patch.object(loopwatch, "PERIOD_S", 0.05):
+        watch.watch()
+        await _ticks(watch, 2)
+        # Late by up to 0.27 s past the period: under 0.3 s, over 0.15 s.
+        _hold_the_loop(0.32)
+        await _ticks(watch, 4)
+        holds = watch.snapshot()["held_by"]
+        watch.stop()
+    assert holds
+    assert 150 <= holds[0]["seen_ms"] < 300
+    assert holds[0]["where"][0].endswith(" in _hold_the_loop")
+
+
 def test_a_frame_says_its_file_line_and_function() -> None:
     """Innermost first: "file:line in function"."""
     where = loopwatch._where(sys._getframe())

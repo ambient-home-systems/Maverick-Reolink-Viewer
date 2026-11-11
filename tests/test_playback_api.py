@@ -347,6 +347,18 @@ async def test_mse_fragments(
     moofs = [at for kind, at, _payload in _boxes(data) if kind == "moof"]
     assert len(moofs) == 2
     _check_mse_ready(data[moofs[0] :], {1: 5 * 50 * 3600, 2: 5 * 31 * 1024})
+    assert "X-RV-Init" not in resp.headers
+    # A player with this source's init: the fragments alone (v0.63.4).
+    resp = await http.get(f"{base}/frags?at=10500&ms=4000&have=file")
+    assert "X-RV-Init" not in resp.headers
+    assert await resp.read() == data
+    # A player with the cut's: the recording's init ahead of the same fragments.
+    resp = await http.get(f"{base}/frags?at=10500&ms=4000&have=cut")
+    init = FTYP + av_moov()
+    assert resp.headers["X-RV-Init"] == str(len(init))
+    assert resp.headers["X-RV-Mime"] == MIME
+    assert resp.headers["X-RV-Source"] == "file"
+    assert await resp.read() == init + data
     resp = await http.get(f"{base}/frags?first=28&ms=60000")
     assert resp.headers["X-RV-Count"] == "2"
     assert resp.headers["X-RV-Last"] == "1"

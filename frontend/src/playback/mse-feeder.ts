@@ -5,7 +5,8 @@
 // a recording costs one window, sent once the bytes up to it are on the
 // server's disk (Phase 2B step 2), or (Phase 5b, an option) cut from the
 // device for that moment: each answer names its source (X-RV-Source), and a
-// window from another source than the last brings that source's init segment.
+// window from another source than the last brings that source's init segment
+// ahead of its fragments (v0.63.4: the player says which it has, `have=`).
 
 export type MseApi = "ManagedMediaSource" | "MediaSource";
 
@@ -131,6 +132,12 @@ interface Asked {
   response: Response;
   data: Uint8Array<ArrayBuffer>;
   began: number;
+}
+
+/** A source's init segment and its MIME type. */
+interface Init {
+  mime: string;
+  data: Uint8Array<ArrayBuffer>;
 }
 
 export class MseFeeder {
@@ -339,11 +346,22 @@ export class MseFeeder {
     void this._fetch(query, ms, false);
   };
 
-  /** Ask for a window: its answer and body, and when it was asked (`_fetch` appends it). */
+  /**
+   * Ask for a window: its answer and body, and when it was asked (`_fetch`
+   * appends it). Once an init is appended, the window says whose (`have`):
+   * one from the other source then starts with that source's init. Through
+   * a relay a second request for it was a round trip of 0.15-0.2 s, on every
+   * jump from a cut into the downloaded part (v0.63.4). The start's first
+   * window is asked beside its init, before either is in: it says nothing.
+   */
   private async _ask(query: WindowQuery, ms: number, controller: AbortController): Promise<Asked> {
     const began = performance.now();
     const where = query.first !== undefined ? `first=${query.first}` : `at=${Math.round(query.at ?? 0)}`;
-    const response = await this._get(`frags?${where}&ms=${Math.round(ms)}&bytes=${WINDOW_MAX_BYTES}`, controller.signal);
+    const have = this._buffer ? `&have=${encodeURIComponent(this.stats.source)}` : "";
+    const response = await this._get(
+      `frags?${where}&ms=${Math.round(ms)}&bytes=${WINDOW_MAX_BYTES}${have}`,
+      controller.signal,
+    );
     return { response, data: new Uint8Array(await response.arrayBuffer()), began };
   }
 
@@ -368,18 +386,24 @@ export class MseFeeder {
       this.stats.lastWaitMs = performance.now() - began;
       if (count > 0) {
         const source = response.headers.get("X-RV-Source") ?? "file";
+        // The source's init ahead of the fragments, when the player had another's.
+        const initBytes = Math.min(header("Init") || 0, data.length);
+        const init = initBytes > 0
+          ? { mime: response.headers.get("X-RV-Mime") ?? "", data: data.subarray(0, initBytes) }
+          : undefined;
+        const media = init ? data.subarray(initBytes) : data;
         if (source !== this.stats.source) {
-          await this._switch(source, controller.signal);
+          await this._switch(source, controller.signal, init);
           // (Methods: not narrowed across the await.)
           if (this._gone() || aborted(controller.signal)) return;
         }
-        await this._append(data);
+        await this._append(media);
         if (query.at !== undefined) this._onTarget(query.at / 1000);
         this.stats.firstSource ??= source;
         if (query.at !== undefined) this.stats.atSource = source;
         if (query.first === undefined || this._runStartS === undefined) this._runStartS = start / 1000;
         this._next = { index: first + count, atS: end / 1000 };
-        if (end > start) this._bytesPerSecond = (data.length * 1000) / (end - start);
+        if (end > start) this._bytesPerSecond = (media.length * 1000) / (end - start);
       }
       if (response.headers.get("X-RV-Last") === "1") {
         // An empty last window: the media ends where the run before it did
@@ -410,12 +434,16 @@ export class MseFeeder {
   /**
    * The next window comes from another source (the recording's download or
    * the device's cut): append that source's init segment first, changing the
-   * buffer's type if its codecs differ.
+   * buffer's type if its codecs differ. The window's answer carries it
+   * (`carried`, v0.63.4); else it is asked for.
    */
-  private async _switch(source: string, signal: AbortSignal): Promise<void> {
-    const init = await this._get(`init?source=${source}`, signal);
-    const mime = init.headers.get("X-RV-Mime") ?? "";
-    const data = new Uint8Array(await init.arrayBuffer());
+  private async _switch(source: string, signal: AbortSignal, carried?: Init): Promise<void> {
+    let init = carried;
+    if (!init) {
+      const response = await this._get(`init?source=${source}`, signal);
+      init = { mime: response.headers.get("X-RV-Mime") ?? "", data: new Uint8Array(await response.arrayBuffer()) };
+    }
+    const { mime, data } = init;
     if (this._gone() || aborted(signal)) return;
     const buffer = this._buffer;
     if (mime && mime !== this.stats.mime && buffer && typeof buffer.changeType === "function") {

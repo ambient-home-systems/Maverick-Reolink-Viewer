@@ -315,7 +315,10 @@ class MseView(HomeAssistantView):
 
         ``init?at=`` gives the init of the source that will serve a start
         there, ``init?source=`` that source's; ``X-RV-Source`` names it on
-        both answers ("file", or "cut" for the device's cut, Phase 5b).
+        both answers ("file", or "cut" for the device's cut, Phase 5b). A
+        window asked with ``have=`` (the source the player has) from the
+        other source starts with that source's init: ``X-RV-Init`` gives its
+        length, ``X-RV-Mime`` its type (v0.63.4: one round trip, not two).
         """
         began = time.monotonic()
         hass: HomeAssistant = request.app["hass"]
@@ -355,7 +358,21 @@ class MseView(HomeAssistantView):
                 status=HTTPStatus.GATEWAY_TIMEOUT, text="Recording not ready"
             )
         headers["Server-Timing"] = _server_timing(began)
-        return await _send_window(request, cache, entry, window, headers)
+        carried_init: bytes | None = None
+        have = request.query.get("have")
+        if (
+            have is not None
+            and window.fragments
+            and window.source != have
+            and (carried := cache.window_init(entry, window)) is not None
+        ):
+            carried_init, mime = carried
+            headers["X-RV-Init"] = str(len(carried_init))
+            if mime:
+                headers["X-RV-Mime"] = mime
+        return await _send_window(
+            request, cache, entry, window, headers, init=carried_init
+        )
 
 
 def _server_timing(began: float) -> str:
@@ -391,7 +408,10 @@ async def _send_window(
     entry: Entry,
     window: Window,
     headers: dict[str, str],
+    *,
+    init: bytes | None = None,
 ) -> web.StreamResponse:
+    """Send a window's fragments, after its source's init when given."""
     times = {
         "X-RV-Start": window.start_ms,
         "X-RV-End": window.end_ms,
@@ -409,6 +429,8 @@ async def _send_window(
     )
     response.enable_chunked_encoding()
     await response.prepare(request)
+    if init:
+        await response.write(init)
     try:
         async for chunk in cache.async_read_window(entry, window):
             await response.write(chunk)

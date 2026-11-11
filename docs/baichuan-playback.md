@@ -649,7 +649,9 @@ recordings over the Reolink protocol** (off by default):
   recording's, indexed like it; the MSE view serves windows from it numbered
   from 1,000,000 × the cut's number, says `X-RV-Source: cut`, and gives its
   init segment (`init?source=cut`); the panel's feeder appends a source's
-  init when the windows' source changes. Any failure (no slot, login, no
+  init when the windows' source changes. Since v0.63.4 the window brings it:
+  the feeder says which source's init it has (`have=`), and a window from
+  the other starts with that source's init (`X-RV-Init`: its length). Any failure (no slot, login, no
   fragment within 6 s, the cut ending before the moment) falls back to the
   download.
 
