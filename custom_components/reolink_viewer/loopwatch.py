@@ -13,6 +13,9 @@ watchdog thread (v0.63.3) looks every ``POLL_S`` at when the timer last ran;
 when it is ``CAPTURE_AFTER_S`` late, it notes where the loop's thread is at
 that moment (the innermost frames of its stack: file, line and function).
 
+v0.63.4 looks twice as often and from half the delay: the owner's run of
+v0.63.3 found a hold of 0.2 s, short of the 0.3 s it then waited for.
+
 Both run only while someone looks: each read of the playback statistics (the
 check, the debug panel) keeps them running ``WATCH_S`` longer.
 """
@@ -35,11 +38,11 @@ WATCH_S = 300.0
 KEEP_S = 60.0
 # The watchdog looks this often, and notes the loop's stack once the timer is
 # this late past its period (s).
-POLL_S = 0.1
-CAPTURE_AFTER_S = 0.3
+POLL_S = 0.05
+CAPTURE_AFTER_S = 0.15
 # Frames noted per hold (the innermost), and holds kept.
 FRAMES = 4
-HOLDS = 10
+HOLDS = 20
 # A file's path is shown from the first of these on (the rest is the install's).
 _ROOTS = ("custom_components/", "homeassistant/", "site-packages/", "lib/python")
 

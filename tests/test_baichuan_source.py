@@ -478,13 +478,15 @@ async def test_a_start_asks_its_init_and_first_window_together_and_one_cut_serve
     cache, _rig = cached
     entry = await cache.async_open(deep_rec())
     cache.lease(entry, 600, "token1")
-    (init, _mime, source), window = await asyncio.gather(
+    (init, mime, source), window = await asyncio.gather(
         cache.async_init(entry, at_ms=AT_MS), _window(cache, entry, at_ms=AT_MS)
     )
     assert source == "cut"
     assert init.startswith(b"\x00\x00\x00\x1cftyp")
     assert window.source == "cut"
     assert window.first == CUT_FIRST + 3
+    # Its source's init, for a player that had the download's (v0.63.4).
+    assert cache.window_init(entry, window) == (init, mime)
     # It reaches past the moment, with a fragment after the moment's (or holds
     # all the cut has): the video can show it.
     assert window.end_ms is not None

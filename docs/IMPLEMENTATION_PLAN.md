@@ -7707,6 +7707,37 @@ it.
   held the loop, with its file and line, and leaving no thread; the frame's
   wording; the check's line and note with rows and the culprit.
 
+**The owner's run of v0.63.3 (2026-11-11, just before 3 AM, Chrome 156 through
+Nabu Casa, Front Yard Right):** every row ✓, and Home Assistant was held 211 ms
+at most. That is too short for the watchdog's 0.3 s, so no "held by" was shown,
+and nothing was noted in "In short". Event start 0.75 s (from the download,
+still filling). The deep start not cached took 0.80 s, against 0.64 s at 2 AM;
+the camera was slower (login 86 ms against 51, first fragment 368 ms against
+286) and so was the URL command (86 ms against 31). The cached jump took 0.39
+s, as on every run through Nabu Casa (0.39–0.52 s). It is two round trips: the
+window from the download, then `init?source=file`, because D1 had played from
+the cut. That is 148 ms here, 150–190 ms before. Not exercised: "beside another
+viewer" (at 3 AM the day's other recordings were cached by B, D1 and V).
+
+**v0.63.4, from it:**
+
+- **A window from the other source carries its init** (`MseView`,
+  `VodCache.window_init`): the player says which source's init it has
+  (`frags?…&have=file|cut`, once one is appended). A window from the other
+  source then starts with that source's init: `X-RV-Init` gives its length,
+  `X-RV-Mime` its type. The feeder appends the init (with `changeType` where
+  the codecs differ), then the fragments. Without one (an older server, or a
+  source with no init), it asks `init?source=` as before. The start's first
+  window, asked beside its init before either is in, says nothing.
+- **The watchdog names holds from 0.15 s** (`CAPTURE_AFTER_S`, was 0.3), and
+  looks every 0.05 s (`POLL_S`, was 0.1). It keeps 20 holds.
+- Checks: a seek from a cut into the download asks one window, its init
+  appended on its own before the fragments, and no `init?source=`; an answer
+  without the init still asks for it; the view's window with `have=` of its
+  own source (fragments alone) and of the other (the init ahead of the same
+  bytes); a cut window's init is its cut's; a hold of about 0.27 s, missed at
+  0.3 s, is noted. The feeder test fails on the code before.
+
 #### Step 10.4: the checks
 
 - **In CI:** `scrub_check.cjs` drags against a fake key-frame endpoint,

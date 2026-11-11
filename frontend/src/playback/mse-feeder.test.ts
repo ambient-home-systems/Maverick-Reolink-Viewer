@@ -19,6 +19,8 @@ class FakeBuffer extends EventTarget {
   ranges: [number, number][] = [];
   removed: [number, number][] = [];
   types: string[] = [];
+  /** What was appended, in order (as text). */
+  appended: string[] = [];
   failNext: "quota" | "error" | undefined;
 
   changeType(type: string): void {
@@ -36,6 +38,7 @@ class FakeBuffer extends EventTarget {
       throw new DOMException("full", "QuotaExceededError");
     }
     const text = new TextDecoder().decode(data);
+    this.appended.push(text);
     this._update(() => {
       if (this.failNext === "error") {
         this.failNext = undefined;
@@ -127,12 +130,15 @@ function fakeServer(count = 30, shortBy = 0, fragment = 2, lateLast = false) {
     aborted: number;
     /** Media placed this many seconds from where the headers say (a misplaced cut). */
     misplaced: number;
+    /** A window from another source than `have` starts with its init (v0.63.4); off: an older server. */
+    carriesInit: boolean;
   } = {
     status: 200,
     text: "",
     cutFrom: Number.POSITIVE_INFINITY,
     aborted: 0,
     misplaced: 0,
+    carriesInit: true,
   };
   const mimes: Record<string, string> = {
     file: 'video/mp4; codecs="avc1.640033,mp4a.40.2"',
@@ -157,13 +163,20 @@ function fakeServer(count = 30, shortBy = 0, fragment = 2, lateLast = false) {
     const n = Math.max(0, Math.min(wanted, count - first));
     // The buffered range can end a little before the window (audio vs video).
     const at = first * fragment + state.misplaced;
-    const body = n ? `${at},${at + n * fragment - shortBy}` : "";
+    const src = first * fragment >= state.cutFrom ? "cut" : "file";
+    const have = query.get("have");
+    const carried = n && state.carriesInit && have !== null && have !== src ? `INIT ${src}` : "";
+    const body = n ? `${carried}${at},${at + n * fragment - shortBy}` : "";
     const headers: Record<string, string> = {
-      "X-RV-Source": first * fragment >= state.cutFrom ? "cut" : "file",
+      "X-RV-Source": src,
       "X-RV-First": String(first),
       "X-RV-Count": String(n),
       "X-RV-Last": first + n >= count && (n === 0 || !lateLast) ? "1" : "0",
     };
+    if (carried) {
+      headers["X-RV-Init"] = String(carried.length);
+      headers["X-RV-Mime"] = mimes[src] ?? "";
+    }
     if (n) {
       headers["X-RV-Start"] = String(first * fragment * 1000);
       headers["X-RV-End"] = String((first + n) * fragment * 1000);
@@ -234,7 +247,7 @@ describe("MseFeeder", () => {
     expect(server.requests.slice(0, 3)).toEqual([
       "init?at=10500",
       `frags?at=10500&ms=${FIRST_WINDOW_MS}&bytes=16777216`,
-      "frags?first=7&ms=20000&bytes=16777216",
+      "frags?first=7&ms=20000&bytes=16777216&have=file",
     ]);
     expect(FakeMediaSource.last?.duration).toBe(120);
     expect(f.stats.api).toBe("MediaSource");
@@ -276,7 +289,7 @@ describe("MseFeeder", () => {
     expect(server.state.aborted).toBe(1);
   });
 
-  it("starts from the device's cut and switches init segments when the source changes", async () => {
+  it("starts from the device's cut and switches init segments when the source changes, the init with the window", async () => {
     const server = fakeServer(60);
     server.state.cutFrom = 60;
     const { f, video } = feeder(server, fakeVideo(), 120_000);
@@ -288,13 +301,15 @@ describe("MseFeeder", () => {
     expect(f.stats.atSource).toBe("cut");
     expect(f.stats.mime).toBe('video/mp4; codecs="avc1.640033"');
     expect(f.stats.switches).toBe(0);
-    // A seek back before the cut: the recording's download serves, with its init.
+    // A seek back before the cut: the recording's download serves, its init
+    // ahead of its fragments in the one answer (v0.63.4: not asked after it).
     video.currentTime = 10;
     video.dispatchEvent(new Event("seeking"));
     await settle();
-    const at = server.requests.indexOf(`frags?at=10000&ms=${FIRST_WINDOW_MS}&bytes=16777216`);
+    const at = server.requests.indexOf(`frags?at=10000&ms=${FIRST_WINDOW_MS}&bytes=16777216&have=cut`);
     expect(at).toBeGreaterThan(0);
-    expect(server.requests[at + 1]).toBe("init?source=file");
+    expect(server.requests).not.toContain("init?source=file");
+    expect(f.around.ahead).toBeGreaterThan(0);
     expect(f.stats.source).toBe("file");
     expect(f.stats.switches).toBe(1);
     expect(f.stats.firstSource).toBe("cut");
@@ -302,7 +317,30 @@ describe("MseFeeder", () => {
     expect(f.stats.atSource).toBe("file");
     const buffer = FakeMediaSource.last?.buffer;
     expect(buffer?.types).toEqual(['video/mp4; codecs="avc1.640033,mp4a.40.2"']);
+    // The init appended on its own, then the window's fragments.
+    const init = buffer?.appended.indexOf("INIT file") ?? -1;
+    expect(init).toBeGreaterThan(0);
+    expect(buffer?.appended[init + 1]).toBe("10,14");
     expect(f.stats.mime).toContain("mp4a");
+    f.destroy();
+  });
+
+  it("asks for the init when the window does not carry it (an older server)", async () => {
+    const server = fakeServer(60);
+    server.state.cutFrom = 60;
+    server.state.carriesInit = false;
+    const { f, video } = feeder(server, fakeVideo(), 120_000);
+    await f.start(80_000);
+    await settle();
+    video.currentTime = 10;
+    video.dispatchEvent(new Event("seeking"));
+    await settle();
+    const at = server.requests.indexOf(`frags?at=10000&ms=${FIRST_WINDOW_MS}&bytes=16777216&have=cut`);
+    expect(at).toBeGreaterThan(0);
+    expect(server.requests[at + 1]).toBe("init?source=file");
+    expect(f.stats.source).toBe("file");
+    expect(f.stats.switches).toBe(1);
+    expect(f.around.ahead).toBeGreaterThan(0);
     f.destroy();
   });
 
@@ -321,7 +359,7 @@ describe("MseFeeder", () => {
     video.currentTime = 100;
     video.dispatchEvent(new Event("seeking"));
     await settle();
-    expect(server.requests).toContain(`frags?at=100000&ms=${FIRST_WINDOW_MS}&bytes=16777216`);
+    expect(server.requests).toContain(`frags?at=100000&ms=${FIRST_WINDOW_MS}&bytes=16777216&have=file`);
     expect(f.around.ahead).toBeGreaterThan(0);
     f.destroy();
   });
@@ -358,7 +396,7 @@ describe("MseFeeder", () => {
     expect(video.currentTime).toBe(11.9);
     // 11.9 s is past the buffered 8–11.8 s: the next fragment by index, never
     // the same window again by time.
-    expect(server.requests[2]).toBe(`frags?first=3&ms=${FIRST_WINDOW_MS}&bytes=16777216`);
+    expect(server.requests[2]).toBe(`frags?first=3&ms=${FIRST_WINDOW_MS}&bytes=16777216&have=file`);
     expect(server.requests.filter((r) => r.startsWith("frags?at="))).toHaveLength(1);
     f.destroy();
   });
@@ -381,7 +419,7 @@ describe("MseFeeder", () => {
     video.currentTime = 5;
     video.dispatchEvent(new Event("seeking"));
     await settle();
-    expect(server.requests[before]).toBe(`frags?at=5000&ms=${FIRST_WINDOW_MS}&bytes=16777216`);
+    expect(server.requests[before]).toBe(`frags?at=5000&ms=${FIRST_WINDOW_MS}&bytes=16777216&have=file`);
     expect(f.around.ahead).toBeGreaterThan(0);
     f.destroy();
   });

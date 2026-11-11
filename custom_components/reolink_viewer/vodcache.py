@@ -815,6 +815,24 @@ class VodCache:
         assert index.init is not None
         return index.init, index.mime, "file"
 
+    def window_init(
+        self, entry: Entry, window: Window
+    ) -> tuple[bytes, str | None] | None:
+        """Return the init segment and MIME type of the source serving ``window``.
+
+        Sent ahead of the window's fragments when the player has the other
+        source's (v0.63.4): a jump from a cut into the downloaded part took a
+        second round trip for it. None if that source has none.
+        """
+        if window.source == "cut":
+            cut = _cut_of(entry, window.first)
+            index = cut.index if cut is not None else None
+        else:
+            index = entry.fragments
+        if index is None or index.init is None:
+            return None
+        return index.init, index.mime
+
     async def async_window(
         self,
         entry: Entry,

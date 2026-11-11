@@ -3,6 +3,22 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.63.4
+
+From the owner's playback check of 0.63.3 in Chrome through Nabu Casa, on Front Yard
+Right. Everything passed, and Home Assistant was held up for 0.2 s at most.
+
+- **Jumping within a recording is quicker over a slow link:** after a start from the
+  recorder's direct video, a jump into the part already downloaded took two trips to
+  Home Assistant: one for the video, then one for a short header the browser needed
+  first. Through Nabu Casa that took about 0.4 s on every run. The header now comes
+  with the video, in one trip, which should bring the jump down to about 0.25 s. A
+  jump the other way, from the downloaded part to the recorder's direct video, saves
+  the same trip.
+- **Shorter holds are named:** Home Assistant now notes what held it up from 0.15 s,
+  where it waited for 0.3 s before, and it looks twice as often. The run's longest
+  hold was 0.2 s, too short to be named.
+
 ## 0.63.3
 
 From the owner's playback check of 0.63.2 in Chrome through Nabu Casa. Everything
