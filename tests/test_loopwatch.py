@@ -1,6 +1,8 @@
 """How late Home Assistant's event loop runs a timer (loopwatch.py, v0.62.2)."""
 
 import asyncio
+import re
+import sys
 import time
 from unittest.mock import patch
 
@@ -54,3 +56,43 @@ async def test_the_timer_stops_when_nobody_reads_it(hass: HomeAssistant) -> None
         watch.watch()
         assert _running(watch)
         watch.stop()
+
+
+def _hold_the_loop(seconds: float) -> None:
+    time.sleep(seconds)
+
+
+async def test_the_watchdog_notes_what_held_the_loop(hass: HomeAssistant) -> None:
+    """Held past its period, the loop's thread is caught where it is (v0.63.3)."""
+    watch = LoopWatch(hass)
+    with (
+        patch.object(loopwatch, "PERIOD_S", 0.05),
+        patch.object(loopwatch, "POLL_S", 0.02),
+        patch.object(loopwatch, "CAPTURE_AFTER_S", 0.15),
+    ):
+        watch.watch()
+        await _ticks(watch, 2)
+        _hold_the_loop(0.6)
+        await _ticks(watch, 4)
+        (hold,) = watch.snapshot()["held_by"]
+        assert hold["seen_ms"] >= 150
+        assert hold["ago_s"] < 5
+        # Innermost first: the function that held it, with its file and line.
+        assert "test_loopwatch.py:" in hold["where"][0]
+        assert hold["where"][0].endswith(" in _hold_the_loop")
+        assert len(hold["where"]) <= loopwatch.FRAMES
+        thread = watch._thread
+        assert thread is not None
+        assert thread.is_alive()
+        watch.stop()
+        # Stopped: no thread left behind.
+        assert not thread.is_alive()
+
+
+def test_a_frame_says_its_file_line_and_function() -> None:
+    """Innermost first: "file:line in function"."""
+    where = loopwatch._where(sys._getframe())
+    assert re.fullmatch(
+        r".*test_loopwatch\.py:\d+ in test_a_frame_says_its_file_line_and_function",
+        where[0],
+    )

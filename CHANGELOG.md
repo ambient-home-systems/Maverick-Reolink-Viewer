@@ -3,6 +3,22 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.63.3
+
+From the owner's playback check of 0.63.2 in Chrome through Nabu Casa. Everything
+passed, and a deep start into an hour not yet downloaded took 0.64 s. But Home
+Assistant was held up by other work for up to 1.3 s, and the report couldn't say by
+what.
+
+- **The check says what held Home Assistant up:** while the check or Technical details
+  is open, Home Assistant notes where it was busy each time it is held up for more
+  than about a third of a second, down to the file, line and function. The check
+  shows it after each start ("held by …"), so the next run can tell whether it's
+  Reolink Viewer's own work, and which part, or another integration.
+- **The summary names where it happened:** "In short" now names the rows whose starts
+  found Home Assistant held up. Some rows don't print a line for their start, and the
+  1.3 s hold in that run wasn't on any line.
+
 ## 0.63.2
 
 From the owner's playback checks of 0.63.1 through Nabu Casa, on Front Yard Right and

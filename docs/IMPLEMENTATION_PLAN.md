@@ -7681,6 +7681,32 @@ Nabu Casa):**
   waits for the group after the moment, or goes alone within a second. Each
   new test fails on the code before.
 
+**The owner's run of v0.63.2 (2026-11-11, 2 AM, Chrome 156 through Nabu Casa,
+Front Yard Right):** every row ✓. The deep start not cached in 0.64 s (0.71 s
+in v0.63.1, 0.87–1.0 s before); slow drag alone over a recording not cached,
+a picture every 0.04 s (30 from the device); fast drag all from the device,
+caught up at rest; the release from a cut in 0.5 s; V ✓. Still not exercised:
+B came from the cache (no cut left running before D1), and the day had one
+recording not cached (no second viewer). **Home Assistant was held twice:**
+D2's line said "HOME ASSISTANT HELD UP 835 ms"; "In short" said 1.3 s, a hold
+in a row whose start line is not printed (C or R), and nothing said what held
+it.
+
+**v0.63.3, from it:**
+
+- **What held Home Assistant** (`loopwatch.py`): a watchdog thread looks every
+  0.1 s at when the timer last ran; 0.3 s past its period, it notes the
+  innermost frames of the loop's thread ("file:line in function", the
+  install's path left out). The statistics carry the last minute's
+  (`held_by`); the watchdog runs and ends with the timer, and its thread is
+  joined on unload.
+- **The check says it:** the "Home Assistant:" line after a start adds "held
+  by …" (the longest of its last 10 s); "In short" names the rows whose
+  starts found Home Assistant held and what held it at the longest.
+- The playback check is v0.8.3. Checks: the watchdog catching a function that
+  held the loop, with its file and line, and leaving no thread; the frame's
+  wording; the check's line and note with rows and the culprit.
+
 #### Step 10.4: the checks
 
 - **In CI:** `scrub_check.cjs` drags against a fake key-frame endpoint,
