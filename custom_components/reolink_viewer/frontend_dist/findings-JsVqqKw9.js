@@ -1,5 +1,5 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
-import { j as i } from "./live-49uKNz9D.js";
+import { j as i } from "./live-D7E76tZh.js";
 //#region src/plain.ts
 var a = {
 	good: "Good",

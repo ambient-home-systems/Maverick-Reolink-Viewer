@@ -470,6 +470,27 @@ async def _window(cache: VodCache, entry: Any, **query: Any) -> vodcache.Window:
     return await cache.async_window(entry, max_ms=4_000, max_bytes=10**7, **query)
 
 
+async def test_a_start_asks_its_init_and_first_window_together_and_one_cut_serves_both(
+    cached: tuple[VodCache, Rig],
+) -> None:
+    """The MSE player asks both at once (v0.63.0): they share the cut started."""
+    cache, _rig = cached
+    entry = await cache.async_open(deep_rec())
+    cache.lease(entry, 600, "token1")
+    (init, _mime, source), window = await asyncio.gather(
+        cache.async_init(entry, at_ms=AT_MS), _window(cache, entry, at_ms=AT_MS)
+    )
+    assert source == "cut"
+    assert init.startswith(b"\x00\x00\x00\x1cftyp")
+    assert window.source == "cut"
+    assert window.first == CUT_FIRST + 3
+    # One cut, not one for each.
+    assert entry.cuts == 1
+    assert entry.cut is not None
+    assert not entry.old_cuts
+    await _done(entry.cut)
+
+
 async def test_a_deep_start_is_served_from_the_cut_while_the_download_goes_on(
     cached: tuple[VodCache, Rig],
 ) -> None:

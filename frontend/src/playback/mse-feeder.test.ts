@@ -119,7 +119,12 @@ class FakeMediaSource extends EventTarget {
 function fakeServer(count = 30, shortBy = 0, fragment = 2, lateLast = false) {
   const requests: string[] = [];
   // Windows at or past `cutFrom` (s) come from the device's cut (Phase 5b).
-  const state = { status: 200, text: "", cutFrom: Number.POSITIVE_INFINITY };
+  const state: { status: number; text: string; cutFrom: number; holdInit?: Promise<void>; aborted: number } = {
+    status: 200,
+    text: "",
+    cutFrom: Number.POSITIVE_INFINITY,
+    aborted: 0,
+  };
   const mimes: Record<string, string> = {
     file: 'video/mp4; codecs="avc1.640033,mp4a.40.2"',
     cut: 'video/mp4; codecs="avc1.640033"',
@@ -132,9 +137,9 @@ function fakeServer(count = 30, shortBy = 0, fragment = 2, lateLast = false) {
     if (part.startsWith("init")) {
       const at = query.has("at") ? Number(query.get("at")) / 1000 : 0;
       const src = query.get("source") ?? (at >= state.cutFrom ? "cut" : "file");
-      return Promise.resolve(
-        new Response(`INIT ${src}`, { headers: { "X-RV-Mime": mimes[src] ?? "", "X-RV-Source": src } }),
-      );
+      const answer = () => new Response(`INIT ${src}`, { headers: { "X-RV-Mime": mimes[src] ?? "", "X-RV-Source": src } });
+      // A slow init (e.g. a cut's first fragment, or a relay's round trip).
+      return state.holdInit ? state.holdInit.then(answer) : Promise.resolve(answer());
     }
     const first = query.has("first")
       ? Number(query.get("first"))
@@ -155,6 +160,7 @@ function fakeServer(count = 30, shortBy = 0, fragment = 2, lateLast = false) {
     }
     return new Promise((resolve, reject) => {
       init?.signal?.addEventListener("abort", () => {
+        state.aborted += 1;
         reject(new DOMException("aborted", "AbortError"));
       });
       setTimeout(() => {
@@ -231,6 +237,33 @@ describe("MseFeeder", () => {
     await settle();
     expect(server.requests.length).toBe(before);
     f.destroy();
+  });
+
+  it("asks for the first window beside the init, not after it (one round trip less)", async () => {
+    const server = fakeServer(60);
+    let release = () => undefined as void;
+    server.state.holdInit = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const { f, video } = feeder(server, fakeVideo(), 120_000);
+    const started = f.start(10_500);
+    await settle(3);
+    // The init has not answered, and the window is asked already.
+    expect(server.requests).toEqual(["init?at=10500", `frags?at=10500&ms=${FIRST_WINDOW_MS}&bytes=16777216`]);
+    release();
+    await started;
+    expect(video.currentTime).toBe(10.5);
+    expect(FakeMediaSource.last?.buffer.ranges[0]?.[0]).toBe(10);
+    expect(f.stats.windows).toBe(1);
+    f.destroy();
+  });
+
+  it("lets the first window go when the start is refused", async () => {
+    FakeMediaSource.supported = false;
+    const server = fakeServer(60);
+    await expect(feeder(server).f.start(10_500)).rejects.toBeInstanceOf(MseUnsupported);
+    await settle(3);
+    expect(server.state.aborted).toBe(1);
   });
 
   it("starts from the device's cut and switches init segments when the source changes", async () => {
