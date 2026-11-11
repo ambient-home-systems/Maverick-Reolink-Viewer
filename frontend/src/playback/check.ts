@@ -66,7 +66,7 @@ import { ScrubClient, isPicture, type ScrubPicture, type SocketLike } from "./sc
 import { SHAPES, mseApi, mseSupports, pickSample, probeShape, type MseApi } from "./mse-probe";
 import type { RvPlayer } from "./player";
 
-export const CHECK_VERSION = "0.8.2";
+export const CHECK_VERSION = "0.8.3";
 export const SETUPS = [
   "Desktop Chrome, LAN",
   "Desktop Chrome, Tailscale",
@@ -255,8 +255,16 @@ interface PlaybackStats {
     rewriting?: number;
     baichuan?: BaichuanStats;
   };
-  /** How late Home Assistant's event loop ran a timer (ms; v0.62.2: older servers have none). */
-  loop?: { held_10s_ms: number | null; held_60s_ms: number | null; period_ms: number } | null;
+  /**
+   * How late Home Assistant's event loop ran a timer (ms; v0.62.2: older
+   * servers have none), and where its thread was when held (v0.63.3).
+   */
+  loop?: {
+    held_10s_ms: number | null;
+    held_60s_ms: number | null;
+    period_ms: number;
+    held_by?: { ago_s: number; seen_ms: number; where: string[] }[];
+  } | null;
 }
 
 interface Played {
@@ -309,6 +317,11 @@ export class PlaybackCheck {
   /** The note that Home Assistant was busy (v0.62.2), and the longest hold in it (ms). */
   private _busyNote: Finding | undefined;
   private _busiest = 0;
+  /** The rows whose starts found Home Assistant held, and what held it at the longest (v0.63.3). */
+  private readonly _busyRows = new Set<string>();
+  private _busiestBy: string | undefined;
+  /** The row running now (each hold is said with it). */
+  private _rowName = "";
   /** How busy Home Assistant was as the drag's release started (P). */
   private _releaseBusy: string | undefined;
   /** The P and V rows' times are multiplied by this (the tests' quick runs). */
@@ -332,6 +345,7 @@ export class PlaybackCheck {
 
   /** Run one row; a failure is said (in its line and "In short") and the check goes on. */
   private async _row(name: string, part: () => Promise<void>): Promise<void> {
+    this._rowName = name;
     try {
       await part();
     } catch (err) {
@@ -2050,15 +2064,31 @@ export class PlaybackCheck {
       );
     }
     if (vod?.rewriting) parts.push(count(vod.rewriting, "plain-copy rewrite"));
-    if (held !== undefined && held >= BUSY_NOTE_MS) this._noteBusy(held);
+    // Where its thread was when held (the watchdog's longest of the last 10 s).
+    const holds = (stats?.loop?.held_by ?? []).filter((h) => h.ago_s <= 10 && h.where.length);
+    const longest = holds.reduce<(typeof holds)[number] | undefined>((a, h) => (a && a.seen_ms >= h.seen_ms ? a : h), undefined);
+    const by = longest ? longest.where.slice(0, 2).join(" ← ") : undefined;
+    if (by) parts.push(`held by ${by}`);
+    if (held !== undefined && held >= BUSY_NOTE_MS) this._noteBusy(held, by);
     return { text: `Home Assistant: ${parts.join(" · ")}`, heldMs: held };
   }
 
-  /** "In short" says once that Home Assistant was busy, with the longest hold seen. */
-  private _noteBusy(heldMs: number): void {
-    if (this._busyNote && heldMs <= this._busiest) return;
-    this._busiest = heldMs;
-    const text = `Home Assistant itself was busy during some starts: its event loop was held up to ${secondsText(heldMs)}, so it answered late (those starts say "HOME ASSISTANT HELD UP").`;
+  /**
+   * "In short" says once that Home Assistant was busy: the rows whose starts
+   * found it so (a start's own line is not printed in every row: v0.63.3),
+   * the longest hold, and what held it, when the watchdog saw.
+   */
+  private _noteBusy(heldMs: number, by: string | undefined): void {
+    if (this._rowName) this._busyRows.add(this._rowName);
+    if (heldMs > this._busiest) {
+      this._busiest = heldMs;
+      this._busiestBy = by;
+    }
+    const rows = [...this._busyRows];
+    const where = rows.length ? ` in ${rows.length === 1 ? "row" : "rows"} ${rows.join(", ")}` : "";
+    const text =
+      `Home Assistant itself was busy during starts${where}: ` +
+      `its event loop was held up to ${secondsText(this._busiest)}${this._busiestBy ? `, by ${this._busiestBy}` : ""}, so it answered late.`;
     if (this._busyNote) {
       this._busyNote.text = text;
     } else {

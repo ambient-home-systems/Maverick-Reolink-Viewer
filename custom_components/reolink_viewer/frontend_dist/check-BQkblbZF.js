@@ -1,5 +1,5 @@
 import { Lt as e, Ot as t, Rt as n, X as r, gt as i, h as a, tt as o, xt as s } from "./live-BlvcqnUk.js";
-import { it as c, tt as l } from "./home-oqOEtrMJ.js";
+import { it as c, tt as l } from "./home-DMJ1HaF0.js";
 import { a as u, n as d, o as f, r as p, s as m, t as h } from "./findings-CGXJtbfY.js";
 //#region src/playback/check-util.ts
 var g = (e) => /iPhone|iPad|iPod/.test(e);
@@ -632,7 +632,7 @@ function je(e, t) {
 }
 //#endregion
 //#region src/playback/check.ts
-var Me = "0.8.2", Ne = [
+var Me = "0.8.3", Ne = [
 	"Desktop Chrome, LAN",
 	"Desktop Chrome, Tailscale",
 	"Desktop Chrome, Nabu Casa",
@@ -689,6 +689,9 @@ var X = (e) => new Date(e).toLocaleTimeString(), pt = class {
 	_plain = [];
 	_busyNote;
 	_busiest = 0;
+	_busyRows = /* @__PURE__ */ new Set();
+	_busiestBy;
+	_rowName = "";
 	_releaseBusy;
 	timeScale = 1;
 	constructor(e, t, n = () => void 0) {
@@ -701,6 +704,7 @@ var X = (e) => new Date(e).toLocaleTimeString(), pt = class {
 		this._stopped = !0;
 	}
 	async _row(t, n) {
+		this._rowName = t;
 		try {
 			await n();
 		} catch (n) {
@@ -1659,18 +1663,19 @@ var X = (e) => new Date(e).toLocaleTimeString(), pt = class {
 	}
 	async _busy() {
 		let e = await this._stats(), t = e?.loop?.held_10s_ms ?? void 0, n = e?.vod, r = [t === void 0 ? "its event loop not measured (Home Assistant runs an older Reolink Viewer)" : `its event loop held up to ${b(t)} in the last 10 s`];
-		return n?.filling !== void 0 && r.push(`${h(n.filling, "download")} from the recorder` + (n.prefetching ? ` (${String(n.prefetching)} for no viewer: next files, warm hours)` : "")), n?.rewriting && r.push(h(n.rewriting, "plain-copy rewrite")), t !== void 0 && t >= it && this._noteBusy(t), {
+		n?.filling !== void 0 && r.push(`${h(n.filling, "download")} from the recorder` + (n.prefetching ? ` (${String(n.prefetching)} for no viewer: next files, warm hours)` : "")), n?.rewriting && r.push(h(n.rewriting, "plain-copy rewrite"));
+		let i = (e?.loop?.held_by ?? []).filter((e) => e.ago_s <= 10 && e.where.length).reduce((e, t) => e && e.seen_ms >= t.seen_ms ? e : t, void 0), a = i ? i.where.slice(0, 2).join(" ← ") : void 0;
+		return a && r.push(`held by ${a}`), t !== void 0 && t >= it && this._noteBusy(t, a), {
 			text: `Home Assistant: ${r.join(" · ")}`,
 			heldMs: t
 		};
 	}
-	_noteBusy(e) {
-		if (this._busyNote && e <= this._busiest) return;
-		this._busiest = e;
-		let t = `Home Assistant itself was busy during some starts: its event loop was held up to ${u(e)}, so it answered late (those starts say "HOME ASSISTANT HELD UP").`;
-		this._busyNote ? this._busyNote.text = t : (this._busyNote = {
+	_noteBusy(e, t) {
+		this._rowName && this._busyRows.add(this._rowName), e > this._busiest && (this._busiest = e, this._busiestBy = t);
+		let n = [...this._busyRows], r = `Home Assistant itself was busy during starts${n.length ? ` in ${n.length === 1 ? "row" : "rows"} ${n.join(", ")}` : ""}: its event loop was held up to ${u(this._busiest)}${this._busiestBy ? `, by ${this._busiestBy}` : ""}, so it answered late.`;
+		this._busyNote ? this._busyNote.text = r : (this._busyNote = {
 			grade: "note",
-			text: t
+			text: r
 		}, this._plain.push(this._busyNote));
 	}
 	async _stats() {

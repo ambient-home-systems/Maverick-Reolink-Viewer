@@ -125,7 +125,7 @@ describe("PlaybackCheck", () => {
       changes.push(1),
     );
     const report = await check.run();
-    expect(report).toContain("Reolink Viewer playback check v0.8.2 · Desktop Chrome, LAN · Garage");
+    expect(report).toContain("Reolink Viewer playback check v0.8.3 · Desktop Chrome, LAN · Garage");
     expect(report).toContain("A1 Time to timeline, today (as the tab opened): 120 ms (server: memory, total 4 ms)");
     expect(report).toContain("A2/A3 skipped: no earlier recording day this month");
     expect(report).toContain("B  skipped: no events today");
@@ -601,9 +601,8 @@ describe("PlaybackCheck: starts that waited for the recorder", () => {
       loop: { held_10s_ms: 900, held_60s_ms: 900, period_ms: 250 },
     });
     expect(report).toMatch(/^B {2}MOTION at .*: first frame 70 ms .* · HOME ASSISTANT HELD UP 900 ms$/m);
-    expect(report).toContain(
-      'Home Assistant itself was busy during some starts: its event loop was held up to 0.9 s, so it answered late (those starts say "HOME ASSISTANT HELD UP").',
-    );
+    // The note names the rows whose starts found it held (a row's own start line is not always printed: v0.63.3).
+    expect(report).toMatch(/Home Assistant itself was busy during starts in rows B, D(, [A-Z]+)*: its event loop was held up to 0\.9 s, so it answered late\./);
   });
 
   it("says a row that fails, and runs the rest (v0.63.2: a lost connection ended the check)", async () => {

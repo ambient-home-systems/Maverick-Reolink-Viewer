@@ -1093,8 +1093,16 @@ describe("rv-playback while dragging (Phase 10)", () => {
         rewriting: 1,
         baichuan: { enabled: true, logged_in: 1, logins: 3, logouts: 2, cuts_running: 0 },
       },
-      // Home Assistant's event loop held 1.3 s (v0.62.2's diagnostics).
-      loop: { held_10s_ms: 1320, held_60s_ms: 1320, period_ms: 250 },
+      // Home Assistant's event loop held 1.3 s (v0.62.2's diagnostics), and where (v0.63.3).
+      loop: {
+        held_10s_ms: 1320,
+        held_60s_ms: 1320,
+        period_ms: 250,
+        held_by: [
+          { ago_s: 3, seen_ms: 900, where: ["reolink_viewer/vodcache.py:120 in _scan", "reolink_viewer/vodcache.py:80 in fill"] },
+          { ago_s: 40, seen_ms: 2000, where: ["homeassistant/components/recorder/core.py:9 in old"] },
+        ],
+      },
     };
     hass.responses["reolink_viewer/playback/check_report"] = null;
     const { el, sockets, player } = await scrubMount(hass);
@@ -1123,10 +1131,10 @@ describe("rv-playback while dragging (Phase 10)", () => {
     expect(report).toMatch(/ {5}\[URL \d+ ms( \(server [\d.]+ ms\))?\] /);
     // How busy Home Assistant was as the release started, and the note in "In short".
     expect(report).toContain(
-      "     Home Assistant: its event loop held up to 1320 ms in the last 10 s · 2 downloads from the recorder (1 for no viewer: next files, warm hours) · 1 plain-copy rewrite · HOME ASSISTANT HELD UP",
+      "     Home Assistant: its event loop held up to 1320 ms in the last 10 s · 2 downloads from the recorder (1 for no viewer: next files, warm hours) · 1 plain-copy rewrite · held by reolink_viewer/vodcache.py:120 in _scan ← reolink_viewer/vodcache.py:80 in fill · HOME ASSISTANT HELD UP",
     );
     expect(check.inShort(true).findings.map((f) => f.text)).toContain(
-      'Home Assistant itself was busy during some starts: its event loop was held up to 1.3 s, so it answered late (those starts say "HOME ASSISTANT HELD UP").',
+      "Home Assistant itself was busy during starts: its event loop was held up to 1.3 s, by reolink_viewer/vodcache.py:120 in _scan ← reolink_viewer/vodcache.py:80 in fill, so it answered late.",
     );
     expect(report).toContain("     server: ");
     expect(report).toContain("   hovering while dragging: the time alone, no thumbnail ✓");
