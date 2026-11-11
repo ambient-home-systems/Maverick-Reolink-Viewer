@@ -1038,6 +1038,7 @@ var kt = class {
 	_bytesPerSecond = 0;
 	_ready = !1;
 	_closed = !1;
+	_offTarget = 0;
 	_listeners = [];
 	constructor(e, t, n) {
 		this._video = e, this._src = t, this._onError = n, this.stats = {
@@ -1181,7 +1182,7 @@ var kt = class {
 			if (this.stats.windows += 1, this.stats.bytes += a.length, this.stats.lastWaitMs = performance.now() - o, l > 0) {
 				let t = n.headers.get("X-RV-Source") ?? "file";
 				if (t !== this.stats.source && (await this._switch(t, i.signal), this._gone() || E(i.signal))) return;
-				await this._append(a), this.stats.firstSource ??= t, e.at !== void 0 && (this.stats.atSource = t), (e.first === void 0 || this._runStartS === void 0) && (this._runStartS = u / 1e3), this._next = {
+				await this._append(a), e.at !== void 0 && this._onTarget(e.at / 1e3), this.stats.firstSource ??= t, e.at !== void 0 && (this.stats.atSource = t), (e.first === void 0 || this._runStartS === void 0) && (this._runStartS = u / 1e3), this._next = {
 					index: c + l,
 					atS: d / 1e3
 				}, d > u && (this._bytesPerSecond = a.length * 1e3 / (d - u));
@@ -1266,6 +1267,11 @@ var kt = class {
 	_rangeAt(e) {
 		let t = this._buffer;
 		if (t) return T(t.buffered).find((t) => e >= t.start - .05 && e < t.end);
+	}
+	_onTarget(e) {
+		let t = this._buffer;
+		if (!t || T(t.buffered).some((t) => e >= t.start - .5 && e < t.end)) this._offTarget = 0;
+		else if (this._offTarget += 1, this._offTarget >= 3) throw Error(`the recording's fragments do not hold the time asked (${e.toFixed(1)} s), 3 windows in a row`);
 	}
 	_jumpGap = () => {
 		let e = this._buffer;

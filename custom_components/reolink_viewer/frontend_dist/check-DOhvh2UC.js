@@ -1,6 +1,6 @@
-import { Lt as e, Ot as t, Rt as n, X as r, gt as i, h as a, tt as o, xt as s } from "./live-D7E76tZh.js";
-import { it as c, tt as l } from "./home-DXozycCT.js";
-import { a as u, n as d, o as f, r as p, s as m, t as h } from "./findings-JsVqqKw9.js";
+import { Lt as e, Ot as t, Rt as n, X as r, gt as i, h as a, tt as o, xt as s } from "./live-D_I3_AlM.js";
+import { it as c, tt as l } from "./home-DOKr4iQr.js";
+import { a as u, n as d, o as f, r as p, s as m, t as h } from "./findings-DWimnVUi.js";
 //#region src/playback/check-util.ts
 var g = (e) => /iPhone|iPad|iPod/.test(e);
 function _(e) {
@@ -113,7 +113,7 @@ function te(e) {
 	let n = e.mux;
 	if (n) {
 		let e = n.rate_source ?? (n.rate_learned ? "learned" : "nominal");
-		t.push(`placed by ${n.anchor ?? "?"}, counter ${n.counter_rate ?? "?"}/s${e === "nominal" ? "" : ` (${e})`}`);
+		t.push(`placed by ${n.anchor ?? "?"}, counter ${n.counter_rate ?? "?"}/s${e === "nominal" ? "" : ` (${e})`}`), n.foreign_skipped && t.push(`${String(n.foreign_skipped)} blocks of another cut skipped`);
 	}
 	return typeof e.mux_ms == "number" && t.push(`mux ${Math.round(e.mux_ms)} ms`), `Reolink protocol cut: ${t.join(", ")}`;
 }

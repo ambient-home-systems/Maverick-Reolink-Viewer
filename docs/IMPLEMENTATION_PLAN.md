@@ -7592,6 +7592,55 @@ What the diagnostics showed:
   completing; a refused start aborting the window; on the server, an init
   and a window asked together, in either order, served by one cut.
 
+**The owner's run of v0.63.0 (2026-11-10, Chrome 156 through Nabu Casa, Front
+Yard Right):**
+
+- **The parallel ask worked:** each start's init and first window began
+  together. A start from the download was quicker (the first event 0.66 s);
+  starts from a cut were not (1.0 s): asked so early, the cut's first window
+  held only the fragment of the moment, and the video waited a round trip
+  for the next.
+- **Then the tab broke, from a fault already in the server.** B3 had started
+  a cut of the 10 PM hour 11.8 min in, which went on downloading the rest of
+  the hour. D1's cut of the 9 PM hour stopped it, and the 10 PM hour's last
+  blocks, still arriving, began D1's cut: its first key frame 27 min from the
+  moment asked, so it was "placed by asked time", and its own stream after it
+  went 731 s past the recording's end (the video's duration read 4,330.9 s for
+  a 60-minute recording). The muxer guarded against another cut's blocks only
+  when a span resumed, not at a cut's start. From there: D2 showed nothing;
+  at C the player had asked 2,353 windows (108 MB) for a time none of them
+  buffered; R painted nothing; every picture of F and P waited past the
+  browser's 5 s. The release and V, on other recordings, worked.
+
+**v0.63.1, from it:**
+
+- **A cut's start ignores another cut's last blocks** (`BaichuanMuxer`): a
+  first key frame whose own time is far from the moment asked is held, with
+  what follows, until the stream shows its own: a key frame near the moment,
+  or a jump of the counter to another run (what was held was another cut's:
+  `foreign_skipped`). One run of `HOLD_KEYS` (30) key frames with neither is
+  the stream's own, its device's clock off: placed at the asked time, as
+  before; a stream that ends while held, too. The check's cut line says how
+  many blocks of another cut were skipped.
+- **The player fails rather than asks forever** (`MseFeeder`): three windows in
+  a row asked for a time that did not buffer it (`OFF_TARGET_MAX`) end the
+  player with an error; the tab starts it afresh, and says so if that fails
+  too.
+- **A scrub picture is answered within 4 s** (`ScrubService.async_picture`,
+  `ANSWER_S`), found or not: one that waits longer (the camera's channel or
+  the cache held by something else) is answered "no picture within 4 s: the
+  camera or Home Assistant is busy", under the browser's 5 s.
+- **A start's window from a cut reaches past the moment** (`_cut_window`): a
+  window asked by time waits up to 1 s (`START_AHEAD_WAIT_S`) for the cut to
+  reach 2 s past it (`START_AHEAD_MS`), so the video shows the moment
+  without asking again.
+- Checks: the muxer skipping another cut's blocks at a start (by a jump of
+  the counter, and by a key frame at the moment), a device clock an hour off
+  still placed at the asked time after its run, and a stream ending while
+  held; the player failing after three windows that miss the time; a picture
+  answered as late; a start's cut window reaching past the moment. Each new
+  test fails on the code before.
+
 #### Step 10.4: the checks
 
 - **In CI:** `scrub_check.cjs` drags against a fake key-frame endpoint,

@@ -39,6 +39,14 @@ const TRIM_SLACK_S = 10;
 const EMPTY_RETRY_MS = 1_000;
 /** Buffered ranges this close count as one (fragment edges, audio vs video). */
 export const JOIN_S = 0.5;
+/**
+ * Windows asked for a time in a row that did not buffer it: then the
+ * recording's fragments do not hold it, and asking again would not either
+ * (v0.63.1: a cut placed past its recording's end had the player ask 2,353
+ * windows for a time none of them held). The player fails, and the tab
+ * starts it afresh.
+ */
+export const OFF_TARGET_MAX = 3;
 
 export interface FeederStats {
   api: MseApi;
@@ -145,6 +153,8 @@ export class MseFeeder {
   /** Events drive fetching once the first window is in (start() fetches that). */
   private _ready = false;
   private _closed = false;
+  /** Windows asked by time in a row that did not buffer that time. */
+  private _offTarget = 0;
   private readonly _listeners: [EventTarget, string, EventListener][] = [];
 
   constructor(
@@ -364,6 +374,7 @@ export class MseFeeder {
           if (this._gone() || aborted(controller.signal)) return;
         }
         await this._append(data);
+        if (query.at !== undefined) this._onTarget(query.at / 1000);
         this.stats.firstSource ??= source;
         if (query.at !== undefined) this.stats.atSource = source;
         if (query.first === undefined || this._runStartS === undefined) this._runStartS = start / 1000;
@@ -521,6 +532,22 @@ export class MseFeeder {
     const buffer = this._buffer;
     if (!buffer) return undefined;
     return joinedRanges(buffer.buffered).find((r) => t >= r.start - 0.05 && t < r.end);
+  }
+
+  /** A window asked for time `t` was appended: it must have buffered it (see OFF_TARGET_MAX). */
+  private _onTarget(t: number): void {
+    const buffer = this._buffer;
+    const held = buffer ? joinedRanges(buffer.buffered).some((r) => t >= r.start - JOIN_S && t < r.end) : true;
+    if (held) {
+      this._offTarget = 0;
+      return;
+    }
+    this._offTarget += 1;
+    if (this._offTarget >= OFF_TARGET_MAX) {
+      throw new Error(
+        `the recording's fragments do not hold the time asked (${t.toFixed(1)} s), ${String(OFF_TARGET_MAX)} windows in a row`,
+      );
+    }
   }
 
   /** Stuck at a small gap between buffered ranges: step over it. */

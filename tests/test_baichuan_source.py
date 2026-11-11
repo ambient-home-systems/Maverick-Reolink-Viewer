@@ -484,6 +484,9 @@ async def test_a_start_asks_its_init_and_first_window_together_and_one_cut_serve
     assert init.startswith(b"\x00\x00\x00\x1cftyp")
     assert window.source == "cut"
     assert window.first == CUT_FIRST + 3
+    # It reaches past the moment (or holds all the cut has): the video can show it.
+    assert window.end_ms is not None
+    assert window.end_ms >= AT_MS + vodcache.START_AHEAD_MS or window.last
     # One cut, not one for each.
     assert entry.cuts == 1
     assert entry.cut is not None

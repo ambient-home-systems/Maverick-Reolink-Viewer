@@ -267,7 +267,14 @@ export interface CutStatus {
   running?: boolean;
   error?: string | null;
   mbit_s?: number | null;
-  mux?: { anchor?: string | null; counter_rate?: number; rate_learned?: boolean; rate_source?: string };
+  mux?: {
+    anchor?: string | null;
+    counter_rate?: number;
+    rate_learned?: boolean;
+    rate_source?: string;
+    /** Blocks of another cut of the channel, still arriving, skipped (v0.63.1: at the start too). */
+    foreign_skipped?: number;
+  };
   /** Time the muxer took (ms, on HA's event loop; Phase 5c's host load). */
   mux_ms?: number;
 }
@@ -312,6 +319,7 @@ export function cutReport(cut: CutStatus): string {
     // Phase 5c: a rate kept from an earlier cut of the camera is "stored".
     const source = mux.rate_source ?? (mux.rate_learned ? "learned" : "nominal");
     parts.push(`placed by ${mux.anchor ?? "?"}, counter ${mux.counter_rate ?? "?"}/s${source === "nominal" ? "" : ` (${source})`}`);
+    if (mux.foreign_skipped) parts.push(`${String(mux.foreign_skipped)} blocks of another cut skipped`);
   }
   if (typeof cut.mux_ms === "number") parts.push(`mux ${Math.round(cut.mux_ms)} ms`);
   return `Reolink protocol cut: ${parts.join(", ")}`;
