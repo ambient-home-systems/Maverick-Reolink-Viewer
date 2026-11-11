@@ -26,7 +26,7 @@ put on it:
 | 7 | Live video on dashboards: a Reolink Viewer camera card | Standard | 1–1.5 wk | **Done** (2026-11-03, v0.45.2), closed on daily use by the owner. **Step 1 done** (v0.44.0): the Reolink camera card, `custom:reolink-viewer-camera`, with its editor, on any dashboard and for any user. The owner's check (2026-11-02): on the wall tablet (Galaxy Tab A9+, Fully Kiosk, a sections view) and the iPhone app's dashboard, the Doorbell's and the front-yard camera's cards show their picture at once and their video quickly, kept warm or not, and go full screen in HD and back. **Step 2 built** (v0.45.0): what the cards see is logged per device (Devices → Dashboard cards), they sleep while Fully Kiosk's screen is off or its screensaver on, and a doorbell's card can wake the screen and go full screen when it rings. **Step 2 done** (2026-11-03, v0.45.2): on the owner's tablet the cards sleep under Fully's screensaver (no frames decoded) and a ring wakes the screen and shows the Doorbell full screen, playing in 0.6 s (v0.45.1 fills the window from the top layer). Step 3 stays gated. Not measured: a warm camera's wake time and 8 visible hours; the wall page's cards are the owner's choice. See "Phase 7" |
 | 8 | Unusual events: learning what is normal | High | 2–3 wk, then a week of learning | **Started** (2026-11-03). **Step 1 built** (v0.46.0): the detection journal, opt-in ("Learn what is normal"), with a 10-day head start from Home Assistant's recorder; on at the owner's since 2026-11-02, all 7 cameras. v0.46.1 keeps motion as bursts and a year of history (the owner's choices, from the first 10 days' sizes). **Step 2 built** (v0.47.0): Stamina's model, ported with its tests (MIT, in `THIRD_PARTY.md`), with a daily cap for a busy property; the Devices page shows each camera's state and the week's marks with their sentences. The owner's check: 3.6 marks a day at Balanced (243 a week without the cap). v0.47.1, the owner's choices: motion never marked, time counted once, one mark per incident across cameras; 5.1 a day, the journal 1.1 MB (about 2.8 MB a month). v0.47.2: only long stands out, a kind seen 10 times is known, only detections fire first; 5.3 a day. v0.47.3: an incident's later events take what fired before it; a mark always says why; the model saved between restarts; 5.3 a day, 39 without the cap. v0.47.4: anything seen 10 times is known, only "nothing fired first" raises; 1.4 a day, all rare by count. v0.47.5: Balanced aims at a few a day (floor 0, at most 3 a day), More knows a value after 20. **Step 3 built** (v0.48.0–v0.49.0), the owner's choice: marks on the timetable's rows with why, and an Unusual filter on Events (v0.48.0; the owner's check: 2.6 a day at Balanced); "What it has learned" on each camera's Overview, and a mark's count as a total (v0.49.0). **House-wide signals built** (v0.50.0): chosen in the options, kept beside the detections, learned and said. **Step 4 built** (v0.51.0): each detection scored as it begins and ends; `reolink_viewer_unusual`, an "unusual activity" sensor per camera, and a device trigger per camera, on Reolink Viewer's own device. See "Phase 8" |
 | 9 | The Wall: the Live page as a security monitor, with layouts, arranging, HD large tiles and the detection strip | Standard / High | 2–3 wk | **Done** (2026-11-10, v0.56.0): the owner validated v0.55.0's and v0.56.0's checklists. Started 2026-11-05. **Step 1 built** (v0.52.0): the Wall, its layouts (Auto by shape, 1, 2×2, 3×3, 4×4, 1+5, 1+7), saved per user on the server, `#wall/<id>`, each device remembering board or Wall; the owner's check: it works, nothing to scroll. **Step 2 built** (v0.53.0): swapping (drag, or Arrange and two taps), the large slot or alone by a double tap or Enter, the keyboard, pages and tours. **Step 3 built** (v0.54.0–v0.54.1): HD in the large tiles while a stream slot is spare, the NVR's budget 9 streams with 2 HD tiles (the capacity test). **Step 4 built** (v0.55.0): the detection strip, a tile lit at once by its sensor, and per layout the feeds' floodlight and siren buttons. **Step 5 built** (v0.56.0): the pointer hidden when still, the screen kept awake, the tiles asleep under Fully's screen off, and the Reolink Wall dashboard card. The owner's checks of v0.55.0 and v0.56.0 passed (2026-11-10): the phase is done. See "Phase 9" |
-| 10 | Scrubbing that shows the picture while dragging | Very high | 2–4 wk | **Started** (2026-11-10). **Step 0 built** (v0.57.0): the gate's measurements, the probe's scrub cuts and key frames, and the playback check's K row (key frames decoded one at a time); the owner's runs passed it (2026-11-10). **Step 1 built** (v0.58.0): the picture at a moment, from the server: a scrub session (a signed websocket), answered from a store of key frames found, the disk cache or a 2-second cut the device sends, taking its channel's turn; the playback check's F row. **Step 2 built** (v0.59.0): dragging over what the video has not buffered shows the server's key frame at the pointer, over the video, until release plays from there. **Step 4 built** (v0.60.0, the owner's ask): the playback check's P row replaces the hand checklist. **Step 3 built** (v0.62.0): a drag pauses the video, the server answers each picture before its cut's drain, and a release plays from the picture shown; the P row drags slowly alone and beside a second viewer. See "Phase 10" |
+| 10 | Scrubbing that shows the picture while dragging | Very high | 2–4 wk | **Started** (2026-11-10). **Step 0 built** (v0.57.0): the gate's measurements, the probe's scrub cuts and key frames, and the playback check's K row (key frames decoded one at a time); the owner's runs passed it (2026-11-10). **Step 1 built** (v0.58.0): the picture at a moment, from the server: a scrub session (a signed websocket), answered from a store of key frames found, the disk cache or a 2-second cut the device sends, taking its channel's turn; the playback check's F row. **Step 2 built** (v0.59.0): dragging over what the video has not buffered shows the server's key frame at the pointer, over the video, until release plays from there. **Step 4 built** (v0.60.0, the owner's ask): the playback check's P row replaces the hand checklist. **Step 3 built** (v0.62.0): a drag pauses the video, the server answers each picture before its cut's drain, and a release plays from the picture shown; the P row drags slowly alone and beside a second viewer. The owner's runs of v0.62.0 passed it on Front Yard Right and Garage (alone, a picture every 0.05–0.06 s; beside a second viewer, no stall); v0.62.1 follows from them. See "Phase 10" |
 | 11 | Playback and settings extras: zoom, event clips, filters, copying settings | Standard | 1–2 wk | Planned. See "Phase 11" |
 | 12 | Optional R&D: the Doorbell's recordings and talk | Very high | 3–5 wk, gated | Planned. See "Phase 12" |
 | 13 | Optional: live picture integrity and outside live sources | High | 1–1.5 wk, gated | Planned. See "Phase 13" |
@@ -6602,6 +6602,13 @@ not another event); the command end to end (an event fired, the automation
 it runs, the check matching it with its mark; learning off); the card's
 lines and report.
 
+**The owner's first run (2026-11-10, v0.62.0):** learning on and learned; 10
+marks in the 7 days before (1.4 a day at Balanced), every camera but the
+Laundry Room (84 detections) past its minimum. No mark yet since the log
+began (13:45 that day; the last was on Nov 9), so nothing to compare. ✗ no
+automation listens: the owner is to make the user guide's example, then run
+the check again in a few days.
+
 **Exit criteria:**
 
 - After 7 days on the owner's cameras, every camera past its minimum marks
@@ -7471,6 +7478,46 @@ a full reload of the page (Ctrl+F5), on LAN Chrome:
     from the click;
   - the P row: its two slow drags, the second viewer gone after, and the
     release at the picture.
+
+**The owner's runs of v0.62.0 (2026-11-10, Chrome 156 through Nabu Casa, the
+playback check v0.8.0):**
+
+- **Front Yard Right (a key frame a second):** P all ✓. Alone, 114 pictures
+  in the 10 s drag, a new one every 0.05 s (16 at 0.65 s in v0.61.3's run),
+  30 from the device and 84 from the key frames its cuts had brought; the
+  tab's video paused; beside a second viewer, a picture every 0.21 s and the
+  viewer played 12 s in 12 s; the release in 0.3 s, the video beginning
+  within 0.1 s of the picture's own time. V passed a third time.
+  **One ✗, not from this step:** the first B event, 2 minutes before its
+  hour's end, took 3.5 s. The recorder was sending that hour to the server
+  as a prefetch (196 MB), so the cut's reply took 1.2 s (about 0.1 s
+  otherwise) and its first fragment 1.7 s; and, so near the end, the tab
+  preloaded the next hour at once, 2.7 MB sharing Nabu Casa's connection
+  with the start.
+- **Garage (a key frame every 4 s, recordings of 8–41 s):** every row ✓,
+  HD there and back included (0.8 s, 0.3 s: Safari's failed return is
+  Safari's). Alone, a new picture every 0.06 s, 2.7 s behind the moving
+  pointer and 3.0 s at rest (within the 4 s interval); beside a second
+  viewer every 0.05 s, no stall; fast, caught up at rest; the release in
+  0.7 s, on the picture's own time. **F missed one moment of 10, both
+  passes:** "no key frame within 1 s": the same moment twice, so its place,
+  not chance.
+
+**v0.62.1, from them:**
+
+- **A start's successor waits for its first frame** (`_preloadAfterStart`):
+  the next recording's URL, its preload and the server's prefetch of it
+  begin once the start shows its first frame, not beside it. An older
+  preload that is not what comes after the new start stops loading at once,
+  as before. A recording moved on to by itself preloads its successor at
+  once (it is playing).
+- **The F row says where a moment with no picture is in its recording**
+  (`placeInRecording`: "1.2 s before the end of a 19 s recording"), so
+  Garage's next run tells whether the miss is a recording's end, where the
+  2 s cut asked may hold no key frame.
+- Checks: a start a minute before its recording's end asks nothing of the
+  next until its first frame, then preloads it; a moment's place from its
+  nearer end.
 
 #### Step 10.4: the checks
 
