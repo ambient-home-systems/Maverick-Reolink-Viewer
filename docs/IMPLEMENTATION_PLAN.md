@@ -7519,6 +7519,47 @@ playback check v0.8.0):**
   next until its first frame, then preloads it; a moment's place from its
   nearer end.
 
+**The owner's run of v0.62.1 (2026-11-10, Chrome 156 through Nabu Casa, Front
+Yard Right):** the first event's start made its own 2 requests only (the
+preload waited, as built). P all ✓: alone a picture every 0.05 s (74, 27
+from the device); again 0.06 s; beside a second viewer 0.18 s, no stall;
+fast caught up. V passed a fourth time; moving on in 1 ms. **But the starts
+were slow where the recorder was not:**
+
+| Start | First frame | The recorder's part | Where the rest went |
+| --- | --- | --- | --- |
+| B1, not cached, 40 min in | 2.5 s (✗) | the cut's first fragment 0.57 s, its reply 0.06 s | the init answered 1.94 s after it was asked |
+| B2, B3, the same recording (on disk) | 1.5 s, 1.0 s | none | windows of 0.3–0.4 MB answered in 0.8–1.0 s (0.25 s in earlier runs) |
+| D1, not cached, 50 min in | 1.6 s (0.8–1.0 s before) | first fragment 0.33 s, reply 0.14 s | the init answered 0.98 s after it was asked |
+| P's release | 2.6 s | none (the hour was on disk) | the URL alone took 2.2 s (0.03–0.08 s before) |
+
+Each time Home Assistant was downloading an hour from the recorder (137–213
+MB: B's hour as a prefetch, D's for the start) or had just finished one (the
+release's hour, whose plain copy is then rewritten with ffmpeg). The last
+run's B1 had the same 1.4 s between the first fragment and the init's answer.
+The report could not tell the server's work from a Home Assistant too busy
+to answer.
+
+**v0.62.2, from it: the check says where a start's time went.**
+
+- **The server's own time to each video answer:** the MSE init and windows
+  carry `Server-Timing: rv;dur=…` (the handler's time to its answer), and
+  each request line gives it beside the answer's time ("answer 1938 (server
+  612)"; on secure pages, where browsers expose it). The URL's own time
+  (`timing.total_ms`) is beside "URL" on each start line.
+- **How busy Home Assistant was:** a timer every 0.25 s notes how late the
+  event loop ran it (`loopwatch.py`); it runs only for 5 minutes after each
+  read of the playback statistics (the check reads them first). After each
+  start (B, D, the release), a line "Home Assistant: its event loop held up
+  to N ms in the last 10 s · N downloads from the recorder (N for no viewer)
+  · N plain-copy rewrites", from the statistics (`prefetching` is new
+  there). A hold of half a second or more is said once in "In short", with
+  the longest.
+- The playback check is v0.8.1. Checks: the timer measures a blocking call
+  and stops when unread; the statistics carry it and the prefetch count; the
+  init and windows carry their Server-Timing; the request lines and the
+  "Home Assistant:" line and note.
+
 #### Step 10.4: the checks
 
 - **In CI:** `scrub_check.cjs` drags against a fake key-frame endpoint,

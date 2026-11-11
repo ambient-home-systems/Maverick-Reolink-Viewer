@@ -1109,12 +1109,16 @@ async def ws_playback_stats(
         connection.send_error(msg["id"], ERR_NOT_LOADED, "Reolink Viewer is not loaded")
         return
     data = entry.runtime_data
+    # Reading the statistics keeps the loop's timer running a while (v0.62.2).
+    if data.loop is not None:
+        data.loop.watch()
     connection.send_result(
         msg["id"],
         {
             "vod": await data.vod_cache.async_stats(),
             "thumbnails": data.thumbnails.stats(),
             "scrub": data.scrub.stats() if data.scrub is not None else None,
+            "loop": data.loop.snapshot() if data.loop is not None else None,
         },
     )
 

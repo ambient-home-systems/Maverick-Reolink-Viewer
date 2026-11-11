@@ -66,7 +66,7 @@ import { ScrubClient, isPicture, type ScrubPicture, type SocketLike } from "./sc
 import { SHAPES, mseApi, mseSupports, pickSample, probeShape, type MseApi } from "./mse-probe";
 import type { RvPlayer } from "./player";
 
-export const CHECK_VERSION = "0.8.0";
+export const CHECK_VERSION = "0.8.1";
 export const SETUPS = [
   "Desktop Chrome, LAN",
   "Desktop Chrome, Tailscale",
@@ -125,6 +125,8 @@ const DRAG_UNCACHED_MS = 300;
 const DRAG_CACHED_MS = 100;
 /** A recording playing on the same camera may pause this long at most (ms). */
 const DRAG_STALL_MS = 1_000;
+/** Home Assistant's event loop held this long (ms) around a start is said in "In short" (v0.62.2). */
+const BUSY_NOTE_MS = 500;
 /**
  * V: two viewers on one camera (Phase 5's check, automated): each plays this
  * long after its start (ms); then, both stopped, the NVR's list of users is
@@ -245,8 +247,14 @@ interface PlaybackStats {
     reserved_bytes?: number;
     leased?: number;
     max_bytes?: number;
+    /** Downloads from the recorder running, those no viewer waits for, and plain-copy rewrites (v0.62.2). */
+    filling?: number;
+    prefetching?: number;
+    rewriting?: number;
     baichuan?: BaichuanStats;
   };
+  /** How late Home Assistant's event loop ran a timer (ms; v0.62.2: older servers have none). */
+  loop?: { held_10s_ms: number | null; held_60s_ms: number | null; period_ms: number } | null;
 }
 
 interface Played {
@@ -258,6 +266,8 @@ interface Played {
   source: string | undefined;
   /** What the server had of the recording when the start opened it (none opened: undefined). */
   held: CacheStatus | undefined;
+  /** How busy Home Assistant was around the start (v0.62.2). */
+  busy: string;
 }
 
 class Stopped extends Error {}
@@ -294,6 +304,11 @@ export class PlaybackCheck {
   private _hdPlayed = false;
   private readonly _summary: string[] = [];
   private readonly _plain: Finding[] = [];
+  /** The note that Home Assistant was busy (v0.62.2), and the longest hold in it (ms). */
+  private _busyNote: Finding | undefined;
+  private _busiest = 0;
+  /** How busy Home Assistant was as the drag's release started (P). */
+  private _releaseBusy: string | undefined;
   /** The P and V rows' times are multiplied by this (the tests' quick runs). */
   timeScale = 1;
 
@@ -320,6 +335,8 @@ export class PlaybackCheck {
     try {
       await this._header();
       this._sd();
+      // Reading the statistics starts the server's loop timer for the starts below (v0.62.2).
+      await this._stats();
       await this._timelines();
       await this._events();
       await this._deep();
@@ -525,6 +542,8 @@ export class PlaybackCheck {
     const held = t.playing === before ? undefined : t.playing?.cache;
     const ok = await this._wait(() => t.metrics.firstFrameMs !== undefined || Boolean(t.playFailure), 120_000);
     watch.stop();
+    // How busy Home Assistant was meanwhile, read at once (its last 10 s).
+    const busy = await this._busy();
     const m = t.metrics;
     // Where it really started (a start at the wrong place looks fast too).
     const shown = t.player?.time;
@@ -539,9 +558,11 @@ export class PlaybackCheck {
     // What served this start or seek (its first window asked for by time).
     const served = t.player?.mseStats?.atSource;
     const from = served ? ` · from ${sourceLabel(served)}` : "";
+    // The server's own time for a URL it was asked for (v0.62.2).
+    const urlServer = held !== undefined ? t.playing?.timing?.total_ms : undefined;
     const line =
       `first frame ${ok && !t.playFailure ? ms(m.firstFrameMs) : "none"}` +
-      ` [URL ${ms(m.urlMs)} · metadata ${ms(watch.seen.loadedmetadata)} · seeked ${ms(watch.seen.seeked)} · playing ${ms(watch.seen.playing)}]` +
+      ` [URL ${ms(m.urlMs)}${urlServer === undefined ? "" : ` (server ${ms(urlServer)})`} · metadata ${ms(watch.seen.loadedmetadata)} · seeked ${ms(watch.seen.seeked)} · playing ${ms(watch.seen.playing)}]` +
       ` ${m.delivery ?? "?"}${file}${from} · ${m.stream ?? "?"} ${m.codec ?? ""}${where}${t.playFailure ? ` FAILED: ${t.playFailure}` : ""}`;
     return {
       ok: ok && !t.playFailure && !where,
@@ -550,6 +571,7 @@ export class PlaybackCheck {
       began,
       source: t.playing?.base ?? t.playing?.url,
       held,
+      busy,
     };
   }
 
@@ -576,6 +598,7 @@ export class PlaybackCheck {
       this._log(`B  ${ev.types.join("+")} at ${clock(ev.start)} (${where}): ${played.line}`);
       await sleep(300);
       this._log(`     ${requestReport(played.began, played.source)}`);
+      this._log(`     ${played.busy}`);
       if (seg) this._log(`     ${await this._fillReport()}`);
       await this._pause(1500);
     }
@@ -739,6 +762,7 @@ export class PlaybackCheck {
       this._log(`D1 ${label}, ${describe(target)}: ${played.line}`);
       await sleep(300);
       this._log(`     ${requestReport(played.began, played.source)}`);
+      this._log(`     ${played.busy}`);
       this._log(`     ${await this._fillReport()}`);
       this._log(`     ${loginReport((await this._stats())?.vod.baichuan)}`);
     } else {
@@ -1099,9 +1123,11 @@ export class PlaybackCheck {
       // Where the start's time went: the page's steps, then the server's (a cut's slot and reply).
       const m = t.metrics;
       const served = t.player.mseStats?.atSource;
+      const urlServer = m.urlMs ? t.playing?.timing?.total_ms : undefined;
       this._log(
-        `     [URL ${ms(m.urlMs)}] ${m.delivery ?? "?"}${served ? ` · from ${sourceLabel(served)}` : ""} · ${m.stream ?? "?"} ${m.codec ?? ""}`,
+        `     [URL ${ms(m.urlMs)}${urlServer === undefined ? "" : ` (server ${ms(urlServer)})`}] ${m.delivery ?? "?"}${served ? ` · from ${sourceLabel(served)}` : ""} · ${m.stream ?? "?"} ${m.codec ?? ""}`,
       );
+      if (this._releaseBusy) this._log(`     ${this._releaseBusy}`);
       this._log(`     ${await this._fillReport()}`);
     }
     this._log(`   over what the video has buffered: ${buffered.text}${mark(buffered.ok)}`);
@@ -1335,6 +1361,7 @@ export class PlaybackCheck {
     // Where the video began: at the picture shown (step 3), or at the pointer.
     const startedAt = player.time;
     timeline.dispatchEvent(new CustomEvent("rv-hover-end"));
+    this._releaseBusy = await this._busy();
     if (!ok) {
       return { text: `no first frame in ${span(DRAG_RELEASE_MS)}`, plain: "Letting go did not start the video.", ok: false };
     }
@@ -1976,6 +2003,45 @@ export class PlaybackCheck {
     });
   }
 
+  /**
+   * How busy Home Assistant was around a start (v0.62.2): the longest its
+   * event loop was held in the last 10 s, and the downloads from the
+   * recorder and plain-copy rewrites running then. A held loop answers every
+   * request late; it is noted in "In short" from half a second.
+   */
+  private async _busy(): Promise<string> {
+    const stats = await this._stats();
+    const held = stats?.loop?.held_10s_ms ?? undefined;
+    const vod = stats?.vod;
+    const parts = [
+      held === undefined
+        ? "its event loop not measured (Home Assistant runs an older Reolink Viewer)"
+        : `its event loop held up to ${ms(held)} in the last 10 s`,
+    ];
+    if (vod?.filling !== undefined) {
+      parts.push(
+        `${count(vod.filling, "download")} from the recorder` +
+          (vod.prefetching ? ` (${String(vod.prefetching)} for no viewer: next files, warm hours)` : ""),
+      );
+    }
+    if (vod?.rewriting) parts.push(count(vod.rewriting, "plain-copy rewrite"));
+    if (held !== undefined && held >= BUSY_NOTE_MS) this._noteBusy(held);
+    return `Home Assistant: ${parts.join(" · ")}`;
+  }
+
+  /** "In short" says once that Home Assistant was busy, with the longest hold seen. */
+  private _noteBusy(heldMs: number): void {
+    if (this._busyNote && heldMs <= this._busiest) return;
+    this._busiest = heldMs;
+    const text = `Home Assistant itself was busy during some starts: its event loop was held up to ${secondsText(heldMs)}, so it answered late (see the "Home Assistant:" lines).`;
+    if (this._busyNote) {
+      this._busyNote.text = text;
+    } else {
+      this._busyNote = { grade: "note", text };
+      this._plain.push(this._busyNote);
+    }
+  }
+
   private async _stats(): Promise<PlaybackStats | undefined> {
     try {
       return await this._t.hass.callWS({ type: "reolink_viewer/playback/stats" });
@@ -2127,7 +2193,7 @@ function watchVideo(player: RvPlayer | null, began: number): { seen: Record<stri
  * how long it waited for a connection, the server's answer time and how long
  * the transfer ran. One long transfer = the whole file was read.
  */
-function requestReport(began: number, playedUrl: string | undefined): string {
+export function requestReport(began: number, playedUrl: string | undefined): string {
   const path = playedUrl ? new URL(playedUrl, location.href).pathname : "";
   const entries = (performance.getEntriesByType("resource") as PerformanceResourceTiming[]).filter(
     (e) =>
@@ -2140,9 +2206,14 @@ function requestReport(began: number, playedUrl: string | undefined): string {
     // MSE: the init segment and windows are under the recording's path.
     const other = path && new URL(e.name).pathname.startsWith(path) ? "" : " (other file)";
     const size = e.encodedBodySize ? ` · ${mb(e.encodedBodySize)}` : "";
+    // The server's own time to its answer (v0.62.2; secure pages only, and
+    // not every browser has it).
+    const timings = e.serverTiming as readonly PerformanceServerTiming[] | undefined;
+    const own = timings?.find((st) => st.name === "rv")?.duration;
     return (
       `#${i + 1}${other} +${Math.round(e.startTime - began)} ms: wait ${Math.round(e.requestStart - e.startTime)}` +
-      ` · answer ${Math.round(e.responseStart - e.requestStart)} · ran ${Math.round(e.responseEnd - e.responseStart)} ms${size}`
+      ` · answer ${Math.round(e.responseStart - e.requestStart)}${own === undefined ? "" : ` (server ${Math.round(own)})`}` +
+      ` · ran ${Math.round(e.responseEnd - e.responseStart)} ms${size}`
     );
   });
   const more = sent.length > 10 ? ` | … ${sent.length - 10} more` : "";

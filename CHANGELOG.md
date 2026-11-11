@@ -3,6 +3,25 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.62.2
+
+From the owner's playback check of 0.62.1 in Chrome through Nabu Casa. Several video
+starts took 1.5 to 2.6 s, although the recorder answered within a fraction of a
+second. Each time, Home Assistant was downloading or had just finished downloading an
+hour of video. This release makes the check say where the time went, so the next run
+can show the cause.
+
+- **The server's own time for each video request:** the check now gives Home
+  Assistant's own time beside each answer (for example "answer 1938 (server 612)"),
+  and beside the request for the video's address. A big difference means the time
+  went on the way between Home Assistant and the browser, not in Home Assistant's
+  work on the request. It shows on pages served over https, such as through Nabu Casa.
+- **How busy Home Assistant was:** after each start, the check says how long Home
+  Assistant was held up by other work in the 10 s before, and how many downloads
+  from the recorder and file rewrites it was running. "In short" says so when it
+  was held up for half a second or more. Home Assistant only measures this for 5
+  minutes after the check or Technical details last asked.
+
 ## 0.62.1
 
 From the owner's playback checks of 0.62.0 in Chrome through Nabu Casa, on Front Yard

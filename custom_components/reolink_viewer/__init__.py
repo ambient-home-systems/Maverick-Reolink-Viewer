@@ -57,6 +57,7 @@ from .journal import Journal, delete_journal, journal_path
 from .live.service import LiveService
 from .live.views import LiveFrameView, LiveImageView, LiveMseView
 from .live.websocket import async_register_live_commands
+from .loopwatch import LoopWatch
 from .models import ReolinkViewerConfigEntry, ReolinkViewerData
 from .scheduler import HostLimits, Scheduler
 from .scrub import STORE_BYTES as SCRUB_STORE_BYTES, KeyFrameStore, ScrubService
@@ -234,6 +235,7 @@ async def async_setup_entry(
         names=lambda: unusual.names,
         fired=fired.record,
     )
+    loop_watch = LoopWatch(hass)
     entry.runtime_data = ReolinkViewerData(
         scheduler=scheduler,
         timeline=timeline,
@@ -250,7 +252,9 @@ async def async_setup_entry(
         fired=fired,
         wall=wall,
         scrub=scrub,
+        loop=loop_watch,
     )
+    entry.async_on_unload(loop_watch.stop)
     entry.async_on_unload(journal.listen_detections(watch.detected))
     entry.async_on_unload(watch.async_stop)
     entry.async_on_unload(fired.async_stop)

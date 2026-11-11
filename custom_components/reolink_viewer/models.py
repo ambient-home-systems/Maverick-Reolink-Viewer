@@ -10,6 +10,7 @@ from .checks import CheckReports
 from .events import SeenStore
 from .journal import Journal
 from .live.service import LiveService
+from .loopwatch import LoopWatch
 from .scheduler import Scheduler
 from .scrub import ScrubService
 from .thumbnails import ThumbnailService
@@ -51,6 +52,8 @@ class ReolinkViewerData:
     wall: WallStore | None = None
     # Phase 10: scrubbing that shows the picture (key frames from the server).
     scrub: ScrubService | None = None
+    # How late the event loop runs (the playback check reads it with each start).
+    loop: LoopWatch | None = None
 
 
 type ReolinkViewerConfigEntry = ConfigEntry[ReolinkViewerData]

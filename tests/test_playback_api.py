@@ -3,6 +3,7 @@
 import asyncio
 from collections.abc import AsyncGenerator, Generator
 from datetime import datetime, timedelta
+import re
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -324,6 +325,8 @@ async def test_mse_fragments(
     assert resp.status == 200
     assert resp.headers["X-RV-Mime"] == MIME
     assert resp.headers["X-RV-Source"] == "file"
+    # The server's own time to the answer, for the playback check (v0.62.2).
+    assert re.fullmatch(r"rv;dur=\d+\.\d", resp.headers["Server-Timing"])
     assert await resp.read() == FTYP + av_moov()
     # The init of what serves a start (the option is off: the recording).
     resp = await http.get(f"{base}/init?at=40000")
@@ -337,6 +340,7 @@ async def test_mse_fragments(
         k: resp.headers[f"X-RV-{k}"] for k in ("First", "Count", "Last", "Source")
     }
     assert headers == {"First": "5", "Count": "2", "Last": "0", "Source": "file"}
+    assert resp.headers["Server-Timing"].startswith("rv;dur=")
     assert float(resp.headers["X-RV-Start"]) == 10_000
     assert float(resp.headers["X-RV-End"]) == 14_000
     data = await resp.read()
@@ -881,7 +885,11 @@ async def test_peek_stats_and_check_reports(
     assert vod["disk_bytes"] >= len(BODY)
     assert vod["reserved_bytes"] == 0
     assert vod["max_bytes"] == cache._max_bytes
+    assert vod["prefetching"] == 0
     assert "files" in msg["result"]["thumbnails"]
+    # Reading the statistics starts the loop's timer: nothing measured yet.
+    assert msg["result"]["loop"]["held_10s_ms"] is None
+    assert msg["result"]["loop"]["period_ms"] == 250
 
     for text, done in (("first part", False), ("all of it", True)):
         msg = await _ws(

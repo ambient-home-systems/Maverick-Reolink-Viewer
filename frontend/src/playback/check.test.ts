@@ -4,7 +4,7 @@ import { parseInShort } from "../plain";
 import { makeHass, okDevices, type FakeHass } from "../test-fixtures";
 import { VERSION } from "../version";
 import type { TimelineDay } from "../types";
-import { PlaybackCheck, hdByDefault, noteInterruptedCheck, type CheckTarget } from "./check";
+import { PlaybackCheck, hdByDefault, noteInterruptedCheck, requestReport, type CheckTarget } from "./check";
 import { MSE_SAMPLES } from "./mse-sample";
 import type { RvPlayer } from "./player";
 
@@ -125,7 +125,7 @@ describe("PlaybackCheck", () => {
       changes.push(1),
     );
     const report = await check.run();
-    expect(report).toContain("Reolink Viewer playback check v0.8.0 · Desktop Chrome, LAN · Garage");
+    expect(report).toContain("Reolink Viewer playback check v0.8.1 · Desktop Chrome, LAN · Garage");
     expect(report).toContain("A1 Time to timeline, today (as the tab opened): 120 ms (server: memory, total 4 ms)");
     expect(report).toContain("A2/A3 skipped: no earlier recording day this month");
     expect(report).toContain("B  skipped: no events today");
@@ -604,3 +604,29 @@ describe("PlaybackCheck: starts that waited for the recorder", () => {
     expect(report).toContain("- Deep start (sub, 60.0 min recording): not cached 2250 ms, cached 70 ms ✓");
   });
 });
+
+describe("the request lines", () => {
+  it("give the server's own time beside each answer where the browser has it (v0.62.2)", () => {
+    const base = "https://ha.example/api/reolink_viewer/mse/tok";
+    const entry = (name: string, start: number, serverTiming?: { name: string; duration: number }[]) => ({
+      name,
+      initiatorType: "fetch",
+      startTime: start,
+      requestStart: start + 1,
+      responseStart: start + 1939,
+      responseEnd: start + 1940,
+      encodedBodySize: 0,
+      nextHopProtocol: "h2",
+      serverTiming,
+    });
+    vi.spyOn(performance, "getEntriesByType").mockReturnValue([
+      entry(`${base}/init?at=1`, 100, [{ name: "rv", duration: 612.4 }]),
+      // A browser without serverTiming (or a plain-HTTP page) says nothing more.
+      entry(`${base}/frags?at=1`, 2100),
+    ] as unknown as PerformanceEntryList);
+    expect(requestReport(0, base)).toBe(
+      "requests (h2): 2 sent: #1 +100 ms: wait 1 · answer 1938 (server 612) · ran 1 ms | #2 +2100 ms: wait 1 · answer 1938 · ran 1 ms",
+    );
+  });
+});
+
