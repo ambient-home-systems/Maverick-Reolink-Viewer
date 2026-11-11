@@ -327,6 +327,27 @@ async def test_a_picture_from_the_cache_then_the_store(service: Any) -> None:
     assert svc.stats()["store"]["key_frames"] == 2
 
 
+async def test_a_picture_that_waits_too_long_is_answered_as_late(service: Any) -> None:
+    """The camera's channel held by something else: an answer in time, saying so."""
+    svc, _timeline, _cache, source, _thumbs = service
+    held = asyncio.Event()
+
+    async def waits(**kwargs: Any) -> KeySample:
+        await held.wait()
+        raise AssertionError("never got the channel")
+
+    source.async_key_frame = waits
+    with (
+        patch.object(scrub, "ANSWER_S", 0.05),
+        pytest.raises(
+            ScrubError,
+            match=r"no picture within 0\.05 s: the camera or Home Assistant is busy",
+        ),
+    ):
+        await svc.async_picture(CAMERA, DAY_DATE, SEGMENT.start + 300_000)
+    assert svc.stats()["answered"]["late"] == 1
+
+
 async def test_a_picture_from_the_device_or_the_thumbnail(service: Any) -> None:
     svc, _timeline, _cache, source, thumbs = service
     at = SEGMENT.start + 300_000

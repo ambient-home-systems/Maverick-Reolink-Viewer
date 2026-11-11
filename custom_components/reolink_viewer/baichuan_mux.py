@@ -41,6 +41,16 @@ block whose counter steps more than ``FOREIGN_STEP_S`` either way is skipped
 (``foreign_skipped``), unless ``FOREIGN_RUN`` blocks in a row step so (then
 it is this stream's own jump).
 
+The same can happen at a cut's start: the cut before on the channel (another
+recording, stopped for this one) still sends its last blocks (the owner's
+v0.63.0 run: the 10 PM hour's blocks began a cut of the 9 PM hour, which was
+placed 731 s past the recording's end). So a first key frame whose own POSIX
+time is far from the moment asked is held, with what follows it, until the
+stream shows its own: a key frame near the moment (what was held was another
+cut's: skipped), or a jump of the counter to another run (likewise). Only a
+run of ``HOLD_KEYS`` key frames with neither is this stream's own, with its
+device's clock off: it is placed at the asked time, as before.
+
 Parameter sets equal to the init segment's are taken out of the samples;
 changed ones stay in band. Audio follows on its own clock (1024 samples per
 AAC frame), started at the first key frame and moved back into line with the
@@ -90,6 +100,9 @@ AAC_FRAME = 1024
 FOREIGN_STEP_S = 20
 FOREIGN_RUN = 30
 FOREIGN_GUARD = 120
+# A start held as perhaps another cut's (see the module doc) is this stream's
+# own after this many key frames in one run (its device's clock off).
+HOLD_KEYS = 30
 # A frame's least duration (s), and the last frame's when nothing follows.
 MIN_FRAME_S = 0.001
 DEFAULT_FRAME_S = 1 / 15
@@ -265,6 +278,12 @@ class BaichuanMuxer:
         # Blocks in a row skipped as another cut's; blocks left to watch.
         self._foreign_run = 0
         self._guard = 0
+        # A start held as perhaps another cut's: its blocks, its key frames,
+        # its run's counter; then whether a far start is taken as this one's.
+        self._held: list[Block] = []
+        self._held_keys = 0
+        self._held_micro: int | None = None
+        self._far_ok = False
 
     @property
     def asked_unix(self) -> float | None:
@@ -298,6 +317,11 @@ class BaichuanMuxer:
 
     def feed(self, block: Block) -> list[bytes]:
         """Take one block; return the init segment and fragments it completes."""
+        if self._held or self._far_start(block):
+            return self._hold(block)
+        return self._take(block)
+
+    def _take(self, block: Block) -> list[bytes]:
         if block.kind in ("key", "frame"):
             return self._video(block)
         if block.kind == "audio":
@@ -306,13 +330,87 @@ class BaichuanMuxer:
 
     def finish(self) -> list[bytes]:
         """Close the last group of pictures (the stream ended)."""
+        # A start still held: its own after all (the stream ended with it).
+        out = self._release() if self._held else []
         if not self._gop:
-            return []
+            return out
+        return out + self._finish_gop()
+
+    def _finish_gop(self) -> list[bytes]:
         durations = [
             b.time - a.time for a, b in zip(self._gop, self._gop[1:], strict=False)
         ]
         last = sorted(durations)[len(durations) // 2] if durations else DEFAULT_FRAME_S
         return self._close_gop(self._gop[-1].time + max(last, MIN_FRAME_S))
+
+    # ---- A start that may be another cut's ----
+
+    def _far_start(self, block: Block) -> bool:
+        """Return whether a block would start the stream far from the moment asked."""
+        if self._started or self._far_ok or block.kind != "key" or block.micro is None:
+            return False
+        return self._far(block.unix_time)
+
+    def _far(self, unix: int | None) -> bool:
+        """Return whether a key frame's own time is plausible and far from the asked one."""
+        asked = self._asked
+        return (
+            asked is not None
+            and unix is not None
+            and _plausible(unix)
+            and abs(unix - asked) > ANCHOR_TOLERANCE_S
+        )
+
+    def _near(self, unix: int | None) -> bool:
+        """Return whether a key frame's own time is plausible and near the asked one."""
+        asked = self._asked
+        return (
+            asked is not None
+            and unix is not None
+            and _plausible(unix)
+            and abs(unix - asked) <= ANCHOR_TOLERANCE_S
+        )
+
+    def _hold(self, block: Block) -> list[bytes]:
+        """Hold a block of a start that may be another cut's (see the module doc)."""
+        video = block.kind in ("key", "frame") and block.micro is not None
+        if video and self._held_micro is not None and block.micro is not None:
+            step = (block.micro - self._held_micro) & 0xFFFFFFFF
+            if min(step, (1 << 32) - step) > FOREIGN_STEP_S * NOMINAL_RATE:
+                # Another run: what was held was another cut's.
+                self._drop_held()
+                return self.feed(block)
+        if self._held and block.kind == "key" and self._near(block.unix_time):
+            # The stream's own key frame, near the moment: the rest was another cut's.
+            self._drop_held()
+            return self._take(block)
+        self._held.append(block)
+        if video:
+            self._held_micro = block.micro
+        if block.kind == "key":
+            self._held_keys += 1
+            if self._held_keys > HOLD_KEYS:
+                # One run all along: the stream's own, its device's clock off.
+                return self._release()
+        return []
+
+    def _drop_held(self) -> None:
+        self.stats.foreign_skipped += len(self._held)
+        self._held = []
+        self._held_keys = 0
+        self._held_micro = None
+
+    def _release(self) -> list[bytes]:
+        """Take what was held as the stream's own (placed at the asked time)."""
+        held = self._held
+        self._held = []
+        self._held_keys = 0
+        self._held_micro = None
+        self._far_ok = True
+        out: list[bytes] = []
+        for block in held:
+            out += self._take(block)
+        return out
 
     # ---- Video ----
 

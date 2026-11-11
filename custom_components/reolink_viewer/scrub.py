@@ -56,6 +56,9 @@ STREAM = "sub"
 # cameras) until a cut has shown the camera's.
 DEFAULT_INTERVAL_MS = 4_000
 INTERVAL_SLACK_MS = 500
+# A picture is answered within this (s), found or not: under the browser's
+# 5 s (scrub-client's ASK_TIMEOUT_MS), so a late one says why (v0.63.1).
+ANSWER_S = 4.0
 # The scrub store's size on disk.
 STORE_BYTES = 64 * 1024**2
 STORE_SUFFIX = ".kf"
@@ -255,8 +258,23 @@ class ScrubService:
         """Return the picture at ``at_ms`` (UTC ms) of ``source``'s ``day``.
 
         Raises :class:`ScrubError` when there is none (between recordings, no
-        key frame in time, the device busy or refusing).
+        key frame in time, the device busy or refusing), within ``ANSWER_S``:
+        a picture that waits longer (the camera's channel or the cache held by
+        something else) is answered as late, never left unanswered (v0.63.1:
+        in the owner's run every ask waited past the browser's 5 s).
         """
+        try:
+            async with asyncio.timeout(ANSWER_S):
+                return await self._picture_at(source, day, at_ms)
+        except TimeoutError as err:
+            self._count("late")
+            raise ScrubError(
+                f"no picture within {ANSWER_S:g} s: the camera or Home Assistant is busy"
+            ) from err
+
+    async def _picture_at(
+        self, source: PlaybackSource, day: date, at_ms: int
+    ) -> Picture:
         began = time.monotonic()
         camera = source.key
         reach = self._reach_ms(source)

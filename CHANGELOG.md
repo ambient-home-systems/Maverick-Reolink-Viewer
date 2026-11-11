@@ -3,6 +3,28 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.63.1
+
+From the owner's playback check of 0.63.0 in Chrome through Nabu Casa. Partway through,
+the Playback tab stopped showing video and pictures. The cause was a fault in Home
+Assistant's handling of the recorder that was there before 0.63.0; this run hit the
+one situation that triggers it.
+
+- **Switching quickly between recordings no longer mixes them up:** when you jump to
+  another recording of a camera while the recorder is still sending the last one, the
+  end of the last one can arrive first. Home Assistant took it for the start of the
+  new one and put the new recording's video at the wrong times, in that run past the
+  end of the hour. Home Assistant now recognises the old recording's leftovers and
+  drops them.
+- **The player no longer gets stuck asking for the same moment:** if the video that
+  comes back doesn't cover the moment it asked for, the player stops after three tries
+  and starts again, instead of asking forever. In that run it asked 2,353 times.
+- **Pictures while dragging always get an answer:** if the camera or Home Assistant is
+  too busy, the picture now comes back within 4 s saying so, instead of no answer.
+- **Videos the recorder sends directly start sooner:** the first stretch now holds a
+  little more than the moment itself, so the video can show it without asking again.
+  This gives these starts the saving 0.63.0 brought to starts from saved video.
+
 ## 0.63.0
 
 From the owner's playback check of 0.62.2 in Chrome through Nabu Casa. Every check

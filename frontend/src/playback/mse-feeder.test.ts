@@ -119,11 +119,20 @@ class FakeMediaSource extends EventTarget {
 function fakeServer(count = 30, shortBy = 0, fragment = 2, lateLast = false) {
   const requests: string[] = [];
   // Windows at or past `cutFrom` (s) come from the device's cut (Phase 5b).
-  const state: { status: number; text: string; cutFrom: number; holdInit?: Promise<void>; aborted: number } = {
+  const state: {
+    status: number;
+    text: string;
+    cutFrom: number;
+    holdInit?: Promise<void>;
+    aborted: number;
+    /** Media placed this many seconds from where the headers say (a misplaced cut). */
+    misplaced: number;
+  } = {
     status: 200,
     text: "",
     cutFrom: Number.POSITIVE_INFINITY,
     aborted: 0,
+    misplaced: 0,
   };
   const mimes: Record<string, string> = {
     file: 'video/mp4; codecs="avc1.640033,mp4a.40.2"',
@@ -147,7 +156,8 @@ function fakeServer(count = 30, shortBy = 0, fragment = 2, lateLast = false) {
     const wanted = Math.max(1, Math.ceil(Number(query.get("ms")) / 1000 / fragment));
     const n = Math.max(0, Math.min(wanted, count - first));
     // The buffered range can end a little before the window (audio vs video).
-    const body = n ? `${first * fragment},${(first + n) * fragment - shortBy}` : "";
+    const at = first * fragment + state.misplaced;
+    const body = n ? `${at},${at + n * fragment - shortBy}` : "";
     const headers: Record<string, string> = {
       "X-RV-Source": first * fragment >= state.cutFrom ? "cut" : "file",
       "X-RV-First": String(first),
@@ -394,6 +404,19 @@ describe("MseFeeder", () => {
     await settle();
     expect(server.requests.length).toBe(count);
     f.destroy();
+  });
+
+  it("fails, not asks forever, when the windows do not hold the time asked (v0.63.1)", async () => {
+    const server = fakeServer(60);
+    // A cut placed 731 s from where it says (the owner's run).
+    server.state.misplaced = 731;
+    const { f, errors } = feeder(server, fakeVideo(), 120_000);
+    await f.start(10_500);
+    await settle(60);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]?.message).toContain("do not hold the time asked (10.5 s), 3 windows in a row");
+    expect(f.closed).toBe(true);
+    expect(server.requests.filter((r) => r.startsWith("frags")).length).toBeLessThanOrEqual(4);
   });
 
   it("tells the file player to take over, or reports a failure", async () => {

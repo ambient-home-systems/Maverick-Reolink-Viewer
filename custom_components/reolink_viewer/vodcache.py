@@ -65,6 +65,7 @@ File I/O runs in the executor; device I/O goes through the scheduler.
 
 import asyncio
 from collections.abc import AsyncIterator, Callable
+import contextlib
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 import hashlib
@@ -136,6 +137,10 @@ DEEP_MARGIN_MS = 30_000
 CUT_REACH_MS = 60_000
 # A cut's first fragment must come within this long, else the download serves.
 CUT_FIRST_WAIT_S = 6.0
+# A window that starts or seeks into a cut waits this long at most (s) for the
+# cut to reach this far past the moment (ms), so the video can show it.
+START_AHEAD_MS = 2_000
+START_AHEAD_WAIT_S = 1.0
 # Media a cut fetches at a time, per stream (ms; absent: to the recording's
 # end). An HD cut to the end fetched 1.9 GB beside the download (v0.36.0's
 # hardware check); a few minutes ahead of the viewer is enough.
@@ -1156,6 +1161,16 @@ class VodCache:
             await self._await_cut(cut, lambda i: start(i) is not None, None)
         except CutError as err:
             raise VodCacheError(f"cut failed: {err}") from err
+        if first is None and at_ms is not None:
+            # A start or a seek: the window reaches a little past the moment,
+            # so the video shows it without asking again (v0.63.1: asked
+            # beside the init, a cut's first window held only the fragment of
+            # the moment, and the video waited a round trip for the next).
+            ahead = at_ms + START_AHEAD_MS
+            with contextlib.suppress(CutError):
+                await self._await_cut(
+                    cut, lambda i: i.duration_ms >= ahead, START_AHEAD_WAIT_S
+                )
         index = cut.index
         begin = start(index)
         base = CUT_FIRST * cut.generation

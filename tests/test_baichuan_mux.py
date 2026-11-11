@@ -15,6 +15,7 @@ from custom_components.reolink_viewer.baichuan_media import (
 )
 from custom_components.reolink_viewer.baichuan_mux import (
     AAC_FRAME,
+    HOLD_KEYS,
     NOMINAL_RATE,
     VIDEO_TIMESCALE,
     BaichuanMuxer,
@@ -170,10 +171,25 @@ def test_frames_before_the_first_key_frame_and_unreadable_ones_are_dropped() -> 
 
 def test_a_device_clock_far_from_the_asked_time_anchors_at_the_asked_time() -> None:
     muxer = BaichuanMuxer(ORIGIN, ASKED)
-    muxer.feed(_h264_key(0, ASKED + 3600))  # an hour off (a zone error)
+    # An hour off (a zone error): held as perhaps another cut's (v0.63.1),
+    # then, one run of key frames all along, the stream's own.
+    pieces: list[bytes] = []
+    for second in range(HOLD_KEYS):
+        pieces += muxer.feed(_h264_key(second * NOMINAL_RATE, ASKED + 3600 + second))
+        assert muxer.first_time is None
+    pieces += muxer.feed(_h264_key(HOLD_KEYS * NOMINAL_RATE, ASKED + 3600 + HOLD_KEYS))
     assert muxer.first_time == 2700.0
     assert muxer.stats.anchor == "asked time"
     assert muxer.stats.anchor_offset_s == 3600
+    assert muxer.stats.foreign_skipped == 0
+    pieces += muxer.finish()
+    assert _index(pieces).fragments[0].start_ms == 2_700_000
+    # A stream that ends while held is its own too.
+    short = BaichuanMuxer(ORIGIN, ASKED)
+    assert short.feed(_h264_key(0, ASKED + 3600)) == []
+    assert short.feed(_frame(annexb(P), 100_000)) == []
+    assert len(short.finish()) == 2
+    assert short.stats.anchor == "asked time"
 
     no_time = BaichuanMuxer(ORIGIN, ASKED)
     no_time.feed(_h264_key(0, None))
@@ -184,6 +200,50 @@ def test_a_device_clock_far_from_the_asked_time_anchors_at_the_asked_time() -> N
     early = BaichuanMuxer(ORIGIN)
     early.feed(_h264_key(0, ORIGIN - 5))  # before the recording: clamped to 0
     assert early.first_time == 0.0
+
+
+def test_another_cuts_last_blocks_do_not_start_this_cut() -> None:
+    """The cut before on the channel still sends (v0.63.1): skipped, not placed here.
+
+    The owner's run: a cut of the 9 PM hour began with the 10 PM hour's last
+    blocks, was placed at the asked time, and its own then 731 s past the
+    recording's end.
+    """
+    muxer = BaichuanMuxer(ORIGIN, ASKED)
+    pieces: list[bytes] = []
+    # The 10 PM hour's last blocks: 27 minutes from the moment, their own run.
+    other = 2_000_000_000
+    for second in range(3):
+        pieces += muxer.feed(
+            _h264_key(other + second * NOMINAL_RATE, ASKED + 1620 + second)
+        )
+        pieces += muxer.feed(_frame(annexb(P), other + second * NOMINAL_RATE + 500_000))
+        pieces += muxer.feed(_audio(adts_frame()))
+    assert pieces == []
+    assert muxer.first_time is None
+    # This cut's own stream: another run of the counter, at the moment.
+    for second in range(3):
+        pieces += muxer.feed(_h264_key(second * NOMINAL_RATE, ASKED + second))
+        pieces += muxer.feed(_frame(annexb(P), second * NOMINAL_RATE + 500_000))
+    pieces += muxer.finish()
+    assert muxer.stats.anchor == "key frame time"
+    assert muxer.stats.foreign_skipped == 9
+    starts = [f.start_ms for f in _index(pieces).fragments]
+    assert starts == [2_700_000, 2_701_000, 2_702_000]
+
+
+def test_a_key_frame_at_the_moment_ends_a_hold_without_a_jump() -> None:
+    """Another cut's blocks then this one's, the counters close: its key frame decides."""
+    muxer = BaichuanMuxer(ORIGIN, ASKED)
+    assert muxer.feed(_h264_key(0, ASKED - 600)) == []  # ten minutes before
+    assert muxer.feed(_frame(annexb(P), 500_000)) == []
+    # A key frame with no time of its own decides nothing: held with the rest.
+    assert muxer.feed(_h264_key(800_000, None)) == []
+    pieces = muxer.feed(_h264_key(1_000_000, ASKED))
+    pieces += muxer.finish()
+    assert muxer.stats.foreign_skipped == 3
+    assert muxer.stats.anchor == "key frame time"
+    assert [f.start_ms for f in _index(pieces).fragments] == [2_700_000]
 
 
 def test_the_counter_rate_is_learned_from_the_key_frames() -> None:
