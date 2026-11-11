@@ -265,6 +265,8 @@ export class RvPlayback extends LitElement {
   private _starting: number | undefined;
   /** A recording whose successor's URL is asked for near its end. */
   private _preloadPending: { segment: Segment; seq: number } | undefined;
+  /** A start whose successor is preloaded once it shows its first frame. */
+  private _preloadOnFrame: { segment: Segment; seq: number; from: number } | undefined;
   private _recoveredAt = -Infinity;
   /** Streams whose recordings the MSE player could not play here. */
   private readonly _mseFailed = new Set<Stream>();
@@ -520,7 +522,7 @@ export class RvPlayback extends LitElement {
     const wanted = target.segment.start + target.offset;
     this._cursor = wanted;
     if (this._seekWithin(target.segment, wanted, requestedAt)) {
-      this._schedulePreload(target.segment, seq, wanted);
+      this._preloadAfterStart(target.segment, seq, wanted);
       return;
     }
     this._starting = seq;
@@ -553,7 +555,7 @@ export class RvPlayback extends LitElement {
       const offset = Math.max(0, wanted - playback.start);
       await this._player?.play(this._toItem(playback, target.segment), offset, requestedAt);
       void this._showDownload(playback, seq);
-      this._schedulePreload(target.segment, seq, wanted);
+      this._preloadAfterStart(target.segment, seq, wanted);
     } catch (err) {
       if (seq === this._playSeq) this._playError(toError(err).message);
     } finally {
@@ -668,6 +670,33 @@ export class RvPlayback extends LitElement {
     } catch {
       // The panel keeps what it showed.
     }
+  }
+
+  /**
+   * Preload what comes after a start once it shows its first frame (v0.62.1).
+   * Before, the next recording's download, and the server's prefetch of it,
+   * shared the connection and the recorder with the start: in the owner's run
+   * through Nabu Casa, a start 2 minutes before its recording's end took
+   * 3.5 s beside 2.7 MB of the next one. An older preload, not what comes
+   * after this recording, stops loading at once.
+   */
+  private _preloadAfterStart(segment: Segment, seq: number, from: number): void {
+    this._preloadPending = undefined;
+    const next = this._nextSegment(segment);
+    const kept = next !== undefined && this._player?.preloaded?.recording.startsWith(`${this._stream}:${next.id}:`);
+    if (!kept) void this._player?.preload(undefined);
+    if (this._metrics.firstFrameMs !== undefined) {
+      this._schedulePreload(segment, seq, from);
+      return;
+    }
+    this._preloadOnFrame = { segment, seq, from };
+  }
+
+  /** The start showed its first frame: what comes after it may load now. */
+  private _preloadNow(): void {
+    const waiting = this._preloadOnFrame;
+    this._preloadOnFrame = undefined;
+    if (waiting && waiting.seq === this._playSeq) this._schedulePreload(waiting.segment, waiting.seq, waiting.from);
   }
 
   /** Preload the next recording now, or near this one's end if that is far. */
@@ -971,6 +1000,7 @@ export class RvPlayback extends LitElement {
     this._player?.stop();
     this._playing = undefined;
     this._preloadPending = undefined;
+    this._preloadOnFrame = undefined;
     this.thumbLoader.clear();
     this._thumbs = new Map();
     this._thumbsRequested.clear();
@@ -1528,6 +1558,7 @@ export class RvPlayback extends LitElement {
               this._metrics = { ...this._metrics, firstFrameMs: e.detail.ms, codec };
               this._resumeThumbs();
               this._clearScrubPicture();
+              this._preloadNow();
             }}
             @rv-advanced=${(e: CustomEvent<AdvanceDetail>) => {
               this._onAdvanced(e.detail);

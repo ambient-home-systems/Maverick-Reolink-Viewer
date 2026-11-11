@@ -45,6 +45,7 @@ import {
   restInside,
   sampleStalls,
   span,
+  placeInRecording,
   spreadMoments,
   summarizeDrag,
   touchingPairs,
@@ -996,6 +997,11 @@ export class PlaybackCheck {
         `F  Pictures from the server (scrub, ${String(moments.length)} moments over the day): first ${describePass(first)}` +
           ` · again ${describePass(again)}${offsetText}${decoded}`,
       );
+      // Where each moment without a picture was (the first pass's).
+      const segments = t.day?.segments ?? [];
+      (first.missedAt ?? []).forEach((at, i) => {
+        this._log(`   no picture at ${clock(at)}, ${placeInRecording(segments, at)}: ${first.missed[i] ?? "?"}`);
+      });
       this._summary.push(`Pictures from the server: first ${describePass(first)}; again ${describePass(again)}`);
     } finally {
       client.close();
@@ -1524,7 +1530,7 @@ export class PlaybackCheck {
   }
 
   private async _askPass(client: ScrubClient, moments: readonly number[], keep: ScrubPicture[]): Promise<ScrubPass> {
-    const pass: ScrubPass = { answered: [], missed: [] };
+    const pass: ScrubPass = { answered: [], missed: [], missedAt: [] };
     for (const at of moments) {
       this._checkStopped();
       const answer = await client.ask(at);
@@ -1533,6 +1539,7 @@ export class PlaybackCheck {
         keep.push(answer);
       } else {
         pass.missed.push(answer.error);
+        pass.missedAt?.push(at);
       }
     }
     return pass;

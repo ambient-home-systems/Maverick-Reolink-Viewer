@@ -1,9 +1,9 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
 import { At as i, B as a, C as o, D as s, Lt as c, O as l, Ot as u, Rt as d, St as f, T as p, X as ee, Z as m, _t as h, a as g, bt as _, c as v, d as y, gt as te, i as b, j as x, kt as S, m as ne, n as re, o as ie, p as ae, r as oe, s as se, tt as C, u as ce, vt as w, w as le, xt as T } from "./live-49uKNz9D.js";
-import { $ as E, D as ue, E as de, F as fe, I as pe, L as me, M as he, N as ge, O as D, P as _e, R as O, T as k, b as A, c as ve, g as j, h as M, j as N, k as ye, l as be, m as xe, q as P, u as F, v as Se, w as Ce, x as we, y as I } from "./home-BEq3E41E.js";
-import { dayLabel as Te, shortDay as Ee } from "./events-view-By2P_wep.js";
+import { $ as E, D as ue, E as de, F as fe, I as pe, L as me, M as he, N as ge, O as D, P as _e, R as O, T as k, b as A, c as ve, g as j, h as M, j as N, k as ye, l as be, m as xe, q as P, u as F, v as Se, w as Ce, x as we, y as I } from "./home-CW1nwJH6.js";
+import { dayLabel as Te, shortDay as Ee } from "./events-view-Cy_TGjXa.js";
 import { i as De } from "./findings-D8z8rKHP.js";
-import { a as Oe, c as ke, f as Ae, i as L, l as je, n as R, o as Me, r as Ne, s as z, t as Pe, u as Fe } from "./check-DJLLItca.js";
+import { a as Oe, c as ke, f as Ae, i as L, l as je, n as R, o as Me, r as Ne, s as z, t as Pe, u as Fe } from "./check-B2OnlhKx.js";
 var Ie = class extends r {
 	static properties = {
 		events: { attribute: !1 },
@@ -1425,6 +1425,7 @@ var X = 6e4, it = 3e3, Z = 1e4, at = 3, ot = 86400, st = 10 * M, ct = 10, lt = 8
 	_check;
 	_starting;
 	_preloadPending;
+	_preloadOnFrame;
 	_recoveredAt = -Infinity;
 	_mseFailed = /* @__PURE__ */ new Set();
 	_lastPreview = 0;
@@ -1605,7 +1606,7 @@ var X = 6e4, it = 3e3, Z = 1e4, at = 3, ot = 86400, st = 10 * M, ct = 10, lt = 8
 		this._playFailure = void 0, this._pauseThumbs();
 		let o = i.segment.start + i.offset;
 		if (this._cursor = o, this._seekWithin(i.segment, o, t)) {
-			this._schedulePreload(i.segment, a, o);
+			this._preloadAfterStart(i.segment, a, o);
 			return;
 		}
 		this._starting = a;
@@ -1627,7 +1628,7 @@ var X = 6e4, it = 3e3, Z = 1e4, at = 3, ot = 86400, st = 10 * M, ct = 10, lt = 8
 				delivery: e ? `MSE (${p() ?? "?"})${l.cache.complete ? ", cached" : ""}` : wt(r, this._progressive, l.cache.complete)
 			};
 			let u = Math.max(0, o - l.start);
-			await this._player?.play(this._toItem(l, i.segment), u, t), this._showDownload(l, a), this._schedulePreload(i.segment, a, o);
+			await this._player?.play(this._toItem(l, i.segment), u, t), this._showDownload(l, a), this._preloadAfterStart(i.segment, a, o);
 		} catch (e) {
 			a === this._playSeq && this._playError(c(e).message);
 		} finally {
@@ -1707,6 +1708,19 @@ var X = 6e4, it = 3e3, Z = 1e4, at = 3, ot = 86400, st = 10 * M, ct = 10, lt = 8
 				cache: e.cache
 			});
 		} catch {}
+	}
+	_preloadAfterStart(e, t, n) {
+		this._preloadPending = void 0;
+		let r = this._nextSegment(e);
+		r !== void 0 && this._player?.preloaded?.recording.startsWith(`${this._stream}:${r.id}:`) || this._player?.preload(void 0), this._metrics.firstFrameMs === void 0 ? this._preloadOnFrame = {
+			segment: e,
+			seq: t,
+			from: n
+		} : this._schedulePreload(e, t, n);
+	}
+	_preloadNow() {
+		let e = this._preloadOnFrame;
+		this._preloadOnFrame = void 0, e && e.seq === this._playSeq && this._schedulePreload(e.segment, e.seq, e.from);
 	}
 	_schedulePreload(e, t, n) {
 		this._preloadPending = void 0;
@@ -1873,7 +1887,7 @@ var X = 6e4, it = 3e3, Z = 1e4, at = 3, ot = 86400, st = 10 * M, ct = 10, lt = 8
 		i > this._today || this._selectDate(i);
 	}
 	_selectDate(e) {
-		this._date = e, this._closeScrub(), this._player?.stop(), this._playing = void 0, this._preloadPending = void 0, this.thumbLoader.clear(), this._thumbs = /* @__PURE__ */ new Map(), this._thumbsRequested.clear();
+		this._date = e, this._closeScrub(), this._player?.stop(), this._playing = void 0, this._preloadPending = void 0, this._preloadOnFrame = void 0, this.thumbLoader.clear(), this._thumbs = /* @__PURE__ */ new Map(), this._thumbsRequested.clear();
 		let t = this._loadDay(e), [n, r] = e.split("-").map(Number);
 		return n && r && (n !== this._month.year || r !== this._month.month) && this._loadMonth(n, r), t;
 	}
@@ -2330,7 +2344,7 @@ var X = 6e4, it = 3e3, Z = 1e4, at = 3, ot = 86400, st = 10 * M, ct = 10, lt = 8
 				...this._metrics,
 				firstFrameMs: e.detail.ms,
 				codec: t
-			}, this._resumeThumbs(), this._clearScrubPicture();
+			}, this._resumeThumbs(), this._clearScrubPicture(), this._preloadNow();
 		}}
             @rv-advanced=${(e) => {
 			this._onAdvanced(e.detail);

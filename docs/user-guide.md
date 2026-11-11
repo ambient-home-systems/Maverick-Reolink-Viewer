@@ -412,8 +412,7 @@ What it will not do:
   **More, including borderline ones** marks more.
 - **A person walking past three cameras is three events.**
 
-Marks on the timetable, an "Unusual" filter, and an event for automations come in
-later versions. The model is ported from
+The model is ported from
 [Reolink Stamina](https://github.com/marl1w/reolink-stamina-ha) (MIT).
 
 ### This device

@@ -236,6 +236,25 @@ describe("rv-playback", () => {
     expect(sentOf(hass, "reolink_viewer/playback/url")).toHaveLength(2);
   });
 
+  it("preloads the next recording only once the start shows its first frame", async () => {
+    // The video starts when the test says (happy-dom would start it at once).
+    vi.spyOn(HTMLMediaElement.prototype, "play").mockImplementation(() => new Promise<void>(() => undefined));
+    const hass = playbackHass();
+    const el = await mount(hass);
+    // A minute before s1's end: what comes after it is wanted soon.
+    await el.playAt(T0 + 61 * MIN);
+    for (let i = 0; i < 3; i += 1) await flush();
+    const player = el.renderRoot.querySelector("rv-player");
+    const asked = () => sentOf(hass, "reolink_viewer/playback/url").map((m) => m.segment_id);
+    // Nothing of s2 shares the connection with the start.
+    expect(asked()).toEqual(["s1"]);
+    expect(player?.preloaded).toBeUndefined();
+    player?.renderRoot.querySelector("video")?.dispatchEvent(new Event("playing"));
+    for (let i = 0; i < 3; i += 1) await flush();
+    expect(asked()).toEqual(["s1", "s2"]);
+    expect(player?.preloaded?.segmentId).toBe("s2");
+  });
+
   it("offers picture-in-picture where the browser has it, and shows when it is on", async () => {
     const pip = fakePip();
     try {

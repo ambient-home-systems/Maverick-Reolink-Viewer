@@ -3,6 +3,22 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.62.1
+
+From the owner's playback checks of 0.62.0 in Chrome through Nabu Casa, on Front Yard
+Right and Garage.
+
+- **A video starts sooner near the end of a recording:** the next recording now
+  starts loading once the video you asked for shows its first picture, not at the
+  same moment. In that run, an event 2 minutes before its recording's end took 3.5 s
+  to start, sharing the connection with the next recording's download.
+- **The check says where a missing picture was:** on Garage, one moment of ten got
+  no picture from the recorder, both times it was asked. The "pictures from the
+  server" row now says where that moment is in its recording (for example, "1.2 s
+  before the end of a 19 s recording"), so the next run can show the cause.
+- **The user guide no longer says** unusual marks and their automation event "come
+  in later versions": both are there.
+
 ## 0.62.0
 
 Dragging along the timeline, from the owner's playback check in Chrome through Nabu

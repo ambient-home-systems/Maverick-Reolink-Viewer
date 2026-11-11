@@ -349,10 +349,26 @@ export function spreadMoments(segments: readonly { start: number; end: number }[
   return moments;
 }
 
-/** One pass of asks: what came back for each moment. */
+/** One pass of asks: what came back for each moment, and the moments missed (UTC ms). */
 export interface ScrubPass {
   answered: { ms: number; source: string; offsetMs: number }[];
   missed: string[];
+  missedAt?: number[];
+}
+
+/**
+ * Where a moment sits in its recording, from its nearer end: "0.4 s into a
+ * 19 s recording", "1.2 s before the end of a 19 s recording" (a missed
+ * picture's place, v0.62.1: the owner's Garage run missed one moment twice).
+ */
+export function placeInRecording(segments: readonly { start: number; end: number }[], at: number): string {
+  const recording = segments.find((s) => s.start <= at && at < s.end);
+  if (!recording) return "in no recording";
+  const into = at - recording.start;
+  const left = recording.end - at;
+  const near = (ms: number) => (ms < 10_000 ? `${(ms / 1000).toFixed(1)} s` : span(ms));
+  const length = span(recording.end - recording.start);
+  return into <= left ? `${near(into)} into a ${length} recording` : `${near(left)} before the end of a ${length} recording`;
 }
 
 /** How a pass went: "10 of 10, median 212 ms (device 7, cache 3)". */

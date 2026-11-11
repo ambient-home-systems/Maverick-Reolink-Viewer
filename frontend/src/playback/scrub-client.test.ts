@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { describePass, spreadMoments } from "./check-util";
+import { describePass, placeInRecording, spreadMoments } from "./check-util";
 import { ASK_TIMEOUT_MS, ScrubClient, isPicture, readPicture, type SocketLike } from "./scrub-client";
 
 /** A websocket the test drives: what was sent, and answers to give. */
@@ -176,5 +176,16 @@ describe("the playback check's F row", () => {
       "3 of 6, median 190 ms (device 2, cache 1) · none for 2: no recording at that moment; 1: no picture from the device: x",
     );
     expect(describePass({ answered: [], missed: [] })).toBe("0 of 0");
+  });
+
+  it("says where a missed moment sits in its recording, from its nearer end", () => {
+    const segments = [
+      { start: 0, end: 19_000 },
+      { start: 60_000, end: 3_660_000 },
+    ];
+    expect(placeInRecording(segments, 400)).toBe("0.4 s into a 19 s recording");
+    expect(placeInRecording(segments, 17_800)).toBe("1.2 s before the end of a 19 s recording");
+    expect(placeInRecording(segments, 60_000 + 25 * 60_000)).toBe("25.0 min into a 60.0 min recording");
+    expect(placeInRecording(segments, 30_000)).toBe("in no recording");
   });
 });
