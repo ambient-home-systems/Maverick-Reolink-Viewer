@@ -255,11 +255,15 @@ def mse_ready(
     audio: str = "aac",
     seconds: int = 8,
     fragment_s: float = 1.0,
+    reordered: bool = False,
 ) -> bool:
     """Write a fragmented MP4 as MSE wants it (default-base-is-moof, tfdt).
 
-    One fragment per ``fragment_s`` (each starting with a key frame). Returns
-    False when ffmpeg or the encoders are missing.
+    One fragment per ``fragment_s`` (each starting with a key frame). With
+    ``reordered`` (libx264), B-frames: the SPS says frames are reordered, so a
+    decoder holds each frame until more come, as the owner's Mac did with a
+    lone key frame (v0.63.10). Returns False when ffmpeg or the encoders are
+    missing.
     """
     import shutil
     import subprocess
@@ -269,7 +273,17 @@ def mse_ready(
         return False
     rate = 10
     codec_args = {
-        "libx264": ["-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p"],
+        "libx264": [
+            "-c:v",
+            "libx264",
+            *(
+                ["-preset", "veryfast", "-bf", "2"]
+                if reordered
+                else ["-preset", "ultrafast"]
+            ),
+            "-pix_fmt",
+            "yuv420p",
+        ],
         "libvpx-vp9": ["-c:v", "libvpx-vp9", "-deadline", "realtime", "-b:v", "200k"],
     }[video]
     sample_rate = 48000 if audio == "libopus" else 16000

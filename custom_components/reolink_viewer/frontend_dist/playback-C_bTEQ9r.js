@@ -1,9 +1,9 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
 import { At as i, B as a, C as o, D as s, Lt as c, O as l, Ot as u, Rt as d, St as f, T as p, X as ee, Z as m, _t as h, a as g, bt as _, c as v, d as y, gt as te, i as b, j as x, kt as S, m as ne, n as re, o as ie, p as ae, r as oe, s as se, tt as C, u as ce, vt as w, w as le, xt as T } from "./live-DbkkZT-0.js";
-import { A as ue, D as de, E, F as fe, I as pe, J as D, L as me, M as O, N as he, O as ge, P as _e, R as ve, S as ye, T as be, _ as k, b as A, c as xe, et as j, g as M, h as Se, k as N, l as Ce, m as we, u as P, x as F, y as Te, z as I } from "./home-CqRwm9ch.js";
-import { dayLabel as Ee, shortDay as De } from "./events-view-CkTmtcPt.js";
+import { A as ue, D as de, E, F as fe, I as pe, J as D, L as me, M as O, N as he, O as ge, P as _e, R as ve, S as ye, T as be, _ as k, b as A, c as xe, et as j, g as M, h as Se, k as N, l as Ce, m as we, u as P, x as F, y as Te, z as I } from "./home-CebYk9Wm.js";
+import { dayLabel as Ee, shortDay as De } from "./events-view-GhiFYIg9.js";
 import { i as Oe } from "./findings-DW6UZzjC.js";
-import { a as ke, c as Ae, f as je, i as L, l as Me, n as R, o as Ne, r as Pe, s as z, t as Fe, u as Ie } from "./check-BP7PUwxU.js";
+import { a as ke, c as Ae, f as je, i as L, l as Me, n as R, o as Ne, r as Pe, s as z, t as Fe, u as Ie } from "./check-v4y_y9B7.js";
 var Le = class extends r {
 	static properties = {
 		events: { attribute: !1 },
@@ -781,6 +781,7 @@ function We(e, t, n) {
 }
 var Ge = class {
 	_ctor;
+	_source;
 	_buffer;
 	_codec = "";
 	_init;
@@ -803,7 +804,7 @@ var Ge = class {
 			if (!this._buffer || n.codec !== this._codec) {
 				this.close(t);
 				let e = new r();
-				t.disableRemotePlayback = !0, this._url = URL.createObjectURL(e);
+				this._source = e, t.disableRemotePlayback = !0, this._url = URL.createObjectURL(e);
 				let i = H(e, "sourceopen", B);
 				if (t.src = this._url, !await i) throw Error(`the source did not open${U(t)}`);
 				try {
@@ -821,18 +822,27 @@ var Ge = class {
 			}), this._init = e.init), await W(i, t, "the picture", () => {
 				i.appendBuffer(e.data);
 			});
-			let a = n.timeS + .001, o = We(t, a, B);
-			if (t.currentTime = a, !await o) {
+			let a = this._end(), o = n.timeS + .001, s = We(t, o, B);
+			if (t.currentTime = o, !await s) {
 				let e = Array.from({ length: i.buffered.length }, (e, t) => `${i.buffered.start(t).toFixed(2)}–${i.buffered.end(t).toFixed(2)} s`).join(", ");
-				throw Error(`the video did not show it within ${String(B / 1e3)} s (ready state ${String(t.readyState)}, at ${t.currentTime.toFixed(2)} s for ${a.toFixed(2)} s, buffered ${e || "nothing"})${U(t)}`);
+				throw Error(`the video did not show it within ${String(B / 1e3)} s (ready state ${String(t.readyState)}, at ${t.currentTime.toFixed(2)} s for ${o.toFixed(2)} s, buffered ${e || "nothing"})${a}${U(t)}`);
 			}
 			return this._failure = void 0, !0;
 		} catch (e) {
 			return this._failure = e instanceof Error ? e.message : String(e), this.close(t), !1;
 		}
 	}
+	_end() {
+		let e = this._source;
+		if (e?.readyState !== "open") return `; its stream was ${e?.readyState ?? "gone"}, not ended`;
+		try {
+			return e.endOfStream(), "";
+		} catch (e) {
+			return `; its stream could not be ended: ${e instanceof Error ? e.message : String(e)}`;
+		}
+	}
 	close(e) {
-		e && this._url && (e.removeAttribute("src"), e.load()), this._url && URL.revokeObjectURL(this._url), this._url = void 0, this._buffer = void 0, this._codec = "", this._init = void 0;
+		e && this._url && (e.removeAttribute("src"), e.load()), this._url && URL.revokeObjectURL(this._url), this._url = void 0, this._source = void 0, this._buffer = void 0, this._codec = "", this._init = void 0;
 	}
 };
 function Ke(e, t) {
