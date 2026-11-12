@@ -59,7 +59,7 @@ function g(e, t) {
 }
 //#endregion
 //#region src/version.ts
-var _ = "0.63.10", le = "https://github.com/ambient-home-systems/Maverick-Reolink-Viewer", ue = {
+var _ = "0.63.11", le = "https://github.com/ambient-home-systems/Maverick-Reolink-Viewer", ue = {
 	guide: ["user-guide"],
 	troubleshooting: ["troubleshooting"],
 	cameras: ["cameras"],
@@ -1500,13 +1500,13 @@ function ut(e) {
 //#endregion
 //#region src/views.ts
 var dt = {
-	events: () => import("./events-view-GhiFYIg9.js"),
-	list: () => import("./device-list-Dilm5gL1.js"),
-	device: () => import("./device-page-Bhf-AhVN.js"),
-	"live-check": () => import("./live-check-C36Fu5qe.js"),
-	soak: () => import("./live-soak-DwX6tIcx.js"),
-	cards: () => import("./card-report-DQCcM5Vv.js"),
-	wall: () => import("./wall-_cSKy8f4.js")
+	events: () => import("./events-view-CWC7EFdE.js"),
+	list: () => import("./device-list-CaQrYp-x.js"),
+	device: () => import("./device-page-B18rWvSN.js"),
+	"live-check": () => import("./live-check-CK2Iu6GY.js"),
+	soak: () => import("./live-soak-eKTl_u-x.js"),
+	cards: () => import("./card-report-BXZhI5A2.js"),
+	wall: () => import("./wall-CV60yaFI.js")
 }, $ = /* @__PURE__ */ new Map();
 function ft(e) {
 	let t = dt[e];

@@ -3,6 +3,24 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.63.11
+
+From the owner's playback check of 0.63.10 on Garage, in Chrome on the Mac on the LAN:
+dragging now shows pictures, one every 0.05 s, on every pass, and the check found no
+problems. It did say "no events today", though an hour earlier it had opened events
+from that afternoon.
+
+- **The playback check (v0.8.8) says when today's event search failed:** right after
+  Home Assistant restarted, the camera's event search failed and was retried. The
+  recordings were found, but the check took the empty list of events to mean "no events
+  today". Now each timeline row says when its event search failed, and with what error.
+  Before opening events, the check asks for today once more. If the search fails again,
+  that's reported as a problem, not as a quiet day. The timeline itself already searched
+  again on its own.
+- **A timeline row that joined a search already running says so:** the first row's
+  search times can be longer than its own wait, because it joined the search the page
+  had started as the tab opened.
+
 ## 0.63.10
 
 From the owner's playback check of 0.63.9 on Garage, in Chrome on the Mac on the LAN.

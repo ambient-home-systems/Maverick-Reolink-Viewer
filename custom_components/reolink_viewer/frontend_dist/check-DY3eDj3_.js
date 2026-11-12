@@ -1,5 +1,5 @@
 import { Lt as e, Ot as t, Rt as n, X as r, gt as i, h as a, tt as o, xt as s } from "./live-DbkkZT-0.js";
-import { at as c, nt as l } from "./home-CebYk9Wm.js";
+import { at as c, nt as l } from "./home-DSLYdt8h.js";
 import { a as u, n as d, o as f, r as p, s as m, t as h } from "./findings-DW6UZzjC.js";
 //#region src/playback/check-util.ts
 var g = (e) => /iPhone|iPad|iPod/.test(e);
@@ -392,15 +392,15 @@ async function ve(e, t, n, r = _e()) {
 	}
 	return i;
 }
-var G = (e) => `${e.toFixed(1)} ms`;
-function ye(e) {
+var ye = (e) => `${e.toFixed(1)} ms`;
+function be(e) {
 	if (!e.length) return;
 	let t = [...e].sort((e, t) => e - t), n = Math.floor(t.length / 2);
 	return t.length % 2 ? t[n] : ((t[n - 1] ?? 0) + (t[n] ?? 0)) / 2;
 }
-var be = (e) => `${String(Math.round(e / 1024))} KB`;
-function xe(e, t, n, r, i) {
-	let a = r.map((e) => e.data.length), o = ye(r.slice(1).map((e, t) => e.timeS - (r[t]?.timeS ?? e.timeS)).filter((e) => e > 0)), s = r.length > 1 ? (r.at(-1)?.timeS ?? 0) - (r[0]?.timeS ?? 0) : 0, c = `${e} ${t} ${String(n.width)}×${String(n.height)}: ${String(r.length)} key frame${r.length === 1 ? "" : "s"}` + (r.length > 1 ? ` in ${s.toFixed(1)} s of media, every ${(o ?? 0).toFixed(1)} s` : "") + (a.length ? `, ${be(Math.min(...a))}–${be(Math.max(...a))} (median ${be(ye(a) ?? 0)})` : "");
+var xe = (e) => `${String(Math.round(e / 1024))} KB`;
+function Se(e, t, n, r, i) {
+	let a = r.map((e) => e.data.length), o = be(r.slice(1).map((e, t) => e.timeS - (r[t]?.timeS ?? e.timeS)).filter((e) => e > 0)), s = r.length > 1 ? (r.at(-1)?.timeS ?? 0) - (r[0]?.timeS ?? 0) : 0, c = `${e} ${t} ${String(n.width)}×${String(n.height)}: ${String(r.length)} key frame${r.length === 1 ? "" : "s"}` + (r.length > 1 ? ` in ${s.toFixed(1)} s of media, every ${(o ?? 0).toFixed(1)} s` : "") + (a.length ? `, ${xe(Math.min(...a))}–${xe(Math.max(...a))} (median ${xe(be(a) ?? 0)})` : "");
 	if (!i.available) return {
 		text: `${c} · VideoDecoder absent: a scrub would decode through a hidden MSE video here`,
 		short: `${e}: no VideoDecoder`,
@@ -411,17 +411,17 @@ function xe(e, t, n, r, i) {
 		short: `${e}: VideoDecoder refuses ${t}`,
 		decodeMs: void 0
 	};
-	let [l, ...u] = i.decodeMs, d = ye(u.length ? u : i.decodeMs), f = ye(i.drawMs), p = d !== void 0 && d <= 30;
+	let [l, ...u] = i.decodeMs, d = be(u.length ? u : i.decodeMs), f = be(i.drawMs), p = d !== void 0 && d <= 30;
 	return {
-		text: `${c} · ${d === void 0 ? `VideoDecoder decoded none${i.error ? ` (${i.error})` : ""}` : `VideoDecoder: one in ${G(d)} (median of ${String(u.length || i.decodeMs.length)}${u.length ? `; the first ${G(l)}` : ""})` + (f === void 0 ? "" : `, drawn on a canvas in ${G(f)}`) + (i.width ? ` at ${String(i.width)}×${String(i.height ?? 0)}` : "") + (i.error ? ` · then failed: ${i.error}` : "") + ` · gate 30 ms: ${p ? "passes" : "fails"}`}`,
-		short: d === void 0 ? `${e}: none decoded` : `${e} ${G(d)} to decode (VideoDecoder)${o ? `, every ${o.toFixed(1)} s` : ""}`,
+		text: `${c} · ${d === void 0 ? `VideoDecoder decoded none${i.error ? ` (${i.error})` : ""}` : `VideoDecoder: one in ${ye(d)} (median of ${String(u.length || i.decodeMs.length)}${u.length ? `; the first ${ye(l)}` : ""})` + (f === void 0 ? "" : `, drawn on a canvas in ${ye(f)}`) + (i.width ? ` at ${String(i.width)}×${String(i.height ?? 0)}` : "") + (i.error ? ` · then failed: ${i.error}` : "") + ` · gate 30 ms: ${p ? "passes" : "fails"}`}`,
+		short: d === void 0 ? `${e}: none decoded` : `${e} ${ye(d)} to decode (VideoDecoder)${o ? `, every ${o.toFixed(1)} s` : ""}`,
 		decodeMs: d
 	};
 }
 //#endregion
 //#region src/playback/scrub-client.ts
-var Se = (e) => "data" in e, Ce = 1;
-function we(e, t) {
+var Ce = (e) => "data" in e, we = 1;
+function Te(e, t) {
 	let n = new DataView(e).getUint32(0), r = JSON.parse(new TextDecoder().decode(new Uint8Array(e, 4, n))), i = 4 + n;
 	return {
 		seq: r.seq,
@@ -437,7 +437,7 @@ function we(e, t) {
 		...typeof r.interval == "number" ? { interval: r.interval } : {}
 	};
 }
-var Te = 5e3, Ee = class {
+var Ee = 5e3, De = class {
 	_socket;
 	_now;
 	_seq = 0;
@@ -467,11 +467,11 @@ var Te = 5e3, Ee = class {
 			clearTimeout(t);
 		});
 	}
-	async ask(e, t = Te) {
+	async ask(e, t = Ee) {
 		let n = Math.round(e);
 		await this._ready;
 		let r = this._now();
-		if (this._closed || this._socket.readyState !== Ce) return {
+		if (this._closed || this._socket.readyState !== we) return {
 			at: n,
 			error: "the scrub session closed",
 			ms: 0
@@ -517,7 +517,7 @@ var Te = 5e3, Ee = class {
 		if (!t) return;
 		let n = this._now() - t.began;
 		if (e instanceof ArrayBuffer) {
-			let { seq: r, ...i } = we(e, n);
+			let { seq: r, ...i } = Te(e, n);
 			if (r !== t.seq) return;
 			this._take(), t.resolve(i);
 			return;
@@ -535,7 +535,7 @@ var Te = 5e3, Ee = class {
 			ms: n
 		}));
 	}
-}, De = {
+}, Oe = {
 	h264: {
 		codec: "avc1.42C00A",
 		init: "AAAAHGZ0eXBpc281AAACAGlzbzVpc282bXA0MQAAAuhtb292AAAAbG12aGQAAAAAAAAAAAAAAAAAAAPoAAAAAAABAAABAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAAB6nRyYWsAAABcdGtoZAAAAAMAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAEAAAAAAQAAAAEAAAAAAAYZtZGlhAAAAIG1kaGQAAAAAAAAAAAAAAAAAACgAAAAAAFXEAAAAAAAtaGRscgAAAAAAAAAAdmlkZQAAAAAAAAAAAAAAAFZpZGVvSGFuZGxlcgAAAAExbWluZgAAABR2bWhkAAAAAQAAAAAAAAAAAAAAJGRpbmYAAAAcZHJlZgAAAAAAAAABAAAADHVybCAAAAABAAAA8XN0YmwAAAClc3RzZAAAAAAAAAABAAAAlWF2YzEAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAQABAAEgAAABIAAAAAAAAAAEVTGF2YzYwLjMxLjEwMiBsaWJ4MjY0AAAAAAAAAAAAAAAY//8AAAAvYXZjQwFCwAr/4QAXZ0LACtkEJsBEAAADAAQAAAMAUDxImSABAAVoy4PLIAAAABBwYXNwAAAAAQAAAAEAAAAQc3R0cwAAAAAAAAAAAAAAEHN0c2MAAAAAAAAAAAAAABRzdHN6AAAAAAAAAAAAAAAAAAAAEHN0Y28AAAAAAAAAAAAAAChtdmV4AAAAIHRyZXgAAAAAAAAAAQAAAAEAAAAAAAAAAAAAAAAAAABidWR0YQAAAFptZXRhAAAAAAAAACFoZGxyAAAAAAAAAABtZGlyYXBwbAAAAAAAAAAAAAAAAC1pbHN0AAAAJal0b28AAAAdZGF0YQAAAAEAAAAATGF2ZjYwLjE2LjEwMA==",
@@ -554,7 +554,7 @@ var Te = 5e3, Ee = class {
 		noTfdt: "AAAAfG1vb2YAAAAQbWZoZAAAAAAAAAABAAAAZHRyYWYAAAAcdGZoZAACADgAAAABAAAEAAAAACkBAQAAAAAAQHRydW4AAAIFAAAACgAAAIQCAAAAAAAAKQAAAA8AAAAPAAAADwAAAA8AAAAPAAAADwAAAA8AAAAPAAAADw==",
 		nvr: "AAAAhG1vb2YAAAAQbWZoZAAAAAAAAAABAAAAbHRyYWYAAAAkdGZoZAAAADkAAAABAAAAAAAAAwcAAAQAAAAAKQEBAAAAAABAdHJ1bgAAAgUAAAAKAAAAjAIAAAAAAAApAAAADwAAAA8AAAAPAAAADwAAAA8AAAAPAAAADwAAAA8AAAAP"
 	}
-}, Oe = [
+}, ke = [
 	{
 		shape: "normalized",
 		label: "MSE-ready fragment"
@@ -572,30 +572,30 @@ var Te = 5e3, Ee = class {
 		label: "NVR shape (both)"
 	}
 ];
-function ke(e) {
+function Ae(e) {
 	let t = window[e];
 	return typeof t == "function" ? t : void 0;
 }
-function Ae(e, t) {
-	let n = ke(e);
+function je(e, t) {
+	let n = Ae(e);
 	if (n) try {
 		return n.isTypeSupported(`video/mp4; codecs="${t}"`);
 	} catch {
 		return !1;
 	}
 }
-function je(e) {
-	for (let [t, n] of Object.entries(De)) if (Ae(e, n.codec)) return {
+function Me(e) {
+	for (let [t, n] of Object.entries(Oe)) if (je(e, n.codec)) return {
 		name: t,
 		sample: n
 	};
 }
-var Me = (e) => Uint8Array.from(atob(e), (e) => e.charCodeAt(0));
-function Ne(e, t) {
+var Ne = (e) => Uint8Array.from(atob(e), (e) => e.charCodeAt(0));
+function Pe(e, t) {
 	let n = new Uint8Array(e.length + t.length);
 	return n.set(e), n.set(t, e.length), n;
 }
-function Pe(e, t) {
+function Fe(e, t) {
 	return new Promise((n, r) => {
 		let i = () => {
 			e.removeEventListener("updateend", i), e.removeEventListener("error", a), n();
@@ -605,8 +605,8 @@ function Pe(e, t) {
 		e.addEventListener("updateend", i), e.addEventListener("error", a), e.appendBuffer(t);
 	});
 }
-async function Fe(e, t, n, r = 5e3) {
-	let i = ke(e);
+async function Ie(e, t, n, r = 5e3) {
+	let i = Ae(e);
 	if (!i) return "not available";
 	let a = performance.now(), o = document.createElement("video");
 	o.muted = !0, o.playsInline = !0, o.disableRemotePlayback = !0, o.style.cssText = "position:fixed;left:-10px;top:-10px;width:2px;height:2px;opacity:0", document.body.append(o);
@@ -625,7 +625,7 @@ async function Fe(e, t, n, r = 5e3) {
 						return;
 					}
 					try {
-						await Pe(i, Me(t.init)), await Pe(i, Ne(Me(t[n]), Me(t.mdat)));
+						await Fe(i, Ne(t.init)), await Fe(i, Pe(Ne(t[n]), Ne(t.mdat)));
 					} catch {
 						e("append error");
 						return;
@@ -635,7 +635,7 @@ async function Fe(e, t, n, r = 5e3) {
 						try {
 							s.endOfStream();
 						} catch {}
-						e(await Ie(o, r) ? `plays (${Math.round(performance.now() - a)} ms)` : "buffered, does not play");
+						e(await Le(o, r) ? `plays (${Math.round(performance.now() - a)} ms)` : "buffered, does not play");
 					}
 				})();
 			}, { once: !0 });
@@ -645,7 +645,7 @@ async function Fe(e, t, n, r = 5e3) {
 		clearTimeout(l), o.removeAttribute("src"), o.load(), o.remove(), URL.revokeObjectURL(c);
 	}
 }
-function Ie(e, t) {
+function Le(e, t) {
 	return new Promise((n) => {
 		let r = setTimeout(() => {
 			n(e.currentTime > 0);
@@ -657,7 +657,7 @@ function Ie(e, t) {
 }
 //#endregion
 //#region src/playback/check.ts
-var Le = "0.8.7", Re = [
+var Re = "0.8.8", ze = [
 	"Desktop Chrome, LAN",
 	"Desktop Chrome, Tailscale",
 	"Desktop Chrome, Nabu Casa",
@@ -669,32 +669,32 @@ var Le = "0.8.7", Re = [
 	"iPhone app, Nabu Casa",
 	"Other"
 ];
-function ze(e) {
+function Be(e) {
 	return !/Tailscale|Nabu Casa/.test(e);
 }
-var Be = [
+var Ve = [
 	.5,
 	1,
 	2,
 	4,
 	8
-], Ve = 6e3, He = 1e3, Ue = 6e4, We = 33554432, Ge = 3e3, Ke = 3e5, qe = 1e4, Je = [
+], He = 6e3, Ue = 1e3, We = 6e4, Ge = 33554432, Ke = 3e3, qe = 3e5, Je = 1e4, Ye = [
 	-10,
 	-5,
 	3,
 	8,
 	15
-], Ye = 6e5, Xe = 2e4, Ze = 8388608, Qe = 10, $e = 50, et = 5e3, K = {
+], Xe = 6e5, Ze = 2e4, Qe = 8388608, $e = 10, et = 50, tt = 5e3, G = {
 	spanMs: 3e4,
 	ms: 1e4
-}, tt = {
+}, nt = {
 	spanMs: 3e5,
 	ms: 5e3
-}, nt = 2e3, rt = 2e4, it = 5, at = .37, ot = 300, st = 100, ct = 1e3, lt = 500, ut = 5e3, dt = 8e3, ft = 5e3, pt = 75e3, q = 1500, mt = 3e5, ht = 15, gt = 7, J = "reolink-viewer-check-running", _t = class extends Error {}, Y = (e) => new Promise((t) => setTimeout(t, e)), vt = (e) => e.where.slice(0, 2).join(" ← "), yt = (e) => {
+}, rt = 2e3, it = 2e4, at = 5, ot = .37, st = 300, ct = 100, lt = 1e3, ut = 500, dt = 5e3, ft = 8e3, pt = 5e3, mt = 75e3, K = 1500, ht = 3e5, gt = 15, _t = 7, q = "reolink-viewer-check-running", vt = class extends Error {}, J = (e) => new Promise((t) => setTimeout(t, e)), yt = (e) => e.where.slice(0, 2).join(" ← "), bt = (e) => {
 	let t = se(e.by);
 	return e.thread ? `${t ?? "code of no integration"}, in another thread (${e.thread})` : t;
-}, bt = (e, t, n) => e !== void 0 && e >= t && n !== void 0, xt = (e, t, n) => bt(e, t, n) ? `${S(e ?? 0)} (slowed by ${n.who})` : P(e, t), St = (e) => e.time;
-function Ct(e, t, n) {
+}, xt = (e, t, n) => e !== void 0 && e >= t && n !== void 0, St = (e, t, n) => xt(e, t, n) ? `${S(e ?? 0)} (slowed by ${n.who})` : P(e, t), Ct = (e) => e.time;
+function wt(e, t, n) {
 	return new Promise((r) => {
 		let i = setTimeout(() => {
 			e.removeEventListener(t, a), r(!1);
@@ -704,7 +704,7 @@ function Ct(e, t, n) {
 		e.addEventListener(t, a, { once: !0 });
 	});
 }
-var X = (e) => new Date(e).toLocaleTimeString(), wt = class {
+var Y = (e) => new Date(e).toLocaleTimeString(), Tt = class {
 	_t;
 	options;
 	_onChange;
@@ -739,7 +739,7 @@ var X = (e) => new Date(e).toLocaleTimeString(), wt = class {
 		try {
 			await n();
 		} catch (n) {
-			if (n instanceof _t) throw n;
+			if (n instanceof vt) throw n;
 			let r = e(n).message;
 			this._log(`${t}  FAILED: ${r}`), this._plain.push({
 				grade: "problem",
@@ -748,16 +748,16 @@ var X = (e) => new Date(e).toLocaleTimeString(), wt = class {
 		}
 	}
 	async run() {
-		this.running = !0, Lt(this.id, this.options.setup);
+		this.running = !0, Rt(this.id, this.options.setup);
 		try {
 			await this._header(), this._sd(), await this._stats(), await this._row("A", () => this._timelines()), await this._row("B", () => this._events()), await this._row("D", () => this._deep()), await this._row("C", () => this._advance()), await this._row("R", () => this._rates()), await this._row("S", () => this._scrub()), await this._row("K", () => this._keyFrames()), await this._row("F", () => this._serverPictures()), await this._row("P", () => this._drag()), await this._row("H", () => this._switchHd()), await this._row("L", () => this._link()), await this._row("MSE", () => this._capabilities()), this.options.soakMinutes > 0 && await this._row("Soak", () => this._soak()), await this._row("V", () => this._viewers());
 			for (let e of d(this.inShort(!0))) this._log(e);
 			this._log(""), this._log("Summary:");
 			for (let e of this._summary) this._log(`- ${e}`);
 		} catch (t) {
-			this._log(t instanceof _t ? "Stopped." : `Check failed: ${e(t).message}`);
+			this._log(t instanceof vt ? "Stopped." : `Check failed: ${e(t).message}`);
 		} finally {
-			this._t.player?.pause(), this.running = !1, this._log(`Done at ${(/* @__PURE__ */ new Date()).toLocaleTimeString()}.`), await this._save(!0), Rt(this.id);
+			this._t.player?.pause(), this.running = !1, this._log(`Done at ${(/* @__PURE__ */ new Date()).toLocaleTimeString()}.`), await this._save(!0), zt(this.id);
 		}
 		return this.text;
 	}
@@ -769,7 +769,7 @@ var X = (e) => new Date(e).toLocaleTimeString(), wt = class {
 		};
 	}
 	_log(e) {
-		this.lines.push(e), this._onChange(), performance.now() - this._lastSave > qe && this._save(!1);
+		this.lines.push(e), this._onChange(), performance.now() - this._lastSave > Je && this._save(!1);
 	}
 	_save(e) {
 		return this._lastSave = performance.now(), this._saving = this._saving.then(() => this._t.hass.callWS({
@@ -781,23 +781,23 @@ var X = (e) => new Date(e).toLocaleTimeString(), wt = class {
 		})).then(() => void 0).catch(() => void 0), this._saving;
 	}
 	_checkStopped() {
-		if (this._stopped) throw new _t();
+		if (this._stopped) throw new vt();
 	}
 	async _wait(e, t) {
 		let n = performance.now() + t;
 		for (; performance.now() < n;) {
 			if (this._checkStopped(), e()) return !0;
-			await Y(100);
+			await J(100);
 		}
 		return e();
 	}
 	async _pause(e) {
 		let t = performance.now() + e;
-		for (; performance.now() < t;) this._checkStopped(), await Y(Math.min(250, t - performance.now()));
+		for (; performance.now() < t;) this._checkStopped(), await J(Math.min(250, t - performance.now()));
 	}
 	async _header() {
 		let e = this._t, t = navigator.connection;
-		this._log(`Reolink Viewer playback check v${Le} · ${this.options.setup} · ${e.cameraName} · ${(/* @__PURE__ */ new Date()).toLocaleString()}`), this._log(`Browser: ${x(navigator.userAgent)} · page ${a(location.hostname)} over ${location.protocol.replace(":", "")} · screen ${screen.width}×${screen.height} @${window.devicePixelRatio}x` + (t?.effectiveType ? ` · network ${t.effectiveType}, ${t.downlink ?? "?"} Mbit/s (browser estimate)` : ""));
+		this._log(`Reolink Viewer playback check v${Re} · ${this.options.setup} · ${e.cameraName} · ${(/* @__PURE__ */ new Date()).toLocaleString()}`), this._log(`Browser: ${x(navigator.userAgent)} · page ${a(location.hostname)} over ${location.protocol.replace(":", "")} · screen ${screen.width}×${screen.height} @${window.devicePixelRatio}x` + (t?.effectiveType ? ` · network ${t.effectiveType}, ${t.downlink ?? "?"} Mbit/s (browser estimate)` : ""));
 		let n = performance.getEntriesByType("navigation")[0];
 		this._log(`User agent: ${navigator.userAgent}`), this._log(`Connection: page loaded over ${n?.nextHopProtocol || "? (from the app's cache)"}; each video request line gives its own (h2/h3 share one connection; http/1.1 allows 6 at once)`), this._log(`Player: ${e.mode} · file player delivery: ${e.progressive ? "progressive" : "whole file first (WebKit)"}`), this._summary.push(`Player: ${e.mode}`);
 		let r = await e.hass.callWS({ type: "reolink_viewer/devices" }).catch(() => void 0), i = c(r, l);
@@ -815,7 +815,7 @@ var X = (e) => new Date(e).toLocaleTimeString(), wt = class {
 		let e = this._t, t = e.today;
 		e.date !== t && await this._loadDay(t);
 		let n = e.metrics;
-		this._log(`A1 Time to timeline, today (as the tab opened): ${S(n.timelineMs)} (server: ${It(n.timelineServer)})`);
+		this._log(`A1 Time to timeline, today (as the tab opened): ${S(n.timelineMs)} (server: ${Q(n.timelineServer)})${Lt(e.day)}`);
 		let r = Number(t.slice(8, 10)), i = [...e.monthDays].filter((e) => e < r).sort((e, t) => t - e), a = i.at(Math.min(2, i.length - 1));
 		if (a === void 0) {
 			this._log("A2/A3 skipped: no earlier recording day this month"), this._summary.push(`Timeline: today ${P(n.timelineMs, 1e3)}`), this._plain.push(n.timelineMs === void 0 ? {
@@ -828,11 +828,11 @@ var X = (e) => new Date(e).toLocaleTimeString(), wt = class {
 			return;
 		}
 		let o = `${t.slice(0, 8)}${String(a).padStart(2, "0")}`, s = await this._loadDay(o);
-		this._log(`A2 Time to timeline, ${o}: ${S(s.timelineMs)} (server: ${It(s.timelineServer)})`), await this._loadDay(t);
+		this._log(`A2 Time to timeline, ${o}: ${S(s.timelineMs)} (server: ${Q(s.timelineServer)})${Lt(e.day)}`), await this._loadDay(t);
 		let c = await this._loadDay(o);
-		this._log(`A3 Time to timeline, ${o} again: ${S(c.timelineMs)} (server: ${It(c.timelineServer)})`);
+		this._log(`A3 Time to timeline, ${o} again: ${S(c.timelineMs)} (server: ${Q(c.timelineServer)})${Lt(e.day)}`);
 		let l = await this._loadDay(t);
-		this._log(`A4 Time to timeline, today again: ${S(l.timelineMs)} (server: ${It(l.timelineServer)})`);
+		this._log(`A4 Time to timeline, today again: ${S(l.timelineMs)} (server: ${Q(l.timelineServer)})${Lt(e.day)}`);
 		let d = s.timelineServer?.cache === "fresh", p = [
 			f(n.timelineMs, 1e3, 3e3),
 			f(s.timelineMs, d ? 3e3 : 1e3, d ? 6e3 : 3e3),
@@ -849,14 +849,14 @@ var X = (e) => new Date(e).toLocaleTimeString(), wt = class {
 	async _play(e) {
 		let t = this._t;
 		performance.clearResourceTimings(), performance.setResourceTimingBufferSize(1e3);
-		let n = performance.now(), r = Nt(t.player, n), i = t.playing;
+		let n = performance.now(), r = Pt(t.player, n), i = t.playing;
 		await t.playAt(e, n);
 		let a = t.playing === i ? void 0 : t.playing?.cache, o = await this._wait(() => t.metrics.firstFrameMs !== void 0 || !!t.playFailure, 12e4);
 		r.stop();
 		let s = t.metrics, { text: c, heldMs: l, slowed: u } = await this._busy({
 			began: n,
 			firstMs: s.firstFrameMs
-		}), d = t.player?.time, f = d === void 0 ? void 0 : d - e, p = f === void 0 || Math.abs(f) <= 2e3 ? "" : ` · STARTED AT ${X(d ?? 0)}, ${w(Math.abs(f))} ${f < 0 ? "before" : "after"} the time asked`, m = t.playing?.file ? ` · ${t.playing.file} file` : "", h = t.player?.mseStats?.atSource, g = h ? ` · from ${ne(h)}` : "", _ = a === void 0 ? void 0 : t.playing?.timing?.total_ms, v = `first frame ${o && !t.playFailure ? S(s.firstFrameMs) : "none"} [URL ${S(s.urlMs)}${_ === void 0 ? "" : ` (server ${S(_)})`} · metadata ${S(r.seen.loadedmetadata)} · seeked ${S(r.seen.seeked)} · playing ${S(r.seen.playing)}] ${s.delivery ?? "?"}${m}${g} · ${s.stream ?? "?"} ${s.codec ?? ""}${p}${t.playFailure ? ` FAILED: ${t.playFailure}` : ""}` + (l !== void 0 && l >= lt ? ` · HOME ASSISTANT HELD UP ${S(l)}${u ? ` (by ${u.who})` : ""}` : "");
+		}), d = t.player?.time, f = d === void 0 ? void 0 : d - e, p = f === void 0 || Math.abs(f) <= 2e3 ? "" : ` · STARTED AT ${Y(d ?? 0)}, ${w(Math.abs(f))} ${f < 0 ? "before" : "after"} the time asked`, m = t.playing?.file ? ` · ${t.playing.file} file` : "", h = t.player?.mseStats?.atSource, g = h ? ` · from ${ne(h)}` : "", _ = a === void 0 ? void 0 : t.playing?.timing?.total_ms, v = `first frame ${o && !t.playFailure ? S(s.firstFrameMs) : "none"} [URL ${S(s.urlMs)}${_ === void 0 ? "" : ` (server ${S(_)})`} · metadata ${S(r.seen.loadedmetadata)} · seeked ${S(r.seen.seeked)} · playing ${S(r.seen.playing)}] ${s.delivery ?? "?"}${m}${g} · ${s.stream ?? "?"} ${s.codec ?? ""}${p}${t.playFailure ? ` FAILED: ${t.playFailure}` : ""}` + (l !== void 0 && l >= ut ? ` · HOME ASSISTANT HELD UP ${S(l)}${u ? ` (by ${u.who})` : ""}` : "");
 		return {
 			ok: o && !t.playFailure && !p,
 			line: v,
@@ -869,31 +869,53 @@ var X = (e) => new Date(e).toLocaleTimeString(), wt = class {
 		};
 	}
 	async _events() {
-		let e = this._t, t = e.day, n = (t?.events ?? []).slice(-3).reverse();
-		if (!t || !n.length) {
+		let e = this._t, t = e.day, n = t?.events_error;
+		if (t && n) {
+			let r;
+			try {
+				r = await s(e.hass, e.deviceId, t.date);
+			} catch {
+				r = void 0;
+			}
+			if (!r || r.events_error) {
+				let e = r?.events_error ?? n;
+				this._log(`B  skipped: today's event search failed (${n}), and again when asked once more (${e})`), this._summary.push(`Events: today's event search failed (${e})`), this._plain.push({
+					grade: "problem",
+					text: `Today's events could not be listed: the camera's event search failed (${e}), so the timeline shows no events for today.`,
+					advice: "The timeline searches again by itself; if today's events stay missing, run the check again and include the details below in a report."
+				});
+				return;
+			}
+			t = r, this._log(`B  today's event search had failed (${n}); asked once more, it found ${h(t.events.length, "event")} (server: ${Q(t.timing)})`), this._plain.push({
+				grade: "note",
+				text: `Today's event search failed at first (${n}); asked again, it found ${h(t.events.length, "event")}.`
+			});
+		}
+		let r = (t?.events ?? []).slice(-3).reverse();
+		if (!t || !r.length) {
 			this._log("B  skipped: no events today"), this._plain.push({
 				grade: "note",
 				text: "There were no events today to try opening."
 			});
 			return;
 		}
-		let r = [], i = [], a = [], o;
-		for (let s of n) {
-			let n = t.segments.find((e) => s.start >= e.start && s.start < e.end), c = n ? `${w(s.start - n.start)} into a ${w(n.end - n.start)} recording` : "no recording", l = await this._play(s.start);
-			l.ok && e.metrics.firstFrameMs !== void 0 && (r.push(`${xt(e.metrics.firstFrameMs, 2e3, l.slowed)}${l.held?.complete === !1 ? " (not cached)" : ""}`), bt(e.metrics.firstFrameMs, 2e3, l.slowed) ? (a.push(e.metrics.firstFrameMs), o = l.slowed) : i.push(e.metrics.firstFrameMs)), this._log(`B  ${s.types.join("+")} at ${X(s.start)} (${c}): ${l.line}`), await Y(300), this._log(`     ${Pt(l.began, l.source)}`), this._log(`     ${l.busy}`), n && this._log(`     ${await this._fillReport()}`), await this._pause(1500);
+		let i = [], a = [], o = [], c;
+		for (let n of r) {
+			let r = t.segments.find((e) => n.start >= e.start && n.start < e.end), s = r ? `${w(n.start - r.start)} into a ${w(r.end - r.start)} recording` : "no recording", l = await this._play(n.start);
+			l.ok && e.metrics.firstFrameMs !== void 0 && (i.push(`${St(e.metrics.firstFrameMs, 2e3, l.slowed)}${l.held?.complete === !1 ? " (not cached)" : ""}`), xt(e.metrics.firstFrameMs, 2e3, l.slowed) ? (o.push(e.metrics.firstFrameMs), c = l.slowed) : a.push(e.metrics.firstFrameMs)), this._log(`B  ${n.types.join("+")} at ${Y(n.start)} (${s}): ${l.line}`), await J(300), this._log(`     ${Ft(l.began, l.source)}`), this._log(`     ${l.busy}`), r && this._log(`     ${await this._fillReport()}`), await this._pause(1500);
 		}
-		this._summary.push(`Events → first frame (sub): ${r.join(", ") || "none played"}`);
-		let s = p(i), c = i.length + a.length, l = c < n.length ? `; ${String(n.length - c)} of ${h(n.length, "event")} did not play` : "", d = p(a);
-		this._plain.push(s === void 0 && (d === void 0 || !o) ? {
+		this._summary.push(`Events → first frame (sub): ${i.join(", ") || "none played"}`);
+		let l = p(a), d = a.length + o.length, m = d < r.length ? `; ${String(r.length - d)} of ${h(r.length, "event")} did not play` : "", g = p(o);
+		this._plain.push(l === void 0 && (g === void 0 || !c) ? {
 			grade: "problem",
 			text: "Events would not play.",
 			advice: "Run the check again; if it happens again, include the details below in a report."
-		} : s === void 0 && d !== void 0 && o ? {
+		} : l === void 0 && g !== void 0 && c ? {
 			grade: "note",
-			text: `Opening an event starts its video in ${a.length > 1 ? "about " : ""}${u(d)}, but ${o.who} held Home Assistant up meanwhile (not judged)${l}.`
+			text: `Opening an event starts its video in ${o.length > 1 ? "about " : ""}${u(g)}, but ${c.who} held Home Assistant up meanwhile (not judged)${m}.`
 		} : {
-			grade: f(s ?? 0, 2e3, 4e3),
-			text: `Opening an event starts its video in ${i.length > 1 ? "about " : ""}${u(s ?? 0)}${l}` + (o ? ` (not counting ${h(a.length, "start")} ${o.who} held Home Assistant up during)` : "") + "."
+			grade: f(l ?? 0, 2e3, 4e3),
+			text: `Opening an event starts its video in ${a.length > 1 ? "about " : ""}${u(l ?? 0)}${m}` + (c ? ` (not counting ${h(o.length, "start")} ${c.who} held Home Assistant up during)` : "") + "."
 		});
 	}
 	async _peek(e, t) {
@@ -924,19 +946,19 @@ var X = (e) => new Date(e).toLocaleTimeString(), wt = class {
 			await this._pause(1e3);
 		}
 		if (!i) return "server: not cached (or its URL expired)";
-		let a = [i.cache === "disk" ? "from disk" : `fill (${Et(i.priority)})`];
+		let a = [i.cache === "disk" ? "from disk" : `fill (${Dt(i.priority)})`];
 		for (let [e, t] of [
 			["wait_ms", "queue"],
 			["headers_ms", "NVR headers"],
 			["ttfb_ms", "NVR first byte"],
 			["fill_ms", "download"]
 		]) typeof i[e] == "number" && a.push(`${t} ${S(i[e])}`);
-		typeof i.mbit_s == "number" && a.push(`${i.mbit_s} Mbit/s`), a.push(C(i.bytes)), typeof i.stopped_ms == "number" && a.push(`stopped at ${w(i.stopped_ms)} (the cut has the rest)`), typeof i.yields == "number" && a.push(`gave its slot to the cut ${String(i.yields)}×`), typeof i.cut_offset_ms == "number" && a.push(`cut ${i.cut_offset_ms >= 0 ? "+" : ""}${String(Math.round(i.cut_offset_ms))} ms from the copy`), i.indexed !== void 0 && a.push(`index ${Et(i.indexed)}`), (r || i.flat !== void 0) && a.push(`plain MP4 ${i.flat === void 0 ? "not yet" : Et(i.flat)}`), typeof i.flat_ms == "number" && a.push(`rewrite ${S(i.flat_ms)}`), typeof i.flat_moov_bytes == "number" && a.push(`moov ${C(i.flat_moov_bytes)}`), i.error && a.push(`error ${i.error}`), typeof i.cut_error == "string" && a.push(`cut not used: ${i.cut_error}`);
+		typeof i.mbit_s == "number" && a.push(`${i.mbit_s} Mbit/s`), a.push(C(i.bytes)), typeof i.stopped_ms == "number" && a.push(`stopped at ${w(i.stopped_ms)} (the cut has the rest)`), typeof i.yields == "number" && a.push(`gave its slot to the cut ${String(i.yields)}×`), typeof i.cut_offset_ms == "number" && a.push(`cut ${i.cut_offset_ms >= 0 ? "+" : ""}${String(Math.round(i.cut_offset_ms))} ms from the copy`), i.indexed !== void 0 && a.push(`index ${Dt(i.indexed)}`), (r || i.flat !== void 0) && a.push(`plain MP4 ${i.flat === void 0 ? "not yet" : Dt(i.flat)}`), typeof i.flat_ms == "number" && a.push(`rewrite ${S(i.flat_ms)}`), typeof i.flat_moov_bytes == "number" && a.push(`moov ${C(i.flat_moov_bytes)}`), i.error && a.push(`error ${i.error}`), typeof i.cut_error == "string" && a.push(`cut not used: ${i.cut_error}`);
 		let s = i.cut;
 		return `server: ${a.join(", ")}${s ? ` | ${re(s)}` : ""}`;
 	}
 	async _findLong() {
-		let e = this._t, t = e.today, n = Number(t.slice(8, 10)), r = [t, ...[...e.monthDays].filter((e) => e < n).sort((e, t) => t - e).slice(0, gt).map((e) => `${t.slice(0, 8)}${String(e).padStart(2, "0")}`)], i = 0, a;
+		let e = this._t, t = e.today, n = Number(t.slice(8, 10)), r = [t, ...[...e.monthDays].filter((e) => e < n).sort((e, t) => t - e).slice(0, _t).map((e) => `${t.slice(0, 8)}${String(e).padStart(2, "0")}`)], i = 0, a;
 		for (let t of r) {
 			let n;
 			try {
@@ -945,7 +967,7 @@ var X = (e) => new Date(e).toLocaleTimeString(), wt = class {
 				continue;
 			}
 			for (let e of E(n.segments, n.now)) {
-				if (i >= ht) return a;
+				if (i >= gt) return a;
 				i += 1;
 				let r = await this._peek(t, e.id);
 				if (r && !r.cache) return {
@@ -975,19 +997,19 @@ var X = (e) => new Date(e).toLocaleTimeString(), wt = class {
 			return;
 		}
 		e.date !== t.date && await this._loadDay(t.date);
-		let n = t.segment, r = w(n.end - n.start), i = (e) => `${w(e.time - n.start)} into a ${r} recording of ${t.date}` + (e.event ? ` (event ${e.event.types.join("+")} at ${X(e.event.start)})` : " (no event there: a point)"), a, o, s;
+		let n = t.segment, r = w(n.end - n.start), i = (e) => `${w(e.time - n.start)} into a ${r} recording of ${t.date}` + (e.event ? ` (event ${e.event.types.join("+")} at ${Y(e.event.start)})` : " (no event there: a point)"), a, o, s;
 		if (t.cached) this._log("D1 skipped: every long recording looked at is cached already (try again after other recordings were viewed)");
 		else {
 			let r = T(n, t.day.events, .5, .95, .75), c = await this._play(r.time), l = c.held;
 			c.ok && l?.complete === !1 && (a = e.metrics.firstFrameMs, o = c.served, s = c.slowed);
 			let u = l?.complete ? "Not cached when chosen, but on disk when played (not counted)" : l?.bytes ? `Not cached (${C(l.bytes)} already fetched when played)` : "Not cached";
-			this._log(`D1 ${u}, ${i(r)}: ${c.line}`), await Y(300), this._log(`     ${Pt(c.began, c.source)}`), this._log(`     ${c.busy}`), this._log(`     ${await this._fillReport()}`), this._log(`     ${F((await this._stats())?.vod.baichuan)}`);
+			this._log(`D1 ${u}, ${i(r)}: ${c.line}`), await J(300), this._log(`     ${Ft(c.began, c.source)}`), this._log(`     ${c.busy}`), this._log(`     ${await this._fillReport()}`), this._log(`     ${F((await this._stats())?.vod.baichuan)}`);
 		}
 		await this._pause(1500);
 		let c = T(n, t.day.events, .1, .45, .4), l = await this._play(c.time), d = l.held?.complete === !1, p = l.ok && !d ? e.metrics.firstFrameMs : void 0, m = t.cached ? "Cached when chosen, but not on disk when played" : "Still being copied when played";
-		this._log(`D2 ${d ? `${m} (not counted)` : "Cached"}, ${i(c)}: ${l.line}`), await Y(300), this._log(`     ${Pt(l.began, l.source)}`);
-		let h = (e) => bt(a, 2e3, e) ? ` (slowed by ${e.who})` : "";
-		this._summary.push(`Deep start (sub, ${r} recording): not cached ${a === void 0 ? "not measured" : `${S(a)}${o ? ` from ${ne(o)}` : ""}${h(s)}`}, cached ${xt(p, 2e3, l.slowed)}`);
+		this._log(`D2 ${d ? `${m} (not counted)` : "Cached"}, ${i(c)}: ${l.line}`), await J(300), this._log(`     ${Ft(l.began, l.source)}`);
+		let h = (e) => xt(a, 2e3, e) ? ` (slowed by ${e.who})` : "";
+		this._summary.push(`Deep start (sub, ${r} recording): not cached ${a === void 0 ? "not measured" : `${S(a)}${o ? ` from ${ne(o)}` : ""}${h(s)}`}, cached ${St(p, 2e3, l.slowed)}`);
 		let g = a === void 0 ? "." : `; the first time, ${u(a)}, while the recorder sends it over${h(s)}.`, _ = p === void 0 ? void 0 : f(p, 2e3, 4e3);
 		this._plain.push(p === void 0 ? l.ok ? {
 			grade: "fine",
@@ -995,7 +1017,7 @@ var X = (e) => new Date(e).toLocaleTimeString(), wt = class {
 		} : {
 			grade: "problem",
 			text: "Jumping into the middle of a long recording did not play."
-		} : bt(p, 2e3, l.slowed) ? {
+		} : xt(p, 2e3, l.slowed) ? {
 			grade: "note",
 			text: `Jumping into the middle of a long recording starts in ${u(p)}, but ${l.slowed.who} held Home Assistant up ${u(l.slowed.heldMs)} meanwhile (not judged)${g}`
 		} : {
@@ -1018,7 +1040,7 @@ var X = (e) => new Date(e).toLocaleTimeString(), wt = class {
 			let t = await this._wait(() => e.player?.current?.segmentId === a.id && o.length > 0, 45e3);
 			t && !o.includes("advanced") && await this._wait(() => e.metrics.firstFrameMs !== void 0 || !!e.playFailure, 6e4);
 			let n = e.player, r;
-			r = t ? o.includes("advanced") ? `yes (preloaded) · gap ${S(e.metrics.gapMs)}` : `yes, by reloading (the next file was not preloaded) · first frame ${S(e.metrics.firstFrameMs)}` : `no: on ${n?.current?.segmentId === i.id ? "the first" : n?.current ? "another" : "no"} recording at ${n?.time === void 0 ? "?" : X(n.time)}, ${n?.paused ? "paused" : "playing"}, next ${n?.preloaded ? "preloaded" : "not preloaded"}, events [${o.join(", ")}]`, d && (r += ` · it stood still and was nudged on ${String(d)}×`), this._log(`C  Moved on by itself at ${X(i.end)} (from a ${w(i.end - i.start)} recording): ${r}` + (e.playFailure ? ` FAILED: ${e.playFailure}` : "")), t || this._log(`     ${jt(e.player)}`), this._summary.push(`Auto-advance: ${t && o.includes("advanced") ? `gap ${S(e.metrics.gapMs)}` : r}`);
+			r = t ? o.includes("advanced") ? `yes (preloaded) · gap ${S(e.metrics.gapMs)}` : `yes, by reloading (the next file was not preloaded) · first frame ${S(e.metrics.firstFrameMs)}` : `no: on ${n?.current?.segmentId === i.id ? "the first" : n?.current ? "another" : "no"} recording at ${n?.time === void 0 ? "?" : Y(n.time)}, ${n?.paused ? "paused" : "playing"}, next ${n?.preloaded ? "preloaded" : "not preloaded"}, events [${o.join(", ")}]`, d && (r += ` · it stood still and was nudged on ${String(d)}×`), this._log(`C  Moved on by itself at ${Y(i.end)} (from a ${w(i.end - i.start)} recording): ${r}` + (e.playFailure ? ` FAILED: ${e.playFailure}` : "")), t || this._log(`     ${Mt(e.player)}`), this._summary.push(`Auto-advance: ${t && o.includes("advanced") ? `gap ${S(e.metrics.gapMs)}` : r}`);
 			let s = e.metrics.gapMs ?? 0;
 			this._plain.push(t ? o.includes("advanced") ? {
 				grade: s < 500 ? "good" : s < 2e3 ? "fine" : "slow",
@@ -1046,36 +1068,36 @@ var X = (e) => new Date(e).toLocaleTimeString(), wt = class {
 			this._log(`R  skipped: the recording did not play (${i.line})`);
 			return;
 		}
-		this._log(`R  Playback rates, ${w(r.end - r.start)} recording, ${Ve / 1e3} s each (sub stream):`);
+		this._log(`R  Playback rates, ${w(r.end - r.start)} recording, ${He / 1e3} s each (sub stream):`);
 		let a = [];
 		try {
-			for (let t of Be) {
-				let n = Q(e.player);
+			for (let t of Ve) {
+				let n = Z(e.player);
 				if (!n) break;
 				let r = await this._measureRate(n, t);
 				if (a.push(r), this._log(`     ${k(r)}`), r.ended) break;
 			}
 		} finally {
-			let t = Q(e.player);
+			let t = Z(e.player);
 			t && (t.playbackRate = 1);
 		}
 		this._summary.push(`Rates: ${a.map((e) => `${e.rate}× ${e.focused ? M(e) ? "✓" : "✗" : "– (not in front)"}`).join(" ") || "not measured"} (smooth = ${ee})`), this._plain.push(...j(a));
 	}
 	async _scrub() {
-		let e = this._t.player, t = e?.current, n = Q(e);
+		let e = this._t.player, t = e?.current, n = Z(e);
 		if (!e || !t || !n || e.time === void 0) {
 			this._log("S  skipped: nothing playing");
 			return;
 		}
 		await this._pause(3e3);
-		let r = St(e) ?? t.start, i = [], a = [], o = 0;
-		for (let s of Je) {
+		let r = Ct(e) ?? t.start, i = [], a = [], o = 0;
+		for (let s of Ye) {
 			let c = r + s * 1e3;
 			if (c < t.start || c > t.end) continue;
-			let l = performance.now(), u = Ct(n, "seeked", 3e3);
-			e.preview(c) ? await u && (i.push(performance.now() - l), o = Math.max(o, Math.abs((St(e) ?? c) - c))) : a.push(s);
+			let l = performance.now(), u = wt(n, "seeked", 3e3);
+			e.preview(c) ? await u && (i.push(performance.now() - l), o = Math.max(o, Math.abs((Ct(e) ?? c) - c))) : a.push(s);
 		}
-		let s = r + Ye, c = s < t.end ? ` · ${w(Ye)} ahead: ${e.preview(s) ? "buffered, shown" : "not buffered (the thumbnail shows instead)"}` : "", l = i.length + a.length, d = i.length ? [...i].sort((e, t) => e - t)[Math.floor(i.length / 2)] : void 0;
+		let s = r + Xe, c = s < t.end ? ` · ${w(Xe)} ahead: ${e.preview(s) ? "buffered, shown" : "not buffered (the thumbnail shows instead)"}` : "", l = i.length + a.length, d = i.length ? [...i].sort((e, t) => e - t)[Math.floor(i.length / 2)] : void 0;
 		this._log(`S  Scrub preview (frames from the buffer while dragging): ${i.length} of ${l} points shown` + (d === void 0 ? "" : `, median ${S(d)}, each within ${(o / 1e3).toFixed(2)} s of its point`) + (a.length ? ` · not buffered: ${a.map((e) => `${e > 0 ? "+" : ""}${e} s`).join(", ")}` : "") + c), this._summary.push(`Scrub: ${i.length} of ${l} points in the buffer shown${d === void 0 ? "" : ` (median ${S(d)})`}`), l && this._plain.push(i.length === l ? {
 			grade: f(d, 500, 1500),
 			text: `Dragging along the timeline shows the video at once (in about ${u(d ?? 0)}).`
@@ -1089,7 +1111,7 @@ var X = (e) => new Date(e).toLocaleTimeString(), wt = class {
 		this._log(`K  ${e.text}`), this._summary.push(`Key frames: ${e.short}`);
 	}
 	async _serverPictures() {
-		let n = this._t, i = I(n.day?.segments ?? [], Qe);
+		let n = this._t, i = I(n.day?.segments ?? [], $e);
 		if (!i.length) {
 			this._log("F  skipped: no recording on this day");
 			return;
@@ -1097,7 +1119,7 @@ var X = (e) => new Date(e).toLocaleTimeString(), wt = class {
 		let a;
 		try {
 			let { url: e } = await t(n.hass, n.deviceId, n.date);
-			a = new Ee(new WebSocket(r(e, location.href))), await a.ready();
+			a = new De(new WebSocket(r(e, location.href))), await a.ready();
 		} catch (t) {
 			this._log(`F  the scrub session did not open: ${e(t).message}`), this._summary.push("Pictures from the server: the session did not open");
 			return;
@@ -1107,7 +1129,7 @@ var X = (e) => new Date(e).toLocaleTimeString(), wt = class {
 			this._log(`F  Pictures from the server (scrub, ${String(i.length)} moments over the day): first ${R(t)} · again ${R(r)}${c}${o}`);
 			let l = n.day?.segments ?? [];
 			(t.missedAt ?? []).forEach((e, n) => {
-				this._log(`   no picture at ${X(e)}, ${L(l, e)}: ${t.missed[n] ?? "?"}`);
+				this._log(`   no picture at ${Y(e)}, ${L(l, e)}: ${t.missed[n] ?? "?"}`);
 			}), this._summary.push(`Pictures from the server: first ${R(t)}; again ${R(r)}`);
 		} finally {
 			a.close();
@@ -1132,8 +1154,8 @@ var X = (e) => new Date(e).toLocaleTimeString(), wt = class {
 			this._log("P  skipped: no recording to drag over on this day");
 			return;
 		}
-		let d = this.timeScale, p = s.end - s.start, m = Math.min(K.spanMs, Math.max(5e3, (p - 15e3) / 2)), g = s.start + Math.min(5e3, p / 10), _ = e.player.current !== void 0, v = await this._dragPass(g, m, K.ms * d), y = e.hover?.bare === !0, b = Q(e.player)?.paused !== !1, x = await this._dragPass(g, m, K.ms * d), C = g + m + et, T = c ? await this._dragBeside(c, C, m) : void 0, E = C + m, D = ae(n.segments, E, E + tt.spanMs), O = await this._dragPass(E, D - E, tt.ms * d), k = await this._dragRelease(O.rest), ee = (await this._stats())?.vod.baichuan?.logins, A = a !== void 0 && ee !== void 0 ? ee - a : void 0, j = B(v), M = B(x), N = B(O), te = l ? st : ot, P = this._dragGrade(j, te), re = this._dragGrade(M, st), F = ie(N), I = T?.pass ? B(T.pass) : void 0, L = T?.played ? T.played.longestStallMs < ct : void 0, R = (e) => e === void 0 ? "" : e ? " ✓" : " ✗", z = (e) => e === "good" || e === "fine";
-		this._log(`P  Pictures while dragging (Phase 10): ${i} · over ${X(g)}, a recording ${l ? "already cached" : "not cached"}` + (e.scrub?.unavailable ? " · THE SCRUB SESSION DID NOT OPEN" : "")), this._log(`   slow (${w(m)} of recording in ${w(K.ms)}): ${V(j, v)}${R(z(P))}`), _ && this._log(`   this tab's video while dragging: ${b ? "paused" : "PLAYED ON"}${R(b)}`), this._log(`   again over the same stretch: ${V(M, x)}${R(z(re))}`), this._log(`   ${this._besideText(T, I)}${R(L)}`), this._log(`   fast (${((e) => `${(e / 6e4).toFixed(1)} min`)(D - E)} in ${w(tt.ms)}): ${V(N, O)}${R(F)}`), this._log(`   release: ${k.text}${R(k.ok)}`);
+		let d = this.timeScale, p = s.end - s.start, m = Math.min(G.spanMs, Math.max(5e3, (p - 15e3) / 2)), g = s.start + Math.min(5e3, p / 10), _ = e.player.current !== void 0, v = await this._dragPass(g, m, G.ms * d), y = e.hover?.bare === !0, b = Z(e.player)?.paused !== !1, x = await this._dragPass(g, m, G.ms * d), C = g + m + tt, T = c ? await this._dragBeside(c, C, m) : void 0, E = C + m, D = ae(n.segments, E, E + nt.spanMs), O = await this._dragPass(E, D - E, nt.ms * d), k = await this._dragRelease(O.rest), ee = (await this._stats())?.vod.baichuan?.logins, A = a !== void 0 && ee !== void 0 ? ee - a : void 0, j = B(v), M = B(x), N = B(O), te = l ? ct : st, P = this._dragGrade(j, te), re = this._dragGrade(M, ct), F = ie(N), I = T?.pass ? B(T.pass) : void 0, L = T?.played ? T.played.longestStallMs < lt : void 0, R = (e) => e === void 0 ? "" : e ? " ✓" : " ✗", z = (e) => e === "good" || e === "fine";
+		this._log(`P  Pictures while dragging (Phase 10): ${i} · over ${Y(g)}, a recording ${l ? "already cached" : "not cached"}` + (e.scrub?.unavailable ? " · THE SCRUB SESSION DID NOT OPEN" : "")), this._log(`   slow (${w(m)} of recording in ${w(G.ms)}): ${V(j, v)}${R(z(P))}`), _ && this._log(`   this tab's video while dragging: ${b ? "paused" : "PLAYED ON"}${R(b)}`), this._log(`   again over the same stretch: ${V(M, x)}${R(z(re))}`), this._log(`   ${this._besideText(T, I)}${R(L)}`), this._log(`   fast (${((e) => `${(e / 6e4).toFixed(1)} min`)(D - E)} in ${w(nt.ms)}): ${V(N, O)}${R(F)}`), this._log(`   release: ${k.text}${R(k.ok)}`);
 		for (let e of k.detail ?? []) this._log(`     ${e}`);
 		if (k.firstMs !== void 0 || k.detail) {
 			let t = e.metrics, n = e.player.mseStats?.atSource, r = t.urlMs ? e.playing?.timing?.total_ms : void 0;
@@ -1203,13 +1225,13 @@ var X = (e) => new Date(e).toLocaleTimeString(), wt = class {
 			});
 		};
 		a.addEventListener("rv-scrub-painted", u);
-		let d = Math.max(1, Math.round(n / ($e * this.timeScale))), f = i.clientWidth / 2, p;
+		let d = Math.max(1, Math.round(n / (et * this.timeScale))), f = i.clientWidth / 2, p;
 		try {
-			for (let r = 0; r <= d; r += 1) this._checkStopped(), c = e + t * r / d + at, i.dispatchEvent(new CustomEvent("rv-scrub", { detail: { time: c } })), r % it === 0 && i.dispatchEvent(new CustomEvent("rv-hover", { detail: {
+			for (let r = 0; r <= d; r += 1) this._checkStopped(), c = e + t * r / d + ot, i.dispatchEvent(new CustomEvent("rv-scrub", { detail: { time: c } })), r % at === 0 && i.dispatchEvent(new CustomEvent("rv-hover", { detail: {
 				time: c,
 				x: f
-			} })), await Y(n / d);
-			p = performance.now() - l, await this._pause(nt * this.timeScale);
+			} })), await J(n / d);
+			p = performance.now() - l, await this._pause(rt * this.timeScale);
 		} finally {
 			a.removeEventListener("rv-scrub-painted", u);
 		}
@@ -1241,7 +1263,7 @@ var X = (e) => new Date(e).toLocaleTimeString(), wt = class {
 				startMs: a,
 				source: i.source
 			};
-			let o = H(() => i.position), s = await this._dragPass(n, r, K.ms * this.timeScale);
+			let o = H(() => i.position), s = await this._dragPass(n, r, G.ms * this.timeScale);
 			return {
 				startMs: a,
 				source: i.source,
@@ -1268,8 +1290,8 @@ var X = (e) => new Date(e).toLocaleTimeString(), wt = class {
 		let a = e.scrub?.counts.asked ?? 0, o = 0, s = 0;
 		for (let e = 0; e < 8; e += 1) {
 			this._checkStopped();
-			let a = i - 3e3 + e * 750 + at;
-			t.buffers(a) && (o += 1, n.dispatchEvent(new CustomEvent("rv-scrub", { detail: { time: a } })), await Y(120 * this.timeScale), r.showing || (s += 1));
+			let a = i - 3e3 + e * 750 + ot;
+			t.buffers(a) && (o += 1, n.dispatchEvent(new CustomEvent("rv-scrub", { detail: { time: a } })), await J(120 * this.timeScale), r.showing || (s += 1));
 		}
 		n.dispatchEvent(new CustomEvent("rv-hover-end"));
 		let c = (e.scrub?.counts.asked ?? 0) - a;
@@ -1282,7 +1304,7 @@ var X = (e) => new Date(e).toLocaleTimeString(), wt = class {
 		};
 	}
 	async _dragStretch() {
-		let e = this._t, t = e.player?.current?.segmentId, n = [...e.day?.segments ?? []].filter((e) => e.id !== t).sort((e, t) => t.end - t.start - (e.end - e.start)).slice(0, ht), r = [];
+		let e = this._t, t = e.player?.current?.segmentId, n = [...e.day?.segments ?? []].filter((e) => e.id !== t).sort((e, t) => t.end - t.start - (e.end - e.start)).slice(0, gt), r = [];
 		for (let t of n) {
 			this._checkStopped();
 			let n = await this._peek(e.date, t.id);
@@ -1305,7 +1327,7 @@ var X = (e) => new Date(e).toLocaleTimeString(), wt = class {
 		let a = r.showing, o = r.shown, s = !1, c, l = performance.now(), d = new Promise((e) => {
 			let t = setTimeout(() => {
 				e(!1);
-			}, rt);
+			}, it);
 			i.addEventListener("rv-first-frame", () => {
 				s = !0, clearTimeout(t), e(!0);
 			}, { once: !0 });
@@ -1318,7 +1340,7 @@ var X = (e) => new Date(e).toLocaleTimeString(), wt = class {
 		let g = p ? ` (it stood still and was nudged on ${String(p)}×)` : "", _ = performance.now() - l, v = i.time;
 		n.dispatchEvent(new CustomEvent("rv-hover-end"));
 		let y = await this._busy();
-		if (this._releaseBusy = y.text + (y.heldMs !== void 0 && y.heldMs >= lt ? " · HOME ASSISTANT HELD UP" : ""), !h) return {
+		if (this._releaseBusy = y.text + (y.heldMs !== void 0 && y.heldMs >= ut ? " · HOME ASSISTANT HELD UP" : ""), !h) return {
 			...await this._releaseStuck(i, l, e),
 			ok: !1
 		};
@@ -1343,7 +1365,7 @@ var X = (e) => new Date(e).toLocaleTimeString(), wt = class {
 		};
 	}
 	async _releaseStuck(e, t, n) {
-		let r = e.lastRefusal, i = r && r.at >= t ? `; its play() was refused: ${r.text}` : "", a = e.time, o = a === void 0 ? 0 : Math.abs(a - n), s = `then: ${a === void 0 ? "" : `${o < 1e3 ? u(o) : w(o)} ${a <= n ? "before" : "after"} where it was let go; `}${jt(e)}${i}`, c = performance.now(), l = await e.tryPlay(ut), d = `no first frame in ${w(rt)}`;
+		let r = e.lastRefusal, i = r && r.at >= t ? `; its play() was refused: ${r.text}` : "", a = e.time, o = a === void 0 ? 0 : Math.abs(a - n), s = `then: ${a === void 0 ? "" : `${o < 1e3 ? u(o) : w(o)} ${a <= n ? "before" : "after"} where it was let go; `}${Mt(e)}${i}`, c = performance.now(), l = await e.tryPlay(dt), d = `no first frame in ${w(it)}`;
 		return l === void 0 ? {
 			text: d,
 			plain: "Letting go did not start the video until play was pressed: the browser held it back.",
@@ -1351,7 +1373,7 @@ var X = (e) => new Date(e).toLocaleTimeString(), wt = class {
 		} : l === "no answer" ? {
 			text: d,
 			plain: "Letting go did not start the video: it waited for video it did not get, and pressing play did not help.",
-			detail: [s, `pressing play then: still nothing after ${w(ut)} (it waits for video)`]
+			detail: [s, `pressing play then: still nothing after ${w(dt)} (it waits for video)`]
 		} : {
 			text: d,
 			plain: `Letting go did not start the video: the browser refused to play it (${l}).`,
@@ -1371,20 +1393,20 @@ var X = (e) => new Date(e).toLocaleTimeString(), wt = class {
 		}
 		let r = this.timeScale, i = await this._onlineUsers(), a = (e, t) => e.start + (e.end - e.start) * t, o = await this._play(a(n, .5)), s = await this._onlineUsers(), c = e.openViewer(), l, d, p, h, g;
 		try {
-			let i = H(() => Q(e.player)?.currentTime), o = t.at(1);
-			l = await c.playAt(o ? a(o, .5) : a(n, .2)), await this._pause(dt * r), p = await this._onlineUsers();
+			let i = H(() => Z(e.player)?.currentTime), o = t.at(1);
+			l = await c.playAt(o ? a(o, .5) : a(n, .2)), await this._pause(ft * r), p = await this._onlineUsers();
 			let s = c.position;
-			d = await c.playAt(a(n, .85)), await this._pause(dt * r), g = c.position !== void 0 && (s === void 0 || c.position !== s), h = i.stop();
+			d = await c.playAt(a(n, .85)), await this._pause(ft * r), g = c.position !== void 0 && (s === void 0 || c.position !== s), h = i.stop();
 		} finally {
 			c.close();
 		}
 		e.player.stop();
-		let _ = await this._backAtRest(i, pt * r), v = (e) => e.count === void 0 ? `? (${e.error ?? "not said"})` : String(e.count), y = (e) => e !== void 0 && e < q * 2, b = h.longestStallMs < ct, x = (e) => e === void 0 ? "" : e ? " ✓" : " ✗";
-		this._log(`V  Two viewers on one camera (Phase 5): the NVR's users at rest ${v(i)}, with one viewer ${v(s)}, with two ${v(p)}`), this._log(`   the first viewer (this tab, ${X(a(n, .5))}): ${o.line}${x(o.ok)}`), this._log(`   the second viewer: first frame ${l === void 0 ? "none" : S(l)}${x(y(l))}; then far into the first one's recording: ${d === void 0 ? "none" : S(d)}${x(y(d) && g)}`), this._log(`   the first viewer meanwhile: played ${w(h.playedMs)} in ${w(h.wallMs)}, longest stall ${w(h.longestStallMs)}${x(b)}`), this._log(`   both stopped (the second as a closed tab): ${_.text}${x(_.ok)}`), this._summary.push(`Two viewers: first viewer's longest stall ${w(h.longestStallMs)}; second started in ${l === void 0 ? "–" : S(l)}, jumped in ${d === void 0 ? "–" : S(d)}; ${_.ok === void 0 ? "the NVR's list not read" : _.ok ? "the NVR back at rest" : "the NVR NOT back at rest"}`), this._plain.push({
+		let _ = await this._backAtRest(i, mt * r), v = (e) => e.count === void 0 ? `? (${e.error ?? "not said"})` : String(e.count), y = (e) => e !== void 0 && e < K * 2, b = h.longestStallMs < lt, x = (e) => e === void 0 ? "" : e ? " ✓" : " ✗";
+		this._log(`V  Two viewers on one camera (Phase 5): the NVR's users at rest ${v(i)}, with one viewer ${v(s)}, with two ${v(p)}`), this._log(`   the first viewer (this tab, ${Y(a(n, .5))}): ${o.line}${x(o.ok)}`), this._log(`   the second viewer: first frame ${l === void 0 ? "none" : S(l)}${x(y(l))}; then far into the first one's recording: ${d === void 0 ? "none" : S(d)}${x(y(d) && g)}`), this._log(`   the first viewer meanwhile: played ${w(h.playedMs)} in ${w(h.wallMs)}, longest stall ${w(h.longestStallMs)}${x(b)}`), this._log(`   both stopped (the second as a closed tab): ${_.text}${x(_.ok)}`), this._summary.push(`Two viewers: first viewer's longest stall ${w(h.longestStallMs)}; second started in ${l === void 0 ? "–" : S(l)}, jumped in ${d === void 0 ? "–" : S(d)}; ${_.ok === void 0 ? "the NVR's list not read" : _.ok ? "the NVR back at rest" : "the NVR NOT back at rest"}`), this._plain.push({
 			grade: b ? "good" : "problem",
 			text: b ? "Two viewers on one camera play on: the first did not stall while the second started and jumped into its recording." : `With two viewers on one camera, the first stalled ${u(h.longestStallMs)} while the second started.`
 		}), this._plain.push({
-			grade: y(l) && y(d) ? m([f(l, q, q * 2), f(d, q, q * 2)]) : "problem",
+			grade: y(l) && y(d) ? m([f(l, K, K * 2), f(d, K, K * 2)]) : "problem",
 			text: l === void 0 || d === void 0 ? "A second viewer of the same camera did not start." : `A second viewer of the same camera starts in ${u(l)}, and in ${u(d)} far into the first one's recording.`
 		}), this._plain.push({
 			grade: _.ok === void 0 ? "note" : _.ok ? "good" : "problem",
@@ -1392,7 +1414,7 @@ var X = (e) => new Date(e).toLocaleTimeString(), wt = class {
 		});
 	}
 	async _uncached(e) {
-		let t = this._t, n = t.player?.current?.segmentId, r = [...t.day?.segments ?? []].filter((e) => e.id !== n).sort((e, t) => t.end - t.start - (e.end - e.start)).slice(0, ht), i = [];
+		let t = this._t, n = t.player?.current?.segmentId, r = [...t.day?.segments ?? []].filter((e) => e.id !== n).sort((e, t) => t.end - t.start - (e.end - e.start)).slice(0, gt), i = [];
 		for (let n of r) {
 			this._checkStopped();
 			let r = await this._peek(t.date, n.id);
@@ -1434,7 +1456,7 @@ var X = (e) => new Date(e).toLocaleTimeString(), wt = class {
 				};
 			}
 			if (s >= t) break;
-			await this._pause(Math.min(ft * this.timeScale, t - s));
+			await this._pause(Math.min(pt * this.timeScale, t - s));
 		}
 		let a = `the NVR lists ${r.count === void 0 ? "?" : String(r.count)} (${e.count === void 0 ? "?" : String(e.count)} at rest), ${i === void 0 ? "?" : String(i)} Reolink protocol login(s) left`;
 		return {
@@ -1452,7 +1474,7 @@ var X = (e) => new Date(e).toLocaleTimeString(), wt = class {
 		for (let i of t) {
 			this._checkStopped();
 			let t = await e.ask(i);
-			Se(t) ? (r.answered.push({
+			Ce(t) ? (r.answered.push({
 				ms: t.ms,
 				source: t.source,
 				offsetMs: t.at - t.time
@@ -1483,7 +1505,7 @@ var X = (e) => new Date(e).toLocaleTimeString(), wt = class {
 		};
 		let a = Math.round(Math.max(0, (n.time ?? r.start) - r.start));
 		try {
-			let e = await i.fetch(`${i.base}/frags?at=${String(a)}&ms=${String(Xe)}&bytes=${String(Ze)}`), n = e.headers.get("X-RV-Source") ?? "file", r = await i.fetch(`${i.base}/init?source=${n}`);
+			let e = await i.fetch(`${i.base}/frags?at=${String(a)}&ms=${String(Ze)}&bytes=${String(Qe)}`), n = e.headers.get("X-RV-Source") ?? "file", r = await i.fetch(`${i.base}/init?source=${n}`);
 			if (!e.ok || !r.ok) return {
 				text: `${t}: the fragments did not come (HTTP ${String(e.status)}, init ${String(r.status)})`,
 				short: `${t} not read`
@@ -1495,17 +1517,17 @@ var X = (e) => new Date(e).toLocaleTimeString(), wt = class {
 			};
 			let c = pe(new Uint8Array(await e.arrayBuffer()), o);
 			if (!c.length) return {
-				text: `${t}: no key frame in ${w(Xe)} of fragments`,
+				text: `${t}: no key frame in ${w(Ze)} of fragments`,
 				short: `${t}: none`
 			};
 			this._checkStopped();
-			let l = xe(t, s, o, c, await ve(s, o, c));
+			let l = Se(t, s, o, c, await ve(s, o, c));
 			return {
 				text: `${l.text} · from the ${n}`,
 				short: l.short
 			};
 		} catch (n) {
-			if (n instanceof _t) throw n;
+			if (n instanceof vt) throw n;
 			return {
 				text: `${t}: ${e(n).message}`,
 				short: `${t} failed`
@@ -1529,18 +1551,18 @@ var X = (e) => new Date(e).toLocaleTimeString(), wt = class {
 		}
 		let r = e.day?.segments.find((e) => e.id === n.segmentId), i = r ? ` (${w((t.time ?? r.start) - r.start)} into a ${w(r.end - r.start)} recording)` : "", a = await this._switchTo("main");
 		if (!a.ok) {
-			this._log(`H  HD at ${X(a.at)}${i}: ${a.line}`), this._summary.push(`HD switch: ${a.line}`), this._plain.push({
+			this._log(`H  HD at ${Y(a.at)}${i}: ${a.line}`), this._summary.push(`HD switch: ${a.line}`), this._plain.push({
 				grade: "problem",
 				text: "HD did not play; the viewer went back to SD.",
 				advice: "SD still works. Include the details below if you report it."
 			});
 			return;
 		}
-		this._hdPlayed = !0, this._log(`H  HD at ${X(a.at)}${i}: ${a.line} · ${e.metrics.stream ?? "?"} ${e.metrics.codec ?? "?"} · ${e.metrics.delivery ?? "?"}`), this._log(`     ${await this._fillReport()}`);
+		this._hdPlayed = !0, this._log(`H  HD at ${Y(a.at)}${i}: ${a.line} · ${e.metrics.stream ?? "?"} ${e.metrics.codec ?? "?"} · ${e.metrics.delivery ?? "?"}`), this._log(`     ${await this._fillReport()}`);
 		let o = await this._keyLine("HD");
 		this._log(`     K ${o.text}`), this._summary.push(`Key frames: ${o.short}`), await this._pause(5e3);
 		let s = await this._switchTo("sub");
-		this._log(`     Back to SD at ${X(s.at)}: ${s.line}`), s.ok || this._log(`     ${jt(e.player)}`), this._summary.push(`HD switch: to HD ${a.short}; back to SD ${s.short}`), s.ok || this._plain.push({
+		this._log(`     Back to SD at ${Y(s.at)}: ${s.line}`), s.ok || this._log(`     ${Mt(e.player)}`), this._summary.push(`HD switch: to HD ${a.short}; back to SD ${s.short}`), s.ok || this._plain.push({
 			grade: "problem",
 			text: `Going back from HD to SD failed (${s.line.replace(/^FAILED: /, "").replace(/ \(back on the sub stream\)$/, "")}).`,
 			advice: "Pressing SD again, or playing another moment, plays it. Include the details below if you report it."
@@ -1552,9 +1574,9 @@ var X = (e) => new Date(e).toLocaleTimeString(), wt = class {
 	async _switchTo(e) {
 		let t = this._t, n = t.player, r = n?.time ?? 0, i = t.metrics.hdFailures ?? 0, a = () => (t.metrics.hdFailures ?? 0) > i;
 		t.setStream(e);
-		let o = await this._wait(() => t.metrics.stream === e && t.metrics.firstFrameMs !== void 0 || a() || !!t.playFailure, mt), s = a() ? t.metrics.lastHdFailure ?? "HD failed" : t.playFailure;
+		let o = await this._wait(() => t.metrics.stream === e && t.metrics.firstFrameMs !== void 0 || a() || !!t.playFailure, ht), s = a() ? t.metrics.lastHdFailure ?? "HD failed" : t.playFailure;
 		if (!o || s) {
-			let e = s ? `FAILED: ${s} (back on the sub stream)` : `no first frame within ${w(mt)}`;
+			let e = s ? `FAILED: ${s} (back on the sub stream)` : `no first frame within ${w(ht)}`;
 			return {
 				ok: !1,
 				at: r,
@@ -1575,10 +1597,10 @@ var X = (e) => new Date(e).toLocaleTimeString(), wt = class {
 	async _measureRate(e, t) {
 		e.playbackRate = t;
 		let n = e.playbackRate;
-		await this._pause(He);
-		let r = Z(), i = setInterval(() => {
-			r &&= Z();
-		}, 250), a = kt(e), o = e.currentTime, s = performance.now(), c = 0, l, u = 0, d = !1, f = () => {
+		await this._pause(Ue);
+		let r = X(), i = setInterval(() => {
+			r &&= X();
+		}, 250), a = At(e), o = e.currentTime, s = performance.now(), c = 0, l, u = 0, d = !1, f = () => {
 			c += 1, l ??= performance.now();
 		}, p = () => {
 			l !== void 0 && (u += performance.now() - l), l = void 0;
@@ -1586,14 +1608,14 @@ var X = (e) => new Date(e).toLocaleTimeString(), wt = class {
 			d = !0;
 		};
 		e.addEventListener("waiting", f), e.addEventListener("playing", p), e.addEventListener("ended", m);
-		let h = Mt(e);
+		let h = Nt(e);
 		try {
-			await this._pause(Ve);
+			await this._pause(He);
 		} finally {
 			clearInterval(i), h.stop(), e.removeEventListener("waiting", f), e.removeEventListener("playing", p), e.removeEventListener("ended", m);
 		}
 		l !== void 0 && (u += performance.now() - l);
-		let g = kt(e);
+		let g = At(e);
 		return {
 			rate: t,
 			applied: n,
@@ -1606,12 +1628,12 @@ var X = (e) => new Date(e).toLocaleTimeString(), wt = class {
 			stalls: c,
 			stalledMs: u,
 			ended: d,
-			focused: r && Z()
+			focused: r && X()
 		};
 	}
 	async _link() {
 		let t = this._t, n = t.playing, r = t.hass.fetchWithAuth?.bind(t.hass), i = n?.base, a = n?.url ?? n?.clip_url, o, s = "of the cached recording";
-		if (i && r ? (s = "of fragments", o = (e) => r(`${i}/frags?first=0&ms=${String(Ke)}&bytes=${String(We)}`, {
+		if (i && r ? (s = "of fragments", o = (e) => r(`${i}/frags?first=0&ms=${String(qe)}&bytes=${String(Ge)}`, {
 			cache: "no-store",
 			signal: e
 		})) : a && (o = (e) => fetch(a, {
@@ -1624,7 +1646,7 @@ var X = (e) => new Date(e).toLocaleTimeString(), wt = class {
 		}
 		let c = performance.now(), l = new AbortController(), u = setTimeout(() => {
 			l.abort();
-		}, Ge);
+		}, Ke);
 		try {
 			let e = await o(l.signal), t = performance.now() - c, n = 0, r = e.body?.getReader();
 			try {
@@ -1650,23 +1672,23 @@ var X = (e) => new Date(e).toLocaleTimeString(), wt = class {
 		try {
 			t = await i(e.hass, e.deviceId);
 		} catch {}
-		let n = t.sub?.codec, r = t.main?.codec, a = (e) => [["sub", n], ["main", r]].map(([t, n]) => n ? `${t} ${n} ${Tt(Ae(e, n))}` : `${t} codec unknown (not cached yet)`).join(", "), o = ["MediaSource", "ManagedMediaSource"];
-		this._log(`MSE: ${o.map((e) => ke(e) ? `${e} present (${a(e)})` : `${e} absent`).join(" · ")}`);
+		let n = t.sub?.codec, r = t.main?.codec, a = (e) => [["sub", n], ["main", r]].map(([t, n]) => n ? `${t} ${n} ${Et(je(e, n))}` : `${t} codec unknown (not cached yet)`).join(", "), o = ["MediaSource", "ManagedMediaSource"];
+		this._log(`MSE: ${o.map((e) => Ae(e) ? `${e} present (${a(e)})` : `${e} absent`).join(" · ")}`);
 		let s = [];
 		for (let e of o) {
-			if (!ke(e)) continue;
-			let t = je(e);
+			if (!Ae(e)) continue;
+			let t = Me(e);
 			if (!t) {
 				this._log(`MSE probe (${e}): no sample codec supported`);
 				continue;
 			}
 			let n = [];
-			for (let { shape: r, label: i } of Oe) this._checkStopped(), n.push(`${i} ${await Fe(e, t.sample, r)}`);
+			for (let { shape: r, label: i } of ke) this._checkStopped(), n.push(`${i} ${await Ie(e, t.sample, r)}`);
 			this._log(`MSE probe (${e}, ${t.name} sample): ${n.join(" · ")}`), s.push(`${e} ${n[0]?.includes("plays") ? "plays MSE-ready fragments" : "fails"}`);
 		}
 		this._summary.push(`MSE: ${s.join(", ") || "neither MediaSource nor ManagedMediaSource"}`);
 		let c = document.createElement("video"), l = (e) => e ? `"${c.canPlayType(`video/mp4; codecs="${e}"`)}"` : "unknown";
-		this._log(`Video: canPlayType sub ${l(n)}, main ${l(r)} · getVideoPlaybackQuality ${Tt("getVideoPlaybackQuality" in c)} · requestVideoFrameCallback ${Tt("requestVideoFrameCallback" in c)} · performance.memory ${Tt(Dt() !== void 0)}`), this._log(`HD as the tab opened: ${e.hd.reason}${this._hdPlayed ? " (played in H above)" : ""}`), t.main?.width && t.main.height && r && this._log(`HD decodingInfo for ${r} at ${t.main.width}×${t.main.height}: ${await Ft(r, t.main.width, t.main.height)}`), this._hdPlayed || this._summary.push(`HD: ${e.hd.main ? "offered" : "not offered"} (${e.hd.reason})`), e.hd.main || this._plain.push({
+		this._log(`Video: canPlayType sub ${l(n)}, main ${l(r)} · getVideoPlaybackQuality ${Et("getVideoPlaybackQuality" in c)} · requestVideoFrameCallback ${Et("requestVideoFrameCallback" in c)} · performance.memory ${Et(Ot() !== void 0)}`), this._log(`HD as the tab opened: ${e.hd.reason}${this._hdPlayed ? " (played in H above)" : ""}`), t.main?.width && t.main.height && r && this._log(`HD decodingInfo for ${r} at ${t.main.width}×${t.main.height}: ${await It(r, t.main.width, t.main.height)}`), this._hdPlayed || this._summary.push(`HD: ${e.hd.main ? "offered" : "not offered"} (${e.hd.reason})`), e.hd.main || this._plain.push({
 			grade: "note",
 			text: `HD is not offered on this device: ${e.hd.reason}.`
 		});
@@ -1679,33 +1701,33 @@ var X = (e) => new Date(e).toLocaleTimeString(), wt = class {
 			this._log("M  skipped: no recording to play");
 			return;
 		}
-		this._log(`M  One-hour session: playing from ${X(i.start)} on ${r} for ${t} min, a sample a minute`);
+		this._log(`M  One-hour session: playing from ${Y(i.start)} on ${r} for ${t} min, a sample a minute`);
 		let a = e.player, o = 0, s = 0, c = [], l = () => {
 			o += 1;
 		}, u = (e) => {
 			s += 1, c.push(e.detail.gapMs);
-		}, d = [...a?.renderRoot.querySelectorAll("video") ?? []], f = [], p = [], m = 0, g = new Ot(), _ = { minute: !0 }, v = setInterval(() => {
-			_.minute &&= Z();
+		}, d = [...a?.renderRoot.querySelectorAll("video") ?? []], f = [], p = [], m = 0, g = new kt(), _ = { minute: !0 }, v = setInterval(() => {
+			_.minute &&= X();
 		}, 1e3), y = performance.now();
 		try {
 			await this._play(i.start), d.forEach((e) => {
 				e.addEventListener("waiting", l);
 			}), a?.addEventListener("rv-advanced", u);
 			for (let n = 1; n <= t; n += 1) {
-				if (await this._pause(Ue), e.player?.paused && document.visibilityState === "visible") {
+				if (await this._pause(We), e.player?.paused && document.visibilityState === "visible") {
 					let t = e.day?.segments[0];
 					this._log(`M  ${n} min: playback had stopped${e.playFailure ? ` (${e.playFailure})` : ""}; starting again from the day's first recording`), t && await e.playAt(t.start, performance.now());
 				}
-				let t = Q(e.player), r = g.update(d), i = _.minute && Z();
+				let t = Z(e.player), r = g.update(d), i = _.minute && X();
 				_.minute = !0;
-				let a = t ? Math.max(0, At(t) - t.currentTime) : 0;
+				let a = t ? Math.max(0, jt(t) - t.currentTime) : 0;
 				m = Math.max(m, a);
-				let c = Dt();
+				let c = Ot();
 				c !== void 0 && f.push([(performance.now() - y) / 36e5, c]);
 				let l = await this._stats();
 				l?.vod.disk_bytes !== void 0 && p.push(l.vod.disk_bytes);
 				let u = d.reduce((e, t) => e + te(t.buffered), 0);
-				this._log(`M  ${n} min: ${e.player?.time === void 0 ? "?" : X(e.player.time)} ${e.player?.paused ? "paused" : "playing"}` + (document.visibilityState === "visible" ? "" : " (page hidden: the system pauses video)") + (i ? "" : " · PAGE NOT IN FRONT this minute") + ` · heap ${c === void 0 ? "n/a" : C(c)} · ${a.toFixed(0)} s ahead, ${u.toFixed(0)} s buffered in both videos · dropped ${r} this minute, ${g.dropped} of ${g.decoded} in all · ${o} stalls · ${s} file changes` + (e.metrics.recoveries ? ` · ${e.metrics.recoveries} reloads mid-way` : "") + (l ? ` · cache ${C(l.vod.disk_bytes)} on disk + ${C(l.vod.reserved_bytes)} reserved, ${l.vod.leased ?? "?"} leased` : "")), Lt(this.id, this.options.setup, n);
+				this._log(`M  ${n} min: ${e.player?.time === void 0 ? "?" : Y(e.player.time)} ${e.player?.paused ? "paused" : "playing"}` + (document.visibilityState === "visible" ? "" : " (page hidden: the system pauses video)") + (i ? "" : " · PAGE NOT IN FRONT this minute") + ` · heap ${c === void 0 ? "n/a" : C(c)} · ${a.toFixed(0)} s ahead, ${u.toFixed(0)} s buffered in both videos · dropped ${r} this minute, ${g.dropped} of ${g.decoded} in all · ${o} stalls · ${s} file changes` + (e.metrics.recoveries ? ` · ${e.metrics.recoveries} reloads mid-way` : "") + (l ? ` · cache ${C(l.vod.disk_bytes)} on disk + ${C(l.vod.reserved_bytes)} reserved, ${l.vod.leased ?? "?"} leased` : "")), Rt(this.id, this.options.setup, n);
 			}
 		} finally {
 			clearInterval(v), d.forEach((e) => {
@@ -1729,14 +1751,14 @@ var X = (e) => new Date(e).toLocaleTimeString(), wt = class {
 		a?.filling !== void 0 && c.push(`${h(a.filling, "download")} from the recorder` + (a.prefetching ? ` (${String(a.prefetching)} for no viewer: next files, warm hours)` : "")), a?.rewriting && c.push(h(a.rewriting, "plain-copy rewrite"));
 		let l = (r?.held_by ?? []).filter((e) => e.ago_s <= 10 && e.where.length), u = l.reduce((e, t) => e && e.seen_ms >= t.seen_ms ? e : t, void 0);
 		if (u) {
-			let e = yt(u);
-			c.push(`held by ${e ? `${e}: ` : ""}${vt(u)}`);
+			let e = bt(u);
+			c.push(`held by ${e ? `${e}: ` : ""}${yt(u)}`);
 		}
-		i !== void 0 && i >= lt && this._noteBusy(i, u);
+		i !== void 0 && i >= ut && this._noteBusy(i, u);
 		let d;
 		if (e) {
-			let n = (t - e.began) / 1e3, r = le(l, n, e.firstMs === void 0 ? 0 : Math.max(0, n - e.firstMs / 1e3)), i = r.longest ? yt(r.longest) : void 0;
-			i && r.totalMs >= lt && !ce(r.longest?.by) && (d = {
+			let n = (t - e.began) / 1e3, r = le(l, n, e.firstMs === void 0 ? 0 : Math.max(0, n - e.firstMs / 1e3)), i = r.longest ? bt(r.longest) : void 0;
+			i && r.totalMs >= ut && !ce(r.longest?.by) && (d = {
 				who: i,
 				heldMs: r.totalMs
 			});
@@ -1749,7 +1771,7 @@ var X = (e) => new Date(e).toLocaleTimeString(), wt = class {
 	}
 	_noteBusy(e, t) {
 		this._rowName && this._busyRows.add(this._rowName), e > this._busiest && (this._busiest = e, this._busiestBy = t);
-		let n = [...this._busyRows], r = n.length ? ` in ${n.length === 1 ? "row" : "rows"} ${n.join(", ")}` : "", i = this._busiestBy, a = i ? yt(i) : void 0, o = ce(i?.by), s = i ? a ? `, by ${a}${o ? "" : ", not Reolink Viewer"} (${vt(i)})` : `, by ${vt(i)}` : "", c = `Home Assistant itself was busy during starts${r}: its event loop was held up to ${u(this._busiest)}${s}, so it answered late.`, l = o ? "problem" : "note";
+		let n = [...this._busyRows], r = n.length ? ` in ${n.length === 1 ? "row" : "rows"} ${n.join(", ")}` : "", i = this._busiestBy, a = i ? bt(i) : void 0, o = ce(i?.by), s = i ? a ? `, by ${a}${o ? "" : ", not Reolink Viewer"} (${yt(i)})` : `, by ${yt(i)}` : "", c = `Home Assistant itself was busy during starts${r}: its event loop was held up to ${u(this._busiest)}${s}, so it answered late.`, l = o ? "problem" : "note";
 		this._busyNote ? (this._busyNote.text = c, this._busyNote.grade = l) : (this._busyNote = {
 			grade: l,
 			text: c
@@ -1762,18 +1784,18 @@ var X = (e) => new Date(e).toLocaleTimeString(), wt = class {
 			return;
 		}
 	}
-}, Tt = (e) => e === void 0 ? "n/a" : e ? "yes" : "no", Z = () => document.visibilityState === "visible" && document.hasFocus(), Et = (e) => typeof e == "string" || typeof e == "number" ? String(e) : "?";
-function Dt() {
+}, Et = (e) => e === void 0 ? "n/a" : e ? "yes" : "no", X = () => document.visibilityState === "visible" && document.hasFocus(), Dt = (e) => typeof e == "string" || typeof e == "number" ? String(e) : "?";
+function Ot() {
 	return performance.memory?.usedJSHeapSize;
 }
-var Ot = class {
+var kt = class {
 	decoded = 0;
 	dropped = 0;
 	_last = /* @__PURE__ */ new Map();
 	update(e) {
 		let t = this.dropped;
 		for (let t of e) {
-			let e = kt(t);
+			let e = At(t);
 			if (!e) continue;
 			let n = this._last.get(t), r = !n || e.totalVideoFrames < n.totalVideoFrames;
 			this.decoded += r ? e.totalVideoFrames : e.totalVideoFrames - n.totalVideoFrames, this.dropped += r ? e.droppedVideoFrames : e.droppedVideoFrames - n.droppedVideoFrames, this._last.set(t, e);
@@ -1781,26 +1803,26 @@ var Ot = class {
 		return this.dropped - t;
 	}
 };
-function kt(e) {
+function At(e) {
 	return typeof e.getVideoPlaybackQuality == "function" ? e.getVideoPlaybackQuality() : void 0;
 }
-function At(e) {
+function jt(e) {
 	let t = e.buffered;
 	for (let n = 0; n < t.length; n += 1) if (t.start(n) <= e.currentTime + .5 && t.end(n) >= e.currentTime) return t.end(n);
 	return e.currentTime;
 }
-function jt(e) {
-	let t = Q(e);
+function Mt(e) {
+	let t = Z(e);
 	if (!t) return "video: none on screen";
 	let n = [];
 	for (let e = 0; e < t.buffered.length; e += 1) n.push(`${t.buffered.start(e).toFixed(1)}–${t.buffered.end(e).toFixed(1)} s`);
 	let r = t.error ? `, error ${String(t.error.code)}${t.error.message ? ` (${t.error.message})` : ""}` : "", i = e?.mseStats;
 	return `video: at ${t.currentTime.toFixed(1)} s of ${Number.isFinite(t.duration) ? t.duration.toFixed(1) : String(t.duration)} s, ready state ${String(t.readyState)}, network ${String(t.networkState)}, ${t.paused ? "paused" : "not paused"}${t.ended ? ", ended" : ""}${t.seeking ? ", seeking" : ""}, buffered [${n.join(", ") || "nothing"}]${r}` + (i ? ` · MSE (${i.api}): ${String(i.windows)} windows, ${C(i.bytes)}, from the ${i.source}, ${i.fetching ? "fetching" : "not fetching"}, ${i.ahead.toFixed(1)} s ahead` + (i.streaming === !1 ? ", the browser asked to pause fetching" : "") + (i.nudges ? `, stood still and nudged on ${String(i.nudges)}×` : "") : " · not through MSE");
 }
-function Q(e) {
+function Z(e) {
 	return e?.renderRoot.querySelector("video.active") ?? null;
 }
-function Mt(e) {
+function Nt(e) {
 	if (typeof e.requestVideoFrameCallback != "function") return {
 		painted: void 0,
 		maxGap: void 0,
@@ -1817,7 +1839,7 @@ function Mt(e) {
 	};
 	return n = e.requestVideoFrameCallback(a), i;
 }
-function Nt(e, t) {
+function Pt(e, t) {
 	let n = {}, r = [...e?.renderRoot.querySelectorAll("video") ?? []], i = [
 		"loadedmetadata",
 		"seeked",
@@ -1837,7 +1859,7 @@ function Nt(e, t) {
 		}
 	};
 }
-function Pt(e, t) {
+function Ft(e, t) {
 	let n = t ? new URL(t, location.href).pathname : "", r = performance.getEntriesByType("resource").filter((t) => (t.initiatorType === "video" || t.initiatorType === "fetch" && t.name.includes("/api/reolink_viewer/mse/")) && t.startTime >= e - 5);
 	if (!r.length) return "requests: none reported (this browser may not report video requests)";
 	let i = r.filter((e) => e.requestStart > 0), a = i.slice(0, 10).map((t, r) => {
@@ -1846,7 +1868,7 @@ function Pt(e, t) {
 	}), o = i.length > 10 ? ` | … ${i.length - 10} more` : "", s = r.length - i.length, c = [...new Set(i.map((e) => e.nextHopProtocol).filter(Boolean))].join("/");
 	return `requests${c ? ` (${c})` : ""}: ${i.length} sent${s ? `, ${s} cancelled before sending` : ""}: ${a.join(" | ")}${o}`;
 }
-async function Ft(t, n, r) {
+async function It(t, n, r) {
 	let i = navigator.mediaCapabilities;
 	if (!i?.decodingInfo) return "MediaCapabilities absent";
 	let a = [];
@@ -1867,10 +1889,10 @@ async function Ft(t, n, r) {
 	}
 	return a.join(" · ");
 }
-function It(e) {
+function Q(e) {
 	if (!e) return "?";
 	let t = [e.cache ?? "?"];
-	e.age_s !== void 0 && t.push(`${Et(e.age_s)} s old`);
+	e.age_s !== void 0 && t.push(`${Dt(e.age_s)} s old`);
 	for (let [n, r] of [
 		["queue_ms", "queue"],
 		["files_ms", "recordings"],
@@ -1880,7 +1902,19 @@ function It(e) {
 		let i = e[n];
 		typeof i == "number" && t.push(`${r} ${S(i)}`);
 	}
-	return typeof e.warm == "string" && t.push(`background fetch: ${e.warm}`), t.join(", ");
+	typeof e.warm == "string" && t.push(`background fetch: ${e.warm}`);
+	let n = Math.max(...[
+		"search_ms",
+		"files_ms",
+		"events_ms"
+	].map((t) => {
+		let n = e[t];
+		return typeof n == "number" ? n : 0;
+	}));
+	return typeof e.total_ms == "number" && n > e.total_ms + 100 && t.push("joined a search already running"), t.join(", ");
+}
+function Lt(e) {
+	return e?.events_error ? ` · event search failed (${e.events_error})` : "";
 }
 function $() {
 	try {
@@ -1889,30 +1923,30 @@ function $() {
 		return;
 	}
 }
-function Lt(e, t, n) {
+function Rt(e, t, n) {
 	try {
-		let r = $()?.getItem(J), i = {
+		let r = $()?.getItem(q), i = {
 			id: e,
 			setup: t,
 			started: r ? JSON.parse(r).started : (/* @__PURE__ */ new Date()).toISOString(),
 			updated: (/* @__PURE__ */ new Date()).toISOString(),
 			...n ? { minute: n } : {}
 		};
-		$()?.setItem(J, JSON.stringify(i));
+		$()?.setItem(q, JSON.stringify(i));
 	} catch {}
 }
-function Rt(e) {
+function zt(e) {
 	try {
-		let t = $()?.getItem(J);
-		t && JSON.parse(t).id === e && $()?.removeItem(J);
+		let t = $()?.getItem(q);
+		t && JSON.parse(t).id === e && $()?.removeItem(q);
 	} catch {}
 }
-async function zt(e) {
+async function Bt(e) {
 	let t;
 	try {
-		let e = $()?.getItem(J);
+		let e = $()?.getItem(q);
 		if (!e) return;
-		t = JSON.parse(e), $()?.removeItem(J);
+		t = JSON.parse(e), $()?.removeItem(q);
 	} catch {
 		return;
 	}
@@ -1929,6 +1963,6 @@ async function zt(e) {
 	} catch {}
 	return r;
 }
-var Bt = (e) => e.callWS({ type: "reolink_viewer/playback/check_reports" });
+var Vt = (e) => e.callWS({ type: "reolink_viewer/playback/check_reports" });
 //#endregion
-export { zt as a, pe as c, x as d, y as f, ze as i, fe as l, b as m, Re as n, Ee as o, _ as p, Bt as r, Se as s, wt as t, ge as u };
+export { Bt as a, pe as c, x as d, y as f, Be as i, fe as l, b as m, ze as n, De as o, _ as p, Vt as r, Ce as s, Tt as t, ge as u };
