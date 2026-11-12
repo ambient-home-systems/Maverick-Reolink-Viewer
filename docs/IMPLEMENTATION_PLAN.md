@@ -7962,6 +7962,63 @@ footage."**
   is cut, and the download is not resumed; with less, it is resumed as
   before. The test fails on the code before.
 
+**The owner's runs of v0.63.8 (2026-11-12, about 2:55 PM, Chrome 155 on the
+Mac):**
+
+- **Front Yard Right, Nabu Casa, with HD:** every row passed. HD took 1.25 s
+  from the file on disk: the 2.39 GB download had completed in the run
+  before, so this fix was not exercised.
+  - B1 took 2.5 s: the cut's reply 734 ms, first fragment 1.0 s. It was
+    "slowed by Home Assistant's own code", held by `selectors.py:452 in
+    select ← base_events.py in _run_once`: the loop's thread idle in select
+    while its timer ran late.
+- **Front Yard Left, Nabu Casa:** D1 0.57 s (1.09 s before), D2 0.08 s, the
+  release under 0.1 s. 2× was ✗ at 26 of 30 frames painted (27 needed), with
+  no stall.
+- **Garage, Chrome on the LAN (plain HTTP):** P was "painted with MSE (no
+  VideoDecoder: WebCodecs needs a secure page (HTTPS) …)", and showed no
+  picture in 186 asked (0 missed). The pictures came; none was painted, and
+  `MsePainter` said nothing of why.
+  - Headless Chromium paints them, through the same steps, from an ffmpeg
+    clip and from server-made pictures of an A/V recording in the NVR's
+    shape, the painter's video hidden or not. So the fault is not reproduced.
+  - The Radarr integration held the loop 1.3 s (`aiopyarr` models).
+- **The learning check:** no automation listens for unusual activity yet,
+  and 3 events fired for no mark. Both are the owner's to act on.
+
+**v0.63.9, from them:**
+
+- **The MSE painter says why** (`MsePainter.lastFailure`): the source did not
+  open; the type, the init or the picture refused, or not taken within 2 s
+  (with the video's error); or the video did not show it within 2 s (its
+  ready state, time and buffered ranges). It reaches the check's P row
+  ("they could not be shown: …"), "In short", and the debug panel's
+  "Pictures while dragging".
+- **Two likely fixes:**
+  - The painter's video stays rendered, at opacity 0, not `visibility:
+    hidden`, while it has no picture on show.
+  - A picture counts as shown on `seeked` or once the video is at its time
+    with its frame (ready state 2 or more), polled every 50 ms.
+- **The watchdog when the loop waits** (`loopwatch._blame`):
+  - A hold whose loop thread is in a wait (`selectors`, `queue.get`,
+    `threading` waits, sockets and the like: `_waiting`) is blamed on the
+    first other thread running code, one in an integration first, with its
+    name (`thread`). With none it is `system`: the computer gave the process
+    no time.
+  - The check says "held by Home Assistant's Radarr integration, in another
+    thread (SyncWorker_3)", or "the computer Home Assistant runs on (none of
+    its threads was running)".
+- The playback check is v0.8.7.
+- **Checks:**
+  - `_blame` on the owner's stacks.
+  - Waits known by their innermost frame.
+  - Real threads: a "loop" waiting in select and another running code filed
+    under the Radarr integration.
+  - The painter's reasons (refused, not taken, not shown).
+  - A picture counted as shown without `seeked`.
+  - The check's words for a thread and for the computer.
+  - The "no picture" line's reason.
+
 #### Step 10.4: the checks
 
 - **In CI:** `scrub_check.cjs` drags against a fake key-frame endpoint,

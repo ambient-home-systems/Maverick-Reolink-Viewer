@@ -208,6 +208,117 @@ def test_a_generator_held_in_names_its_caller_after_it_yields() -> None:
     tokens.close()
 
 
+# The loop's thread as the owner's runs of v0.63.8 found it: waiting in select.
+_SELECTING = [
+    ("/usr/lib/python3.14/selectors.py", 452, "select"),
+    ("/usr/lib/python3.14/asyncio/base_events.py", 2026, "_run_once"),
+    ("/usr/lib/python3.14/site-packages/homeassistant/runner.py", 10, "run"),
+]
+_RADARR = [
+    ("/usr/lib/python3.14/site-packages/aiopyarr/models/base.py", 116, "__init__"),
+    (
+        "/usr/lib/python3.14/site-packages/aiopyarr/models/radarr.py",
+        274,
+        "__post_init__",
+    ),
+    (
+        "/usr/lib/python3.14/site-packages/homeassistant/components/radarr/coordinator.py",
+        50,
+        "_fetch",
+    ),
+    ("/usr/lib/python3.14/concurrent/futures/thread.py", 59, "run"),
+]
+_IDLE_WORKER = [
+    ("/usr/lib/python3.14/queue.py", 171, "get"),
+    ("/usr/lib/python3.14/concurrent/futures/thread.py", 89, "_worker"),
+]
+_RECORDER = [
+    ("/usr/lib/python3.14/threading.py", 359, "wait"),
+    (
+        "/usr/lib/python3.14/site-packages/homeassistant/components/recorder/core.py",
+        600,
+        "_run",
+    ),
+]
+
+
+def test_a_hold_with_the_loop_waiting_names_the_thread_that_ran() -> None:
+    """The loop waited in select and ran late: another thread had the interpreter (v0.63.9)."""
+    where, by, thread = loopwatch._blame(
+        _SELECTING,
+        [
+            ("SyncWorker_0", _IDLE_WORKER),
+            ("Recorder", _RECORDER),
+            ("SyncWorker_3", _RADARR),
+        ],
+    )
+    assert by == "homeassistant/components/radarr"
+    assert thread == "SyncWorker_3"
+    assert where[0] == "site-packages/aiopyarr/models/base.py:116 in __init__"
+    # No other thread running code: the computer gave Home Assistant no time.
+    where, by, thread = loopwatch._blame(
+        _SELECTING, [("SyncWorker_0", _IDLE_WORKER), ("Recorder", _RECORDER)]
+    )
+    assert by == "system"
+    assert thread is None
+    assert where[0] == "lib/python3.14/selectors.py:452 in select"
+    # The loop's thread running code: that code, as before.
+    where, by, thread = loopwatch._blame(_RADARR, [("SyncWorker_3", _RADARR)])
+    assert by == "homeassistant/components/radarr"
+    assert thread is None
+    # A thread running code in no integration still beats the computer.
+    plain = [("/usr/lib/python3.14/json/decoder.py", 345, "decode")]
+    _where, by, thread = loopwatch._blame(_SELECTING, [("worker", plain)])
+    assert by is None
+    assert thread == "worker"
+
+
+def test_waits_are_known_by_their_innermost_frame() -> None:
+    assert loopwatch._waiting(_SELECTING)
+    assert loopwatch._waiting(_IDLE_WORKER)
+    assert loopwatch._waiting(_RECORDER)
+    assert loopwatch._waiting([])
+    assert not loopwatch._waiting(_RADARR)
+
+
+def test_the_watchdog_reads_the_other_threads_when_the_loop_waits(
+    hass: HomeAssistant,
+) -> None:
+    """Real threads: the "loop" waits in select, another runs Radarr's code (v0.63.9)."""
+    import selectors
+    import threading
+
+    stop = threading.Event()
+    radarr = _as_file(
+        "/usr/lib/python3.14/site-packages/homeassistant/components/radarr/coordinator.py",
+        "def _fetch(stop):\n    n = 0\n    while not stop.is_set():\n        n += 1\n",
+    )
+    waiting = threading.Thread(
+        target=lambda: selectors.DefaultSelector().select(2), name="loop"
+    )
+    busy = threading.Thread(target=radarr["_fetch"], args=(stop,), name="SyncWorker_3")
+    waiting.start()
+    busy.start()
+    try:
+        time.sleep(0.1)
+        watch = LoopWatch(hass)
+        watch._loop_thread = waiting.ident
+        hold = watch._capture(time.monotonic(), 0.6)
+    finally:
+        stop.set()
+        busy.join()
+        waiting.join()
+    assert hold is not None
+    assert hold.by == "homeassistant/components/radarr"
+    assert hold.thread == "SyncWorker_3"
+    # Its frames (innermost may be the stop check it calls, in threading.py).
+    assert any(
+        w.startswith("homeassistant/components/radarr/coordinator.py:")
+        for w in hold.where
+    )
+    assert hold.held_ms == 600.0
+
+
 def test_a_frame_says_its_file_line_and_function() -> None:
     """Innermost first: "file:line in function"."""
     where = loopwatch._where(loopwatch._stack(sys._getframe()))

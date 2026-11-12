@@ -28,6 +28,14 @@ looking for its caller, it yielded, and a paused generator's frame no longer
 links to its caller. So (v0.63.7) the stack is read once, at the hold, as
 plain (file, line, function) entries, with nothing read from disk.
 
+The owner's runs of v0.63.8 then found holds with the loop's thread idle in
+``selectors.select``: the timer was due and the loop was waiting for no work,
+yet ran late. That is another thread holding the interpreter (the GIL), or
+the computer giving Home Assistant no time. So (v0.63.9) such a hold looks
+at the process's other threads: the first one running code, and whose (its
+name and integration), is noted; with none, it is the computer's
+(``by`` "system").
+
 Both run only while someone looks: each read of the playback statistics (the
 check, the debug panel) keeps them running ``WATCH_S`` longer.
 """
@@ -155,13 +163,26 @@ class LoopWatch:
                 continue
             seen = beat
             current = None
-            frame = sys._current_frames().get(self._loop_thread or 0)  # noqa: SLF001
-            if frame is None:
+            current = self._capture(now, late)
+            if current is None:
                 continue
-            stack = _stack(frame)
-            current = _Hold(now, round(late * 1000, 1), _where(stack), _owner(stack))
             with self._lock:
                 self._holds.append(current)
+
+    def _capture(self, now: float, late: float) -> _Hold | None:
+        """Note a hold: where the loop's thread is, or the thread that runs instead."""
+        frames = sys._current_frames()  # noqa: SLF001
+        frame = frames.get(self._loop_thread or 0)
+        if frame is None:
+            return None
+        stack = _stack(frame)
+        others = [
+            (_thread_name(ident), _stack(other))
+            for ident, other in frames.items()
+            if ident not in (self._loop_thread, threading.get_ident())
+        ]
+        where, by, thread = _blame(stack, others)
+        return _Hold(now, round(late * 1000, 1), where, by, thread)
 
     def held_ms(self, seconds: float) -> float | None:
         """Return the longest delay (ms) in the last ``seconds``; None if not watched then."""
@@ -185,14 +206,24 @@ class LoopWatch:
         ``ago_s``: since it was last seen held (its end, within ``POLL_S``);
         ``seen_ms``: how long the timer was late by then; ``by``: whose code
         held it (``custom_components/<domain>``, ``homeassistant/components/
-        <domain>``, ``homeassistant`` for its own code, or None).
+        <domain>``, ``homeassistant`` for its own code, ``system`` when no
+        thread of the process was running, or None); ``thread``: the other
+        thread that ran while the loop's waited, if one did.
         """
         now = time.monotonic()
         with self._lock:
-            holds = [(h.last, h.held_ms, list(h.where), h.by) for h in self._holds]
+            holds = [
+                (h.last, h.held_ms, list(h.where), h.by, h.thread) for h in self._holds
+            ]
         return [
-            {"ago_s": round(now - last, 1), "seen_ms": held, "where": where, "by": by}
-            for last, held, where, by in reversed(holds)
+            {
+                "ago_s": round(now - last, 1),
+                "seen_ms": held,
+                "where": where,
+                "by": by,
+                "thread": thread,
+            }
+            for last, held, where, by, thread in reversed(holds)
             if last >= now - seconds
         ]
 
@@ -213,17 +244,27 @@ class LoopWatch:
 
 
 class _Hold:
-    """A hold the watchdog saw: when last seen, how long, where, whose code."""
+    """A hold the watchdog saw: when last seen, how long, where, whose code.
 
-    __slots__ = ("by", "held_ms", "last", "where")
+    ``thread``: the other thread that ran meanwhile, when the loop's own was
+    waiting (see ``_blame``).
+    """
+
+    __slots__ = ("by", "held_ms", "last", "thread", "where")
 
     def __init__(
-        self, last: float, held_ms: float, where: list[str], by: str | None
+        self,
+        last: float,
+        held_ms: float,
+        where: list[str],
+        by: str | None,
+        thread: str | None = None,
     ) -> None:
         self.last = last
         self.held_ms = held_ms
         self.where = where
         self.by = by
+        self.thread = thread
 
 
 # A stack as read at a hold: (file, line, function), innermost first.
@@ -266,6 +307,65 @@ def _owner(stack: Stack) -> str | None:
         if "/homeassistant/" in path:
             core = True
     return "homeassistant" if core else None
+
+
+# Where a thread waits (for I/O, a lock, a queue, a timer): it holds nothing.
+# (A file's functions that wait; None: all of them.)
+_WAITS: dict[str, frozenset[str] | None] = {
+    "selectors.py": None,
+    "threading.py": frozenset({"wait", "_wait_for_tstate_lock", "join", "acquire"}),
+    "queue.py": frozenset({"get", "put"}),
+    "socket.py": frozenset({"accept", "recv", "recv_into", "readinto", "recvfrom"}),
+    "ssl.py": frozenset({"read", "recv", "recv_into", "do_handshake"}),
+    "subprocess.py": frozenset({"wait", "_wait", "_try_wait", "communicate"}),
+    "connection.py": frozenset({"recv", "recv_bytes", "_recv", "_recv_bytes", "poll"}),
+    "base_events.py": frozenset({"_run_once", "run_forever"}),
+}
+
+
+def _waiting(stack: Stack) -> bool:
+    """Return whether a thread's innermost frame is a wait (it runs no code)."""
+    if not stack:
+        return True
+    path, _line, name = stack[0]
+    base = path.rsplit("/", 1)[-1]
+    if base not in _WAITS:
+        return False
+    names = _WAITS[base]
+    return names is None or name in names
+
+
+def _blame(
+    loop: Stack, others: list[tuple[str | None, Stack]]
+) -> tuple[list[str], str | None, str | None]:
+    """Return where a hold was, whose code, and in which other thread.
+
+    The loop's own thread, running code: that code. Waiting (the timer was
+    due and it ran late anyway): the first other thread running code, one
+    in an integration first, else any; with none, the computer's
+    (``system``: no thread of the process ran).
+    """
+    if not _waiting(loop):
+        return _where(loop), _owner(loop), None
+    running = [(name, stack) for name, stack in others if not _waiting(stack)]
+    owned = [
+        (name, stack)
+        for name, stack in running
+        if _owner(stack) not in (None, "homeassistant")
+    ]
+    candidates = owned or running
+    if not candidates:
+        return _where(loop), "system", None
+    name, stack = candidates[0]
+    return _where(stack), _owner(stack), name or "another thread"
+
+
+def _thread_name(ident: int) -> str | None:
+    """Return a thread's name (its ident as ``sys._current_frames`` gives it)."""
+    for thread in threading.enumerate():
+        if thread.ident == ident:
+            return thread.name
+    return None
 
 
 def _where(stack: Stack) -> list[str]:

@@ -137,8 +137,9 @@ class FakeBuffer extends EventTarget {
   removed = 0;
   private _ranges: [number, number][] = [];
 
-  get buffered(): { length: number } {
-    return { length: this._ranges.length };
+  get buffered(): { length: number; start: (i: number) => number; end: (i: number) => number } {
+    const ranges = this._ranges;
+    return { length: ranges.length, start: (i) => ranges[i]?.[0] ?? 0, end: (i) => ranges[i]?.[1] ?? 0 };
   }
 
   appendBuffer(data: Uint8Array): void {
@@ -215,6 +216,68 @@ describe("painting a key frame through MSE", () => {
     } finally {
       open.mockRestore();
     }
+  });
+
+  /** A painter whose sources open at once, with `video`; `buffer` changes the buffer's ways. */
+  async function painted(video: HTMLVideoElement, setUp: (buffer: FakeBuffer) => void = () => undefined) {
+    const { Source, sources } = fakeMse();
+    const open = vi.spyOn(URL, "createObjectURL").mockImplementation((source) => {
+      const record = sources.at(-1);
+      if (record) setUp(record.buffer);
+      queueMicrotask(() => (source as unknown as EventTarget).dispatchEvent(new Event("sourceopen")));
+      return "blob:scrub";
+    });
+    try {
+      const painter = new MsePainter(Source);
+      const ok = await painter.paint(picture(), video);
+      return { ok, failure: painter.lastFailure };
+    } finally {
+      open.mockRestore();
+    }
+  }
+
+  it("keeps why a picture could not be shown (v0.63.9: the owner's Chrome on HTTP showed none)", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "setInterval"] });
+    try {
+      // The browser refuses the picture.
+      const refusing = painted(fakeVideo(), (buffer) => {
+        buffer.appendBuffer = function (this: FakeBuffer, data: Uint8Array) {
+          this.appended.push(data);
+          queueMicrotask(() => {
+            this.dispatchEvent(new Event("error"));
+            this.dispatchEvent(new Event("updateend"));
+          });
+        };
+      });
+      await vi.advanceTimersByTimeAsync(2_500);
+      expect(await refusing).toEqual({ ok: false, failure: "the init segment was refused" });
+      // A buffer that never takes it.
+      const stuck = painted(fakeVideo(), (buffer) => {
+        buffer.appendBuffer = () => undefined;
+      });
+      await vi.advanceTimersByTimeAsync(2_500);
+      expect(await stuck).toEqual({ ok: false, failure: "the init segment was not taken within 2 s" });
+      // A video that never gets there.
+      const still = document.createElement("video");
+      const never = painted(still);
+      await vi.advanceTimersByTimeAsync(2_500);
+      const result = await never;
+      expect(result.ok).toBe(false);
+      expect(result.failure).toBe("the video did not show it within 2 s (ready state 0, at 0.00 s for 0.00 s, buffered 0.00–1.00 s)");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("counts a picture shown once the video is at its time, though it never says seeked", async () => {
+    // As a browser may not say it: no seeked, but there, with the frame (ready state 2).
+    const video = document.createElement("video");
+    let time = 0;
+    Object.defineProperty(video, "currentTime", { get: () => time, set: (value: number) => (time = value) });
+    Object.defineProperty(video, "readyState", { get: () => 2 });
+    const { ok, failure } = await painted(video);
+    expect(ok).toBe(true);
+    expect(failure).toBeUndefined();
   });
 
   it("says it could not where there is no MSE or the source never opens", async () => {

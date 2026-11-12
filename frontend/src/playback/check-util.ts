@@ -432,6 +432,8 @@ export interface DragPass {
   asked: number;
   missed: number;
   lastMiss?: string;
+  /** Why the pictures that came could not be shown (the MSE painter's last failure, v0.63.9). */
+  paintFailure?: string;
 }
 
 export interface DragSummary {
@@ -489,7 +491,10 @@ export const caughtUp = (s: DragSummary): boolean => s.restMs !== undefined && s
 /** "34 pictures, the first after 0.41 s, a new one every 0.27 s (median), 33 of 34 within the camera's 1.0 s of their moment (0.1–0.9 s before), 0.8 s behind the moving pointer; device 30, store 4" */
 export function describeDrag(s: DragSummary, pass: DragPass): string {
   if (!s.pictures) {
-    return `no picture in ${String(pass.asked)} asked${pass.missed ? ` (${String(pass.missed)} missed${pass.lastMiss ? `, last: ${pass.lastMiss}` : ""})` : ""}`;
+    return (
+      `no picture in ${String(pass.asked)} asked${pass.missed ? ` (${String(pass.missed)} missed${pass.lastMiss ? `, last: ${pass.lastMiss}` : ""})` : ""}` +
+      (pass.paintFailure ? `; they could not be shown: ${pass.paintFailure}` : "")
+    );
   }
   const sources = Object.entries(s.sources)
     .map(([source, n]) => `${source} ${String(n)}`)
@@ -568,6 +573,8 @@ export function heldByName(by: string | null | undefined): string | undefined {
   if (!by) return undefined;
   if (by === OUR_CODE) return "Reolink Viewer itself";
   if (by === "homeassistant") return "Home Assistant's own code";
+  // Its loop waited and no thread of it ran (v0.63.9): the computer gave it no time.
+  if (by === "system") return "the computer Home Assistant runs on (none of its threads was running)";
   const custom = by.startsWith("custom_components/");
   const core = by.startsWith("homeassistant/components/");
   if (!custom && !core) return undefined;
@@ -591,6 +598,8 @@ export interface LoopHold {
   seen_ms: number;
   where: string[];
   by?: string | null;
+  /** Another thread that ran while the loop's waited (v0.63.9). */
+  thread?: string | null;
 }
 
 /**

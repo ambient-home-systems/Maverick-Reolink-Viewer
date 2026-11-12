@@ -23,6 +23,8 @@ export interface PaintPath {
   how: "WebCodecs" | "MSE" | "none";
   /** Why not WebCodecs, in words. */
   why?: string;
+  /** MSE: why the last picture could not be shown, if it could not (v0.63.9). */
+  failure?: string;
 }
 
 /** A picture painted (the `rv-scrub-painted` event): the playback check times them. */
@@ -82,11 +84,13 @@ export class RvScrubPicture extends LitElement {
   get path(): PaintPath {
     if (this.codecs.available) return { how: "WebCodecs" };
     if (this.mse.available) {
+      const failure = this.mse.lastFailure;
       return {
         how: "MSE",
         why: window.isSecureContext
           ? "this browser has no VideoDecoder"
           : "no VideoDecoder: WebCodecs needs a secure page (HTTPS), and this one is plain HTTP",
+        ...(failure ? { failure } : {}),
       };
     }
     return { how: "none", why: "this browser has neither WebCodecs nor MSE" };
@@ -95,6 +99,11 @@ export class RvScrubPicture extends LitElement {
   /** Whether a picture is on screen now. */
   get showing(): boolean {
     return this.picture !== undefined && this._shown !== undefined;
+  }
+
+  /** Why the last picture could not be painted through MSE (v0.63.9), if it could not. */
+  get paintFailure(): string | undefined {
+    return this.codecs.available ? undefined : this.mse.lastFailure;
   }
 
   /** The picture on screen, if any: its time and its camera's key-frame interval. */
@@ -236,6 +245,17 @@ export class RvScrubPicture extends LitElement {
     video.on,
     img.on {
       visibility: visible;
+    }
+    /*
+     * The MSE painter's video stays rendered, only transparent, until it shows
+     * a picture: a browser may leave a hidden video's seek undone (v0.63.9).
+     */
+    video {
+      visibility: visible;
+      opacity: 0;
+    }
+    video.on {
+      opacity: 1;
     }
     .frame.late canvas,
     .frame.late video,

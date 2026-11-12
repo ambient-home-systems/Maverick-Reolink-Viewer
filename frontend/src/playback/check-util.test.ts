@@ -356,6 +356,11 @@ describe("the P row: pictures while dragging", () => {
   it("says a drag that showed nothing, with the last answer", () => {
     const pass: DragPass = { movedMs: 500, rest: 0, asked: 3, missed: 3, lastMiss: "no picture from the device: busy", paints: [] };
     expect(describeDrag(summarizeDrag(pass), pass)).toBe("no picture in 3 asked (3 missed, last: no picture from the device: busy)");
+    // v0.63.9: pictures came, and the browser could not show them (MSE): why.
+    const shown = { ...pass, missed: 0, paintFailure: "the picture was refused (video error 4)" };
+    expect(describeDrag(summarizeDrag(shown), shown)).toBe(
+      "no picture in 3 asked; they could not be shown: the picture was refused (video error 4)",
+    );
   });
 
   it("rests a drag's pointer inside a recording", () => {
@@ -400,6 +405,8 @@ describe("whose code held Home Assistant (v0.63.5)", () => {
     expect(heldByName("custom_components/frigate_proxy")).toBe("the Frigate Proxy integration");
     expect(heldByName("homeassistant/components/recorder")).toBe("Home Assistant's Recorder integration");
     expect(heldByName("homeassistant")).toBe("Home Assistant's own code");
+    // v0.63.9: its loop waited, and none of its threads ran.
+    expect(heldByName("system")).toBe("the computer Home Assistant runs on (none of its threads was running)");
     expect(heldByName("custom_components/reolink_viewer")).toBe("Reolink Viewer itself");
     expect(heldByName(null)).toBeUndefined();
     expect(heldByName(undefined)).toBeUndefined();
