@@ -1,6 +1,6 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
-import { Z as i, c as a, j as o, ot as s, u as c } from "./live-BkJQck7z.js";
-import { A as l, C as u, I as d, S as f, W as p, _ as m, k as h, u as g } from "./home-CWhJIzJr.js";
+import { Z as i, c as a, j as o, ot as s, u as c } from "./live-DbkkZT-0.js";
+import { A as l, C as u, G as d, L as f, j as p, u as m, v as h, w as g } from "./home-GYXy7b8E.js";
 //#region src/playback/calendar.ts
 var _ = [
 	0,
@@ -40,7 +40,7 @@ var _ = [
 		}));
 	}
 	_move(e) {
-		let [t, n] = m(this.year, this.month, e);
+		let [t, n] = h(this.year, this.month, e);
 		this._emit("rv-month", {
 			year: t,
 			month: n
@@ -56,7 +56,7 @@ var _ = [
 		else if (e.key === "Home") a = /* @__PURE__ */ new Date(n.getTime() - r * 864e5);
 		else if (e.key === "End") a = new Date(n.getTime() + (6 - r) * 864e5);
 		else if (e.key === "PageUp" || e.key === "PageDown") {
-			let [n, r] = m(this.year, this.month, e.key === "PageUp" ? -1 : 1), i = new Date(Date.UTC(n, r, 0)).getUTCDate();
+			let [n, r] = h(this.year, this.month, e.key === "PageUp" ? -1 : 1), i = new Date(Date.UTC(n, r, 0)).getUTCDate();
 			a = new Date(Date.UTC(n, r - 1, Math.min(t, i)));
 		} else return;
 		e.preventDefault();
@@ -69,7 +69,7 @@ var _ = [
 		}, s ? this._move(s) : this._focus = Math.min(a.getUTCDate(), i);
 	}
 	get _shown() {
-		return f(this.year, this.month, 1).slice(0, 7);
+		return u(this.year, this.month, 1).slice(0, 7);
 	}
 	willUpdate(e) {
 		(e.has("month") || e.has("year")) && (this._focus = this._focusAfter?.month === this._shown ? this._focusAfter.day : void 0);
@@ -89,7 +89,7 @@ var _ = [
 		})), a = _.map((e) => (e + this.firstDay) % 7).map((e) => new Date(Date.UTC(2023, 0, 1 + e)).toLocaleDateString(void 0, {
 			weekday: "long",
 			timeZone: "UTC"
-		})), o = this._stop(new Date(Date.UTC(this.year, this.month, 0)).getUTCDate()), [s, c] = m(this.year, this.month, 1), l = this.today !== void 0 && f(s, c, 1) > this.today;
+		})), o = this._stop(new Date(Date.UTC(this.year, this.month, 0)).getUTCDate()), [s, c] = h(this.year, this.month, 1), l = this.today !== void 0 && u(s, c, 1) > this.today;
 		return n`<div class="head">
         <button class="text" aria-label="Previous month" @click=${() => {
 			this._move(-1);
@@ -103,10 +103,10 @@ var _ = [
         <div class="week" role="row">
           ${r.map((e, t) => n`<span class="dow" role="columnheader" aria-label=${a[t] ?? e}>${e}</span>`)}
         </div>
-        ${u(this.year, this.month, this.firstDay).map((e) => n`<div class="week" role="row">
+        ${g(this.year, this.month, this.firstDay).map((e) => n`<div class="week" role="row">
             ${e.map((e) => {
 			if (e === null) return n`<span role="gridcell"></span>`;
-			let r = f(this.year, this.month, e), i = this.today !== void 0 && r > this.today, a = this.days.has(e), s = new Date(Date.UTC(this.year, this.month - 1, e)).toLocaleDateString(void 0, {
+			let r = u(this.year, this.month, e), i = this.today !== void 0 && r > this.today, a = this.days.has(e), s = new Date(Date.UTC(this.year, this.month - 1, e)).toLocaleDateString(void 0, {
 				weekday: "long",
 				month: "long",
 				day: "numeric",
@@ -247,7 +247,7 @@ var b = class extends r {
 		}
 	}
 	_go(e) {
-		this._calendar = !1, p(this, e >= this._today ? { view: "events" } : {
+		this._calendar = !1, d(this, e >= this._today ? { view: "events" } : {
 			view: "events",
 			date: e
 		});
@@ -345,7 +345,7 @@ var b = class extends r {
     </div>`;
 	}
 	_renderFilters() {
-		let e = this._feed?.events ?? [], r = new Set(e.map((e) => e.camera_id)), a = this.cameras.filter((e) => r.has(e.id) || this._cameraFilter.has(e.id)), o = [.../* @__PURE__ */ new Set([...e.flatMap((e) => h(e.types)), ...this._typeFilter])], s = this._marks?.enabled ? this._marks : void 0;
+		let e = this._feed?.events ?? [], r = new Set(e.map((e) => e.camera_id)), a = this.cameras.filter((e) => r.has(e.id) || this._cameraFilter.has(e.id)), o = [.../* @__PURE__ */ new Set([...e.flatMap((e) => l(e.types)), ...this._typeFilter])], s = this._marks?.enabled ? this._marks : void 0;
 		if (!a.length && !o.length && !s) return t;
 		let c = this._cameraFilter.size > 0 || this._typeFilter.size > 0 || this._unusualOnly;
 		return n`<div class="filters">
@@ -364,14 +364,14 @@ var b = class extends r {
           </div>` : t}
       ${o.length ? n`<div class="group" role="group" aria-label="What was detected">
             <span class="label">Detected</span>
-            ${l(o).map((e) => n`<button
+            ${p(o).map((e) => n`<button
                   class="chip"
                   aria-pressed=${this._typeFilter.has(e) ? "true" : "false"}
                   @click=${() => {
 			this._typeFilter = this._toggle(this._typeFilter, e);
 		}}
                 >
-                  ${i(g([e]))}${d(e)}
+                  ${i(m([e]))}${f(e)}
                 </button>`)}
           </div>` : t}
       ${s ? this._renderUnusual(s) : t}

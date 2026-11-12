@@ -1,6 +1,6 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
-import { Lt as i, Q as a, Z as o, d as s, f as c, j as l, n as u, nt as d, p as f } from "./live-BkJQck7z.js";
-import { s as p, tt as m } from "./home-CWhJIzJr.js";
+import { Lt as i, Q as a, Z as o, d as s, f as c, j as l, n as u, nt as d, p as f } from "./live-DbkkZT-0.js";
+import { nt as p, s as m } from "./home-GYXy7b8E.js";
 //#region src/live/card-report.ts
 var h = /* @__PURE__ */ new Set([
 	"visible",
@@ -131,8 +131,8 @@ var w = class extends r {
         </button>
         ${typeof e == "object" && "devices" in e && e.devices.length ? n`<button
               @click=${() => {
-			p({
-				version: m,
+			m({
+				version: p,
 				devices: e.devices
 			}, `reolink-viewer-cards-${String(Date.now())}.json`);
 		}}
@@ -169,7 +169,7 @@ var w = class extends r {
 	}
 	_renderDevices(e, t) {
 		if (!e.devices.length) return n`<p class="muted">No dashboard card has reported yet. Add a Reolink camera card to a dashboard and open it.</p>`;
-		let r = C(e.devices, m, t);
+		let r = C(e.devices, p, t);
 		return n`${e.devices.map((e) => n`<section class="device">
           <h2>${e.device}</h2>
           <p class="muted small">Last heard from ${T(e.updated, t)}</p>

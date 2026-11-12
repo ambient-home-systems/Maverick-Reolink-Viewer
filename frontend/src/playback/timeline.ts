@@ -25,6 +25,8 @@ const PINCH_MIN_PX = 24;
 /** A trackpad pinch (ctrl+wheel): how much one unit of wheel zooms. */
 const PINCH_WHEEL = 0.01;
 const HEIGHT = 76;
+/** Centred: a time left under the playhead stays this long at most for the cursor to follow (ms). */
+const HELD_MS = 3_000;
 const TICK_ROW = 18;
 const BAR_TOP = 22;
 const BAR_HEIGHT = 26;
@@ -65,6 +67,14 @@ export interface HoverDetail {
  * Up and Page Down further, Home and End to the start and end of the day), as
  * a drag scrubs, and the recording plays from there once they rest, or at
  * once with Enter or Space; + and - zoom. The view follows the time.
+ *
+ * `centred` (v0.63.7, the owner's ask: "more Nest/UniFi Protect like"): the
+ * playhead stays in the middle and the strip moves under it. Dragging the
+ * strip moves the time the other way (the time under the playhead is what
+ * plays on release); a click plays from where it lands, which comes to the
+ * middle; zooming keeps the middle's time; a sideways wheel moves the time as
+ * the arrow keys do; two fingers zoom. The day's edges can come to the middle,
+ * with nothing beyond them.
  */
 export class RvTimeline extends LitElement {
   static override properties = {
@@ -73,7 +83,9 @@ export class RvTimeline extends LitElement {
     view: { attribute: false },
     cursor: { attribute: false },
     timeZone: { attribute: false },
+    centred: { type: Boolean },
     _keyTime: { state: true },
+    _held: { state: true },
   };
 
   declare day: TimelineDay | undefined;
@@ -82,13 +94,22 @@ export class RvTimeline extends LitElement {
   declare view: View;
   declare cursor: number | undefined;
   declare timeZone: string | undefined;
+  /** The playhead stays in the middle and the strip moves (v0.63.7). */
+  declare centred: boolean;
+  /**
+   * Centred: the time a drag, a click or the keys left under the playhead,
+   * shown there until the cursor (the owner's play time) follows, so the strip
+   * does not jump back meanwhile; dropped if it does not within `HELD_MS`.
+   */
+  declare _held: number | undefined;
+  private _heldTimer: ReturnType<typeof setTimeout> | undefined;
 
   private _width = 0;
   /** The width the ResizeObserver last reported (0: none yet). */
   private _observed = 0;
   private _resize: ResizeObserver | undefined;
-  /** One pointer pressed: where, whether it moved, and the time it scrubbed to. */
-  private _drag: { pointerId: number; x: number; moved: boolean; time?: number } | undefined;
+  /** One pointer pressed: where, whether it moved, the time it scrubbed to, and (centred) the time in the middle when pressed. */
+  private _drag: { pointerId: number; x: number; moved: boolean; time?: number; from?: number } | undefined;
   /** The pointers down on the canvas, and their x. */
   private readonly _pointers = new Map<number, number>();
   /** Two fingers: the span and their distance when they landed, and the time between them. */
@@ -104,6 +125,7 @@ export class RvTimeline extends LitElement {
     super();
     this.events = [];
     this.view = { start: 0, span: ZOOM_LEVELS[0] ?? 86_400_000 };
+    this.centred = false;
   }
 
   override connectedCallback(): void {
@@ -124,6 +146,7 @@ export class RvTimeline extends LitElement {
     this._resize?.disconnect();
     clearTimeout(this._hoverTimer);
     clearTimeout(this._keySeek);
+    clearTimeout(this._heldTimer);
   }
 
   private get _canvas(): HTMLCanvasElement | null {
@@ -137,11 +160,50 @@ export class RvTimeline extends LitElement {
 
   /** Time under an x position (pixels from the canvas's left edge). */
   timeAt(x: number): number {
-    return xToTime(x, this.view, this._width || 1);
+    return xToTime(x, this._shown, this._width || 1);
+  }
+
+  /** The view drawn: centred, the time under the playhead in the middle; else `view`. */
+  private get _shown(): View {
+    if (!this.centred) return this.view;
+    return { start: this._centre - this.view.span / 2, span: this.view.span };
+  }
+
+  /** Centred: the time under the playhead (a drag's, the keys', one just left there, or the cursor). */
+  private get _centre(): number {
+    return this._drag?.time ?? this._keyTime ?? this._held ?? this.cursor ?? this.view.start + this.view.span / 2;
+  }
+
+  /** A time the playhead can be at: within the day, and not after now (a now before the day is not believed). */
+  private _within(time: number): number {
+    const { start, end } = this._bounds;
+    const now = this.day?.now ?? end;
+    const last = now > start ? Math.min(end, now) : end;
+    return Math.min(Math.max(time, start), last);
+  }
+
+  protected override willUpdate(changed: Map<string, unknown>): void {
+    // The play time followed what was left under the playhead: it takes over.
+    if (changed.has("cursor") && this._held !== undefined) this._dropHeld();
   }
 
   protected override updated(): void {
     this._draw();
+  }
+
+  /** Centred: keep a time under the playhead until the cursor follows (see `_held`). */
+  private _hold(time: number): void {
+    if (!this.centred) return;
+    this._held = time;
+    clearTimeout(this._heldTimer);
+    this._heldTimer = setTimeout(() => {
+      this._held = undefined;
+    }, HELD_MS);
+  }
+
+  private _dropHeld(): void {
+    clearTimeout(this._heldTimer);
+    this._held = undefined;
   }
 
   private _emit(name: string, detail: object): void {
@@ -156,12 +218,24 @@ export class RvTimeline extends LitElement {
     this._emit("rv-view-change", { view: next });
   }
 
-  /** Zoom one level in (+1) or out (-1) around a time (default: the cursor). */
+  /** Zoom one level in (+1) or out (-1) around a time (default: the cursor; centred, always the middle). */
   zoom(direction: 1 | -1, anchor?: number): void {
     const span = stepZoom(this.view.span, direction);
     if (span === undefined) return;
+    if (this.centred) {
+      this._setSpan(span);
+      return;
+    }
     const at = anchor ?? this.cursor ?? this.view.start + this.view.span / 2;
     this._setView(zoomAt(this.view, span, at, this._bounds));
+  }
+
+  /** Centred: a new span around the middle's time (not kept within the day). */
+  private _setSpan(span: number): void {
+    if (span === this.view.span) return;
+    const next = { start: this._centre - span / 2, span };
+    this.view = next;
+    this._emit("rv-view-change", { view: next });
   }
 
   /** A span between the narrowest zoom level and the whole day. */
@@ -171,8 +245,12 @@ export class RvTimeline extends LitElement {
     return Math.min(Math.max(span, narrowest), Math.max(end - start, narrowest));
   }
 
-  /** Pan by a fraction of the visible span (negative: earlier). */
+  /** Pan by a fraction of the visible span (negative: earlier); centred, the time moves (as the keys move it). */
   pan(fraction: number): void {
+    if (this.centred) {
+      this._keyTo(this._within(this._centre + fraction * this.view.span));
+      return;
+    }
     this._setView({ start: this.view.start + fraction * this.view.span, span: this.view.span });
   }
 
@@ -184,14 +262,17 @@ export class RvTimeline extends LitElement {
   private _onWheel(event: WheelEvent): void {
     event.preventDefault();
     if (event.ctrlKey) {
-      // A trackpad pinch: zoom by how far it went, around the pointer.
+      // A trackpad pinch: zoom by how far it went, around the pointer (centred: the middle).
       const span = this._span(this.view.span * Math.exp(event.deltaY * PINCH_WHEEL));
-      this._setView(zoomAt(this.view, span, this.timeAt(this._x(event)), this._bounds));
+      if (this.centred) this._setSpan(span);
+      else this._setView(zoomAt(this.view, span, this.timeAt(this._x(event)), this._bounds));
       return;
     }
     if (event.shiftKey || Math.abs(event.deltaX) > Math.abs(event.deltaY)) {
       const delta = event.shiftKey ? event.deltaY : event.deltaX;
-      this.pan(Math.sign(delta) * 0.25);
+      // Centred: a trackpad's sideways swipe moves the strip as a drag would.
+      if (this.centred) this._keyTo(this._within(this._centre + (delta * this.view.span) / (this._width || 1)));
+      else this.pan(Math.sign(delta) * 0.25);
       return;
     }
     if (event.deltaY === 0) return;
@@ -214,7 +295,7 @@ export class RvTimeline extends LitElement {
       return;
     }
     if (this._pinched || this._pointers.size > 2) return;
-    this._drag = { pointerId: event.pointerId, x, moved: false };
+    this._drag = { pointerId: event.pointerId, x, moved: false, ...(this.centred ? { from: this._centre } : {}) };
   }
 
   /**
@@ -235,8 +316,8 @@ export class RvTimeline extends LitElement {
   /** A second finger: a scrub under way ends where it is, and the pinch begins. */
   private _startPinch(): void {
     const drag = this._drag;
-    if (drag?.moved && drag.time !== undefined) this._emit("rv-seek", { time: drag.time } satisfies TimeDetail);
     this._drag = undefined;
+    if (drag?.moved && drag.time !== undefined) this._seekNow(drag.time);
     this._pinched = true;
     this._endHover();
     const [a = 0, b = 0] = this._pointers.values();
@@ -252,6 +333,11 @@ export class RvTimeline extends LitElement {
     const dist = Math.abs(a - b);
     const span =
       pinch.dist >= PINCH_MIN_PX && dist >= PINCH_MIN_PX ? this._span((pinch.span * pinch.dist) / dist) : this.view.span;
+    if (this.centred) {
+      // The middle stays: two fingers zoom.
+      this._setSpan(span);
+      return;
+    }
     const mid = (a + b) / 2;
     this._setView({ start: pinch.anchor - (mid / (this._width || 1)) * span, span });
   }
@@ -267,6 +353,16 @@ export class RvTimeline extends LitElement {
     if (drag && drag.pointerId === event.pointerId) {
       if (Math.abs(x - drag.x) > CLICK_SLOP_PX) drag.moved = true;
       if (drag.moved) {
+        if (drag.from !== undefined) {
+          // Centred: the strip goes with the pointer; the time under the playhead the other way.
+          const width = this._width || 1;
+          const time = this._within(drag.from - ((x - drag.x) * this.view.span) / width);
+          drag.time = time;
+          this.requestUpdate();
+          this._emit("rv-scrub", { time } satisfies TimeDetail);
+          this._scheduleHover(time, width / 2);
+          return;
+        }
         const time = this.timeAt(x);
         drag.time = time;
         this._emit("rv-scrub", { time } satisfies TimeDetail);
@@ -289,13 +385,21 @@ export class RvTimeline extends LitElement {
     const drag = this._drag;
     if (!drag || drag.pointerId !== event.pointerId) return;
     this._drag = undefined;
-    this._emit("rv-seek", { time: this.timeAt(this._x(event)) } satisfies TimeDetail);
+    // Centred: a drag plays what it left under the playhead; a click, where it landed.
+    const time =
+      drag.from !== undefined
+        ? drag.moved && drag.time !== undefined
+          ? drag.time
+          : this._within(this.timeAt(this._x(event)))
+        : this.timeAt(this._x(event));
+    this._seekNow(time);
     if (event.pointerType !== "mouse") this._endHover();
   }
 
   /** The browser took the gesture (a page scroll) or lost a pointer. */
   private _onPointerCancel(event: PointerEvent): void {
     this._pointers.delete(event.pointerId);
+    if (this._drag?.time !== undefined) this.requestUpdate();
     this._drag = undefined;
     this._pinch = undefined;
     if (!this._pointers.size) this._pinched = false;
@@ -315,7 +419,7 @@ export class RvTimeline extends LitElement {
   }
 
   private _onKey(event: KeyboardEvent): void {
-    const from = this._keyTime ?? this.cursor ?? this.view.start + this.view.span / 2;
+    const from = this.centred ? this._centre : (this._keyTime ?? this.cursor ?? this.view.start + this.view.span / 2);
     const step = keyStep(this.view.span);
     const { start, end } = this._bounds;
     const moves: Partial<Record<string, number>> = {
@@ -362,7 +466,8 @@ export class RvTimeline extends LitElement {
     this._keyTime = time;
     const { start, span } = this.view;
     const margin = span * 0.1;
-    if (time < start + margin || time > start + span - margin) {
+    // Centred, the strip follows the time by itself.
+    if (!this.centred && (time < start + margin || time > start + span - margin)) {
       this._setView({ start: time - span / 2, span });
     }
     this._emit("rv-scrub", { time } satisfies TimeDetail);
@@ -375,6 +480,7 @@ export class RvTimeline extends LitElement {
   private _seekNow(time: number): void {
     clearTimeout(this._keySeek);
     this._keyTime = undefined;
+    this._hold(time);
     this._emit("rv-seek", { time } satisfies TimeDetail);
   }
 
@@ -401,7 +507,7 @@ export class RvTimeline extends LitElement {
     const muted = color("--rv-muted", "#5d6370");
     ctx.clearRect(0, 0, width, HEIGHT);
 
-    const view = this.view;
+    const view = this._shown;
     const x = (t: number) => timeToX(t, view, width);
     // Ticks and labels.
     ctx.font = `500 12px ${color("--rv-font", "sans-serif")}`;
@@ -422,6 +528,14 @@ export class RvTimeline extends LitElement {
       if (px + 3 + ctx.measureText(label).width <= width) ctx.fillText(label, px + 3, 2);
     }
     const day = this.day;
+    if (day && this.centred) {
+      // Centred, the strip can go past the day's edges: nothing is there.
+      ctx.fillStyle = color("--rv-ground-2", "#f2f2f2");
+      const before = Math.min(width, x(day.start));
+      if (before > 0) ctx.fillRect(0, TICK_ROW, before, HEIGHT - TICK_ROW);
+      const after = Math.max(0, x(day.end));
+      if (after < width) ctx.fillRect(after, TICK_ROW, width - after, HEIGHT - TICK_ROW);
+    }
     if (day) {
       // The part of today that has not happened yet.
       if (day.now < day.end) {
@@ -447,9 +561,10 @@ export class RvTimeline extends LitElement {
         ctx.fillRect(Math.round(x(day.now)) - 1, TICK_ROW, 2, HEIGHT - TICK_ROW);
       }
     }
-    if (this.cursor !== undefined) {
-      // The playhead: an ink line under a small pointer on the tick row.
-      const px = Math.round(x(this.cursor));
+    const playhead = this.centred ? this._centre : this.cursor;
+    if (playhead !== undefined) {
+      // The playhead: an ink line under a small pointer on the tick row (centred: the middle).
+      const px = Math.round(x(playhead));
       ctx.fillStyle = ink;
       ctx.fillRect(px - 1, TICK_ROW, 2, HEIGHT - TICK_ROW);
       ctx.beginPath();
@@ -541,6 +656,12 @@ export class RvTimeline extends LitElement {
       -webkit-user-select: none;
       -webkit-touch-callout: none;
       -webkit-tap-highlight-color: transparent;
+    }
+    :host([centred]) canvas {
+      cursor: grab;
+    }
+    :host([centred]) canvas:active {
+      cursor: grabbing;
     }
     canvas:focus-visible {
       outline: 2px solid var(--rv-action);

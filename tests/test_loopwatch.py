@@ -158,7 +158,7 @@ def test_whose_code_a_stack_is_in() -> None:
     """The innermost integration; Home Assistant's own code; or none."""
 
     def here() -> Any:
-        return loopwatch._owner(sys._getframe())
+        return loopwatch._owner(loopwatch._stack(sys._getframe()))
 
     assert _spook["_lexed"](_lexer["tokeniter"], here) == "custom_components/spook"
     core = _as_file(
@@ -176,9 +176,41 @@ def test_whose_code_a_stack_is_in() -> None:
     assert here() is None or here() == "homeassistant"
 
 
+def test_a_generator_held_in_names_its_caller_after_it_yields() -> None:
+    """The owner's run of v0.63.6: Spook's frames, but no "by" (v0.63.7).
+
+    Jinja's lexer is a generator: once it yields, its frame no longer links
+    to its caller. The stack read at the hold still has it.
+    """
+    seen: dict[str, Any] = {}
+    lexer = _as_file(
+        _JINJA,
+        "def tokeniter(seen):\n"
+        "    seen['frame'] = sys._getframe()\n"
+        "    seen['stack'] = loopwatch._stack(sys._getframe())\n"
+        "    yield 1\n"
+        "    yield 2\n",
+    )
+    spook = _as_file(
+        _SPOOK,
+        "def _lexed(tokeniter, seen):\n    tokens = tokeniter(seen)\n    next(tokens)\n    return tokens\n",
+    )
+    tokens = spook["_lexed"](lexer["tokeniter"], seen)
+    # Yielded: the frame alone no longer says who called it.
+    assert seen["frame"].f_back is None
+    assert loopwatch._owner(loopwatch._stack(seen["frame"])) is None
+    # Read at the hold: it does.
+    assert loopwatch._owner(seen["stack"]) == "custom_components/spook"
+    assert loopwatch._where(seen["stack"])[:2] == [
+        "site-packages/jinja2/lexer.py:3 in tokeniter",
+        "custom_components/spook/template_extraction.py:3 in _lexed",
+    ]
+    tokens.close()
+
+
 def test_a_frame_says_its_file_line_and_function() -> None:
     """Innermost first: "file:line in function"."""
-    where = loopwatch._where(sys._getframe())
+    where = loopwatch._where(loopwatch._stack(sys._getframe()))
     assert re.fullmatch(
         r".*test_loopwatch\.py:\d+ in test_a_frame_says_its_file_line_and_function",
         where[0],

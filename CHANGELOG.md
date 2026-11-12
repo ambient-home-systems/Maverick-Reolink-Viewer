@@ -3,6 +3,30 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.63.7
+
+From the owner's playback check of 0.63.6 in Safari on the Mac, and the owner's ask
+for a timeline like Nest's and UniFi Protect's.
+
+- **The timeline keeps the play point in the middle:** the timeline moves under it
+  as the video plays. Drag the timeline left or right to move through the day; the
+  picture at the play point shows as you go, and it plays from there when you let
+  go. Click an event's mark, or any time, to play from it. Zooming keeps the play
+  point's time in the middle, and a sideways swipe on a trackpad moves through the
+  time too. A day opens 6 hours wide instead of the whole day. The old style, with
+  the play point moving along a still timeline, is under **Details**, **Timeline**.
+- **A frozen video is nudged on:** in Safari, a video jumped to 8 s before the end of
+  a recording said it was playing, with those 8 s loaded, but its time never moved,
+  so it never went on to the next recording. Now, if a video that says it's playing
+  has video loaded ahead but its time hasn't moved for 1.5 s, it is moved on by
+  0.1 s, then 0.2 s and 0.3 s if needed. The check and Technical details count these
+  nudges.
+- **The check names the integration that held Home Assistant up:** the work holding
+  it up was a Jinja generator inside Spook. By the time Reolink Viewer looked up
+  whose it was, the generator had moved on and no longer showed its caller. The
+  whole stack is now read in one go at the moment of the hold, so "In short" says
+  "by the Spook integration, not Reolink Viewer".
+
 ## 0.63.6
 
 From the owner's playback check of 0.63.5 in Safari on the Mac, over the LAN, on

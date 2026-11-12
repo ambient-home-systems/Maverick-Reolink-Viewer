@@ -48,6 +48,25 @@ export const JOIN_S = 0.5;
  * starts it afresh.
  */
 export const OFF_TARGET_MAX = 3;
+/**
+ * A video that says it plays, with this much loaded ahead (s), whose time
+ * stands still this long (ms), is nudged on (v0.63.7): Safari's stood at the
+ * moment it jumped to, 8 s loaded ahead (the owner's runs of v0.7.0 and
+ * v0.63.6). Each nudge goes `NUDGE_S` further than the last, up to
+ * `NUDGES_MAX` at one place; then it is left.
+ */
+export const STALL_AHEAD_S = 0.5;
+export const STALL_MS = 1_500;
+const STALL_CHECK_MS = 500;
+export const NUDGE_S = 0.1;
+export const NUDGES_MAX = 3;
+
+/** A nudge of a video that stood still (the event `rv-nudge` on the video). */
+export interface NudgeDetail {
+  /** Where it stood, and where it was moved to (s of media). */
+  from: number;
+  to: number;
+}
 
 export interface FeederStats {
   api: MseApi;
@@ -70,6 +89,8 @@ export interface FeederStats {
   trims: number;
   /** A window is on its way. */
   fetching: boolean;
+  /** Times the video stood still with video ahead and was nudged on (v0.63.7). */
+  nudges: number;
 }
 
 interface MediaSourceCtor {
@@ -162,6 +183,12 @@ export class MseFeeder {
   private _closed = false;
   /** Windows asked by time in a row that did not buffer that time. */
   private _offTarget = 0;
+  /** The stall watch: where the time last stood and since when, the nudges there, where it was given up. */
+  private _stallTimer: ReturnType<typeof setInterval> | undefined;
+  private _stillAt: { t: number; since: number } | undefined;
+  private _nudgedTo: number | undefined;
+  private _nudgesHere = 0;
+  private _leftAt: number | undefined;
   private readonly _listeners: [EventTarget, string, EventListener][] = [];
 
   constructor(
@@ -182,6 +209,7 @@ export class MseFeeder {
       lastWaitMs: undefined,
       trims: 0,
       fetching: false,
+      nudges: 0,
     };
   }
 
@@ -270,11 +298,13 @@ export class MseFeeder {
     if (offsetMs > 0 && this._video.currentTime === 0) this._video.currentTime = offsetMs / 1000;
     this._ready = true;
     this._pump();
+    if (!this._closed) this._stallTimer = setInterval(this._watchStall, STALL_CHECK_MS);
   }
 
   /** Stop fetching and let go of the video (the caller resets its src). */
   destroy(): void {
     this._closed = true;
+    clearInterval(this._stallTimer);
     this._pending?.controller.abort();
     this._pending = undefined;
     for (const [target, name, listener] of this._listeners) target.removeEventListener(name, listener);
@@ -585,6 +615,47 @@ export class MseFeeder {
       );
     }
   }
+
+  /**
+   * A video that says it plays, with video loaded ahead, whose time stands
+   * still: nudge it on, a little further each time at one place, as other web
+   * players do with Safari's MSE (see `STALL_MS`). Paused, seeking, ended,
+   * short of data (`readyState` under 3) or near the end of what is loaded,
+   * it is waiting, not stuck: nothing is done.
+   */
+  private readonly _watchStall = (): void => {
+    const video = this._video;
+    if (this._closed || !this._buffer || video.paused || video.seeking || video.ended || video.readyState < 3) {
+      this._stillAt = undefined;
+      return;
+    }
+    const t = video.currentTime;
+    const range = this._rangeAt(t);
+    if (!range || range.end - t < STALL_AHEAD_S || t === this._leftAt) {
+      this._stillAt = undefined;
+      return;
+    }
+    const now = performance.now();
+    if (this._stillAt?.t !== t) {
+      this._stillAt = { t, since: now };
+      return;
+    }
+    if (now - this._stillAt.since < STALL_MS) return;
+    this._stillAt = undefined;
+    // Still where the last nudge put it: a bigger one; elsewhere, the first.
+    const again = this._nudgedTo !== undefined && Math.abs(t - this._nudgedTo) < 0.01;
+    this._nudgesHere = again ? this._nudgesHere + 1 : 1;
+    if (this._nudgesHere > NUDGES_MAX) {
+      this._leftAt = t;
+      this._nudgedTo = undefined;
+      return;
+    }
+    const to = Math.min(t + NUDGE_S * this._nudgesHere, range.end - 0.05);
+    this._nudgedTo = to;
+    this.stats.nudges += 1;
+    video.currentTime = to;
+    video.dispatchEvent(new CustomEvent<NudgeDetail>("rv-nudge", { detail: { from: t, to } }));
+  };
 
   /** Stuck at a small gap between buffered ranges: step over it. */
   private readonly _jumpGap = (): void => {

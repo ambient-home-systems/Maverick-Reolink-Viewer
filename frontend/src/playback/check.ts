@@ -70,7 +70,7 @@ import { ScrubClient, isPicture, type ScrubPicture, type SocketLike } from "./sc
 import { SHAPES, mseApi, mseSupports, pickSample, probeShape, type MseApi } from "./mse-probe";
 import type { RvPlayer } from "./player";
 
-export const CHECK_VERSION = "0.8.5";
+export const CHECK_VERSION = "0.8.6";
 export const SETUPS = [
   "Desktop Chrome, LAN",
   "Desktop Chrome, Tailscale",
@@ -933,8 +933,12 @@ export class PlaybackCheck {
     const player = t.player;
     const onAdvanced = () => seen.push("advanced");
     const onEnded = () => seen.push("ended");
+    // A video that stood still, nudged on (v0.63.7: Safari's stood 8 s from the end).
+    let nudged = 0;
+    const onNudged = () => (nudged += 1);
     player?.addEventListener("rv-advanced", onAdvanced);
     player?.addEventListener("rv-ended", onEnded);
+    player?.addEventListener("rv-nudged", onNudged);
     try {
       await t.playAt(Math.max(a.start, a.end - 8000), performance.now());
       await this._wait(() => t.metrics.firstFrameMs !== undefined || Boolean(t.playFailure), 120_000);
@@ -954,6 +958,7 @@ export class PlaybackCheck {
       } else {
         how = `yes, by reloading (the next file was not preloaded) · first frame ${ms(t.metrics.firstFrameMs)}`;
       }
+      if (nudged) how += ` · it stood still and was nudged on ${String(nudged)}×`;
       this._log(
         `C  Moved on by itself at ${clock(a.end)} (from a ${span(a.end - a.start)} recording): ${how}` +
           (t.playFailure ? ` FAILED: ${t.playFailure}` : ""),
@@ -981,6 +986,7 @@ export class PlaybackCheck {
     } finally {
       player?.removeEventListener("rv-advanced", onAdvanced);
       player?.removeEventListener("rv-ended", onEnded);
+      player?.removeEventListener("rv-nudged", onNudged);
     }
   }
 
@@ -1477,9 +1483,15 @@ export class PlaybackCheck {
     const poll = setInterval(() => {
       if (!framed && goneMs === undefined && !view.showing) goneMs = performance.now() - began;
     }, 25);
+    // A video that stood still, nudged on (v0.63.7).
+    let nudged = 0;
+    const onNudged = () => (nudged += 1);
+    player.addEventListener("rv-nudged", onNudged);
     timeline.dispatchEvent(new CustomEvent("rv-seek", { detail: { time: at } }));
     const ok = await frame;
     clearInterval(poll);
+    player.removeEventListener("rv-nudged", onNudged);
+    const nudges = nudged ? ` (it stood still and was nudged on ${String(nudged)}×)` : "";
     const firstMs = performance.now() - began;
     // Where the video began: at the picture shown (step 3), or at the pointer.
     const startedAt = player.time;
@@ -1509,7 +1521,7 @@ export class PlaybackCheck {
         ? `; it began ${secondsText(Math.abs(startedAt - picture.time))} from the picture's own time (${side(picture.time, at)} the pointer)`
         : "";
     return {
-      text: `the picture stayed until the video's first frame, ${secondsText(firstMs)} after letting go${where}`,
+      text: `the picture stayed until the video's first frame, ${secondsText(firstMs)} after letting go${where}${nudges}`,
       plain: `Letting go plays from there in ${secondsText(firstMs)}, the picture staying until the video shows.`,
       ok: true,
       firstMs,
@@ -2337,8 +2349,9 @@ export function videoState(player: RvPlayer | null): string {
     `${video.ended ? ", ended" : ""}${video.seeking ? ", seeking" : ""}, buffered [${ranges.join(", ") || "nothing"}]${error}` +
     (feed
       ? ` · MSE (${feed.api}): ${String(feed.windows)} windows, ${mb(feed.bytes)}, from the ${feed.source}, ${feed.fetching ? "fetching" : "not fetching"}, ${feed.ahead.toFixed(1)} s ahead` +
-        // ManagedMediaSource asked for a pause in fetching (v0.63.6).
-        (feed.streaming === false ? ", the browser asked to pause fetching" : "")
+        // ManagedMediaSource asked for a pause in fetching (v0.63.6); nudges (v0.63.7).
+        (feed.streaming === false ? ", the browser asked to pause fetching" : "") +
+        (feed.nudges ? `, stood still and nudged on ${String(feed.nudges)}×` : "")
       : " · not through MSE")
   );
 }
