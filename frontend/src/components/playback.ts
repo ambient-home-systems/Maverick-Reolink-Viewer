@@ -50,6 +50,7 @@ import "../playback/timeline";
 import type { HoverDetail, RvTimeline, TimeDetail } from "../playback/timeline";
 import {
   DAY,
+  HOUR,
   MINUTE,
   centreOn,
   clampView,
@@ -120,6 +121,15 @@ const PLAYER_MODE_KEY = "reolink-viewer-player";
 
 /** "auto": MSE where the browser has it (else the file player); "file": always the file player. */
 export type PlayerMode = "auto" | "file";
+/**
+ * The timeline's style (v0.63.7, the owner's ask): "centred", the playhead
+ * fixed in the middle and the strip dragged under it (as Nest and UniFi
+ * Protect), or "moving", the playhead dragged along a still strip.
+ */
+export type TimelineStyle = "centred" | "moving";
+const TIMELINE_STYLE_KEY = "reolink-viewer-timeline";
+/** Centred, a day opens at this span: a whole day would leave half the strip past its edges. */
+const CENTRED_SPAN = 6 * HOUR;
 /** A check cut short is looked for once per page load. */
 let interruptedLookedFor = false;
 
@@ -194,6 +204,7 @@ export class RvPlayback extends LitElement {
     _rate: { state: true },
     _note: { state: true },
     _mode: { state: true },
+    _timelineStyle: { state: true },
     _scrubPicture: { state: true },
   };
 
@@ -240,6 +251,7 @@ export class RvPlayback extends LitElement {
   /** Over the video while a start waits (the recorder's download). */
   declare _note: string | undefined;
   declare _mode: PlayerMode;
+  declare _timelineStyle: TimelineStyle;
   /** The server's picture at the pointer while a drag passes what is not buffered. */
   declare _scrubPicture: ScrubPicture | undefined;
 
@@ -308,6 +320,7 @@ export class RvPlayback extends LitElement {
     this._checkHdPart = hdByDefault(this._checkSetup);
     this._rate = 1;
     this._mode = rememberedMode();
+    this._timelineStyle = rememberedTimelineStyle();
   }
 
   private get _zone(): string | undefined {
@@ -407,9 +420,13 @@ export class RvPlayback extends LitElement {
       this._day = day;
       this._error = undefined;
       if (first || !options.keepView) {
-        this._view = clampView({ start: day.start, span: day.end - day.start }, day);
         const latest = day.events.at(-1)?.start ?? day.segments.at(-1)?.start;
         this._cursor = latest;
+        // Centred: a few hours either side of the play time; else the whole day.
+        this._view =
+          this._timelineStyle === "centred"
+            ? { start: (latest ?? day.start) - CENTRED_SPAN / 2, span: CENTRED_SPAN }
+            : clampView({ start: day.start, span: day.end - day.start }, day);
       } else {
         this._view = clampView(this._view, day);
       }
@@ -971,6 +988,17 @@ export class RvPlayback extends LitElement {
     this._rate = rate;
   }
 
+  private _setTimelineStyle(style: TimelineStyle): void {
+    this._timelineStyle = style;
+    try {
+      window.localStorage.setItem(TIMELINE_STYLE_KEY, style);
+    } catch {
+      // Not remembered.
+    }
+    // Moving: the strip is kept within the day again.
+    if (style === "moving" && this._day) this._view = centreOn(this._view, this._cursor ?? this._view.start, this._day);
+  }
+
   private _setMode(mode: PlayerMode): void {
     this._mode = mode;
     this._mseFailed.clear();
@@ -1528,6 +1556,18 @@ export class RvPlayback extends LitElement {
             <option value="file" ?selected=${this._mode === "file"}>File player only</option>
           </select>
         </dd>
+        <dt>Timeline</dt>
+        <dd>
+          <select
+            aria-label="Timeline style"
+            @change=${(e: Event) => {
+              this._setTimelineStyle((e.target as HTMLSelectElement).value as TimelineStyle);
+            }}
+          >
+            <option value="centred" ?selected=${this._timelineStyle === "centred"}>Play point in the middle: drag the strip</option>
+            <option value="moving" ?selected=${this._timelineStyle === "moving"}>Moving play point: drag it along</option>
+          </select>
+        </dd>
         <dt>Pictures while dragging</dt>
         <dd>${describeScrub(m.scrub, this._scrubber?.unavailable === true, this._scrubView?.path)}</dd>
         <dt>Fell back to the file player</dt>
@@ -1624,6 +1664,7 @@ export class RvPlayback extends LitElement {
               .view=${this._view}
               .cursor=${this._cursor}
               .timeZone=${zone}
+              ?centred=${this._timelineStyle === "centred"}
               @rv-view-change=${(e: CustomEvent<{ view: View }>) => {
                 this._view = e.detail.view;
               }}
@@ -2012,6 +2053,8 @@ export function describePlayer(player: RvPlayer | null): string {
   ];
   // ManagedMediaSource asked for a pause; the last play() refused (v0.63.6).
   if (stats.streaming === false) parts.push("the browser asked to pause fetching");
+  // A video that stood still, nudged on (v0.63.7).
+  if (stats.nudges) parts.push(`nudged on ${String(stats.nudges)}×`);
   const refusal = player.lastRefusal;
   if (refusal) parts.push(`play() last refused: ${refusal.text}`);
   return parts.join(" · ");
@@ -2063,6 +2106,14 @@ function rememberedSetup(): string {
     // No storage: guess from the browser.
   }
   return checkSetup(navigator.userAgent);
+}
+
+function rememberedTimelineStyle(): TimelineStyle {
+  try {
+    return window.localStorage.getItem(TIMELINE_STYLE_KEY) === "moving" ? "moving" : "centred";
+  } catch {
+    return "centred";
+  }
 }
 
 function rememberedMode(): PlayerMode {

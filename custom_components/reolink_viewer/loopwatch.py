@@ -22,6 +22,12 @@ whose code held it (``by``: the innermost integration on the loop's stack,
 however deep), and how long it went on (the watchdog follows it until the
 timer runs); the statistics count the last 10 s's holds and add them up.
 
+The owner's next run showed Spook's frames but no "by": the work was a Jinja
+generator, and between reading where it was (which reads source files) and
+looking for its caller, it yielded, and a paused generator's frame no longer
+links to its caller. So (v0.63.7) the stack is read once, at the hold, as
+plain (file, line, function) entries, with nothing read from disk.
+
 Both run only while someone looks: each read of the playback statistics (the
 check, the debug panel) keeps them running ``WATCH_S`` longer.
 """
@@ -33,7 +39,6 @@ from collections import deque
 import sys
 import threading
 import time
-import traceback
 from types import FrameType
 from typing import Any
 
@@ -153,7 +158,8 @@ class LoopWatch:
             frame = sys._current_frames().get(self._loop_thread or 0)  # noqa: SLF001
             if frame is None:
                 continue
-            current = _Hold(now, round(late * 1000, 1), _where(frame), _owner(frame))
+            stack = _stack(frame)
+            current = _Hold(now, round(late * 1000, 1), _where(stack), _owner(stack))
             with self._lock:
                 self._holds.append(current)
 
@@ -220,7 +226,27 @@ class _Hold:
         self.by = by
 
 
-def _owner(frame: FrameType | None) -> str | None:
+# A stack as read at a hold: (file, line, function), innermost first.
+Stack = list[tuple[str, int, str]]
+
+
+def _stack(frame: FrameType | None) -> Stack:
+    """Read a stack from a frame out, at once (``OWNER_DEPTH`` frames at most).
+
+    Nothing is read from disk meanwhile: the loop's thread runs on while
+    this one waits, and a generator that yields forgets its caller (v0.63.7).
+    """
+    out: Stack = []
+    while frame is not None and len(out) < OWNER_DEPTH:
+        code = frame.f_code
+        out.append(
+            (code.co_filename.replace("\\", "/"), frame.f_lineno or 0, code.co_name)
+        )
+        frame = frame.f_back
+    return out
+
+
+def _owner(stack: Stack) -> str | None:
     """Return whose code a stack is in: the innermost integration on it.
 
     Looked for from the innermost frame out, past libraries (Jinja under
@@ -230,9 +256,7 @@ def _owner(frame: FrameType | None) -> str | None:
     else None.
     """
     core = False
-    depth = 0
-    while frame is not None and depth < OWNER_DEPTH:
-        path = frame.f_code.co_filename.replace("\\", "/")
+    for path, _line, _name in stack:
         for marker in _OWNERS:
             at = path.find(marker)
             if at >= 0 and (at == 0 or path[at - 1] == "/"):
@@ -241,20 +265,18 @@ def _owner(frame: FrameType | None) -> str | None:
                     return marker + domain
         if "/homeassistant/" in path:
             core = True
-        frame = frame.f_back
-        depth += 1
     return "homeassistant" if core else None
 
 
-def _where(frame: FrameType) -> list[str]:
-    """Return the innermost frames of a stack, innermost first: "file:line in function"."""
+def _where(stack: Stack) -> list[str]:
+    """Return a stack's innermost ``FRAMES``, innermost first: "file:line in function"."""
     out: list[str] = []
-    for summary in reversed(traceback.extract_stack(frame, limit=FRAMES)):
-        path = summary.filename.replace("\\", "/")
+    for path, line, name in stack[:FRAMES]:
+        shown = path
         for root in _ROOTS:
             at = path.find(root)
             if at >= 0:
-                path = path[at:]
+                shown = path[at:]
                 break
-        out.append(f"{path}:{summary.lineno} in {summary.name}")
+        out.append(f"{shown}:{line} in {name}")
     return out

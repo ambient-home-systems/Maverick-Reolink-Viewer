@@ -462,10 +462,15 @@ The camera's recordings, from its NVR or its own SD card.
 - **Pick an event** in the list beside it, or **click the timeline** at any time, to
   play from there. The large clock shows the time playing.
 - The **timeline** shows the day's recordings as a band, and each event as a mark.
-  **−** and **+** zoom from the whole day to 5 minutes. Drag along it to look through
-  the recording: the video pauses and the picture under your finger or pointer shows,
-  with its time in the corner. Let go, and it plays from that picture. On a computer,
-  hovering over the timeline shows the picture at that time.
+  The play point stays in the middle, and the timeline moves under it as the video
+  plays. **−** and **+** zoom from the whole day to 5 minutes, around the play point.
+  Drag the timeline left or right to look through the recording: the video pauses
+  and the picture at the play point shows, with its time in the corner. Let go, and
+  it plays from that picture. Click an event's mark, or any time on the timeline, to
+  play from there. On a computer, hovering over the timeline shows the picture at
+  that time, and a sideways swipe on a trackpad moves through the time too.
+- Prefer the play point moving along a still timeline? Under **Details**, set
+  **Timeline** to "Moving play point: drag it along".
 - **⏮ ▶ ⏭**: the previous event, play or pause, the next event. At the end of a
   recording, the next one plays by itself.
 - **SD / HD**: switch quality; playback carries on from the same moment. HD may take
@@ -675,8 +680,8 @@ The panel works in the Home Assistant app on a phone (it is tested on iPhone), a
 a phone's browser. On a narrow screen:
 
 - the board shows two cameras per row, and today's events stack under it;
-- on the **Playback** timeline, **pinch** to zoom in on a moment, and **slide two
-  fingers** to move along the day;
+- on the **Playback** timeline, **drag** it to move through the day, and **pinch** to
+  zoom in on a moment;
 - **picture in picture** keeps a camera or recording playing over your other apps;
 - away from home or on mobile data, full screen starts in the lighter SD; tap **HD**
   for full quality.

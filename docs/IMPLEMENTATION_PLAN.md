@@ -7845,6 +7845,77 @@ over the LAN, labelled "Desktop Chrome, LAN"; Front Yard Right, with events):**
     before the release is not counted.
   - Mac Safari's detection and setup.
 
+**The owner's run of v0.63.6 (2026-11-12, 11:57 AM, Safari 26.5.2 on the Mac,
+"Mac Safari, LAN", Front Yard Right):**
+
+- **The release:** the owner's hand drag and release work in Safari. The
+  check's release passed too (0.5 s, the picture held), so the v0.63.5
+  failure was intermittent.
+- **C failed, as in v0.7.0:** "no: on the first recording at 10:59:52 AM,
+  playing". The video was at 3593.0 s of 3601.1 s, ready state 4, not
+  paused, with [3593.0–3601.1 s] buffered from the cut. ManagedMediaSource
+  had asked to pause fetching. Its time stood at the point jumped to, with
+  8 s loaded ahead, and never moved.
+- **"In short" gave Spook's frames but no "by":** Jinja's `tokeniter` is a
+  generator. `_where` read the stack through `traceback.extract_stack`, which
+  reads source lines from disk, and by the time `_owner` walked the same
+  frame the generator had yielded. A paused generator's `f_back` is None.
+- **Other times:** B's first event took 2.0 s. The recorder's reply took
+  417 ms, its first fragment 788 ms, and the window then waited its full 1 s
+  for the next fragment. The next events took 0.04 and 0.06 s, D1 0.41 s
+  and D2 0.11 s. HD and back, beside a second viewer, and V all passed.
+
+**The owner's ask (with v0.63.7): "I want it more Nest/Unifi Protect like.
+Meaning the play point stays stationary in the center but the slider with the
+motion events is what you click and drag left/right to flow through the
+footage."**
+
+**v0.63.7, from them:**
+
+- **The centred timeline** (`RvTimeline.centred`; the Playback tab's default,
+  `TimelineStyle` "centred", stored in localStorage):
+  - The drawn view is centred on the time under the playhead: a drag's, the
+    keys', one just left there, or the cursor.
+  - A press and drag moves the strip with the pointer, and the time the other
+    way (`rv-scrub`; the hover box over the playhead). The release plays it
+    (`rv-seek`).
+  - A click plays where it lands.
+  - The time is kept within the day and before now; a now before the day is
+    not believed (the design preview's has one).
+  - The time left under the playhead stays there (`_held`) until the cursor
+    follows, or for 3 s at most, so the strip does not jump back meanwhile.
+  - Zoom (buttons, wheel, a trackpad pinch, two fingers) keeps the middle. A
+    sideways wheel moves the time as the arrow keys do, and plays once it
+    rests.
+  - Past the day's edges the strip is shaded.
+  - A day opens 6 h wide (`CENTRED_SPAN`).
+  - "Moving play point: drag it along" (the classic style) is under Details,
+    Timeline.
+- **A frozen video is nudged** (`MseFeeder._watchStall`, every 0.5 s). A
+  video counts as stuck when it is not paused, seeking or ended, its ready
+  state is 3 or more, it has `STALL_AHEAD_S` (0.5 s) or more loaded ahead,
+  and its time has stood still for `STALL_MS` (1.5 s). It is then moved on
+  `NUDGE_S` (0.1 s) × the nudges at that place, up to `NUDGES_MAX` (3), and
+  then left. Each nudge is counted (`stats.nudges`), and the player passes it
+  on as `rv-nudged`. The check's C row and release line say "it stood still
+  and was nudged on N×", and `videoState` and the debug panel count them.
+- **The stack is read once at a hold** (`loopwatch._stack`): (file, line,
+  function) from each frame, read at once with nothing from disk. `_where` and
+  `_owner` work from that list.
+- The playback check is v0.8.6.
+- **Checks:**
+  - The centred timeline: the play time in the middle as it plays; a drag
+    moves the time the other way and plays on release, held until the cursor
+    follows; a click plays where it lands; clamped to the day's start and to
+    now; zoom by wheel and two fingers keeps the middle; a sideways wheel
+    moves and then plays.
+  - The nudge: not before 1.5 s; 0.1, 0.2 and 0.3 s; then left; afresh
+    elsewhere; none when paused, short of data, or at the end of what is
+    loaded.
+  - A generator held in still names its caller after it yields, where the
+    frame alone does not.
+  - The scrub check: a pinch zooms 6 h to 1 h; no long tasks.
+
 #### Step 10.4: the checks
 
 - **In CI:** `scrub_check.cjs` drags against a fake key-frame endpoint,

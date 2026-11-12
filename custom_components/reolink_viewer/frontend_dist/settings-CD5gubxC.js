@@ -1,6 +1,6 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
-import { Lt as i, Z as a, et as o, j as s } from "./live-BkJQck7z.js";
-import { n as c, q as l } from "./home-CWhJIzJr.js";
+import { Lt as i, Z as a, et as o, j as s } from "./live-DbkkZT-0.js";
+import { J as c, n as l } from "./home-GYXy7b8E.js";
 //#region src/catalog.ts
 var u = {
 	id: "other",
@@ -231,7 +231,7 @@ var b = 1e4, x = class {
 			this._connection = t;
 		}}
         >
-          ${c(e)} · ${e.entities.length} settings
+          ${l(e)} · ${e.entities.length} settings
         </button>`)}
       <span class="small muted">
         Both connections reach the same camera; a change made through either applies to it.
@@ -428,12 +428,12 @@ var b = 1e4, x = class {
 		if (!o) return;
 		let s = m(d(this.catalog, e.domain, e.key), r);
 		if (s !== null && !await this.confirm(t, s)) return;
-		let c = a ?? v(e.domain, e.domain === "button" ? "press" : e.domain === "update" ? "install" : n), u = e.entity_id, f = this.writes.begin(u, n, o.states[u]);
+		let l = a ?? v(e.domain, e.domain === "button" ? "press" : e.domain === "update" ? "install" : n), u = e.entity_id, f = this.writes.begin(u, n, o.states[u]);
 		this.requestUpdate();
 		try {
-			await o.callService(c.domain, c.service, c.data, { entity_id: u }, !1), this.writes.confirm(u, f), this._scheduleSettle();
+			await o.callService(l.domain, l.service, l.data, { entity_id: u }, !1), this.writes.confirm(u, f), this._scheduleSettle();
 		} catch (e) {
-			this.writes.fail(u, f) && l(this, `Could not change ${t}: ${i(e).message}`, "error");
+			this.writes.fail(u, f) && c(this, `Could not change ${t}: ${i(e).message}`, "error");
 		}
 		this.requestUpdate();
 	}
@@ -487,12 +487,12 @@ var b = 1e4, x = class {
 			this._enabling = /* @__PURE__ */ new Set([...this._enabling, e.entity_id]);
 			try {
 				let r = (await o(n, e.entity_id)).reload_delay;
-				l(this, `${t} enabled. Home Assistant reloads the Reolink entry${r ? ` in about ${r} seconds` : ""}; the entity becomes available after that.`), this.dispatchEvent(new CustomEvent("rv-entity-enabled", {
+				c(this, `${t} enabled. Home Assistant reloads the Reolink entry${r ? ` in about ${r} seconds` : ""}; the entity becomes available after that.`), this.dispatchEvent(new CustomEvent("rv-entity-enabled", {
 					bubbles: !0,
 					composed: !0
 				}));
 			} catch (e) {
-				l(this, `Could not enable ${t}: ${i(e).message}`, "error");
+				c(this, `Could not enable ${t}: ${i(e).message}`, "error");
 			} finally {
 				let t = new Set(this._enabling);
 				t.delete(e.entity_id), this._enabling = t;
@@ -705,4 +705,4 @@ function E(e, t) {
 }
 customElements.get("rv-settings") || customElements.define("rv-settings", C);
 //#endregion
-export { C as RvSettings, c as connectionLabel, E as formatState, w as optionLabel };
+export { C as RvSettings, l as connectionLabel, E as formatState, w as optionLabel };

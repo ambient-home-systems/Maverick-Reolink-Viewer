@@ -7,6 +7,11 @@ import {
   FIRST_WINDOW_MS,
   MseFeeder,
   MseUnsupported,
+  NUDGES_MAX,
+  NUDGE_S,
+  STALL_AHEAD_S,
+  STALL_MS,
+  type NudgeDetail,
   aheadTarget,
   joinedRanges,
   type MseSource,
@@ -291,6 +296,73 @@ describe("MseFeeder", () => {
     source.streaming = false;
     expect(f.streaming).toBe(false);
     f.destroy();
+  });
+
+  it("nudges on a video that says it plays but stands still with video ahead (v0.63.7)", async () => {
+    const server = fakeServer(60);
+    const video = fakeVideo();
+    const { f } = feeder(server, video, 120_000);
+    await f.start(10_500);
+    await settle();
+    // Safari: playing, all it needs loaded (8 s and more ahead), its time standing still.
+    let paused = false;
+    let ready = 4;
+    Object.defineProperty(video, "paused", { get: () => paused });
+    Object.defineProperty(video, "readyState", { get: () => ready });
+    const nudges: NudgeDetail[] = [];
+    video.addEventListener("rv-nudge", (e) => nudges.push((e as CustomEvent<NudgeDetail>).detail));
+    let now = 0;
+    const clock = vi.spyOn(performance, "now").mockImplementation(() => now);
+    const watch = () => {
+      (f as unknown as { _watchStall: () => void })._watchStall();
+    };
+    try {
+      watch(); // seen standing at 10.5 s
+      now = STALL_MS - 1;
+      watch();
+      expect(f.stats.nudges).toBe(0); // not long enough yet
+      now = STALL_MS;
+      watch();
+      expect(nudges).toEqual([{ from: 10.5, to: 10.5 + NUDGE_S }]);
+      expect(video.currentTime).toBeCloseTo(10.6);
+      // Still where the nudge put it: a bigger one, up to NUDGES_MAX; then it is left.
+      for (let i = 2; i <= NUDGES_MAX + 1; i += 1) {
+        watch();
+        now += STALL_MS;
+        watch();
+      }
+      expect(f.stats.nudges).toBe(NUDGES_MAX);
+      expect(nudges.map((n) => Math.round((n.to - n.from) * 10) / 10)).toEqual([0.1, 0.2, 0.3]);
+      // Moving again, then standing still elsewhere: nudged afresh.
+      video.currentTime = 20;
+      watch();
+      now += STALL_MS;
+      watch();
+      expect(f.stats.nudges).toBe(NUDGES_MAX + 1);
+      // Paused, or short of data: waiting, not stuck.
+      video.currentTime = 25;
+      paused = true;
+      watch();
+      now += STALL_MS;
+      watch();
+      paused = false;
+      ready = 2;
+      watch();
+      now += STALL_MS;
+      watch();
+      expect(f.stats.nudges).toBe(NUDGES_MAX + 1);
+      // At the end of what is loaded (under STALL_AHEAD_S ahead): waiting for the next window.
+      ready = 4;
+      const end = f.around.ahead + 25;
+      video.currentTime = end - STALL_AHEAD_S / 2;
+      watch();
+      now += STALL_MS;
+      watch();
+      expect(f.stats.nudges).toBe(NUDGES_MAX + 1);
+    } finally {
+      clock.mockRestore();
+      f.destroy();
+    }
   });
 
   it("lets the first window go when the start is refused", async () => {

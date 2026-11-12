@@ -1,7 +1,7 @@
 import { a as e, i as t, n, r, t as i } from "./lit-DdRjbP0M.js";
-import { $ as a, Dt as o, F as s, L as c, Lt as l, Mt as u, R as d, Tt as f, Z as p, bt as m, c as h, d as g, j as _, lt as v, p as y, wt as ee } from "./live-BkJQck7z.js";
-import { B as b, J as x, V as S, W as C, X as te, Y as w, c as T, f as E, p as D, u as O } from "./home-CWhJIzJr.js";
-import { t as k } from "./tablet-CfsZS4SK.js";
+import { $ as a, Dt as o, F as s, L as c, Lt as l, Mt as u, R as d, Tt as f, Z as p, bt as m, c as h, d as g, j as _, lt as v, p as y, wt as b } from "./live-DbkkZT-0.js";
+import { G as x, H as ee, V as S, X as C, Y as w, Z as te, c as T, f as E, p as D, u as O } from "./home-GYXy7b8E.js";
+import { t as k } from "./tablet-BKhLLnV4.js";
 //#region src/wall/arrange.ts
 function ne(e, t) {
 	return e.cameras.length ? [...e.cameras] : [...t];
@@ -296,7 +296,7 @@ var U = 12e4, W = 2e4, G = 120, K = 10, q = 60474e4, J = "rv-strip-live", ae = c
 		if (!t.events.length) return;
 		let r = t.now, i = Math.max(Math.min(...t.events.map((e) => e.start)), r - q);
 		try {
-			let { marks: a } = await ee(e, i, r);
+			let { marks: a } = await b(e, i, r);
 			if (n !== this._seq) return;
 			this._marked = new Set(E(t.events, a, i, r).marks.keys());
 		} catch {}
@@ -336,7 +336,7 @@ var U = 12e4, W = 2e4, G = 120, K = 10, q = 60474e4, J = "rv-strip-live", ae = c
 					} : e)
 				});
 			}
-			C(this, {
+			x(this, {
 				view: "device",
 				id: t.camera_id,
 				tab: "playback",
@@ -508,7 +508,7 @@ var Y = {
 	tour_s: null
 };
 function oe(e, t) {
-	if (!e.cameras.length) return b([...t]);
+	if (!e.cameras.length) return S([...t]);
 	let n = new Map(t.map((e) => [e.id, e]));
 	return e.cameras.map((e) => e ? n.get(e) : void 0);
 }
@@ -569,7 +569,7 @@ var X = 3e3, Z = class extends i {
 		}, this._wallFull = !1, this._now = Date.now(), this.card = !1, this.showBar = !0, this._asleep = !1;
 	}
 	connectedCallback() {
-		super.connectedCallback(), this.card || w("wall"), document.addEventListener("fullscreenchange", this._onFullscreen), document.addEventListener("visibilitychange", this._onVisibility), this.addEventListener("pointermove", this._onPointer), this.addEventListener("pointerdown", this._onPointer), this._onPointer(), this._keepAwake(), k.listenToFully(), this._asleep = k.asleep, this._unsleep = k.onSleep(() => {
+		super.connectedCallback(), this.card || C("wall"), document.addEventListener("fullscreenchange", this._onFullscreen), document.addEventListener("visibilitychange", this._onVisibility), this.addEventListener("pointermove", this._onPointer), this.addEventListener("pointerdown", this._onPointer), this._onPointer(), this._keepAwake(), k.listenToFully(), this._asleep = k.asleep, this._unsleep = k.onSleep(() => {
 			this._asleep = k.asleep;
 		}), this._tick();
 	}
@@ -629,7 +629,7 @@ var X = 3e3, Z = class extends i {
 			});
 		}), this._resize.observe(e));
 		let t = this._layout;
-		this._layouts !== void 0 && !this.card && x(t.id || void 0), this._syncTour(), this._refocus && (this._refocus = !1, this.shadowRoot?.querySelector(`.cell[data-slot="${String(this._focus)}"]`)?.focus());
+		this._layouts !== void 0 && !this.card && w(t.id || void 0), this._syncTour(), this._refocus && (this._refocus = !1, this.shadowRoot?.querySelector(`.cell[data-slot="${String(this._focus)}"]`)?.focus());
 	}
 	async _loadLayouts(e) {
 		try {
@@ -686,7 +686,7 @@ var X = 3e3, Z = class extends i {
 		document.fullscreenElement === this ? document.exitFullscreen().catch(() => void 0) : this.requestFullscreen().catch(() => void 0);
 	}
 	_show(e) {
-		e || x(void 0), C(this, e ? {
+		e || w(void 0), x(this, e ? {
 			view: "wall",
 			layout: e
 		} : { view: "wall" });
@@ -716,7 +716,7 @@ var X = 3e3, Z = class extends i {
 				siren: this._draft.siren,
 				strip: this._draft.strip
 			});
-			await this._loadLayouts(t), this._editing = !1, this._error = void 0, C(this, {
+			await this._loadLayouts(t), this._editing = !1, this._error = void 0, x(this, {
 				view: "wall",
 				layout: i.id
 			});
@@ -733,7 +733,7 @@ var X = 3e3, Z = class extends i {
 		}
 	}
 	get _view() {
-		let e = this._layout, t = this._editing ? this._draft.grid : e.grid, n = this._data.cameras ?? [], r = new Map(n.map((e) => [e.id, e])), i = this._order ?? ne(e, b([...n]).map((e) => e.id)), { width: a, height: o } = this._size, s = (e) => e.map((e) => e ? S(d(e)) : void 0);
+		let e = this._layout, t = this._editing ? this._draft.grid : e.grid, n = this._data.cameras ?? [], r = new Map(n.map((e) => [e.id, e])), i = this._order ?? ne(e, S([...n]).map((e) => e.id)), { width: a, height: o } = this._size, s = (e) => e.map((e) => e ? ee(d(e)) : void 0);
 		if (this._alone && r.has(this._alone)) return {
 			order: i,
 			perPage: 1,
@@ -820,13 +820,13 @@ var X = 3e3, Z = class extends i {
 		clearInterval(this._tour), this._tour = void 0, this._tourEvery = 0;
 	}
 	render() {
-		let e = this._layout, t = this._data.cameras, i = this._view, { width: a, height: o } = this._size, s = this.layoutId !== void 0 && this._layouts !== void 0 && e.id !== this.layoutId, c = document.fullscreenEnabled && typeof this.requestFullscreen == "function", l = this._detecting(), u = new Map(b([...t ?? []]).map((e, t) => [e.id, t + 1]));
+		let e = this._layout, t = this._data.cameras, i = this._view, { width: a, height: o } = this._size, s = this.layoutId !== void 0 && this._layouts !== void 0 && e.id !== this.layoutId, c = document.fullscreenEnabled && typeof this.requestFullscreen == "function", l = this._detecting(), u = new Map(S([...t ?? []]).map((e, t) => [e.id, t + 1]));
 		return r`${this.card ? this._renderCardBar(e, i, s, c) : this._renderBar(e, i, s, c)}
       ${this._editing ? this._renderEditor(e) : this._error ? r`<p class="error" role="alert">${this._error}</p>` : n}
       ${t === void 0 ? r`<p class="note pad">${this._data.error ? `Live view could not load: ${this._data.error}` : "Loading…"}</p>` : this._renderCells(i.plan, i.shown, a, o, l, u)}
       ${t && this._shown.strip ? r`<rv-wall-strip
             .hass=${this.hass}
-            .cameras=${b([...t])}
+            .cameras=${S([...t])}
             .numbers=${u}
             .now=${l}
             .pictures=${this._data.images}
@@ -882,7 +882,7 @@ var X = 3e3, Z = class extends i {
         <button
           class="text with-icon"
           @click=${() => {
-			w("board"), C(this, { view: "live" });
+			C("board"), x(this, { view: "live" });
 		}}
         >
           ${p("close")}Board

@@ -1,5 +1,5 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
-import { Dt as i, Et as a, F as o, I as s, L as c, Lt as l, P as u, R as d, Z as f, bt as ee, c as p, d as m, j as h, l as te, wt as ne, yt as re, z as ie } from "./live-BkJQck7z.js";
+import { Dt as i, Et as a, F as o, I as s, L as c, Lt as l, P as u, R as d, Z as f, bt as ee, c as p, d as m, j as h, l as te, wt as ne, yt as re, z as ie } from "./live-DbkkZT-0.js";
 //#region src/integration.ts
 function ae(e) {
 	if (e?.degraded) return e.compat.ok ? !e.hosts.length && !e.cameras.length ? {
@@ -59,7 +59,7 @@ function g(e, t) {
 }
 //#endregion
 //#region src/version.ts
-var _ = "0.63.6", le = "https://github.com/ambient-home-systems/Maverick-Reolink-Viewer", ue = {
+var _ = "0.63.7", le = "https://github.com/ambient-home-systems/Maverick-Reolink-Viewer", ue = {
 	guide: ["user-guide"],
 	troubleshooting: ["troubleshooting"],
 	cameras: ["cameras"],
@@ -1500,13 +1500,13 @@ function ut(e) {
 //#endregion
 //#region src/views.ts
 var dt = {
-	events: () => import("./events-view-CwSBLg5Y.js"),
-	list: () => import("./device-list-Dqht16x3.js"),
-	device: () => import("./device-page-BVnWgCuH.js"),
-	"live-check": () => import("./live-check-7T3sX0qD.js"),
-	soak: () => import("./live-soak-CzeHCBIH.js"),
-	cards: () => import("./card-report-Cj0NsUYE.js"),
-	wall: () => import("./wall-CKbbiY8K.js")
+	events: () => import("./events-view-BuKdZPck.js"),
+	list: () => import("./device-list-DxbuEoLQ.js"),
+	device: () => import("./device-page-cnyf_BCY.js"),
+	"live-check": () => import("./live-check-DgQi4e_s.js"),
+	soak: () => import("./live-soak-M71dH-pC.js"),
+	cards: () => import("./card-report-iJdMPJdD.js"),
+	wall: () => import("./wall-BHsJnv0A.js")
 }, $ = /* @__PURE__ */ new Map();
 function ft(e) {
 	let t = dt[e];
@@ -1517,4 +1517,4 @@ function ft(e) {
 	}), $.set(e, n)), n;
 }
 //#endregion
-export { y as $, U as A, k as B, ze as C, Fe as D, Le as E, we as F, ve as G, w as H, H as I, he as J, _e as K, Te as L, Re as M, R as N, z as O, ke as P, de as Q, Ee as R, Ve as S, Me as T, T as U, A as V, E as W, me as X, C as Y, pe as Z, Be as _, ct as a, I as b, X as c, G as d, v as et, q as f, F as g, M as h, ot as i, se as it, De as j, W as k, Q as l, P as m, ut as n, g as nt, lt as o, K as p, ge as q, at as r, ae as rt, rt as s, ft as t, _ as tt, Z as u, Ae as v, Pe as w, Ne as x, Oe as y, O as z };
+export { de as $, W as A, O as B, Ve as C, Le as D, Me as E, ke as F, E as G, A as H, we as I, ge as J, ve as K, H as L, De as M, Re as N, Fe as O, R as P, pe as Q, Te as R, Ne as S, Pe as T, w as U, k as V, T as W, C as X, he as Y, me as Z, F as _, ct as a, se as at, Oe as b, X as c, G as d, y as et, q as f, M as g, N as h, ot as i, ae as it, U as j, z as k, Q as l, P as m, ut as n, _ as nt, lt as o, K as p, _e as q, at as r, g as rt, rt as s, ft as t, v as tt, Z as u, Be as v, ze as w, I as x, Ae as y, Ee as z };

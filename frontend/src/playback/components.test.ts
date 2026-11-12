@@ -328,6 +328,120 @@ describe("rv-timeline", () => {
     vi.useRealTimers();
   });
 
+  describe("centred (v0.63.7: the play point in the middle, the strip dragged)", () => {
+    /** An hour shown, the play time at 01:30: 3.6 s a pixel, 01:30 at x 500. */
+    async function centred(): Promise<RvTimeline> {
+      const el = await timeline();
+      el.centred = true;
+      el.view = { start: T0, span: HOUR };
+      el.cursor = T0 + 90 * MINUTE;
+      await el.updateComplete;
+      return el;
+    }
+
+    it("keeps the play time in the middle as it plays", async () => {
+      const el = await centred();
+      expect(el.timeAt(500)).toBe(T0 + 90 * MINUTE);
+      el.cursor = T0 + 100 * MINUTE;
+      await el.updateComplete;
+      expect(el.timeAt(500)).toBe(T0 + 100 * MINUTE);
+      expect(el.timeAt(0)).toBe(T0 + 70 * MINUTE);
+    });
+
+    it("drags the strip: the time under the play point moves the other way, and plays on release", async () => {
+      const el = await centred();
+      const canvas = el.renderRoot.querySelector("canvas");
+      const scrubs = collect(el, "rv-scrub") as { time: number }[];
+      const seeks = collect(el, "rv-seek") as { time: number }[];
+      const hovers = collect(el, "rv-hover") as { time: number; x: number }[];
+      vi.useFakeTimers();
+      // Pressed anywhere: the strip, not the time under the pointer.
+      canvas?.dispatchEvent(pointer("pointerdown", 800));
+      // 100 px left: the strip goes left, 6 minutes later come under the play point.
+      canvas?.dispatchEvent(pointer("pointermove", 700, { buttons: 1 }));
+      expect(scrubs.at(-1)?.time).toBe(T0 + 96 * MINUTE);
+      await el.updateComplete;
+      expect(el.timeAt(500)).toBe(T0 + 96 * MINUTE);
+      // 200 px right of where it was pressed: 12 minutes earlier.
+      canvas?.dispatchEvent(pointer("pointermove", 1000, { buttons: 1 }));
+      expect(scrubs.at(-1)?.time).toBe(T0 + 78 * MINUTE);
+      // The hover box sits over the play point.
+      vi.advanceTimersByTime(HOVER_DEBOUNCE_MS);
+      expect(hovers.at(-1)).toEqual({ time: T0 + 78 * MINUTE, x: 500 });
+      vi.useRealTimers();
+      canvas?.dispatchEvent(pointer("pointerup", 1000));
+      expect(seeks).toEqual([{ time: T0 + 78 * MINUTE }]);
+      // Let go: it stays in the middle until the play time gets there, not back at 01:30.
+      await el.updateComplete;
+      expect(el.timeAt(500)).toBe(T0 + 78 * MINUTE);
+      el.cursor = T0 + 78 * MINUTE + 500;
+      await el.updateComplete;
+      expect(el.timeAt(500)).toBe(T0 + 78 * MINUTE + 500);
+    });
+
+    it("plays from a spot clicked, and keeps the time within the day and before now", async () => {
+      const el = await centred();
+      const canvas = el.renderRoot.querySelector("canvas");
+      const seeks = collect(el, "rv-seek") as { time: number }[];
+      const scrubs = collect(el, "rv-scrub") as { time: number }[];
+      // A click on an event 100 px right of the middle: plays from there.
+      canvas?.dispatchEvent(pointer("pointerdown", 600));
+      canvas?.dispatchEvent(pointer("pointerup", 601));
+      expect(seeks).toEqual([{ time: T0 + 96 * MINUTE + 3_600 }]);
+      // Dragged far past the day's start: it stops at the start.
+      el.cursor = T0 + 10 * MINUTE;
+      await el.updateComplete;
+      canvas?.dispatchEvent(pointer("pointerdown", 100));
+      canvas?.dispatchEvent(pointer("pointermove", 900, { buttons: 1 }));
+      expect(scrubs.at(-1)?.time).toBe(T0);
+      canvas?.dispatchEvent(pointer("pointerup", 900));
+      // And past now (12:00 on this day): it stops at now.
+      el.cursor = T0 + 12 * HOUR - MINUTE;
+      await el.updateComplete;
+      canvas?.dispatchEvent(pointer("pointerdown", 900));
+      canvas?.dispatchEvent(pointer("pointermove", 100, { buttons: 1 }));
+      expect(scrubs.at(-1)?.time).toBe(T0 + 12 * HOUR);
+      canvas?.dispatchEvent(pointer("pointerup", 100));
+    });
+
+    it("zooms around the middle, and moves the time with a sideways wheel", async () => {
+      vi.useFakeTimers();
+      const el = await centred();
+      const canvas = el.renderRoot.querySelector("canvas");
+      const views = collect(el, "rv-view-change") as { view: { start: number; span: number } }[];
+      const scrubs = collect(el, "rv-scrub") as { time: number }[];
+      const seeks = collect(el, "rv-seek") as { time: number }[];
+      // Zoomed in with the wheel at the right edge: still 01:30 in the middle.
+      canvas?.dispatchEvent(wheel({ deltaY: -100 }, 950));
+      expect(views.at(-1)?.view).toEqual({ start: T0 + 90 * MINUTE - 7.5 * MINUTE, span: 15 * MINUTE });
+      el.view = views.at(-1)?.view ?? el.view;
+      await el.updateComplete;
+      expect(el.timeAt(500)).toBe(T0 + 90 * MINUTE);
+      // A trackpad's sideways swipe of 100 px: 1.5 minutes on, then it plays from there.
+      canvas?.dispatchEvent(wheel({ deltaX: 100 }, 500));
+      expect(scrubs.at(-1)?.time).toBe(T0 + 91.5 * MINUTE);
+      vi.advanceTimersByTime(KEY_SEEK_MS);
+      expect(seeks).toEqual([{ time: T0 + 91.5 * MINUTE }]);
+      vi.useRealTimers();
+    });
+
+    it("zooms with two fingers around the middle", async () => {
+      const el = await centred();
+      const canvas = el.renderRoot.querySelector("canvas");
+      const views = collect(el, "rv-view-change") as { view: { start: number; span: number } }[];
+      const touch = (type: string, pointerId: number, x: number) =>
+        canvas?.dispatchEvent(pointer(type, x, { pointerId, pointerType: "touch" }));
+      touch("pointerdown", 1, 200);
+      touch("pointerdown", 2, 300);
+      touch("pointermove", 1, 100);
+      touch("pointermove", 2, 500);
+      // Four times closer in, wherever the fingers are: the middle stays.
+      expect(views.at(-1)?.view).toEqual({ start: T0 + 90 * MINUTE - 7.5 * MINUTE, span: 15 * MINUTE });
+      touch("pointerup", 1, 100);
+      touch("pointerup", 2, 500);
+    });
+  });
+
   it("pinches to zoom and slides two fingers to pan; one finger still scrubs", async () => {
     const el = await timeline();
     const canvas = el.renderRoot.querySelector("canvas");

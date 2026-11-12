@@ -1,7 +1,7 @@
 import { LitElement, css, html, nothing, type TemplateResult } from "lit";
 
 import { enterPip, exitPip, inPip, movePip } from "../pip";
-import { MseFeeder, MseUnsupported, type FeederStats, type MseSource } from "./mse-feeder";
+import { MseFeeder, MseUnsupported, type FeederStats, type MseSource, type NudgeDetail } from "./mse-feeder";
 
 /** One recording the player can show: a file URL, or MSE fragments. */
 export interface PlayItem {
@@ -64,7 +64,8 @@ export interface PlayRefusal {
  *
  * Events: `rv-time` (absolute time while playing), `rv-first-frame`,
  * `rv-advanced` (moved to the preloaded file), `rv-ended` (nothing preloaded),
- * `rv-player-error`, `rv-pip` (in or out of picture-in-picture).
+ * `rv-player-error`, `rv-pip` (in or out of picture-in-picture), `rv-nudged`
+ * (a video that stood still was nudged on, v0.63.7).
  */
 export class RvPlayer extends LitElement {
   static override properties = {
@@ -569,6 +570,10 @@ export class RvPlayer extends LitElement {
       }}
       @timeupdate=${() => {
         this._onTime(slot);
+      }}
+      @rv-nudge=${(e: CustomEvent<NudgeDetail>) => {
+        // The feeder nudged a video that stood still (v0.63.7): said on, for the check.
+        if (slot === this._active) this._emit("rv-nudged", { ...e.detail, segmentId: this.current?.segmentId });
       }}
       @error=${(e: Event) => {
         this._onError(slot, e);
