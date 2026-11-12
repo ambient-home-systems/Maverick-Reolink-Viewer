@@ -11,14 +11,21 @@ has not reached it is served from the device's cut (a fake NVR sending x264
 and AAC in Baichuan blocks), muxed by the integration; Chromium appends the
 cut's init and two windows and plays across them.
 
-Needs ffmpeg (libvpx-vp9, libopus; libx264 and AAC for the cut), node and
-Playwright with Chromium (1.57 or later for H.264: Chrome for Testing);
-skipped without them unless RV_BROWSER_TESTS=1 (CI), where it fails instead.
+v0.63.10: the drag painter for browsers without WebCodecs (MsePainter, its
+own code built with the frontend's Vite) shows a lone key frame, made by the
+server's key_sample, from a stream whose decoder holds frames back (x264 with
+B-frames), as the owner's Mac did: ending the stream gives the frame up.
+
+Needs ffmpeg (libvpx-vp9, libopus; libx264 and AAC for the cut and the
+painter), node and Playwright with Chromium (1.57 or later for H.264: Chrome
+for Testing), and frontend/node_modules for the painter; skipped without them
+unless RV_BROWSER_TESTS=1 (CI), where it fails instead.
 """
 
 import asyncio
 import base64
 from collections.abc import AsyncGenerator, Generator
+import io
 import json
 import os
 from pathlib import Path
@@ -39,6 +46,7 @@ from pytest_homeassistant_custom_component.typing import (
 from custom_components.reolink_viewer import bridge
 from custom_components.reolink_viewer.bridge import BaichuanEndpoint
 from custom_components.reolink_viewer.const import CONF_BAICHUAN_DEEP_START
+from custom_components.reolink_viewer.fmp4 import FragmentIndex, key_sample
 from homeassistant.core import HomeAssistant
 
 from .baichuan_fixtures import camera_stream, encode
@@ -57,6 +65,8 @@ from .test_playback_api import (  # noqa: F401 - fixtures
 
 SCRIPT = Path(__file__).with_name("mse_append.cjs")
 CUT_SCRIPT = Path(__file__).with_name("mse_cut.cjs")
+PAINT_SCRIPT = Path(__file__).with_name("mse_paint.cjs")
+FRONTEND = Path(__file__).parent.parent / "frontend"
 REQUIRED = os.environ.get("RV_BROWSER_TESTS") == "1"
 
 
@@ -283,3 +293,67 @@ async def test_chromium_plays_a_deep_start_from_the_devices_cut(
     assert result["crossed"], result
     assert result["frames"]["total"] > 0
     assert result["size"] == [320, 240]
+
+
+def _pictures(nvr: bytes, fragments: tuple[int, ...]) -> list[dict[str, Any]]:
+    """The server's pictures (key_sample) of these fragments, for the page."""
+    index = FragmentIndex()
+    stream = io.BytesIO(nvr)
+    index.scan(stream, len(nvr))
+    assert index.init is not None
+    pictures = []
+    for n in fragments:
+        sample = key_sample(index.init, index.read_fragment(stream, n))
+        assert sample is not None
+        pictures.append(
+            {
+                "init": base64.b64encode(sample.init).decode(),
+                "data": base64.b64encode(sample.fragment).decode(),
+                "codec": sample.codec,
+                "time": sample.decode / sample.timescale,
+            }
+        )
+    return pictures
+
+
+@pytest.mark.timeout(180)
+def test_chromium_paints_a_lone_key_frame_that_the_decoder_holds(
+    tmp_path: Path,
+) -> None:
+    """v0.63.10: a drag's picture is shown though the decoder holds frames back.
+
+    The control (the same picture, its stream left open) stays at ready
+    state 1 without seeking, as the owner's Chrome did; the painter ends the
+    stream, and each picture, and the first again, is shown.
+    """
+    node_path = _node_path()
+    if node_path is None:
+        _missing("node with Playwright is not installed")
+    if not (FRONTEND / "node_modules" / "vite").is_dir():
+        _missing("the frontend's packages are not installed (npm ci in frontend/)")
+    path = tmp_path / "reordered.mp4"
+    if not mse_ready(path, video="libx264", audio="aac", seconds=6, reordered=True):
+        _missing("ffmpeg with libx264 and AAC is not installed")
+    pictures = _pictures(nvr_shape(path.read_bytes()), (0, 3))
+    listed = tmp_path / "pictures.json"
+    listed.write_text(json.dumps(pictures))
+    done = subprocess.run(
+        ["node", str(PAINT_SCRIPT), str(listed)],
+        capture_output=True,
+        text=True,
+        timeout=150,
+        env={**os.environ, "NODE_PATH": node_path},
+        check=False,
+    )
+    assert done.returncode == 0, done.stdout + done.stderr
+    result = json.loads(done.stdout.strip().splitlines()[-1])
+    # The stream holds frames back: left open, the picture is never shown.
+    assert result["control"] == {"seeked": False, "readyState": 1}, result
+    times = [picture["time"] for picture in pictures]
+    assert [shown["for"] for shown in result["painted"]] == [*times, times[0]]
+    for shown in result["painted"]:
+        assert shown["ok"], shown
+        assert shown["failure"] is None
+        assert shown["readyState"] >= 2
+        assert abs(shown["at"] - shown["for"]) < 0.05
+        assert shown["lit"], shown

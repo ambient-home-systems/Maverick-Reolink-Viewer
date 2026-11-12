@@ -3,6 +3,21 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.63.10
+
+From the owner's playback check of 0.63.9 on Garage, in Chrome on the Mac on the LAN.
+Every row passed but one: dragging still showed no pictures. This time the check said
+why: each picture arrived and sat at the right moment, but the video never had it
+ready to show.
+
+- **Dragging in Chrome on a plain-HTTP address shows pictures:** the Mac's video
+  decoder can hold each frame back until it has seen a few more, in case they need
+  reordering, and a picture while dragging is a single frame. The small video that
+  shows them now tells the decoder after each picture that no more is coming, so it
+  hands the frame over at once. The next picture carries on as before. A test in a
+  real browser now drags through recordings that make its decoder hold frames the
+  same way.
+
 ## 0.63.9
 
 From the owner's playback checks of 0.63.8 through Nabu Casa (Front Yard Right with HD,

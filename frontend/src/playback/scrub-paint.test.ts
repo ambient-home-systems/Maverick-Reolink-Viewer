@@ -135,7 +135,15 @@ afterEach(() => {
 class FakeBuffer extends EventTarget {
   appended: Uint8Array[] = [];
   removed = 0;
+  /** What was done to the buffer and its source, in order. */
+  steps: string[] = [];
+  /** Its source: an append or removal opens an ended one again, as MSE says. */
+  source: { readyState: string } | undefined;
   private _ranges: [number, number][] = [];
+
+  private _reopen(): void {
+    if (this.source?.readyState === "ended") this.source.readyState = "open";
+  }
 
   get buffered(): { length: number; start: (i: number) => number; end: (i: number) => number } {
     const ranges = this._ranges;
@@ -143,13 +151,17 @@ class FakeBuffer extends EventTarget {
   }
 
   appendBuffer(data: Uint8Array): void {
+    this._reopen();
     this.appended.push(data);
+    this.steps.push("append");
     this._ranges = [[0, 1]];
     queueMicrotask(() => this.dispatchEvent(new Event("updateend")));
   }
 
   remove(): void {
+    this._reopen();
     this.removed += 1;
+    this.steps.push("remove");
     this._ranges = [];
     queueMicrotask(() => this.dispatchEvent(new Event("updateend")));
   }
@@ -163,10 +175,19 @@ function fakeMse() {
     constructor() {
       super();
       sources.push(this.record);
+      this.record.buffer.source = this;
+      this.addEventListener("sourceopen", () => {
+        this.readyState = "open";
+      });
     }
     addSourceBuffer(type: string): SourceBuffer {
       this.record.types.push(type);
       return this.record.buffer as unknown as SourceBuffer;
+    }
+    endOfStream(): void {
+      if (this.readyState !== "open") throw new Error("The MediaSource's readyState is not 'open'.");
+      this.readyState = "ended";
+      this.record.buffer.steps.push("end");
     }
   }
   return { Source, sources };
@@ -207,6 +228,8 @@ describe("painting a key frame through MSE", () => {
       expect(await painter.paint(picture({ time: 8000 }), video)).toBe(true);
       expect(sources[0]?.buffer.removed).toBe(1);
       expect(sources[0]?.buffer.appended).toHaveLength(3);
+      // Each picture's stream is ended once it is appended; the removal opens it again (v0.63.10).
+      expect(sources[0]?.buffer.steps).toEqual(["append", "append", "end", "remove", "append", "end"]);
       expect(created).toHaveLength(1);
       // Another codec: a new source.
       expect(await painter.paint(picture({ codec: "avc1.640028" }), video)).toBe(true);
@@ -264,6 +287,44 @@ describe("painting a key frame through MSE", () => {
       const result = await never;
       expect(result.ok).toBe(false);
       expect(result.failure).toBe("the video did not show it within 2 s (ready state 0, at 0.00 s for 0.00 s, buffered 0.00–1.00 s)");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("ends the stream after the picture, and says so where it could not (v0.63.10: the owner's Mac held the frame)", async () => {
+    // The owner's Chrome: the picture buffered at its time, but ready state 1 and never seeked,
+    // as the decoder held the lone frame for more. Ended, it gives it up.
+    const video = document.createElement("video");
+    let time = 0;
+    let ended = false;
+    Object.defineProperty(video, "currentTime", { get: () => time, set: (value: number) => (time = value) });
+    Object.defineProperty(video, "readyState", { get: () => (ended ? 4 : 1) });
+    const shown = await painted(video, (buffer) => {
+      const source = buffer.source as unknown as { endOfStream: () => void };
+      const end = source.endOfStream.bind(source);
+      source.endOfStream = () => {
+        end();
+        ended = true;
+      };
+    });
+    expect(shown).toEqual({ ok: true, failure: undefined });
+    // A stream that will not end: the frame may still come; if not, the reason says why.
+    vi.useFakeTimers({ toFake: ["setTimeout", "setInterval"] });
+    try {
+      const held = document.createElement("video");
+      const refused = painted(held, (buffer) => {
+        (buffer.source as unknown as { endOfStream: () => void }).endOfStream = () => {
+          throw new Error("InvalidStateError");
+        };
+      });
+      await vi.advanceTimersByTimeAsync(2_500);
+      expect(await refused).toEqual({
+        ok: false,
+        failure:
+          "the video did not show it within 2 s (ready state 0, at 0.00 s for 0.00 s, buffered 0.00–1.00 s);" +
+          " its stream could not be ended: InvalidStateError",
+      });
     } finally {
       vi.useRealTimers();
     }

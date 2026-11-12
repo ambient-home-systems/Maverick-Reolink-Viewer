@@ -115,6 +115,10 @@ jobs:
         run: npm install -g playwright@1.63.0 && playwright install --with-deps chromium
       - name: Fetch the pinned go2rtc (checksum verified)
         run: echo "RV_GO2RTC=$(python -m scripts.fetch_go2rtc "$RUNNER_TEMP/go2rtc")" >> "$GITHUB_ENV"
+      # The drag painter's test builds the painter with the frontend's Vite.
+      - name: Install the frontend's packages
+        working-directory: frontend
+        run: npm ci
       - name: Chromium plays the MSE view's fragments, and watches live through HA
         run: python -m pytest tests/test_mse_browser.py tests/test_live_browser.py
         env:
@@ -124,7 +128,6 @@ jobs:
       - name: Scrubbing the Playback timeline never blocks the page over 50 ms
         working-directory: frontend
         run: |
-          npm ci
           npx vite build -c vite.preview.config.ts
           NODE_PATH="$(npm root -g)" node ../scripts/scrub_check.cjs
 

@@ -4,7 +4,8 @@
 // kept while the stream's configuration stays the same, decodes each key
 // frame and is flushed so it gives it up at once; where the browser has no
 // VideoDecoder, a video element of its own plays it through Media Source
-// Extensions, its buffer holding that one picture.
+// Extensions, its buffer holding that one picture, and its stream ended so
+// the decoder gives that up at once too (v0.63.10).
 
 import {
   keyFrames,
@@ -126,6 +127,7 @@ export class KeyFramePainter {
 interface MediaSourceLike extends EventTarget {
   readyState: string;
   addSourceBuffer(type: string): SourceBuffer;
+  endOfStream(): void;
 }
 
 type MediaSourceCtor = new () => MediaSourceLike;
@@ -215,8 +217,17 @@ function reached(video: HTMLVideoElement, target: number, timeoutMs: number): Pr
  * The owner's Chrome on the LAN (plain HTTP: no WebCodecs) showed no picture
  * in a whole drag (v0.63.8), and a failure said nothing: the last one's
  * reason is kept (`lastFailure`, v0.63.9) for the check and the debug panel.
+ *
+ * That reason (v0.63.9) was the video at the picture's time with the picture
+ * buffered, but at ready state 1 and never seeked: a decoder that may reorder
+ * frames (the Mac's, for a camera's stream that does not say it doesn't)
+ * holds a frame until more come, and a picture is one frame alone. So the
+ * stream is ended after each picture (v0.63.10), which makes the decoder give
+ * up what it holds, as WebCodecs' flush does; the next append or removal
+ * opens it again.
  */
 export class MsePainter {
+  private _source: MediaSourceLike | undefined;
   private _buffer: SourceBuffer | undefined;
   private _codec = "";
   private _init: Uint8Array | undefined;
@@ -246,6 +257,7 @@ export class MsePainter {
       if (!this._buffer || sample.codec !== this._codec) {
         this.close(video);
         const source = new Ctor();
+        this._source = source;
         video.disableRemotePlayback = true;
         this._url = URL.createObjectURL(source as unknown as MediaSource);
         const opened = once(source, "sourceopen", FRAME_TIMEOUT_MS);
@@ -274,6 +286,7 @@ export class MsePainter {
       await update(buffer, video, "the picture", () => {
         buffer.appendBuffer(picture.data as Uint8Array<ArrayBuffer>);
       });
+      const ending = this._end();
       const target = sample.timeS + 0.001;
       const there = reached(video, target, FRAME_TIMEOUT_MS);
       video.currentTime = target;
@@ -283,7 +296,7 @@ export class MsePainter {
         ).join(", ");
         throw new Error(
           `the video did not show it within ${String(FRAME_TIMEOUT_MS / 1000)} s (ready state ${String(video.readyState)},` +
-            ` at ${video.currentTime.toFixed(2)} s for ${target.toFixed(2)} s, buffered ${ranges || "nothing"})${videoError(video)}`,
+            ` at ${video.currentTime.toFixed(2)} s for ${target.toFixed(2)} s, buffered ${ranges || "nothing"})${ending}${videoError(video)}`,
         );
       }
       this._failure = undefined;
@@ -295,6 +308,21 @@ export class MsePainter {
     }
   }
 
+  /**
+   * End the stream, so the decoder gives up the picture it holds; words for
+   * a failure if it could not be ended (it may be shown all the same).
+   */
+  private _end(): string {
+    const source = this._source;
+    if (source?.readyState !== "open") return `; its stream was ${source?.readyState ?? "gone"}, not ended`;
+    try {
+      source.endOfStream();
+      return "";
+    } catch (err) {
+      return `; its stream could not be ended: ${err instanceof Error ? err.message : String(err)}`;
+    }
+  }
+
   close(video?: HTMLVideoElement): void {
     if (video && this._url) {
       video.removeAttribute("src");
@@ -302,6 +330,7 @@ export class MsePainter {
     }
     if (this._url) URL.revokeObjectURL(this._url);
     this._url = undefined;
+    this._source = undefined;
     this._buffer = undefined;
     this._codec = "";
     this._init = undefined;

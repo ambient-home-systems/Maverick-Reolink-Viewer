@@ -8019,6 +8019,47 @@ Mac):**
   - The check's words for a thread and for the computer.
   - The "no picture" line's reason.
 
+**The owner's run of v0.63.9 (2026-11-12, 4:03 PM, Garage, Chrome 155 on the
+Mac, on the LAN over plain HTTP):** every row passed but P.
+
+- **P:** no picture in 188 asked (197 again, 154 beside another viewer, 17
+  fast). The reason, each time: "the video did not show it within 2 s (ready
+  state 1, at 24.00 s for 24.00 s, buffered 24.00–24.07 s)". So the picture
+  was buffered at its time, and the video was there, but it never had the
+  frame to show and never seeked.
+  - Why: a decoder that may reorder frames holds each one until more come,
+    and a picture is one frame alone. The Mac's decoder does this for a
+    camera stream whose SPS does not say its frames come in order. Headless
+    Chromium decodes x264's clips (which say so) at once, hence no
+    reproduction.
+  - Reproduced: Chromium's own decoder holds a lone key frame from x264
+    with B-frames (the SPS says frames are reordered) the same way: ready
+    state 1, no `seeked`, the owner's very reason. Ending the stream
+    (`MediaSource.endOfStream()`) gives the frame up: ready state 4,
+    `seeked`, and the picture on screen.
+- **B:** one start held the loop 263 ms in template code (`core.py in get ←
+  helpers/template/states.py in _get_state`), filed under ESPHome: likely
+  an ESPHome device's Home Assistant action with a template that reads many
+  entities. That start took 0.3 s all the same.
+
+**v0.63.10, from it:**
+
+- **The MSE painter ends its stream after each picture** (`_end`), as
+  WebCodecs' flush does for the other painter, so the decoder gives the
+  frame up. The next picture's removal or append opens the stream again,
+  as MSE says. A stream that cannot be ended is named in the failure's
+  reason.
+- **Checks:**
+  - Unit: the stream is ended after each picture's append and opened again
+    by the next removal; a stream that will not end is in the reason.
+  - Real browser (`tests/mse_paint.cjs`, from `test_mse_browser.py`): the
+    painter's own code, built with the frontend's Vite, paints server-made
+    pictures (`key_sample`) of an x264 recording with B-frames. The control
+    (the same picture, its stream left open) stays at ready state 1
+    without seeking; the painter shows each picture, and the first again.
+    On the code before, it fails with the owner's reason.
+  - CI's browser job installs the frontend's packages before its tests.
+
 #### Step 10.4: the checks
 
 - **In CI:** `scrub_check.cjs` drags against a fake key-frame endpoint,
