@@ -77,6 +77,31 @@ describe("rv-player", () => {
     expect((advanced[0] as { segmentId: string }).segmentId).toBe("b");
   });
 
+  it("keeps a play() the browser refused, and tries again when asked (v0.63.6)", async () => {
+    const el = await mount("rv-player");
+    const play = vi.spyOn(HTMLMediaElement.prototype, "play");
+    try {
+      // Safari let go of a drag and showed nothing: a refusal was dropped then.
+      play.mockRejectedValueOnce(new DOMException("The request is not allowed", "NotAllowedError"));
+      await el.play(item("a"));
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(el.lastRefusal?.name).toBe("NotAllowedError");
+      expect(el.lastRefusal?.text).toBe("NotAllowedError: The request is not allowed");
+      expect(el.paused).toBe(true);
+      // Pressed again: it plays; refused again; or no answer while it waits for video.
+      play.mockResolvedValueOnce(undefined);
+      expect(await el.tryPlay(50)).toBeUndefined();
+      play.mockRejectedValueOnce(new DOMException("interrupted", "AbortError"));
+      expect(await el.tryPlay(50)).toBe("AbortError: interrupted");
+      expect(el.lastRefusal?.name).toBe("AbortError");
+      play.mockReturnValueOnce(new Promise<void>(() => undefined));
+      expect(await el.tryPlay(20)).toBe("no answer");
+    } finally {
+      play.mockRestore();
+    }
+  });
+
   it("keeps picture-in-picture across the swap to the next file", async () => {
     const pip = fakePip();
     try {

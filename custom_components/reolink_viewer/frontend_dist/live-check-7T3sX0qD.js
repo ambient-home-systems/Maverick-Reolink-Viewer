@@ -1,8 +1,8 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
-import { B as i, E as a, Ft as o, G as s, H as c, It as l, J as u, K as d, Lt as f, Nt as p, R as m, S as h, T as g, U as _, V as ee, W as v, Y as y, Z as b, at as x, b as S, dt as C, ft as te, h as w, ht as T, j as E, mt as D, n as O, p as k, q as ne, st as re, x as ie } from "./live-DVtibn8r.js";
-import { q as ae, tt as oe } from "./home-B9FbTUWz.js";
-import { a as A, i as se, n as ce, o as j, r as M, t as N } from "./findings-ULQT5yEf.js";
-import { d as P, f as F, p as I, r as L } from "./check-Coyl2AZN.js";
+import { B as i, E as a, Ft as o, G as s, H as c, It as l, J as u, K as d, Lt as f, Nt as p, R as m, S as h, T as g, U as _, V as ee, W as v, Y as y, Z as b, at as x, b as S, dt as C, ft as te, h as w, ht as T, j as E, mt as D, n as O, p as k, q as ne, st as re, x as ie } from "./live-BkJQck7z.js";
+import { q as ae, tt as oe } from "./home-CWhJIzJr.js";
+import { a as A, i as se, n as ce, o as j, r as M, t as N } from "./findings-DHZwfhsR.js";
+import { d as P, m as F, p as I, r as L } from "./check-DnmXbwKP.js";
 //#region src/live/check.ts
 var R = [
 	"Desktop Chrome, LAN",
@@ -696,7 +696,7 @@ var $ = class extends r {
                     >` : t}` : t}
         </div>
       </div>
-      ${I(this._setup, navigator.userAgent) ? n`<div class="banner warning" role="alert">
+      ${F(this._setup, navigator.userAgent) ? n`<div class="banner warning" role="alert">
             “${this._setup}” is for another kind of device: pick the one for this device, so the report is
             filed under it.
           </div>` : t}
@@ -869,7 +869,7 @@ function ge() {
 		let e = window.localStorage.getItem(X);
 		if (e && R.includes(e)) return e;
 	} catch {}
-	return F(navigator.userAgent);
+	return I(navigator.userAgent);
 }
 function _e(e) {
 	try {

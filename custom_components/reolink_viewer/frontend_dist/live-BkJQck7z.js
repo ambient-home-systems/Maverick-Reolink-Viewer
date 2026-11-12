@@ -1068,6 +1068,9 @@ var Ot = class {
 	get closed() {
 		return this._closed;
 	}
+	get streaming() {
+		return this._source?.streaming;
+	}
 	get around() {
 		let e = this._video.currentTime, t = this._buffer ? this._rangeAt(e) : void 0;
 		return t ? {

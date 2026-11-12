@@ -6,6 +6,7 @@ import {
   browserLabel,
   bufferedSeconds,
   caughtUp,
+  checkSetup,
   classifyHost,
   cutReport,
   deepTarget,
@@ -15,6 +16,7 @@ import {
   heldByName,
   heldByUs,
   holdsDuring,
+  isMacSafari,
   loginReport,
   longRecordings,
   mb,
@@ -104,6 +106,20 @@ describe("setups", () => {
     expect(setupMismatch("iPhone app, Nabu Casa", IPHONE_APP)).toBe(false);
     expect(setupMismatch("Desktop Chrome, Tailscale", MAC_CHROME)).toBe(false);
     expect(setupMismatch("Other", IPHONE_APP)).toBe(false);
+  });
+
+  it("knows Safari on a Mac from Chrome there (v0.63.6)", () => {
+    // The owner's Safari run of v0.63.5, as "Desktop Chrome, LAN": there was no Safari setup.
+    const MAC_SAFARI =
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.5.2 Safari/605.1.15";
+    expect(isMacSafari(MAC_SAFARI)).toBe(true);
+    expect(isMacSafari(MAC_CHROME)).toBe(false);
+    expect(isMacSafari(IPHONE_APP)).toBe(false);
+    expect(checkSetup(MAC_SAFARI)).toBe("Mac Safari, LAN");
+    expect(checkSetup(MAC_CHROME)).toBe("Desktop Chrome, LAN");
+    expect(checkSetup(IPHONE_APP)).toBe("iPhone app, Wi-Fi (local)");
+    expect(setupMismatch("Mac Safari, Nabu Casa", MAC_SAFARI)).toBe(false);
+    expect(setupMismatch("Mac Safari, LAN", MAC_CHROME)).toBe(true);
   });
 });
 

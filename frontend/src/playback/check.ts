@@ -70,11 +70,15 @@ import { ScrubClient, isPicture, type ScrubPicture, type SocketLike } from "./sc
 import { SHAPES, mseApi, mseSupports, pickSample, probeShape, type MseApi } from "./mse-probe";
 import type { RvPlayer } from "./player";
 
-export const CHECK_VERSION = "0.8.4";
+export const CHECK_VERSION = "0.8.5";
 export const SETUPS = [
   "Desktop Chrome, LAN",
   "Desktop Chrome, Tailscale",
   "Desktop Chrome, Nabu Casa",
+  // v0.63.6: the owner ran the check in Safari as "Desktop Chrome, LAN".
+  "Mac Safari, LAN",
+  "Mac Safari, Tailscale",
+  "Mac Safari, Nabu Casa",
   "iPhone app, Wi-Fi (local)",
   "iPhone app, Tailscale",
   "iPhone app, Nabu Casa",
@@ -131,6 +135,8 @@ const DRAG_CACHED_MS = 100;
 const DRAG_STALL_MS = 1_000;
 /** Home Assistant's event loop held this long (ms) around a start is said in "In short" (v0.62.2). */
 const BUSY_NOTE_MS = 500;
+/** After a release that showed nothing, play is pressed and waited for this long (ms; v0.63.6). */
+const PRESS_PLAY_MS = 5_000;
 /**
  * V: two viewers on one camera (Phase 5's check, automated): each plays this
  * long after its start (ms); then, both stopped, the NVR's list of users is
@@ -1225,7 +1231,9 @@ export class PlaybackCheck {
       `   fast (${minutes(fastEnd - fastFrom)} in ${span(DRAG_FAST.ms)}): ${describeDrag(sFast, fast)}${mark(fastOk)}`,
     );
     this._log(`   release: ${release.text}${mark(release.ok)}`);
-    if (release.firstMs !== undefined) {
+    for (const line of release.detail ?? []) this._log(`     ${line}`);
+    // Its start's lines, played or not (v0.63.6: a failed one said nothing).
+    if (release.firstMs !== undefined || release.detail) {
       // Where the start's time went: the page's steps, then the server's (a cut's slot and reply).
       const m = t.metrics;
       const served = t.player.mseStats?.atSource;
@@ -1439,7 +1447,9 @@ export class PlaybackCheck {
   }
 
   /** Let go at `at`: the video starts there, the picture staying on screen until its first frame. */
-  private async _dragRelease(at: number): Promise<{ text: string; plain: string; ok: boolean; firstMs?: number }> {
+  private async _dragRelease(
+    at: number,
+  ): Promise<{ text: string; plain: string; ok: boolean; firstMs?: number; detail?: string[] }> {
     const t = this._t;
     const timeline = t.timeline;
     const view = t.scrubView;
@@ -1476,9 +1486,7 @@ export class PlaybackCheck {
     timeline.dispatchEvent(new CustomEvent("rv-hover-end"));
     const busy = await this._busy();
     this._releaseBusy = busy.text + (busy.heldMs !== undefined && busy.heldMs >= BUSY_NOTE_MS ? " · HOME ASSISTANT HELD UP" : "");
-    if (!ok) {
-      return { text: `no first frame in ${span(DRAG_RELEASE_MS)}`, plain: "Letting go did not start the video.", ok: false };
-    }
+    if (!ok) return { ...(await this._releaseStuck(player, began, at)), ok: false };
     if (!showing) {
       return {
         text: `the video's first frame after ${secondsText(firstMs)} (no picture was on screen at the release)`,
@@ -1505,6 +1513,52 @@ export class PlaybackCheck {
       plain: `Letting go plays from there in ${secondsText(firstMs)}, the picture staying until the video shows.`,
       ok: true,
       firstMs,
+    };
+  }
+
+  /**
+   * A release that showed no first frame (v0.63.6: the owner's Safari run of
+   * v0.63.5, with nothing said of why): what the video was doing then (paused
+   * or waiting, what it had, a refused play()), then play pressed as a person
+   * would: it starts (the browser held it back), is refused, or still waits
+   * (it had nothing to show there).
+   */
+  private async _releaseStuck(
+    player: RvPlayer,
+    began: number,
+    at: number,
+  ): Promise<{ text: string; plain: string; detail: string[] }> {
+    const refusal = player.lastRefusal;
+    const refused = refusal && refusal.at >= began ? `; its play() was refused: ${refusal.text}` : "";
+    // Where it was: the recording let go in, or still the one before.
+    const shown = player.time;
+    const gap = shown === undefined ? 0 : Math.abs(shown - at);
+    const where =
+      shown === undefined
+        ? ""
+        : `${gap < 1000 ? secondsText(gap) : span(gap)} ${shown <= at ? "before" : "after"} where it was let go; `;
+    const then = `then: ${where}${videoState(player)}${refused}`;
+    const pressed = performance.now();
+    const answer = await player.tryPlay(PRESS_PLAY_MS);
+    const text = `no first frame in ${span(DRAG_RELEASE_MS)}`;
+    if (answer === undefined) {
+      return {
+        text,
+        plain: "Letting go did not start the video until play was pressed: the browser held it back.",
+        detail: [then, `pressing play then: it played after ${secondsText(performance.now() - pressed)}`],
+      };
+    }
+    if (answer === "no answer") {
+      return {
+        text,
+        plain: "Letting go did not start the video: it waited for video it did not get, and pressing play did not help.",
+        detail: [then, `pressing play then: still nothing after ${span(PRESS_PLAY_MS)} (it waits for video)`],
+      };
+    }
+    return {
+      text,
+      plain: `Letting go did not start the video: the browser refused to play it (${answer}).`,
+      detail: [then, `pressing play then: refused (${answer})`],
     };
   }
 
@@ -2282,7 +2336,9 @@ export function videoState(player: RvPlayer | null): string {
     `ready state ${String(video.readyState)}, network ${String(video.networkState)}, ${video.paused ? "paused" : "not paused"}` +
     `${video.ended ? ", ended" : ""}${video.seeking ? ", seeking" : ""}, buffered [${ranges.join(", ") || "nothing"}]${error}` +
     (feed
-      ? ` · MSE (${feed.api}): ${String(feed.windows)} windows, ${mb(feed.bytes)}, from the ${feed.source}, ${feed.fetching ? "fetching" : "not fetching"}, ${feed.ahead.toFixed(1)} s ahead`
+      ? ` · MSE (${feed.api}): ${String(feed.windows)} windows, ${mb(feed.bytes)}, from the ${feed.source}, ${feed.fetching ? "fetching" : "not fetching"}, ${feed.ahead.toFixed(1)} s ahead` +
+        // ManagedMediaSource asked for a pause in fetching (v0.63.6).
+        (feed.streaming === false ? ", the browser asked to pause fetching" : "")
       : " · not through MSE")
   );
 }

@@ -281,6 +281,18 @@ describe("MseFeeder", () => {
     f.destroy();
   });
 
+  it("says when ManagedMediaSource asks for a pause in fetching (v0.63.6)", async () => {
+    const server = fakeServer(60);
+    const { f } = feeder(server, fakeVideo(), 120_000);
+    await f.start(0);
+    // MediaSource has no say: undefined. ManagedMediaSource's endstreaming: false.
+    expect(f.streaming).toBeUndefined();
+    const source = FakeMediaSource.last as unknown as { streaming?: boolean };
+    source.streaming = false;
+    expect(f.streaming).toBe(false);
+    f.destroy();
+  });
+
   it("lets the first window go when the start is refused", async () => {
     FakeMediaSource.supported = false;
     const server = fakeServer(60);

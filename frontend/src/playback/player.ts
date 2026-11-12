@@ -43,6 +43,16 @@ export interface PlayerErrorDetail {
 /** The speeds offered (playbackRate). */
 export const RATES = [0.5, 1, 2, 4, 8] as const;
 
+/** A play() the browser refused or cut short (v0.63.6). */
+export interface PlayRefusal {
+  /** The error's name: NotAllowedError (autoplay), AbortError (a new load or a pause), … */
+  name: string;
+  /** Its name and message. */
+  text: string;
+  /** When (performance.now()). */
+  at: number;
+}
+
 /**
  * A two-buffer player. The active <video> plays the current recording; the
  * hidden one holds the next recording, already loading, so moving on at the
@@ -89,6 +99,8 @@ export class RvPlayer extends LitElement {
   private _firstOnSeeked = false;
   private _endedAt: number | undefined;
   private _pendingOffset: [number, number] = [0, 0];
+  /** The last play() the browser refused or cut short (v0.63.6: once silent). */
+  private _refusal: PlayRefusal | undefined;
 
   constructor() {
     super();
@@ -145,9 +157,44 @@ export class RvPlayer extends LitElement {
   }
 
   /** The active feeder's counters, if the recording plays through MSE. */
-  get mseStats(): (FeederStats & { ahead: number; behind: number }) | undefined {
+  get mseStats(): (FeederStats & { ahead: number; behind: number; streaming: boolean | undefined }) | undefined {
     const feeder = this._feeders[this._active];
-    return feeder ? { ...feeder.stats, ...feeder.around } : undefined;
+    return feeder ? { ...feeder.stats, ...feeder.around, streaming: feeder.streaming } : undefined;
+  }
+
+  /**
+   * The last time the browser refused a play() or cut it short (its error's
+   * name and message, and when: performance.now()). The owner's Safari run of
+   * v0.63.5 let go of a drag and saw no video for 20 s; a refusal was not
+   * kept, so the check could not say whether this was one.
+   */
+  get lastRefusal(): PlayRefusal | undefined {
+    return this._refusal;
+  }
+
+  /**
+   * Ask the video on screen to play, as pressing play does (the playback
+   * check, after a start that showed nothing): undefined once it plays; else
+   * the browser's refusal, or "no answer" if it is still waiting after
+   * `timeoutMs` (for video it does not have).
+   */
+  async tryPlay(timeoutMs: number): Promise<string | undefined> {
+    const video = this._video(this._active);
+    if (!video) return "no video";
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const late = new Promise<string>((resolve) => {
+      timer = setTimeout(() => {
+        resolve("no answer");
+      }, timeoutMs);
+    });
+    try {
+      const played = (video.play() as Promise<void> | undefined) ?? Promise.resolve();
+      return await Promise.race([played.then(() => undefined), late]);
+    } catch (err) {
+      return this._noteRefusal(err).text;
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   /** Whether the recording on screen plays through MSE (and that still works). */
@@ -383,6 +430,8 @@ export class RvPlayer extends LitElement {
   private _start(video: HTMLVideoElement): void {
     const played = video.play() as Promise<void> | undefined;
     played?.catch((err: unknown) => {
+      // Kept for the check and the debug panel (v0.63.6), not shown as an error.
+      this._noteRefusal(err);
       // Autoplay refusals are not errors: the user can press play.
       if (err instanceof DOMException && err.name === "NotAllowedError") {
         this._paused = true;
@@ -391,6 +440,15 @@ export class RvPlayer extends LitElement {
       if (err instanceof DOMException && err.name === "AbortError") return;
       this._fail(String(err), video, false);
     });
+  }
+
+  private _noteRefusal(err: unknown): PlayRefusal {
+    const refusal: PlayRefusal =
+      err instanceof DOMException
+        ? { name: err.name, text: `${err.name}${err.message ? `: ${err.message}` : ""}`, at: performance.now() }
+        : { name: "Error", text: String(err), at: performance.now() };
+    this._refusal = refusal;
+    return refusal;
   }
 
   private _fail(message: string, video: HTMLVideoElement, fallback: boolean): void {

@@ -3,6 +3,29 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.63.6
+
+From the owner's playback check of 0.63.5 in Safari on the Mac, over the LAN, on
+Front Yard Right in the daytime. Most rows passed, including two Safari failures
+from earlier versions: going back from HD to SD, and moving on to the next
+recording. Dragging beside a second viewer was tested for the first time and
+passed. But letting go after a drag showed no video for 20 s, and the report
+couldn't say why.
+
+- **A release that shows nothing says why:** if letting go of a drag shows no video
+  within 20 s, the check now says what the video was doing: paused or waiting,
+  where it was, what it had loaded, whether more was on its way, and whether the
+  browser refused to play it. It then presses play itself, and says whether that
+  started it, was refused, or still had nothing to show. The address, server and
+  Home Assistant lines for that start are printed too; before, they were skipped
+  when it failed.
+- **A refused play is kept:** when the browser refuses to play a video or cuts a
+  play short, the player now keeps the reason. Before, it dropped it silently.
+  Technical details shows it, along with Safari asking the player to pause
+  fetching.
+- **Mac Safari setups:** the check's setups now include "Mac Safari" for the LAN,
+  Tailscale and Nabu Casa. Safari picks the LAN one by default.
+
 ## 0.63.5
 
 From the owner's playback check of 0.63.4 in Chrome through Nabu Casa, on Front Yard

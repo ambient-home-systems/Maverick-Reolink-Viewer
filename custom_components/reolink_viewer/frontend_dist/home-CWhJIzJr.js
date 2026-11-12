@@ -1,5 +1,5 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
-import { Dt as i, Et as a, F as o, I as s, L as c, Lt as l, P as u, R as d, Z as f, bt as ee, c as p, d as m, j as h, l as te, wt as ne, yt as re, z as ie } from "./live-DVtibn8r.js";
+import { Dt as i, Et as a, F as o, I as s, L as c, Lt as l, P as u, R as d, Z as f, bt as ee, c as p, d as m, j as h, l as te, wt as ne, yt as re, z as ie } from "./live-BkJQck7z.js";
 //#region src/integration.ts
 function ae(e) {
 	if (e?.degraded) return e.compat.ok ? !e.hosts.length && !e.cameras.length ? {
@@ -59,7 +59,7 @@ function g(e, t) {
 }
 //#endregion
 //#region src/version.ts
-var _ = "0.63.5", le = "https://github.com/ambient-home-systems/Maverick-Reolink-Viewer", ue = {
+var _ = "0.63.6", le = "https://github.com/ambient-home-systems/Maverick-Reolink-Viewer", ue = {
 	guide: ["user-guide"],
 	troubleshooting: ["troubleshooting"],
 	cameras: ["cameras"],
@@ -1500,13 +1500,13 @@ function ut(e) {
 //#endregion
 //#region src/views.ts
 var dt = {
-	events: () => import("./events-view-TP11JRmQ.js"),
-	list: () => import("./device-list-Cdd1tHq2.js"),
-	device: () => import("./device-page-LUbmFeV6.js"),
-	"live-check": () => import("./live-check-BuWtYjBT.js"),
-	soak: () => import("./live-soak-CbHckxXN.js"),
-	cards: () => import("./card-report-BfFsik70.js"),
-	wall: () => import("./wall-_7jY0Mtk.js")
+	events: () => import("./events-view-CwSBLg5Y.js"),
+	list: () => import("./device-list-Dqht16x3.js"),
+	device: () => import("./device-page-BVnWgCuH.js"),
+	"live-check": () => import("./live-check-7T3sX0qD.js"),
+	soak: () => import("./live-soak-CzeHCBIH.js"),
+	cards: () => import("./card-report-Cj0NsUYE.js"),
+	wall: () => import("./wall-CKbbiY8K.js")
 }, $ = /* @__PURE__ */ new Map();
 function ft(e) {
 	let t = dt[e];
