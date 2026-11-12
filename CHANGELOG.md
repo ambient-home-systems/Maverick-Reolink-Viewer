@@ -3,6 +3,22 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.63.8
+
+From the owner's playback checks of 0.63.7: Safari on the Mac with Spook turned off,
+and Chrome through Nabu Casa. With Spook off, every row passed. Starts took 0.03 to
+0.5 s, and letting go after a drag under 0.1 s. The owner tried the new timeline by
+hand: "works great and looks great".
+
+- **HD just past where a download stopped starts at once:** an HD start at 6.2 min
+  into a recording took 4.2 s. An hour earlier, its download had stopped at 6.1 min,
+  where the recorder's direct video took over, and that had since ended. Being so
+  close, the start picked the download back up. But the recorder always sends a
+  recording from its beginning, so 244 MB had to be read again before any new video
+  came. The download then went on to fetch the whole hour, 2.4 GB. Now, when picking
+  a stopped download back up would mean re-reading more than 32 MB, the start uses the
+  recorder's direct video instead: about 0.7 s, with nothing more downloaded.
+
 ## 0.63.7
 
 From the owner's playback check of 0.63.6 in Safari on the Mac, and the owner's ask

@@ -7916,6 +7916,52 @@ footage."**
     frame alone does not.
   - The scrub check: a pinch zooms 6 h to 1 h; no long tasks.
 
+**The owner's runs of v0.63.7 (2026-11-12):**
+
+- **Safari on the Mac, 12:53 PM, Spook on:**
+  - C passed, "it stood still and was nudged on 1×": the nudge works.
+  - Every hold was named "by the Spook integration, not Reolink Viewer".
+  - Spook held the loop up to 4.9 s of 10 s (9 holds). Today's timeline took
+    1.4 s ✗, its server work 0 ms; D1's URL took 1.36 s, its server 65 ms.
+- **The same at 1:15 PM, Spook disabled:** every row passed, and no hold
+  went over 0.2 s.
+  - Timeline 0.25 s, D1 0.47 s, D2 0.03 s, the release under 0.1 s, HD
+    0.7 s and back 0.15 s.
+  - Dragging beside a second viewer gave a picture every 0.06 s.
+  - The release's cut said "629 blocks of another cut skipped": v0.63.1's
+    guard met another viewer's leftovers on the hardware, and the video
+    started in place.
+- **The owner on the centred timeline by hand:** "the new timeline works
+  great and looks great".
+- **Chrome 155 on the Mac through Nabu Casa, 1:42 PM, Spook off:** every
+  row passed. Trips were about 25 ms on this path. B 0.47 s, D1 0.49 s, D2
+  0.10 s in one trip, C gap 2 ms, the release 0.1 s, dragging every
+  0.05 s.
+- **But HD took 4.2 s ("Fine").**
+  - The Safari run had played HD at 6.2 min of the 6 AM hour, and the
+    download stopped at 6.1 min, where that cut began. The cut later ended
+    with its viewer ("error stopped").
+  - This start, 0.1 min past the stop, was within `DEEP_MARGIN_MS` of what
+    the original held, so `_choose_cut` left it to the original, and the
+    download was resumed. The device ignores Range: the resume re-read the
+    244 MB on disk first (458 Mbit/s, about 4.3 s), then, `whole`, fetched
+    the hour's 2.39 GB.
+- **Holds of 0.16 to 0.24 s were named "Home Assistant's Esphome
+  integration":** a template calling `integration_entities()`, rendered on
+  an ESPHome device's state change. That is the owner's, not Reolink
+  Viewer's.
+
+**v0.63.8, from it:**
+
+- **A start near where a stopped download ended is cut** (`_choose_cut`).
+  The shortcut "within `DEEP_MARGIN_MS` of what the original holds, it
+  serves" now applies while the download runs, or while resuming would
+  re-read little (`REREAD_MAX_BYTES`, 32 MB, about 0.6 s on the LAN).
+  Otherwise a cut serves the start, and the download stays stopped.
+- Checks: a start just past a stopped download with more than that on disk
+  is cut, and the download is not resumed; with less, it is resumed as
+  before. The test fails on the code before.
+
 #### Step 10.4: the checks
 
 - **In CI:** `scrub_check.cjs` drags against a fake key-frame endpoint,

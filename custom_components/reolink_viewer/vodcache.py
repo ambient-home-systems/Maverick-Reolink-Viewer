@@ -133,6 +133,11 @@ CUT_FIRST = 1_000_000
 # A start is cut only this far past what the download has indexed (ms): a
 # start closer than that is reached by the download about as soon.
 DEEP_MARGIN_MS = 30_000
+# A download stopped at a cut reads the recording from its start again when
+# resumed (the device ignores Range): past this many bytes on disk, a start
+# near where it stopped is cut instead (v0.63.8: an HD start 0.1 min past a
+# stop re-read 244 MB, 4.2 s, and then fetched the hour's 2.4 GB).
+REREAD_MAX_BYTES = 32 * 1024 * 1024
 # A start this far past what a running cut has received waits for it (ms).
 CUT_REACH_MS = 60_000
 # A cut's first fragment must come within this long, else the download serves.
@@ -1024,7 +1029,8 @@ class VodCache:
         """Return the cut that serves a start at ``at_ms``, starting one if worth it.
 
         None when the option is off, the original can serve it now or will
-        soon (within ``DEEP_MARGIN_MS`` of what is indexed), or the cut
+        soon (within ``DEEP_MARGIN_MS`` of what is indexed, while its download
+        runs or would re-read little: ``REREAD_MAX_BYTES``), or the cut
         failed: the original serves it then (the Phase 2 path).
         """
         source = self._baichuan
@@ -1052,7 +1058,10 @@ class VodCache:
         if cut is not None and cut.error is None and _covers(cut, at_ms):
             return cut
         reached = indexed.duration_ms if indexed is not None else 0.0
-        if at_ms - reached < DEEP_MARGIN_MS:
+        # Near what the original holds, a running download gets there soon;
+        # a stopped one would re-read every byte on disk first.
+        rereads = _stopped(entry) and entry.written > REREAD_MAX_BYTES
+        if at_ms - reached < DEEP_MARGIN_MS and not rereads:
             return None
         rec = entry.recording
         span = CUT_SPAN_MS.get(rec.stream)
