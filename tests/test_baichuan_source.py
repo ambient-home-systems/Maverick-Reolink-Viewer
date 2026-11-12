@@ -947,7 +947,7 @@ async def test_a_start_just_past_a_stopped_download_is_cut_not_reread(
     assert entry.cut is not first
     # The download was not resumed: no re-read, no whole hour fetched.
     assert not entry.filling
-    assert not entry.whole
+    assert not _resumed(entry)
     assert entry.stopped_ms == stopped
     second = entry.cut
     assert second is not None
@@ -957,8 +957,13 @@ async def test_a_start_just_past_a_stopped_download_is_cut_not_reread(
     with patch.object(vodcache, "REREAD_MAX_BYTES", entry.written):
         window = await _window(cache, entry, at_ms=stopped + 2_000)
     assert window.source == "file"
-    assert entry.whole
+    assert _resumed(entry)
     await cache.async_wait(entry, complete=True)
+
+
+def _resumed(entry: Any) -> bool:
+    """Whether the download was resumed to the end (read afresh: not narrowed)."""
+    return bool(entry.whole)
 
 
 async def test_a_wait_past_the_stop_resumes_the_download(
