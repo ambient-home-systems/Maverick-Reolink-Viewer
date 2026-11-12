@@ -3,6 +3,28 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.63.9
+
+From the owner's playback checks of 0.63.8 through Nabu Casa (Front Yard Right with HD,
+Front Yard Left) and on the LAN (Garage), and the learning check. Front Yard Left's
+first deep start now takes 0.57 s (1.09 s before). On the LAN in Chrome, dragging
+along Garage's timeline showed no pictures at all.
+
+- **Dragging in Chrome on a plain-HTTP address:** Chrome allows WebCodecs only on
+  secure (HTTPS) pages, so on the LAN the pictures go through a small hidden video
+  instead, and in your Chrome none showed. Its video now stays rendered (invisible,
+  not hidden) while it loads a picture, since a browser may skip work for a hidden
+  video. A picture also counts as shown once the video is at its moment, even if the
+  browser never says it has finished seeking. If pictures still don't show, the check
+  and Technical details now say why: the source didn't open, the picture was refused,
+  or the video never reached its moment.
+- **Home Assistant waiting, not working:** a start was "slowed by Home Assistant's
+  own code", but Home Assistant's main loop had been idle, waiting for something to
+  do, while it ran late. That happens when another of Home Assistant's threads is
+  running, or the computer gives Home Assistant no time. The check now names the
+  thread that was running ("the Radarr integration, in another thread"), or says the
+  computer was busy when none was.
+
 ## 0.63.8
 
 From the owner's playback checks of 0.63.7: Safari on the Mac with Spook turned off,

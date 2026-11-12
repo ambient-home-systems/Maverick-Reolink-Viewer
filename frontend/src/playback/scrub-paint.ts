@@ -151,22 +151,77 @@ function once(target: EventTarget, type: string, timeoutMs: number): Promise<boo
   });
 }
 
-async function update(buffer: SourceBuffer, run: () => void): Promise<void> {
+/** The video's error, if it has one, for a failure's words. */
+function videoError(video: HTMLVideoElement): string {
+  const error = video.error;
+  return error ? ` (video error ${String(error.code)}${error.message ? `: ${error.message}` : ""})` : "";
+}
+
+/** Run an append or removal; throws what it was and why it failed (`what`: "the picture"). */
+async function update(buffer: SourceBuffer, video: HTMLVideoElement, what: string, run: () => void): Promise<void> {
+  // (An object: a closure's write is not seen by the checks below otherwise.)
+  const seen = { refused: false };
+  const onError = () => {
+    seen.refused = true;
+  };
+  buffer.addEventListener("error", onError, { once: true });
   const ended = once(buffer, "updateend", FRAME_TIMEOUT_MS);
-  run();
-  if (!(await ended)) throw new Error("the buffer did not take it");
+  try {
+    run();
+  } catch (err) {
+    buffer.removeEventListener("error", onError);
+    throw new Error(`${what} was refused: ${err instanceof Error ? err.message : String(err)}${videoError(video)}`, {
+      cause: err,
+    });
+  }
+  const done = await ended;
+  buffer.removeEventListener("error", onError);
+  if (seen.refused) throw new Error(`${what} was refused${videoError(video)}`);
+  if (!done) throw new Error(`${what} was not taken within ${String(FRAME_TIMEOUT_MS / 1000)} s${videoError(video)}`);
+}
+
+/**
+ * Wait for the video to show the time it was moved to: its `seeked`, or (as
+ * a browser may not say it) its ready state and time there; false if
+ * neither comes in time.
+ */
+function reached(video: HTMLVideoElement, target: number, timeoutMs: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const there = () => !video.seeking && video.readyState >= 2 && Math.abs(video.currentTime - target) < 0.05;
+    const finish = (ok: boolean) => {
+      clearTimeout(timer);
+      clearInterval(poll);
+      video.removeEventListener("seeked", onSeeked);
+      resolve(ok);
+    };
+    const onSeeked = () => {
+      finish(true);
+    };
+    const timer = setTimeout(() => {
+      finish(there());
+    }, timeoutMs);
+    const poll = setInterval(() => {
+      if (there()) finish(true);
+    }, 50);
+    video.addEventListener("seeked", onSeeked);
+  });
 }
 
 /**
  * Plays pictures through MSE where WebCodecs is missing: each picture's init
  * segment (when it changes) and its one-sample fragment are appended, the
  * picture before it removed, and the video set to its time.
+ *
+ * The owner's Chrome on the LAN (plain HTTP: no WebCodecs) showed no picture
+ * in a whole drag (v0.63.8), and a failure said nothing: the last one's
+ * reason is kept (`lastFailure`, v0.63.9) for the check and the debug panel.
  */
 export class MsePainter {
   private _buffer: SourceBuffer | undefined;
   private _codec = "";
   private _init: Uint8Array | undefined;
   private _url: string | undefined;
+  private _failure: string | undefined;
 
   constructor(private readonly _ctor: MediaSourceCtor | undefined = mediaSource()) {}
 
@@ -174,10 +229,19 @@ export class MsePainter {
     return this._ctor !== undefined;
   }
 
+  /** Why the last picture could not be shown (none since it last could: undefined). */
+  get lastFailure(): string | undefined {
+    return this._failure;
+  }
+
   async paint(picture: ScrubPicture, video: HTMLVideoElement): Promise<boolean> {
     const sample = sampleOf(picture);
     const Ctor = this._ctor;
-    if (!sample || !Ctor) return false;
+    if (!Ctor) return false;
+    if (!sample) {
+      this._failure = "the picture has no key frame this browser can read";
+      return false;
+    }
     try {
       if (!this._buffer || sample.codec !== this._codec) {
         this.close(video);
@@ -186,30 +250,46 @@ export class MsePainter {
         this._url = URL.createObjectURL(source as unknown as MediaSource);
         const opened = once(source, "sourceopen", FRAME_TIMEOUT_MS);
         video.src = this._url;
-        if (!(await opened)) throw new Error("the source did not open");
-        this._buffer = source.addSourceBuffer(`video/mp4; codecs="${sample.codec}"`);
+        if (!(await opened)) throw new Error(`the source did not open${videoError(video)}`);
+        try {
+          this._buffer = source.addSourceBuffer(`video/mp4; codecs="${sample.codec}"`);
+        } catch (err) {
+          throw new Error(`${sample.codec} was refused: ${err instanceof Error ? err.message : String(err)}`, { cause: err });
+        }
         this._codec = sample.codec;
         this._init = undefined;
       }
       const buffer = this._buffer;
       if (buffer.buffered.length) {
-        await update(buffer, () => {
+        await update(buffer, video, "the removal of the last picture", () => {
           buffer.remove(0, Number.POSITIVE_INFINITY);
         });
       }
       if (!this._init || !same(this._init, picture.init)) {
-        await update(buffer, () => {
+        await update(buffer, video, "the init segment", () => {
           buffer.appendBuffer(picture.init as Uint8Array<ArrayBuffer>);
         });
         this._init = picture.init;
       }
-      await update(buffer, () => {
+      await update(buffer, video, "the picture", () => {
         buffer.appendBuffer(picture.data as Uint8Array<ArrayBuffer>);
       });
-      const seeked = once(video, "seeked", FRAME_TIMEOUT_MS);
-      video.currentTime = sample.timeS + 0.001;
-      return await seeked;
-    } catch {
+      const target = sample.timeS + 0.001;
+      const there = reached(video, target, FRAME_TIMEOUT_MS);
+      video.currentTime = target;
+      if (!(await there)) {
+        const ranges = Array.from({ length: buffer.buffered.length }, (_, i) =>
+          `${buffer.buffered.start(i).toFixed(2)}–${buffer.buffered.end(i).toFixed(2)} s`,
+        ).join(", ");
+        throw new Error(
+          `the video did not show it within ${String(FRAME_TIMEOUT_MS / 1000)} s (ready state ${String(video.readyState)},` +
+            ` at ${video.currentTime.toFixed(2)} s for ${target.toFixed(2)} s, buffered ${ranges || "nothing"})${videoError(video)}`,
+        );
+      }
+      this._failure = undefined;
+      return true;
+    } catch (err) {
+      this._failure = err instanceof Error ? err.message : String(err);
       this.close(video);
       return false;
     }

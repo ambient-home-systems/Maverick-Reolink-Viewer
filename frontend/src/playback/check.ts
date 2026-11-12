@@ -70,7 +70,7 @@ import { ScrubClient, isPicture, type ScrubPicture, type SocketLike } from "./sc
 import { SHAPES, mseApi, mseSupports, pickSample, probeShape, type MseApi } from "./mse-probe";
 import type { RvPlayer } from "./player";
 
-export const CHECK_VERSION = "0.8.6";
+export const CHECK_VERSION = "0.8.7";
 export const SETUPS = [
   "Desktop Chrome, LAN",
   "Desktop Chrome, Tailscale",
@@ -322,6 +322,13 @@ const sleep = (time: number) => new Promise<void>((resolve) => setTimeout(resolv
 
 /** Where Home Assistant's thread was in a hold: its two innermost frames. */
 const frames = (hold: LoopHold): string => hold.where.slice(0, 2).join(" ← ");
+
+/** Whose code held it, in words, and in which thread when not the loop's own (v0.63.9). */
+const holder = (hold: LoopHold): string | undefined => {
+  const who = heldByName(hold.by);
+  if (!hold.thread) return who;
+  return `${who ?? "code of no integration"}, in another thread (${hold.thread})`;
+};
 
 /** A start over `budget` that another integration held Home Assistant up during: said, not judged (v0.63.5). */
 const exempt = (value: number | undefined, budget: number, slowed: Slowed | undefined): slowed is Slowed =>
@@ -1277,7 +1284,9 @@ export class PlaybackCheck {
           }
         : {
             grade: "problem",
-            text: `Dragging over a recording showed no picture (${String(slow.asked)} asked, ${String(slow.missed)} missed).`,
+            text:
+              `Dragging over a recording showed no picture (${String(slow.asked)} asked, ${String(slow.missed)} missed)` +
+              (slow.paintFailure ? `: the pictures came, but this browser could not show them (${slow.paintFailure}).` : "."),
           },
     );
     if (sAgain.pictures) {
@@ -1363,7 +1372,17 @@ export class PlaybackCheck {
     const asked = (after?.asked ?? 0) - (before?.asked ?? 0);
     const missed = (after?.missed ?? 0) - (before?.missed ?? 0);
     const last = t.metrics.scrub?.last;
-    return { movedMs, rest: pointer, paints, asked, missed, ...(missed && !paints.length && last ? { lastMiss: last } : {}) };
+    // Pictures came but none was shown: why (the MSE painter's reason, v0.63.9).
+    const paintFailure = !paints.length && asked > missed ? view.paintFailure : undefined;
+    return {
+      movedMs,
+      rest: pointer,
+      paints,
+      asked,
+      missed,
+      ...(missed && !paints.length && last ? { lastMiss: last } : {}),
+      ...(paintFailure ? { paintFailure } : {}),
+    };
   }
 
   /**
@@ -2219,7 +2238,7 @@ export class PlaybackCheck {
     const holds = (loop?.held_by ?? []).filter((h) => h.ago_s <= 10 && h.where.length);
     const longest = holds.reduce<LoopHold | undefined>((a, h) => (a && a.seen_ms >= h.seen_ms ? a : h), undefined);
     if (longest) {
-      const who = heldByName(longest.by);
+      const who = holder(longest);
       parts.push(`held by ${who ? `${who}: ` : ""}${frames(longest)}`);
     }
     if (held !== undefined && held >= BUSY_NOTE_MS) this._noteBusy(held, longest);
@@ -2229,7 +2248,7 @@ export class PlaybackCheck {
       const sinceStartS = (asked - start.began) / 1000;
       const sinceFrameS = start.firstMs === undefined ? 0 : Math.max(0, sinceStartS - start.firstMs / 1000);
       const during = holdsDuring(holds, sinceStartS, sinceFrameS);
-      const who = heldByName(during.longest?.by);
+      const who = during.longest ? holder(during.longest) : undefined;
       if (who && during.totalMs >= BUSY_NOTE_MS && !heldByUs(during.longest?.by)) slowed = { who, heldMs: during.totalMs };
     }
     return { text: `Home Assistant: ${parts.join(" · ")}`, heldMs: held, slowed };
@@ -2249,7 +2268,7 @@ export class PlaybackCheck {
     const rows = [...this._busyRows];
     const where = rows.length ? ` in ${rows.length === 1 ? "row" : "rows"} ${rows.join(", ")}` : "";
     const by = this._busiestBy;
-    const who = heldByName(by?.by);
+    const who = by ? holder(by) : undefined;
     const ours = heldByUs(by?.by);
     // Whose code, in words, then where (v0.63.5); where alone before.
     const culprit = !by ? "" : who ? `, by ${who}${ours ? "" : ", not Reolink Viewer"} (${frames(by)})` : `, by ${frames(by)}`;

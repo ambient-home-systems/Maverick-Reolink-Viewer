@@ -125,7 +125,7 @@ describe("PlaybackCheck", () => {
       changes.push(1),
     );
     const report = await check.run();
-    expect(report).toContain("Reolink Viewer playback check v0.8.6 · Desktop Chrome, LAN · Garage");
+    expect(report).toContain("Reolink Viewer playback check v0.8.7 · Desktop Chrome, LAN · Garage");
     expect(report).toContain("A1 Time to timeline, today (as the tab opened): 120 ms (server: memory, total 4 ms)");
     expect(report).toContain("A2/A3 skipped: no earlier recording day this month");
     expect(report).toContain("B  skipped: no events today");
@@ -649,6 +649,18 @@ describe("PlaybackCheck: starts that waited for the recorder", () => {
     expect(report).toMatch(
       /- Note: Home Assistant itself was busy during starts in rows B, D[^:]*: its event loop was held up to 1\.1 s, by the Spook integration, not Reolink Viewer \(site-packages\/jinja2\/lexer\.py:706 in tokeniter ← custom_components\/spook\/template_extraction\.py:195 in _lexed\), so it answered late\./,
     );
+  });
+
+  it("names the thread that ran while Home Assistant's loop waited, or the computer (v0.63.9)", async () => {
+    const slow = { complete: true, bytes: 1, firstMs: 2457 };
+    const radarr = heldBy("homeassistant/components/radarr");
+    Object.assign(radarr.loop.held_by[0], { thread: "SyncWorker_3" });
+    const report = await run([slow, slow, slow], radarr);
+    expect(report).toContain("held by Home Assistant's Radarr integration, in another thread (SyncWorker_3): ");
+    expect(report).toContain("(slowed by Home Assistant's Radarr integration, in another thread (SyncWorker_3))");
+    const system = await run([slow, slow, slow], heldBy("system"));
+    expect(system).toContain("held by the computer Home Assistant runs on (none of its threads was running): ");
+    expect(system).toContain("2457 ms (slowed by the computer Home Assistant runs on (none of its threads was running))");
   });
 
   it("fails a slow start Reolink Viewer itself held Home Assistant up during (v0.63.5)", async () => {

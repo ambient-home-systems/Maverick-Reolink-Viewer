@@ -2069,9 +2069,11 @@ export function describeScrub(scrub: Metrics["scrub"], unavailable: boolean, pat
   if (path?.how === "none") return `not here: ${path.why ?? "no way to paint them"}`;
   const how = path ? `painted with ${path.how}${path.why ? ` (${path.why})` : ""} · ` : "";
   if (unavailable) return `${how}the scrub session could not open: the buffer only`;
-  if (!scrub) return `${how}none yet`;
+  // The MSE painter's last failure (v0.63.9: Chrome on plain HTTP showed none).
+  const failure = path?.failure ? ` · last picture not shown: ${path.failure}` : "";
+  if (!scrub) return `${how}none yet${failure}`;
   const counts = `${String(scrub.shown)} shown of ${String(scrub.asked)} asked${scrub.missed ? `, ${String(scrub.missed)} missed` : ""}`;
-  return `${how}${scrub.last ? `${counts} (last: ${scrub.last})` : counts}`;
+  return `${how}${scrub.last ? `${counts} (last: ${scrub.last})` : counts}${failure}`;
 }
 
 /** How the last recording was delivered, for the debug panel. */
