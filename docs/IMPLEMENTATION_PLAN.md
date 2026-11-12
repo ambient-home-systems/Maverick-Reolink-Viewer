@@ -8094,6 +8094,49 @@ the Mac, on the LAN over plain HTTP):** no problem found.
   problem; a second answer that succeeds gives the note and the events it
   found; the one ask goes without `max_age`.
 
+**The owner's runs of v0.63.11 (2026-11-12, Garage):**
+
+- **Chrome on the Mac, LAN, 6:10 PM:** no problem. Today's event search
+  worked, and B opened 3 events: 1.67 s for the newest (5 minutes old, a cut
+  with a new login: first fragment 1.19 s), then 44 and 48 ms. P: 173
+  pictures, one every 0.05 s. Radarr held the loop 245 ms (3 holds, 534 ms
+  in 10 s).
+- **The iPhone app over Tailscale, 6:17 PM (iOS 27, ManagedMediaSource):**
+  - B: 0.43 and 0.51 s; then 2.23 s for one on disk. The server answered in
+    1 ms, but both requests took 1.85 s to come back: the network.
+  - P: painted with WebCodecs (HTTPS). A new picture every 0.10 s, the first
+    after 0.56 s; again, 0.14 s; the release 0.4 s.
+  - **P's second viewer started in 27.5 s,** from the recording's download.
+    Every earlier run took 0.07–1.5 s, mostly from the cut. The report
+    named neither the recording nor what the server did.
+  - **R: 0.5× was ✗,** "7 fps painted of 16". Seven a second is every frame
+    at 0.5× of Garage's 15, and the longest gap, 136 ms, is one frame. WebKit
+    counted 96 frames in that pass for the 45 there were, and the target
+    was taken from that counter (`sourceFps`).
+  - HD is not offered: `decodingInfo` says 2560×1920 HEVC would not be
+    smooth. The S row showed 4 of 5 points in the buffer, a median of 0.4 s.
+
+**v0.63.12, from them (check v0.8.9):**
+
+- **The rates' reference frame rate** (`referenceFps`): the median step
+  between the media times of frames painted one after the other at 1×
+  (`frameS`, from `requestVideoFrameCallback`'s `mediaTime`). Where a rate's
+  counter disagrees with the frames painted, it is judged against that
+  rate, not the counter. A pass where no gap reaches 1.5 frames has skipped
+  none, and is smooth whatever the count's edges. The R lines are written
+  once all the rates are measured. Below 10 frames a second they show a
+  decimal.
+- **P's second viewer** names its recording (its time and length). When it
+  takes over 2 s to start, or does not start, the server's record of its
+  URL follows (`SecondViewer.url`, `_fillReport` for a given token, at most
+  5 tries).
+- **Checks:**
+  - The owner's iPhone samples: 0.5× smooth against 1×'s frame rate, and a
+    stutter by the counter alone (as v0.8.8 judged it). A real stutter (fewer
+    painted, a gap of two frames) is still one.
+  - The second viewer's recording named, and the server's record of a start
+    that did not come.
+
 #### Step 10.4: the checks
 
 - **In CI:** `scrub_check.cjs` drags against a fake key-frame endpoint,

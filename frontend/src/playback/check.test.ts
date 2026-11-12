@@ -125,7 +125,7 @@ describe("PlaybackCheck", () => {
       changes.push(1),
     );
     const report = await check.run();
-    expect(report).toContain("Reolink Viewer playback check v0.8.8 · Desktop Chrome, LAN · Garage");
+    expect(report).toContain("Reolink Viewer playback check v0.8.9 · Desktop Chrome, LAN · Garage");
     expect(report).toContain("A1 Time to timeline, today (as the tab opened): 120 ms (server: memory, total 4 ms)");
     expect(report).toContain("A2/A3 skipped: no earlier recording day this month");
     expect(report).toContain("B  skipped: no events today");
@@ -820,7 +820,43 @@ describe("the drag beside a second viewer", () => {
       _besideText(beside: unknown, s: undefined): string;
     };
     const beside = await check._dragBeside({ start: T0, end: T0 + 3_600_000 }, T0, 30_000);
-    expect(check._besideText(beside, undefined)).toBe("beside another viewer: it did not start (Connection lost)");
+    expect(check._besideText(beside, undefined)).toMatch(
+      /^beside another viewer: it did not start, playing the \d{1,2}:00:00 [AP]M recording, 60\.0 min long \(Connection lost\)$/,
+    );
+  });
+
+  it("names the recording, and what the server did where it did not start (v0.8.9: 27.5 s on the owner's iPhone)", async () => {
+    const hass = reportingHass();
+    const base = hass.callWS.bind(hass);
+    const asked: string[] = [];
+    hass.callWS = <T,>(message: Record<string, unknown>) => {
+      if (message.type !== "reolink_viewer/playback/cache_status") return base<T>(message);
+      asked.push(String(message.token));
+      return Promise.resolve({
+        cache: { cache: "fill", priority: "playback", wait_ms: 0, headers_ms: 25_000, fill_ms: 27_000, bytes: 2_000_000, complete: true },
+      } as T);
+    };
+    const target: CheckTarget = {
+      ...stubTarget(hass),
+      openViewer: () => ({
+        // No first frame in time.
+        playAt: () => Promise.resolve(undefined),
+        position: undefined,
+        source: "file",
+        url: "/api/reolink_viewer/mse/tok123?authSig=x",
+        close: () => undefined,
+      }),
+    };
+    const check = new PlaybackCheck(target, { setup: "test", soakMinutes: 0 }) as unknown as {
+      _dragBeside(other: { start: number; end: number }, from: number, spanMs: number): Promise<{ server?: string }>;
+      _besideText(beside: unknown, s: undefined): string;
+    };
+    const beside = await check._dragBeside({ start: T0, end: T0 + 84_000 }, T0, 30_000);
+    expect(asked).toEqual(["tok123"]);
+    expect(beside.server).toBe("server: fill (playback), queue 0 ms, NVR headers 25000 ms, download 27000 ms, 2.0 MB");
+    expect(check._besideText(beside, undefined)).toMatch(
+      /^beside another viewer: it did not start, playing the \d{1,2}:00:00 [AP]M recording, 1\.4 min long, from the recording's download$/,
+    );
   });
 });
 

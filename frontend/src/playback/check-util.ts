@@ -134,22 +134,49 @@ export interface RateSample {
   ended: boolean;
   /** Whether the page had focus and was visible the whole time. */
   focused: boolean;
+  /**
+   * The median step between the media times of frames painted one after the
+   * other (s, requestVideoFrameCallback): the recording's frame interval
+   * where no frame is skipped (v0.8.9).
+   */
+  frameS?: number | undefined;
 }
 
-/** Frames per second of the recording, from the frames that went by. */
-export function sourceFps(sample: RateSample): number | undefined {
+/**
+ * The recording's frame rate from the frames painted at 1× (their media
+ * times a frame apart), for judging the rates where the browser's frame
+ * counter cannot be trusted: the owner's iPhone (v0.8.8) counted 96 frames
+ * at 0.5× for the 45 there were, and 0.5× was judged a stutter by that.
+ */
+export function referenceFps(results: readonly RateSample[]): number | undefined {
+  const frameS = results.find((r) => r.rate === 1 && r.focused)?.frameS;
+  return frameS !== undefined && frameS > 0 ? 1 / frameS : undefined;
+}
+
+/**
+ * Frames per second of the recording: from the frames that went by, or,
+ * where the counter disagrees with the frames painted, the `reference`
+ * (`referenceFps`) when there is one.
+ */
+export function sourceFps(sample: RateSample, reference?: number): number | undefined {
+  if (reference !== undefined && !countersAgree(sample)) return reference;
   return sample.decoded && sample.mediaS > 0 ? sample.decoded / sample.mediaS : undefined;
 }
 
-/** One report line for a playback rate. */
-export function describeRate(sample: RateSample): string {
+/** Frames per second for the report: a decimal below 10. */
+function fpsText(fps: number): string {
+  return fps < 10 ? fps.toFixed(1) : fps.toFixed(0);
+}
+
+/** One report line for a playback rate (`reference`: `referenceFps` of all the rates). */
+export function describeRate(sample: RateSample, reference?: number): string {
   const effective = sample.wallMs > 0 ? (sample.mediaS * 1000) / sample.wallMs : 0;
   const parts = [`${effective.toFixed(2)}× effective`];
   if (sample.applied !== sample.rate) parts.push(`browser set ${sample.applied}×`);
-  const fps = sourceFps(sample);
+  const fps = sourceFps(sample, reference);
   if (sample.painted !== undefined) {
-    const painted = `${((sample.painted * 1000) / sample.wallMs).toFixed(0)} fps painted`;
-    parts.push(fps ? `${painted} of ${(fps * sample.rate).toFixed(0)}` : painted);
+    const painted = `${fpsText((sample.painted * 1000) / sample.wallMs)} fps painted`;
+    parts.push(fps ? `${painted} of ${fpsText(fps * sample.rate)}` : painted);
   }
   if (sample.maxGapMs !== undefined) parts.push(`longest frame gap ${Math.round(sample.maxGapMs)} ms`);
   if (sample.decoded !== undefined && sample.dropped !== undefined) {
@@ -181,20 +208,15 @@ export function countersAgree(sample: RateSample): boolean {
 }
 
 /**
- * Whether a rate played smoothly. Above the display's refresh rate a browser
- * must skip frames, so dropped frames count only below 50 frames a second.
- * Where the dropped-frame counter disagrees with the frames painted, the
- * frames painted decide.
- */
-/**
  * The rates in plain words. A browser pauses or slows a page that is not in
  * front: those rates were not measured, which is said as such, never as a
  * stutter (the owner's Mac, v0.61.1: 2× to 8× "stuttered" with the window behind).
  */
 export function rateFindings(results: readonly RateSample[]): Finding[] {
+  const reference = referenceFps(results);
   const measured = results.filter((r) => r.focused);
   const unmeasured = results.filter((r) => !r.focused);
-  const rough = measured.filter((r) => !smooth(r));
+  const rough = measured.filter((r) => !smooth(r, reference));
   const rates = (list: readonly RateSample[]) => list.map((r) => `${String(r.rate)}×`).join(", ");
   const findings: Finding[] = [];
   if (measured.length) {
@@ -217,10 +239,17 @@ export function rateFindings(results: readonly RateSample[]): Finding[] {
   return findings;
 }
 
-export function smooth(sample: RateSample): boolean {
+/**
+ * Whether a rate played smoothly. Above the display's refresh rate a browser
+ * must skip frames, so dropped frames count only below 50 frames a second.
+ * Where the dropped-frame counter disagrees with the frames painted, the
+ * frames painted decide, against the `reference` frame rate (`referenceFps`)
+ * when there is one.
+ */
+export function smooth(sample: RateSample, reference?: number): boolean {
   const effective = sample.wallMs > 0 ? (sample.mediaS * 1000) / sample.wallMs : 0;
   if (Math.abs(effective - sample.rate) > sample.rate * 0.1 || sample.stalledMs >= STALL_ALLOWANCE_MS) return false;
-  const fps = sourceFps(sample);
+  const fps = sourceFps(sample, reference);
   const needed = fps === undefined ? undefined : fps * sample.rate;
   if (needed !== undefined && sample.maxGapMs !== undefined) {
     const allowed = Math.max(250, (2.5 * 1000) / Math.min(needed, 60));
@@ -228,7 +257,9 @@ export function smooth(sample: RateSample): boolean {
   }
   if (needed === undefined || needed > 50) return true;
   if (!countersAgree(sample) && sample.painted !== undefined) {
-    return (sample.painted * 1000) / sample.wallMs >= needed * 0.9;
+    // Most frames painted; or none skipped (no gap of two frames), whatever the count's edges (v0.8.9).
+    const noneSkipped = sample.maxGapMs !== undefined && sample.maxGapMs <= (1.5 * 1000) / needed;
+    return (sample.painted * 1000) / sample.wallMs >= needed * 0.9 || noneSkipped;
   }
   if (sample.decoded) return (sample.dropped ?? 0) <= Math.max(1, sample.decoded * 0.02);
   return true;

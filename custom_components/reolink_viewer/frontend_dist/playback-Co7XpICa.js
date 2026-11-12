@@ -1,9 +1,9 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
 import { At as i, B as a, C as o, D as s, Lt as c, O as l, Ot as u, Rt as d, St as f, T as p, X as ee, Z as m, _t as h, a as g, bt as _, c as v, d as y, gt as te, i as b, j as x, kt as S, m as ne, n as re, o as ie, p as ae, r as oe, s as se, tt as C, u as ce, vt as w, w as le, xt as T } from "./live-DbkkZT-0.js";
-import { A as ue, D as de, E, F as fe, I as pe, J as D, L as me, M as O, N as he, O as ge, P as _e, R as ve, S as ye, T as be, _ as k, b as A, c as xe, et as j, g as M, h as Se, k as N, l as Ce, m as we, u as P, x as F, y as Te, z as I } from "./home-DSLYdt8h.js";
-import { dayLabel as Ee, shortDay as De } from "./events-view-CWC7EFdE.js";
+import { A as ue, D as de, E, F as fe, I as pe, J as D, L as me, M as O, N as he, O as ge, P as _e, R as ve, S as ye, T as be, _ as k, b as A, c as xe, et as j, g as M, h as Se, k as N, l as Ce, m as we, u as P, x as F, y as Te, z as I } from "./home-JF-D5pSQ.js";
+import { dayLabel as Ee, shortDay as De } from "./events-view-DPGP9Qin.js";
 import { i as Oe } from "./findings-DW6UZzjC.js";
-import { a as ke, c as Ae, f as je, i as L, l as Me, n as R, o as Ne, r as Pe, s as z, t as Fe, u as Ie } from "./check-DY3eDj3_.js";
+import { a as ke, c as Ae, f as je, i as L, l as Me, n as R, o as Ne, r as Pe, s as z, t as Fe, u as Ie } from "./check-BLC2cJ0B.js";
 var Le = class extends r {
 	static properties = {
 		events: { attribute: !1 },
@@ -2216,32 +2216,39 @@ var st = 6e4, ct = 3e3, lt = 1e4, ut = 3, dt = 86400, ft = 10 * M, pt = 10, mt =
 	}
 	_openViewer() {
 		let e = document.createElement("rv-player");
-		return e.style.cssText = "position: fixed; left: -10000px; top: 0; width: 320px;", document.body.appendChild(e), {
-			playAt: async (t) => {
-				let n = this.hass, r = this._day ? E(this._day.segments, t) : void 0;
-				if (!n || !r) return;
-				let i = r.segment.start + r.offset, a = performance.now(), o = this._ref(r.segment), s = this._useMse(this._stream) ? await h(n, o, i) : await w(n, o, this._progressive, i), c = new Promise((t) => {
+		e.style.cssText = "position: fixed; left: -10000px; top: 0; width: 320px;", document.body.appendChild(e);
+		let t;
+		return {
+			playAt: async (n) => {
+				let r = this.hass, i = this._day ? E(this._day.segments, n) : void 0;
+				if (!r || !i) return;
+				let a = i.segment.start + i.offset, o = performance.now(), s = this._ref(i.segment), c = this._useMse(this._stream) ? await h(r, s, a) : await w(r, s, this._progressive, a);
+				t = c.base ?? c.url;
+				let l = new Promise((t) => {
 					let n = setTimeout(() => {
 						t(void 0);
 					}, Ct), r = (r) => {
-						clearTimeout(n), e.removeEventListener("rv-first-frame", i), e.removeEventListener("rv-player-error", o), t(r);
+						clearTimeout(n), e.removeEventListener("rv-first-frame", i), e.removeEventListener("rv-player-error", a), t(r);
 					}, i = () => {
-						r(performance.now() - a);
-					}, o = () => {
+						r(performance.now() - o);
+					}, a = () => {
 						r(void 0);
 					};
-					e.addEventListener("rv-first-frame", i), e.addEventListener("rv-player-error", o);
-				}), l = {
-					...this._toItem(s, r.segment),
+					e.addEventListener("rv-first-frame", i), e.addEventListener("rv-player-error", a);
+				}), u = {
+					...this._toItem(c, i.segment),
 					release: () => void 0
 				};
-				return await e.play(l, Math.max(0, i - s.start), a), await c;
+				return await e.play(u, Math.max(0, a - c.start), o), await l;
 			},
 			get position() {
 				return e.renderRoot.querySelector("video.active")?.currentTime;
 			},
 			get source() {
 				return e.mseStats?.atSource;
+			},
+			get url() {
+				return t;
 			},
 			close: () => {
 				e.stop(), e.remove();

@@ -1146,7 +1146,7 @@ describe("rv-playback while dragging (Phase 10)", () => {
     // The fast drag rests inside the last recording, and the last picture shows it.
     expect(report).toMatch(/ {3}fast \(2\.8 min in 5 s\): .*at rest, 0\.5 s from the pointer.* ✓/);
     // The next 30 s beside a second viewer of the camera, playing the other recording; it went away again.
-    expect(report).toMatch(/ {3}beside another viewer \(playing another recording, started in \d+ ms\): \d+ pictures, .*; the viewer played .*, longest stall .* ✓/);
+    expect(report).toMatch(/ {3}beside another viewer \(playing the \d{1,2}:\d{2}:\d{2} [AP]M recording, [\d.]+ (?:s|min) long, started in \d+ ms\): \d+ pictures, .*; the viewer played .*, longest stall .* ✓/);
     expect(document.querySelectorAll("body > rv-player")).toHaveLength(0);
     expect(report).toContain("   over what the video has buffered: skipped, nothing playing");
     expect(check.inShort(true).findings.map((f) => f.text)).toContain("While dragging, pictures are decoded with WebCodecs.");
