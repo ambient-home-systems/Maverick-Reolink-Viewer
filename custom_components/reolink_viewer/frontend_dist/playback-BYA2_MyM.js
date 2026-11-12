@@ -1,9 +1,9 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
-import { At as i, B as a, C as o, D as s, Lt as c, O as l, Ot as u, Rt as d, St as f, T as p, X as ee, Z as m, _t as h, a as g, bt as _, c as v, d as y, gt as te, i as b, j as x, kt as S, m as ne, n as re, o as ie, p as ae, r as oe, s as se, tt as C, u as ce, vt as w, w as le, xt as T } from "./live-DVtibn8r.js";
-import { $ as E, D as ue, E as de, F as fe, I as pe, L as me, M as he, N as ge, O as D, P as _e, R as O, T as k, b as A, c as ve, g as j, h as M, j as N, k as ye, l as be, m as xe, q as P, u as F, v as Se, w as Ce, x as we, y as I } from "./home-B9FbTUWz.js";
-import { dayLabel as Te, shortDay as Ee } from "./events-view-TP11JRmQ.js";
-import { i as De } from "./findings-ULQT5yEf.js";
-import { a as Oe, c as ke, f as Ae, i as L, l as je, n as R, o as Me, r as Ne, s as z, t as Pe, u as Fe } from "./check-Coyl2AZN.js";
+import { At as i, B as a, C as o, D as s, Lt as c, O as l, Ot as u, Rt as d, St as f, T as p, X as ee, Z as m, _t as h, a as g, bt as _, c as v, d as y, gt as te, i as b, j as x, kt as S, m as ne, n as re, o as ie, p as ae, r as oe, s as se, tt as C, u as ce, vt as w, w as le, xt as T } from "./live-BkJQck7z.js";
+import { $ as E, D as ue, E as de, F as fe, I as pe, L as me, M as he, N as ge, O as D, P as _e, R as O, T as k, b as A, c as ve, g as j, h as M, j as N, k as ye, l as be, m as xe, q as P, u as F, v as Se, w as Ce, x as we, y as I } from "./home-CWhJIzJr.js";
+import { dayLabel as Te, shortDay as Ee } from "./events-view-CwSBLg5Y.js";
+import { i as De } from "./findings-DHZwfhsR.js";
+import { a as Oe, c as ke, f as Ae, i as L, l as je, n as R, o as Me, r as Ne, s as z, t as Pe, u as Fe } from "./check-DnmXbwKP.js";
 var Ie = class extends r {
 	static properties = {
 		events: { attribute: !1 },
@@ -204,6 +204,7 @@ var Le = [
 	_firstOnSeeked = !1;
 	_endedAt;
 	_pendingOffset = [0, 0];
+	_refusal;
 	constructor() {
 		super(), this.muted = !0, this.rate = 1, this._active = 0, this._paused = !0, this._waiting = !1, this._started = !1, this._pip = !1;
 	}
@@ -235,8 +236,29 @@ var Le = [
 		let e = this._feeders[this._active];
 		return e ? {
 			...e.stats,
-			...e.around
+			...e.around,
+			streaming: e.streaming
 		} : void 0;
+	}
+	get lastRefusal() {
+		return this._refusal;
+	}
+	async tryPlay(e) {
+		let t = this._video(this._active);
+		if (!t) return "no video";
+		let n, r = new Promise((t) => {
+			n = setTimeout(() => {
+				t("no answer");
+			}, e);
+		});
+		try {
+			let e = t.play() ?? Promise.resolve();
+			return await Promise.race([e.then(() => void 0), r]);
+		} catch (e) {
+			return this._noteRefusal(e).text;
+		} finally {
+			clearTimeout(n);
+		}
 	}
 	get mse() {
 		let e = this._feeders[this._active];
@@ -353,8 +375,20 @@ var Le = [
 	}
 	_start(e) {
 		e.play()?.catch((t) => {
-			t instanceof DOMException && t.name === "NotAllowedError" ? this._paused = !0 : t instanceof DOMException && t.name === "AbortError" || this._fail(String(t), e, !1);
+			this._noteRefusal(t), t instanceof DOMException && t.name === "NotAllowedError" ? this._paused = !0 : t instanceof DOMException && t.name === "AbortError" || this._fail(String(t), e, !1);
 		});
+	}
+	_noteRefusal(e) {
+		let t = e instanceof DOMException ? {
+			name: e.name,
+			text: `${e.name}${e.message ? `: ${e.message}` : ""}`,
+			at: performance.now()
+		} : {
+			name: "Error",
+			text: String(e),
+			at: performance.now()
+		};
+		return this._refusal = t, t;
 	}
 	_fail(e, t, n) {
 		let r = {
@@ -2753,14 +2787,18 @@ function xt(e) {
 }
 function St(e) {
 	let t = e?.mseStats;
-	return t ? [
+	if (!t) return e?.current ? "file player" : "–";
+	let n = [
 		t.api,
 		t.mime.replace(/^video\/mp4; codecs=/, ""),
 		`${t.windows} windows, ${(t.bytes / 1e6).toFixed(1)} MB${t.lastWaitMs === void 0 ? "" : `, last in ${Math.round(t.lastWaitMs)} ms`}`,
 		`${Math.round(t.ahead)} s ahead, ${Math.round(t.behind)} s behind`,
 		`${t.trims} trims`,
 		`from ${t.source === "cut" ? "Reolink protocol cut" : "download"}` + (t.switches ? ` (${t.switches} source switches)` : "")
-	].join(" · ") : e?.current ? "file player" : "–";
+	];
+	t.streaming === !1 && n.push("the browser asked to pause fetching");
+	let r = e.lastRefusal;
+	return r && n.push(`play() last refused: ${r.text}`), n.join(" · ");
 }
 function Ct(e, t, n) {
 	if (n?.how === "none") return `not here: ${n.why ?? "no way to paint them"}`;

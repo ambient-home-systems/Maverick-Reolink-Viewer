@@ -7794,6 +7794,57 @@ Nabu Casa, Front Yard Right):** every row passed but D2.
     and one under budget.
   - The new tests fail on the code before.
 
+**The owner's run of v0.63.5 (2026-11-12, 10:46 AM, Safari 26.5.2 on the Mac
+over the LAN, labelled "Desktop Chrome, LAN"; Front Yard Right, with events):**
+
+- **Fixed since v0.7.0:** C moved on (preloaded, gap 20 ms). H went to HD in
+  0.7 s and back to SD in 0.2 s, both keeping the moment; in v0.7.0, back to
+  SD had failed with media error 4.
+- **"Beside another viewer" ran for the first time:** the second viewer played
+  14 s in 14 s with no stall. Pictures came every 0.69 s (0.06 s alone), the
+  two cuts taking the channel in turns.
+- **B and D:** B opened an event 28 s old from the cut in 0.65 s, with no
+  blocks of another cut. D1 took 0.39 s and D2 0.08 s. A1 took 2.1 s: the
+  NVR's search was slow, and its download headers 3.2 s.
+- **The release failed:** "no first frame in 20 s". It had worked in Safari in
+  v0.7.0 (0.5 s), but that was before v0.62.0's press and release (the drag
+  pauses the video, the release plays from the picture), so this was that
+  path's first Safari run.
+- **What H shows:** H, next, found the player at 1:06:08, where the release
+  asked. So the release loaded the recording and moved there, but `playing`
+  never came.
+- **What could not be told apart:** a paused video, a refused `play()` (the
+  player dropped refusals silently), or a video waiting for data. The release's
+  URL, server and Home Assistant lines were not printed when it failed.
+
+**v0.63.6, from it:**
+
+- **The player keeps a refused or interrupted `play()`** (`RvPlayer.lastRefusal`:
+  the error's name, message and time; `_start` still treats NotAllowedError
+  and AbortError as no failure).
+- **`tryPlay(ms)`** asks the video on screen to play, as pressing play does,
+  and answers: played, refused (why), or "no answer" while it waits for video.
+- **The feeder says ManagedMediaSource's `streaming`**, given in the player's
+  MSE statistics and the debug panel's line, with the last refusal.
+- **The check (v0.8.5), on a release with no first frame in 20 s,** prints:
+  - "then:" with how far the video was from where it was let go, the video's
+    state (`videoState`, now with "the browser asked to pause fetching"), and
+    a `play()` refused since the release;
+  - "pressing play then:" with `tryPlay(5 s)`'s answer;
+  - the start's URL, server and Home Assistant lines.
+
+  "In short" says which it was: held back by the browser, refused, or
+  waiting for video.
+- **Setups:** "Mac Safari, LAN / Tailscale / Nabu Casa", and Safari on a Mac
+  picks the LAN one by default (`isMacSafari`, `checkSetup`). A Mac Safari
+  setup in another browser is a mismatch.
+- **Checks:**
+  - A refused `play()` is kept, and `tryPlay`'s three answers.
+  - The feeder's `streaming`.
+  - The stuck release's lines and words for each answer; a refusal from
+    before the release is not counted.
+  - Mac Safari's detection and setup.
+
 #### Step 10.4: the checks
 
 - **In CI:** `scrub_check.cjs` drags against a fake key-frame endpoint,

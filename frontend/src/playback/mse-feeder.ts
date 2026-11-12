@@ -190,6 +190,14 @@ export class MseFeeder {
     return this._closed;
   }
 
+  /**
+   * ManagedMediaSource's say on fetching (Safari): false while it asks for a
+   * pause (`endstreaming`), true once it wants more; undefined elsewhere.
+   */
+  get streaming(): boolean | undefined {
+    return (this._source as { streaming?: boolean } | undefined)?.streaming;
+  }
+
   /** Seconds buffered ahead of and behind the play position. */
   get around(): { ahead: number; behind: number } {
     const t = this._video.currentTime;

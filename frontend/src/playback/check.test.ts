@@ -125,7 +125,7 @@ describe("PlaybackCheck", () => {
       changes.push(1),
     );
     const report = await check.run();
-    expect(report).toContain("Reolink Viewer playback check v0.8.4 · Desktop Chrome, LAN · Garage");
+    expect(report).toContain("Reolink Viewer playback check v0.8.5 · Desktop Chrome, LAN · Garage");
     expect(report).toContain("A1 Time to timeline, today (as the tab opened): 120 ms (server: memory, total 4 ms)");
     expect(report).toContain("A2/A3 skipped: no earlier recording day this month");
     expect(report).toContain("B  skipped: no events today");
@@ -690,6 +690,55 @@ describe("PlaybackCheck: starts that waited for the recorder", () => {
     expect(report).toContain("- Events → first frame (sub): 70 ms ✓");
     expect(report).toContain("D1 Not cached (12.0 MB already fetched when played), 55.0 min into a 60.0 min recording");
     expect(report).toContain("- Deep start (sub, 60.0 min recording): not cached 2250 ms, cached 70 ms ✓");
+  });
+});
+
+describe("a release that showed no first frame (v0.63.6)", () => {
+  /** The tab's player as the check sees it: a paused video at 368 s, fed through ManagedMediaSource. */
+  function stuckPlayer(answer: string | undefined, refusedAt?: number, time?: number): RvPlayer {
+    const video = document.createElement("video");
+    Object.defineProperty(video, "currentTime", { value: 368 });
+    return {
+      time,
+      lastRefusal: refusedAt === undefined ? undefined : { name: "NotAllowedError", text: "NotAllowedError: not allowed", at: refusedAt },
+      mseStats: { api: "ManagedMediaSource", windows: 1, bytes: 300_000, source: "file", fetching: false, ahead: 2.9, streaming: false },
+      renderRoot: { querySelector: () => video },
+      tryPlay: () => Promise.resolve(answer),
+    } as unknown as RvPlayer;
+  }
+
+  /** Let go at T0 + 368 s. */
+  async function stuck(player: RvPlayer, began: number) {
+    const check = new PlaybackCheck(stubTarget(reportingHass()), { setup: "Mac Safari, LAN", soakMinutes: 0 }) as unknown as {
+      _releaseStuck(player: RvPlayer, began: number, at: number): Promise<{ text: string; plain: string; detail: string[] }>;
+    };
+    return check._releaseStuck(player, began, T0 + 368_000);
+  }
+
+  it("says what the video was doing, and that pressing play started it: the browser held it back", async () => {
+    const began = performance.now();
+    const result = await stuck(stuckPlayer(undefined, began + 5, T0 + 368_000), began);
+    expect(result.text).toBe("no first frame in 20 s");
+    expect(result.detail[0]).toMatch(/^then: under 0\.1 s before where it was let go; video: at 368\.0 s of .*paused.* · MSE \(ManagedMediaSource\): 1 windows, 0\.3 MB, from the file, not fetching, 2\.9 s ahead, the browser asked to pause fetching; its play\(\) was refused: NotAllowedError: not allowed$/);
+    expect(result.detail[1]).toMatch(/^pressing play then: it played after /);
+    expect(result.plain).toBe("Letting go did not start the video until play was pressed: the browser held it back.");
+  });
+
+  it("says when it waited for video it did not get", async () => {
+    const began = performance.now();
+    // A refusal from before the release is not this one's.
+    // Still on the recording before: far from where it was let go.
+    const result = await stuck(stuckPlayer("no answer", began - 60_000, T0 - 3_600_000), began);
+    expect(result.detail[0]).toMatch(/^then: 66\.1 min before where it was let go; /);
+    expect(result.detail[0]).not.toContain("refused");
+    expect(result.detail[1]).toBe("pressing play then: still nothing after 5 s (it waits for video)");
+    expect(result.plain).toBe("Letting go did not start the video: it waited for video it did not get, and pressing play did not help.");
+  });
+
+  it("says when the browser refused to play it", async () => {
+    const result = await stuck(stuckPlayer("NotAllowedError: not allowed"), performance.now());
+    expect(result.detail[1]).toBe("pressing play then: refused (NotAllowedError: not allowed)");
+    expect(result.plain).toBe("Letting go did not start the video: the browser refused to play it (NotAllowedError: not allowed).");
   });
 });
 

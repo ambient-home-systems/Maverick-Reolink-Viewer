@@ -27,7 +27,7 @@ import {
   type SecondViewer,
   type SavedReport,
 } from "../playback/check";
-import { deviceSetup } from "../playback/check-util";
+import { checkSetup } from "../playback/check-util";
 import { canPlayMain, playsProgressive, type StreamDecision } from "../playback/codec";
 import "../playback/calendar";
 import "../playback/event-list";
@@ -2010,6 +2010,10 @@ export function describePlayer(player: RvPlayer | null): string {
     `from ${stats.source === "cut" ? "Reolink protocol cut" : "download"}` +
       (stats.switches ? ` (${stats.switches} source switches)` : ""),
   ];
+  // ManagedMediaSource asked for a pause; the last play() refused (v0.63.6).
+  if (stats.streaming === false) parts.push("the browser asked to pause fetching");
+  const refusal = player.lastRefusal;
+  if (refusal) parts.push(`play() last refused: ${refusal.text}`);
   return parts.join(" · ");
 }
 
@@ -2058,7 +2062,7 @@ function rememberedSetup(): string {
   } catch {
     // No storage: guess from the browser.
   }
-  return deviceSetup(navigator.userAgent);
+  return checkSetup(navigator.userAgent);
 }
 
 function rememberedMode(): PlayerMode {

@@ -12,10 +12,20 @@ export function deviceSetup(userAgent: string): string {
   return isIos(userAgent) ? "iPhone app, Wi-Fi (local)" : "Desktop Chrome, LAN";
 }
 
+/** Safari on a Mac (not Chrome, Edge or Firefox, whose user agents say "Safari" too). */
+export const isMacSafari = (userAgent: string): boolean =>
+  /Macintosh/.test(userAgent) && /Version\/[\d.]+.* Safari\//.test(userAgent) && !/Chrome|Chromium|Edg|Firefox|FxiOS/.test(userAgent);
+
+/** The playback check's setup on this device: Mac Safari (v0.63.6) where it is, else as `deviceSetup`. */
+export function checkSetup(userAgent: string): string {
+  return isMacSafari(userAgent) ? "Mac Safari, LAN" : deviceSetup(userAgent);
+}
+
 /** Whether a setup names another kind of device than this one (an iPhone setup on a Mac, or the reverse). */
 export function setupMismatch(setup: string, userAgent: string): boolean {
   if (setup.startsWith("iPhone")) return !isIos(userAgent);
   if (setup.startsWith("Desktop")) return isIos(userAgent);
+  if (setup.startsWith("Mac Safari")) return !isMacSafari(userAgent);
   return false;
 }
 
