@@ -8060,6 +8060,40 @@ Mac, on the LAN over plain HTTP):** every row passed but P.
     On the code before, it fails with the owner's reason.
   - CI's browser job installs the frontend's packages before its tests.
 
+**The owner's run of v0.63.10 (2026-11-12, 5:31 PM, Garage, Chrome 155 on
+the Mac, on the LAN over plain HTTP):** no problem found.
+
+- **P:** pictures on every pass. Slow: 185, a new one every 0.05 s, the
+  first after 0.2 s. Again: the first after 0.02 s. Beside another viewer:
+  178, and the viewer did not stall. Fast: caught up. Release: the picture
+  held until the video's first frame, under 0.1 s. The pictures are 2–3 s
+  behind the pointer: they are key frames, and Garage sends one every 4 s.
+- **B was skipped as "no events today",** though the run at 4:03 PM had
+  opened events from 4:00–4:01 PM. Just after the restart for the update,
+  today's search took 6.2 s for the recordings and 9.3 s for the events (a
+  failure, the 1 s pause, a second failure), and A4 was "stale, 6 s old",
+  which within a minute only a copy with `events_error` gives. So the event
+  search had failed, and the check read the empty list as a quiet day.
+- A1's search times (6.2 and 9.3 s) passed its total (0.9 s): it joined the
+  search the panel began as the tab opened.
+- ESPHome held the loop 171 ms in a template (`<template>:28 in root ←
+  jinja2 … render`), likely the same as the 263 ms before.
+
+**v0.63.11, from it (check v0.8.8):**
+
+- **A rows** add "· event search failed (…)" when that day's search
+  failed.
+- **B asks once more** when today's event search failed (the server
+  searches again: a copy with `events_error` is never current). If it fails
+  again, B is skipped with both errors, the summary says so, and "In short"
+  has a problem ("Today's events could not be listed …"). If it succeeds,
+  that is said (a note) and its events are opened.
+- **`server()`** adds "joined a search already running" when the search's
+  own times pass the answer's total by more than 0.1 s.
+- **Checks:** the owner's timings and failure give the A1 line and the
+  problem; a second answer that succeeds gives the note and the events it
+  found; the one ask goes without `max_age`.
+
 #### Step 10.4: the checks
 
 - **In CI:** `scrub_check.cjs` drags against a fake key-frame endpoint,

@@ -70,7 +70,7 @@ import { ScrubClient, isPicture, type ScrubPicture, type SocketLike } from "./sc
 import { SHAPES, mseApi, mseSupports, pickSample, probeShape, type MseApi } from "./mse-probe";
 import type { RvPlayer } from "./player";
 
-export const CHECK_VERSION = "0.8.7";
+export const CHECK_VERSION = "0.8.8";
 export const SETUPS = [
   "Desktop Chrome, LAN",
   "Desktop Chrome, Tailscale",
@@ -566,7 +566,7 @@ export class PlaybackCheck {
     const today = t.today;
     if (t.date !== today) await this._loadDay(today);
     const a1 = t.metrics;
-    this._log(`A1 Time to timeline, today (as the tab opened): ${ms(a1.timelineMs)} (server: ${server(a1.timelineServer)})`);
+    this._log(`A1 Time to timeline, today (as the tab opened): ${ms(a1.timelineMs)} (server: ${server(a1.timelineServer)})${searchFailed(t.day)}`);
     const day = Number(today.slice(8, 10));
     const past = [...t.monthDays].filter((n) => n < day).sort((a, b) => b - a);
     const pick = past.at(Math.min(2, past.length - 1));
@@ -582,12 +582,12 @@ export class PlaybackCheck {
     }
     const pastDate = `${today.slice(0, 8)}${String(pick).padStart(2, "0")}`;
     const a2 = await this._loadDay(pastDate);
-    this._log(`A2 Time to timeline, ${pastDate}: ${ms(a2.timelineMs)} (server: ${server(a2.timelineServer)})`);
+    this._log(`A2 Time to timeline, ${pastDate}: ${ms(a2.timelineMs)} (server: ${server(a2.timelineServer)})${searchFailed(t.day)}`);
     await this._loadDay(today);
     const a3 = await this._loadDay(pastDate);
-    this._log(`A3 Time to timeline, ${pastDate} again: ${ms(a3.timelineMs)} (server: ${server(a3.timelineServer)})`);
+    this._log(`A3 Time to timeline, ${pastDate} again: ${ms(a3.timelineMs)} (server: ${server(a3.timelineServer)})${searchFailed(t.day)}`);
     const a4 = await this._loadDay(today);
-    this._log(`A4 Time to timeline, today again: ${ms(a4.timelineMs)} (server: ${server(a4.timelineServer)})`);
+    this._log(`A4 Time to timeline, today again: ${ms(a4.timelineMs)} (server: ${server(a4.timelineServer)})${searchFailed(t.day)}`);
     const cold = a2.timelineServer?.cache === "fresh";
     const grades = [
       speed(a1.timelineMs, 1000, 3000),
@@ -665,7 +665,39 @@ export class PlaybackCheck {
 
   private async _events(): Promise<void> {
     const t = this._t;
-    const day = t.day;
+    let day = t.day;
+    // The day's event search failed (v0.8.8: the owner's run just after a
+    // restart said "no events today" of a day with events): ask once more,
+    // which the server searches again, before saying anything of its events.
+    const failed = day?.events_error;
+    if (day && failed) {
+      let again: TimelineDay | undefined;
+      try {
+        again = await fetchTimelineDay(t.hass, t.deviceId, day.date);
+      } catch {
+        again = undefined;
+      }
+      if (!again || again.events_error) {
+        const still = again?.events_error ?? failed;
+        this._log(`B  skipped: today's event search failed (${failed}), and again when asked once more (${still})`);
+        this._summary.push(`Events: today's event search failed (${still})`);
+        this._plain.push({
+          grade: "problem",
+          text: `Today's events could not be listed: the camera's event search failed (${still}), so the timeline shows no events for today.`,
+          advice: "The timeline searches again by itself; if today's events stay missing, run the check again and include the details below in a report.",
+        });
+        return;
+      }
+      day = again;
+      this._log(
+        `B  today's event search had failed (${failed}); asked once more, it found ${count(day.events.length, "event")}` +
+          ` (server: ${server(day.timing)})`,
+      );
+      this._plain.push({
+        grade: "note",
+        text: `Today's event search failed at first (${failed}); asked again, it found ${count(day.events.length, "event")}.`,
+      });
+    }
     const events = (day?.events ?? []).slice(-3).reverse();
     if (!day || !events.length) {
       this._log("B  skipped: no events today");
@@ -2507,7 +2539,21 @@ function server(t: Timing | undefined): string {
     if (typeof value === "number") parts.push(`${label} ${ms(value)}`);
   }
   if (typeof t.warm === "string") parts.push(`background fetch: ${t.warm}`);
+  // Asked while the same search was running (the panel's own ask, as the
+  // tab opened): its times are the search's, longer than this answer's (v0.8.8).
+  const searched = Math.max(
+    ...(["search_ms", "files_ms", "events_ms"] as const).map((key) => {
+      const value = t[key];
+      return typeof value === "number" ? value : 0;
+    }),
+  );
+  if (typeof t.total_ms === "number" && searched > t.total_ms + 100) parts.push("joined a search already running");
   return parts.join(", ");
+}
+
+/** A day's failed event search, for its A row (v0.8.8). */
+function searchFailed(day: TimelineDay | undefined): string {
+  return day?.events_error ? ` · event search failed (${day.events_error})` : "";
 }
 
 // ---- A run cut short ----

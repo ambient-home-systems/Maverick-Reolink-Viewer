@@ -125,7 +125,7 @@ describe("PlaybackCheck", () => {
       changes.push(1),
     );
     const report = await check.run();
-    expect(report).toContain("Reolink Viewer playback check v0.8.7 · Desktop Chrome, LAN · Garage");
+    expect(report).toContain("Reolink Viewer playback check v0.8.8 · Desktop Chrome, LAN · Garage");
     expect(report).toContain("A1 Time to timeline, today (as the tab opened): 120 ms (server: memory, total 4 ms)");
     expect(report).toContain("A2/A3 skipped: no earlier recording day this month");
     expect(report).toContain("B  skipped: no events today");
@@ -161,6 +161,53 @@ describe("PlaybackCheck", () => {
     // Nothing is left marked as running.
     expect(window.localStorage.getItem("reolink-viewer-check-running")).toBeNull();
     expect(await noteInterruptedCheck(hass)).toBeUndefined();
+  });
+
+  it("asks again when today's event search failed, and says so, not \"no events today\" (v0.8.8)", async () => {
+    // The owner's run just after a restart: the search the panel began as the tab opened, joined;
+    // its event search failed, and B said "no events today" of a day with events.
+    const timing = { cache: "fresh", files_ms: 6158, events_ms: 9263, total_ms: 938 };
+    const failedDay: TimelineDay = { ...emptyDay(), events_error: "ReolinkError 1", timing };
+    const run = async (answer: TimelineDay) => {
+      const hass = reportingHass();
+      const asked: Record<string, unknown>[] = [];
+      const base = hass.callWS.bind(hass);
+      hass.callWS = <T,>(message: Record<string, unknown>) => {
+        if (message.type !== "reolink_viewer/timeline/day") return base<T>(message);
+        asked.push(message);
+        return Promise.resolve(answer as T);
+      };
+      const target = { ...stubTarget(hass), day: failedDay, metrics: { timelineMs: 948, timelineServer: timing } };
+      const report = await new PlaybackCheck(target, { setup: "Desktop Chrome, LAN", soakMinutes: 0 }).run();
+      return { report, asked };
+    };
+    // Failed again when asked: a problem, with the error.
+    const still = await run({ ...emptyDay(), events_error: "ReolinkError 2" });
+    expect(still.report).toContain(
+      "A1 Time to timeline, today (as the tab opened): 948 ms (server: fresh, recordings 6158 ms, events 9263 ms, total 938 ms," +
+        " joined a search already running) · event search failed (ReolinkError 1)",
+    );
+    expect(still.asked).toEqual([{ type: "reolink_viewer/timeline/day", device_id: "cam1", date: "2026-10-17" }]);
+    expect(still.report).toContain(
+      "B  skipped: today's event search failed (ReolinkError 1), and again when asked once more (ReolinkError 2)",
+    );
+    expect(still.report).not.toContain("no events today");
+    expect(still.report).toContain("- Events: today's event search failed (ReolinkError 2)");
+    expect(parseInShort(still.report)?.findings).toContainEqual({
+      grade: "problem",
+      text: "Today's events could not be listed: the camera's event search failed (ReolinkError 2), so the timeline shows no events for today.",
+      advice: "The timeline searches again by itself; if today's events stay missing, run the check again and include the details below in a report.",
+    });
+    // Found when asked: said, and the day's events are what B goes by.
+    const found = await run({ ...emptyDay(), timing: { cache: "fresh", search_ms: 2100, total_ms: 2104 } });
+    expect(found.report).toContain(
+      "B  today's event search had failed (ReolinkError 1); asked once more, it found 0 events (server: fresh, total 2104 ms)",
+    );
+    expect(found.report).toContain("B  skipped: no events today");
+    expect(parseInShort(found.report)?.findings).toContainEqual({
+      grade: "note",
+      text: "Today's event search failed at first (ReolinkError 1); asked again, it found 0 events.",
+    });
   });
 
   it("stops when asked", async () => {
