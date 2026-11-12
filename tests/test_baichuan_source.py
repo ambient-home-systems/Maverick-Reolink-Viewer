@@ -913,6 +913,54 @@ async def test_the_download_stops_where_the_cut_begins_and_the_cut_serves_on(
     assert entry.path.read_bytes() == whole
 
 
+async def test_a_start_just_past_a_stopped_download_is_cut_not_reread(
+    cached: tuple[VodCache, Rig],
+    media: Server,  # noqa: F811
+) -> None:
+    """The owner's HD start 0.1 min past a stop: 4.2 s re-reading 244 MB (v0.63.8).
+
+    The device ignores Range: resuming reads the recording from its start
+    again. With much on disk, a start near the stop is cut instead; with
+    little, the download is resumed as before.
+    """
+    cache, _rig = cached
+    with (
+        patch.object(vodcache, "WRITE_BATCH", 4096),
+        patch.object(vodcache, "CHUNK", 4096),
+    ):
+        entry = await cache.async_open(deep_rec())
+        cache.lease(entry, 600, "token1")
+        assert (await _window(cache, entry, at_ms=AT_MS)).source == "cut"
+        first = entry.cut
+        assert first is not None
+        await _done(first)
+        media.gate.set()
+        await _until(lambda: entry.stopped_ms is not None and not entry.filling)
+    stopped = entry.stopped_ms
+    assert stopped is not None
+    assert entry.written > 0
+    # Its viewer left: that cut is stopped. A start just past the stop.
+    first.error = "stopped"
+    with patch.object(vodcache, "REREAD_MAX_BYTES", entry.written - 1):
+        window = await _window(cache, entry, at_ms=stopped + 2_000)
+    assert window.source == "cut"
+    assert entry.cut is not first
+    # The download was not resumed: no re-read, no whole hour fetched.
+    assert not entry.filling
+    assert not entry.whole
+    assert entry.stopped_ms == stopped
+    second = entry.cut
+    assert second is not None
+    await _done(second)
+    # Little on disk: re-reading it is quicker than a cut; resumed as before.
+    second.error = "stopped"
+    with patch.object(vodcache, "REREAD_MAX_BYTES", entry.written):
+        window = await _window(cache, entry, at_ms=stopped + 2_000)
+    assert window.source == "file"
+    assert entry.whole
+    await cache.async_wait(entry, complete=True)
+
+
 async def test_a_wait_past_the_stop_resumes_the_download(
     cached: tuple[VodCache, Rig],
     media: Server,  # noqa: F811
