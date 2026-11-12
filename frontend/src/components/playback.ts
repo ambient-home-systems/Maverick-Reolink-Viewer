@@ -1198,6 +1198,8 @@ export class RvPlayback extends LitElement {
     // Laid out but off screen: some browsers do not load a hidden video.
     player.style.cssText = "position: fixed; left: -10000px; top: 0; width: 320px;";
     document.body.appendChild(player);
+    // The URL its start was given, for the check's record of it from the server.
+    let url: string | undefined;
     return {
       playAt: async (time: number) => {
         const hass = this.hass;
@@ -1209,6 +1211,7 @@ export class RvPlayback extends LitElement {
         const playback = this._useMse(this._stream)
           ? await fetchPlaybackMse(hass, ref, wanted)
           : await fetchPlaybackUrl(hass, ref, this._progressive, wanted);
+        url = playback.base ?? playback.url;
         const first = new Promise<number | undefined>((resolve) => {
           const timer = setTimeout(() => {
             resolve(undefined);
@@ -1237,6 +1240,9 @@ export class RvPlayback extends LitElement {
       },
       get source() {
         return player.mseStats?.atSource;
+      },
+      get url() {
+        return url;
       },
       close: () => {
         player.stop();

@@ -21,6 +21,7 @@ import {
   longRecordings,
   mb,
   rateFindings,
+  referenceFps,
   restInside,
   sampleStalls,
   setupMismatch,
@@ -197,7 +198,8 @@ describe("rates and sums", () => {
     const mac = sample({ rate: 1, wallMs: 6000, mediaS: 6, decoded: 90, dropped: 90, painted: 90, maxGapMs: 70 });
     expect(smooth(mac)).toBe(true);
     expect(describeRate(mac)).toContain("disagrees");
-    expect(smooth({ ...mac, painted: 70 })).toBe(false);
+    // Frames missed: fewer painted, and a gap of more than a frame (v0.8.9: a gap of one frame is none skipped).
+    expect(smooth({ ...mac, painted: 70, maxGapMs: 200 })).toBe(false);
     // WebKit: the counter lags (60 counted, 90 painted).
     expect(smooth(sample({ rate: 1, wallMs: 6000, mediaS: 6, decoded: 60, dropped: 0, painted: 90, maxGapMs: 100 }))).toBe(true);
     // A browser drawing in software: the counters agree, and they count.
@@ -206,6 +208,31 @@ describe("rates and sums", () => {
     expect(clamped).toContain("browser set 2×");
     expect(clamped).toContain("the file ended");
     expect(clamped).not.toContain("painted");
+  });
+
+  it("judges 0.5× by the frame rate painted at 1× where WebKit's counter disagrees (v0.8.9: the owner's iPhone)", () => {
+    // 0.5×: 7 frames a second painted, each one frame apart (136 ms); WebKit counted 96 for the 45 there were.
+    const half = sample({ rate: 0.5, applied: 0.5, mediaS: 3, decoded: 96, dropped: 0, painted: 44, maxGapMs: 136, frameS: 1 / 15 });
+    const one = sample({ rate: 1, applied: 1, mediaS: 6, decoded: 94, dropped: 0, painted: 90, maxGapMs: 103, frameS: 1 / 15 });
+    // By the counter alone, as v0.8.8 judged it: a stutter.
+    expect(smooth(half)).toBe(false);
+    const reference = referenceFps([half, one]);
+    expect(reference).toBeCloseTo(15);
+    expect(smooth(half, reference)).toBe(true);
+    expect(describeRate(half, reference)).toBe(
+      "0.5×: 0.50× effective, 7.3 fps painted of 7.5, longest frame gap 136 ms, dropped 0 of 96 frames (0.0 %), 0 stalls," +
+        " the dropped-frame counter disagrees with the frames painted: judged by those",
+    );
+    expect(rateFindings([half, one])).toEqual([{ grade: "good", text: "Slow motion and fast forward (0.5× to 1×) play smoothly." }]);
+    // A real stutter at 0.5×: frames skipped and fewer painted.
+    expect(smooth({ ...half, painted: 30, maxGapMs: 270 }, reference)).toBe(false);
+    // Fewer counted at the edges, but none skipped (no gap of two frames): smooth.
+    expect(smooth({ ...half, painted: 39, maxGapMs: 140 }, reference)).toBe(true);
+    // No 1× pass painted, or not in front: the counter, as before.
+    expect(referenceFps([half])).toBeUndefined();
+    expect(referenceFps([half, { ...one, focused: false }])).toBeUndefined();
+    // Where the counter agrees, it counts.
+    expect(smooth(sample({ rate: 1, mediaS: 6, decoded: 90, dropped: 9, painted: 81, maxGapMs: 120 }), reference)).toBe(false);
   });
 
   it("fits a slope and sums buffered ranges", () => {

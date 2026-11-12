@@ -3,6 +3,22 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.63.12
+
+From the owner's playback checks of 0.63.11 on Garage. In Chrome on the Mac, everything
+passed. In the Home Assistant app on the iPhone, over Tailscale, events started in about
+0.5 s, and dragging showed a new picture every 0.1 s, decoded on the phone itself.
+
+- **The playback check (v0.8.9) no longer calls 0.5× a stutter on the iPhone:** the
+  phone showed every frame at half speed, 7 a second for Garage's 15. But Safari's own
+  frame counter counted about twice as many at that speed, and the check compared what
+  it saw against that. Where the counter disagrees with the frames shown, each speed is
+  now judged against the recording's frame rate as shown at normal speed.
+- **A slow second viewer while dragging says why:** on the iPhone, the second recording
+  playing during the drag took 27.5 s to start (other runs: 0.1 to 1.5 s). The check now
+  names the recording it played, and when it takes over 2 s to start, adds what the
+  server did for it.
+
 ## 0.63.11
 
 From the owner's playback check of 0.63.10 on Garage, in Chrome on the Mac on the LAN:

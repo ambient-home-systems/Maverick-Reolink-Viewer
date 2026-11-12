@@ -42,6 +42,7 @@ import {
   ms,
   slope,
   rateFindings,
+  referenceFps,
   smooth,
   SMOOTH_RULE,
   sourceLabel,
@@ -70,7 +71,7 @@ import { ScrubClient, isPicture, type ScrubPicture, type SocketLike } from "./sc
 import { SHAPES, mseApi, mseSupports, pickSample, probeShape, type MseApi } from "./mse-probe";
 import type { RvPlayer } from "./player";
 
-export const CHECK_VERSION = "0.8.8";
+export const CHECK_VERSION = "0.8.9";
 export const SETUPS = [
   "Desktop Chrome, LAN",
   "Desktop Chrome, Tailscale",
@@ -133,6 +134,8 @@ const DRAG_UNCACHED_MS = 300;
 const DRAG_CACHED_MS = 100;
 /** A recording playing on the same camera may pause this long at most (ms). */
 const DRAG_STALL_MS = 1_000;
+/** A second viewer slower than this to start has the server's record of it reported (v0.8.9). */
+const BESIDE_SLOW_MS = 2_000;
 /** Home Assistant's event loop held this long (ms) around a start is said in "In short" (v0.62.2). */
 const BUSY_NOTE_MS = 500;
 /** After a release that showed nothing, play is pressed and waited for this long (ms; v0.63.6). */
@@ -214,6 +217,8 @@ export interface SecondViewer {
   readonly position: number | undefined;
   /** What served its start (MSE): "cut" or "file". */
   readonly source: string | undefined;
+  /** The URL its start was given (MSE's base, or the file player's), for the server's record of it (v0.8.9). */
+  readonly url?: string | undefined;
   /** Stop it as closing its tab does: it stops reading, and tells the server nothing. */
   close(): void;
 }
@@ -230,6 +235,10 @@ export interface CheckOptions {
 interface DragBeside {
   startMs: number | undefined;
   source: string | undefined;
+  /** The recording it played (v0.8.9). */
+  recording?: Segment;
+  /** The server's record of its start, when it was slow or did not come (v0.8.9). */
+  server?: string;
   /** Why it did not start, when its start failed. */
   why?: string;
   pass?: DragPass;
@@ -780,13 +789,13 @@ export class PlaybackCheck {
    * its URL: the current search may name a newer copy of a recording still
    * being written), once it and the plain copy the file player asks for are done.
    */
-  private async _fillReport(): Promise<string> {
+  private async _fillReport(of?: { token: string; plain: boolean }, tries = 90): Promise<string> {
     const playing = this._t.playing;
-    const token = urlToken(playing?.base ?? playing?.url ?? "");
+    const token = of?.token ?? urlToken(playing?.base ?? playing?.url ?? "");
     if (!token) return "server: nothing played";
-    const plain = playing?.file === "plain";
+    const plain = of ? of.plain : playing?.file === "plain";
     let cache: CacheStatus | null = null;
-    for (let i = 0; i < 90; i += 1) {
+    for (let i = 0; i < tries; i += 1) {
       try {
         cache = (await fetchCacheStatus(this._t.hass, token)).cache;
       } catch {
@@ -1054,15 +1063,18 @@ export class PlaybackCheck {
         if (!video) break;
         const sample = await this._measureRate(video, rate);
         results.push(sample);
-        this._log(`     ${describeRate(sample)}`);
         if (sample.ended) break;
       }
     } finally {
       const video = activeVideo(t.player);
       if (video) video.playbackRate = 1;
     }
+    // Each rate judged by the recording's frame rate as painted at 1×, where the
+    // browser's counter disagrees (v0.8.9): so they are written once all are measured.
+    const reference = referenceFps(results);
+    for (const sample of results) this._log(`     ${describeRate(sample, reference)}`);
     this._summary.push(
-      `Rates: ${results.map((r) => `${r.rate}× ${!r.focused ? "– (not in front)" : smooth(r) ? "✓" : "✗"}`).join(" ") || "not measured"} (smooth = ${SMOOTH_RULE})`,
+      `Rates: ${results.map((r) => `${r.rate}× ${!r.focused ? "– (not in front)" : smooth(r, reference) ? "✓" : "✗"}`).join(" ") || "not measured"} (smooth = ${SMOOTH_RULE})`,
     );
     this._plain.push(...rateFindings(results));
   }
@@ -1272,6 +1284,7 @@ export class PlaybackCheck {
     if (hadVideo) this._log(`   this tab's video while dragging: ${held ? "paused" : "PLAYED ON"}${mark(held)}`);
     this._log(`   again over the same stretch: ${describeDrag(sAgain, again)}${mark(good(againGrade))}`);
     this._log(`   ${this._besideText(beside, sBeside)}${mark(stallOk)}`);
+    if (beside?.server) this._log(`     the viewer's ${beside.server}`);
     this._log(
       `   fast (${minutes(fastEnd - fastFrom)} in ${span(DRAG_FAST.ms)}): ${describeDrag(sFast, fast)}${mark(fastOk)}`,
     );
@@ -1424,31 +1437,44 @@ export class PlaybackCheck {
    */
   private async _dragBeside(other: Segment, from: number, spanMs: number): Promise<DragBeside> {
     const viewer = this._t.openViewer();
+    const recording = other;
     try {
       let startMs: number | undefined;
       try {
         startMs = await viewer.playAt(other.start + (other.end - other.start) * 0.6);
       } catch (err) {
-        return { startMs: undefined, source: viewer.source, why: toError(err).message };
+        return { startMs: undefined, source: viewer.source, recording, why: toError(err).message, ...(await this._viewerServer(viewer)) };
       }
-      if (startMs === undefined) return { startMs, source: viewer.source };
+      if (startMs === undefined) return { startMs, source: viewer.source, recording, ...(await this._viewerServer(viewer)) };
       const watch = sampleStalls(() => viewer.position);
       const pass = await this._dragPass(from, spanMs, DRAG_SLOW.ms * this.timeScale);
-      return { startMs, source: viewer.source, pass, played: watch.stop() };
+      const played = watch.stop();
+      // A slow start: what the server did (the owner's iPhone, v0.8.8: 27.5 s from the download).
+      const server = startMs > BESIDE_SLOW_MS ? await this._viewerServer(viewer) : {};
+      return { startMs, source: viewer.source, recording, pass, played, ...server };
     } finally {
       viewer.close();
     }
   }
 
+  /** The server's record of a second viewer's start, from its URL. */
+  private async _viewerServer(viewer: SecondViewer): Promise<{ server?: string }> {
+    const token = urlToken(viewer.url ?? "");
+    return token ? { server: await this._fillReport({ token, plain: false }, 5) } : {};
+  }
+
   private _besideText(beside: DragBeside | undefined, s: DragSummary | undefined): string {
     if (!beside) return "beside another viewer: none (no second recording not cached on this day)";
     const from = beside.source ? `, from ${sourceLabel(beside.source)}` : "";
+    const rec = beside.recording;
+    // Which recording (v0.8.9): the one at that time, and its length.
+    const which = rec ? `the ${clock(rec.start)} recording, ${span(rec.end - rec.start)} long` : "another recording";
     if (!beside.pass || !beside.played || !s) {
-      return `beside another viewer: it did not start${from}${beside.why ? ` (${beside.why})` : ""}`;
+      return `beside another viewer: it did not start, playing ${which}${from}${beside.why ? ` (${beside.why})` : ""}`;
     }
     const { played } = beside;
     return (
-      `beside another viewer (playing another recording${from}, started in ${ms(beside.startMs)}): ${describeDrag(s, beside.pass)}; ` +
+      `beside another viewer (playing ${which}${from}, started in ${ms(beside.startMs)}): ${describeDrag(s, beside.pass)}; ` +
       `the viewer played ${span(played.playedMs)} in ${span(played.wallMs)}, longest stall ${span(played.longestStallMs)}`
     );
   }
@@ -2000,6 +2026,7 @@ export class PlaybackCheck {
       mediaS: Math.max(0, video.currentTime - media0),
       painted: frames.painted,
       maxGapMs: frames.maxGap,
+      frameS: middle(frames.steps),
       decoded: quality0 && quality1 ? quality1.totalVideoFrames - quality0.totalVideoFrames : undefined,
       dropped: quality0 && quality1 ? quality1.droppedVideoFrames - quality0.droppedVideoFrames : undefined,
       stalls,
@@ -2414,30 +2441,37 @@ function activeVideo(player: RvPlayer | null): HTMLVideoElement | null {
 interface FrameCount {
   painted: number | undefined;
   maxGap: number | undefined;
+  /** Steps between the media times of frames painted one after the other (s, v0.8.9). */
+  steps: number[];
   stop: () => void;
 }
 
-/** Count painted frames (requestVideoFrameCallback) and the longest gap. */
+/** Count painted frames (requestVideoFrameCallback), the longest gap, and the media time between them. */
 function countFrames(video: HTMLVideoElement): FrameCount {
   if (typeof video.requestVideoFrameCallback !== "function") {
-    return { painted: undefined, maxGap: undefined, stop: () => undefined };
+    return { painted: undefined, maxGap: undefined, steps: [], stop: () => undefined };
   }
   let last: number | undefined;
+  let lastMedia: number | undefined;
   let handle = 0;
   let stopped = false;
   const count: FrameCount = {
     painted: 0,
     maxGap: 0,
+    steps: [],
     stop: () => {
       stopped = true;
       video.cancelVideoFrameCallback(handle);
     },
   };
-  const frame = (now: number) => {
+  const frame = (now: number, metadata: VideoFrameCallbackMetadata) => {
     if (stopped) return;
     count.painted = (count.painted ?? 0) + 1;
     if (last !== undefined) count.maxGap = Math.max(count.maxGap ?? 0, now - last);
     last = now;
+    const step = lastMedia === undefined ? 0 : metadata.mediaTime - lastMedia;
+    if (step > 0) count.steps.push(step);
+    lastMedia = metadata.mediaTime;
     handle = video.requestVideoFrameCallback(frame);
   };
   handle = video.requestVideoFrameCallback(frame);
