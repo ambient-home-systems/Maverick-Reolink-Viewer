@@ -1134,7 +1134,14 @@ describe("rv-playback while dragging (Phase 10)", () => {
     expect(el._hover?.bare).toBe(true);
     expect(el.renderRoot.querySelector(".hover img, .hover .noimg")).toBeNull();
     expect(sentOf(hass, "reolink_viewer/thumbnail/urls")).toHaveLength(thumbs);
-    expect(el._metrics.scrub).toMatchObject({ asked: 1, shown: 1, missed: 0, last: "store, 0 ms, 0.5 s before" });
+    // How long the picture took is measured on the real clock: "0 ms" here, a few on a busy
+    // machine (CI read 2 ms, v0.68.0).
+    expect(el._metrics.scrub).toMatchObject({
+      asked: 1,
+      shown: 1,
+      missed: 0,
+      last: expect.stringMatching(/^store, \d+ ms, 0\.5 s before$/) as unknown,
+    });
 
     // Released: it plays from there; the picture stays until the video's first frame.
     const play = vi.spyOn(player, "play").mockResolvedValue(undefined);
