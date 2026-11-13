@@ -21,6 +21,7 @@ from custom_components.reolink_viewer.const import CONF_LEARN_NORMAL, DOMAIN
 from custom_components.reolink_viewer.unusual.events import Event
 from custom_components.reolink_viewer.unusual.live import (
     HOLD_S,
+    KIND_VISIT_S,
     UNUSUAL_EVENT,
     VISIT_S,
     UnusualWatch,
@@ -200,6 +201,45 @@ async def test_one_alert_per_visit(hass: HomeAssistant) -> None:
     # Quiet for longer than VISIT_S after the last: a new visit, said again.
     assert await seen("cam-drive", t0 + 75 * 60 + 20 + VISIT_S + 60)
     assert len(fired) == 2
+    watch.async_stop()
+
+
+async def test_one_visit_across_cameras(hass: HomeAssistant) -> None:
+    """The owner's visitor at 8:16 (v0.64.0): the front, the doorbell, the back yard.
+
+    A person at the front is said; the doorbell press is its own kind, said
+    too; the person in the back yard 4 minutes on is the same visit, kept
+    quiet. A person elsewhere well after is a new visit.
+    """
+    journal = _Journal()
+    logged: list[dict[str, Any]] = []
+    watch = UnusualWatch(
+        hass,
+        flush=journal.flush,
+        window=journal.read,
+        model_built=lambda: True,
+        running=lambda: True,
+        names=dict,
+        fired=lambda payload, _at: logged.append(payload),
+    )
+    fired = async_capture_events(hass, UNUSUAL_EVENT)
+    t0 = time.time() - 3600
+
+    async def seen(camera: str, kind: str, at: float) -> bool:
+        journal.window = [(_event(camera, kind, at, at + 20), _score(True))]
+        return await watch.async_check(camera, kind, at)
+
+    assert await seen("cam-front", "person", t0)
+    assert await seen("cam-door", "doorbell", t0 + 14)
+    assert not await seen("cam-back", "person", t0 + 260)
+    assert [(e.data["device_id"], e.data["kind"]) for e in fired] == [
+        ("cam-front", "person"),
+        ("cam-door", "doorbell"),
+    ]
+    assert [p.get("quiet") for p in logged] == [None, None, True]
+    # Past KIND_VISIT_S after the last (the back yard's, which carried it on): a new visit.
+    assert await seen("cam-side", "person", t0 + 260 + 20 + KIND_VISIT_S + 1)
+    assert len(fired) == 3
     watch.async_stop()
 
 

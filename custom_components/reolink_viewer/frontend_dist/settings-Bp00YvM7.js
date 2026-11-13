@@ -1,6 +1,6 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
-import { Lt as i, Z as a, et as o, j as s } from "./live-DbkkZT-0.js";
-import { J as c, n as l } from "./home-DjR_-Gv6.js";
+import { Bt as i, P as a, et as o, rt as s } from "./live-C8Ncs3qj.js";
+import { J as c, n as l } from "./home-CwC_gHhP.js";
 //#region src/catalog.ts
 var u = {
 	id: "other",
@@ -239,11 +239,11 @@ var b = 1e4, x = class {
     </div>`;
 	}
 	_renderRow(e) {
-		let { entity: r, entry: i, label: o } = e, s = this._open.has(r.entity_id);
+		let { entity: r, entry: i, label: a } = e, s = this._open.has(r.entity_id);
 		return n`<li class="row" data-entity-id=${r.entity_id}>
       <div class="info">
         <div class="label">
-          ${o}
+          ${a}
           ${r.sub_device ? n`<span class="badge">${r.sub_device}</span>` : t}
           ${r.disabled_by === null ? t : n`<span class="badge">Turned off</span>`}
           ${r.hidden_by === null ? t : n`<span class="badge">Hidden</span>`}
@@ -252,7 +252,7 @@ var b = 1e4, x = class {
         </div>
         ${i ? n`<div class="muted small">${i.summary}</div>` : t}
       </div>
-      <div class="control">${this._renderControl(r, o)}</div>
+      <div class="control">${this._renderControl(r, a)}</div>
       ${i ? n`<details
             class="about"
             .open=${s}
@@ -260,7 +260,7 @@ var b = 1e4, x = class {
 			this._setOpen(r.entity_id, e.target.open);
 		}}
           >
-            <summary class="small" aria-label=${`About this setting: ${o}`}>About this setting${a("chevronDown")}</summary>
+            <summary class="small" aria-label=${`About this setting: ${a}`}>About this setting${o("chevronDown")}</summary>
             ${s ? this._renderAbout(i) : t}
           </details>` : t}
     </li>`;
@@ -486,7 +486,7 @@ var b = 1e4, x = class {
 		if (n) {
 			this._enabling = /* @__PURE__ */ new Set([...this._enabling, e.entity_id]);
 			try {
-				let r = (await o(n, e.entity_id)).reload_delay;
+				let r = (await s(n, e.entity_id)).reload_delay;
 				c(this, `${t} enabled. Home Assistant reloads the Reolink entry${r ? ` in about ${r} seconds` : ""}; the entity becomes available after that.`), this.dispatchEvent(new CustomEvent("rv-entity-enabled", {
 					bubbles: !0,
 					composed: !0
@@ -499,7 +499,7 @@ var b = 1e4, x = class {
 			}
 		}
 	}
-	static styles = [s, e`
+	static styles = [a, e`
       :host {
         display: flex;
         flex-direction: column;

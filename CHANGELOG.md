@@ -3,6 +3,28 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.64.0
+
+Scrubbing (Phase 10) is done: dragging along the timeline shows the picture on every
+device the owner checked, Chrome and Safari on the Mac, the iPhone app and the wall
+tablet. And the first of Phase 11's extras:
+
+- **Zoom into the picture:** on a recording, and on a camera in full screen, zoom in on
+  part of the picture, up to 8×.
+  - **Phone or tablet:** pinch, drag, or double-tap.
+  - **Computer:** a trackpad pinch (Safari's too), or Ctrl or ⌘ with the mouse wheel;
+    once zoomed, scroll or drag to move around. Not zoomed, a scroll is the page's.
+  - **Keyboard:** + − and 0.
+
+  It never moves past the picture's edges into the black around it. A pill shows how
+  far in you are, with Reset. On a recording, the video's own controls hide while
+  zoomed, and Reset brings them back. Dragging along the timeline while zoomed shows
+  the same part of each picture.
+- **One alert for a visitor who moves between cameras:** this morning, someone at the
+  front was alerted, then again in the back yard 4 minutes later. Now the same kind of
+  thing on another camera within 5 minutes of the last alert is part of the same
+  visit. A press of the doorbell still alerts on its own.
+
 ## 0.63.15
 
 From the owner's wall tablet check of 0.63.14 at 8:12 AM. Today's timeline appeared in

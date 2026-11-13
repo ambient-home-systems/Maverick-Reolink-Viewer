@@ -1,7 +1,7 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
-import { Z as i, j as a, ut as o } from "./live-DbkkZT-0.js";
-import { L as s, a as c, d as l, i as u, n as d, r as f } from "./home-DjR_-Gv6.js";
-import "./device-list-C4RPr_WU.js";
+import { P as i, et as a, pt as o } from "./live-C8Ncs3qj.js";
+import { L as s, a as c, d as l, i as u, n as d, r as f } from "./home-CwC_gHhP.js";
+import "./device-list-DCK596RV.js";
 var p = (e) => `${String(e % 24).padStart(2, "0")}:00`, m = (e) => e.toLocaleString("en-US");
 function h(e) {
 	let t = s(l(e));
@@ -46,13 +46,13 @@ var _ = class extends r {
               ${r.map((e, t) => this._renderKind(e, i, t === 0))}` : n`<p class="muted">Nothing yet: this camera has not detected anything since learning began.</p>` : n`<p class="muted">It is learning from the journal; this shows once it has.</p>`}
     </section>`;
 	}
-	_renderKind(e, r, a) {
+	_renderKind(e, r, i) {
 		let o = h(e.kind);
-		return n`<details class="kind" ?open=${a}>
+		return n`<details class="kind" ?open=${i}>
       <summary>
         <span class="name">${o}</span>
         <span class="muted">${m(e.events)} seen${e.days >= 1 ? ` in ${String(Math.round(e.days))} days` : ""}</span>
-        ${i("chevronDown")}
+        ${a("chevronDown")}
       </summary>
       <div class="charts">
         ${this._renderHours(e)} ${this._renderDays(e)}
@@ -113,7 +113,7 @@ var _ = class extends r {
           </p>` : t}
     </div>`;
 	}
-	static styles = [a, e`
+	static styles = [i, e`
       :host {
         display: block;
         container-type: inline-size;
@@ -320,8 +320,8 @@ var b = 3e4, x = {
     `;
 	}
 	_renderSnapshot(e) {
-		let r = this.snapshotUrl(), a = e.primary_view === "snapshot";
-		return n`<figure class="snapshot ${a ? "primary" : ""}">
+		let r = this.snapshotUrl(), i = e.primary_view === "snapshot";
+		return n`<figure class="snapshot ${i ? "primary" : ""}">
       <div class="frame">
         ${r ? n`<img src=${r} alt="Latest snapshot of ${e.name ?? "the camera"}" />` : n`<p class="none">
               No snapshot: enable one of this camera's stream entities (for example
@@ -337,10 +337,10 @@ var b = 3e4, x = {
 			this._stamp = Date.now();
 		}}
         >
-          ${i("refresh")}Refresh
+          ${a("refresh")}Refresh
         </button>
       </figcaption>
-      ${a ? n`<p class="muted small">
+      ${i ? n`<p class="muted small">
             This camera does not record, so snapshots are its main view. The picture refreshes
             every ${b / 1e3} seconds while this page is open.
           </p>` : t}
@@ -377,7 +377,7 @@ var b = 3e4, x = {
       </p>
     </section>`;
 	}
-	static styles = [a, e`
+	static styles = [i, e`
       :host {
         display: flex;
         flex-direction: column;

@@ -1,6 +1,6 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
-import { Lt as i, M as a, Z as o, _ as s, at as c, d as l, dt as u, g as d, j as f, jt as p, rt as m, t as h, v as g, y as _, zt as v } from "./live-DbkkZT-0.js";
-import { $ as y, B as b, K as x, Q as S, U as C, W as w, Z as T, at as E, et as D, it as O, nt as k, o as A, q as j, rt as M, s as N, t as P, tt as F } from "./home-DjR_-Gv6.js";
+import { Bt as i, F as a, Ht as o, P as s, Pt as c, S as l, b as u, ct as d, et as f, m as p, mt as m, ot as h, t as g, x as _, y as v } from "./live-C8Ncs3qj.js";
+import { $ as y, B as b, K as x, Q as S, U as C, W as w, Z as T, at as E, et as D, it as O, nt as k, o as A, q as j, rt as M, s as N, t as P, tt as F } from "./home-CwC_gHhP.js";
 //#region src/reolink-viewer-panel.ts
 var I = {
 	live: "Live",
@@ -61,7 +61,7 @@ var I = {
 		});
 	}
 	connectedCallback() {
-		super.connectedCallback(), h(import.meta.url), this._route = this._start(x(window.location.hash)), window.addEventListener("hashchange", this._onHashChange), this._tick();
+		super.connectedCallback(), g(import.meta.url), this._route = this._start(x(window.location.hash)), window.addEventListener("hashchange", this._onHashChange), this._tick();
 	}
 	disconnectedCallback() {
 		super.disconnectedCallback(), window.removeEventListener("hashchange", this._onHashChange), clearTimeout(this._toastTimer), clearTimeout(this._clockTimer), this._run?.cancel(), this._run = void 0;
@@ -80,7 +80,7 @@ var I = {
 		}
 	}
 	updated(e) {
-		if (e.has("hass") && this.hass && !this._devices && !this._loading && (this._load(), m(this.hass).catch(() => void 0)), e.get("_route") !== void 0 && !this.shadowRoot?.activeElement) {
+		if (e.has("hass") && this.hass && !this._devices && !this._loading && (this._load(), h(this.hass).catch(() => void 0)), e.get("_route") !== void 0 && !this.shadowRoot?.activeElement) {
 			let e = document.activeElement;
 			(!e || e === document.body) && this.shadowRoot?.querySelector("main")?.focus({ preventScroll: !0 });
 		}
@@ -110,9 +110,9 @@ var I = {
 		if (this.hass) {
 			this._loading = !0;
 			try {
-				this._devices = await c(this.hass), this._loadError = void 0, !this._board.length && !this._devices.degraded && u(this.hass).then(({ cameras: e }) => {
+				this._devices = await d(this.hass), this._loadError = void 0, !this._board.length && !this._devices.degraded && m(this.hass).then(({ cameras: e }) => {
 					this._board.length || (this._board = b(e));
-				}).catch(() => void 0), !this._warmed && !this._devices.degraded && (this._warmed = !0, v(this.hass).catch(() => void 0));
+				}).catch(() => void 0), !this._warmed && !this._devices.degraded && (this._warmed = !0, o(this.hass).catch(() => void 0));
 			} catch (e) {
 				this._loadError = i(e).message;
 			} finally {
@@ -135,7 +135,7 @@ var I = {
           ${this._renderTab("Devices", { view: "list" }, e.view !== "live" && e.view !== "events")}
         </nav>
         <time class="clock" aria-label="Time">
-          ${l(this._now, this.hass?.config?.time_zone)}
+          ${p(this._now, this.hass?.config?.time_zone)}
         </time>
       </header>
       <main
@@ -147,7 +147,7 @@ var I = {
             <span>${this._toast.message}</span>
             <button class="dismiss" aria-label="Dismiss" @click=${() => {
 			this._toast = void 0;
-		}}>${o("close")}</button>
+		}}>${f("close")}</button>
           </div>` : t}
     `;
 	}
@@ -210,7 +210,7 @@ var I = {
 			case "list": return n`<div class="heading">
             <h1>Devices</h1>
             <button class="text with-icon" @click=${() => void this._load()} ?disabled=${this._loading}>
-              ${o("refresh")}Refresh
+              ${f("refresh")}Refresh
             </button>
           </div>
           ${this._renderBanner()}
@@ -225,7 +225,7 @@ var I = {
 		return n`<div>
       <button class="text with-icon back" @click=${() => {
 			this.navigate({ view: "list" });
-		}}>${o("back")}All devices</button>
+		}}>${f("back")}All devices</button>
     </div>`;
 	}
 	_renderBanner() {
@@ -247,7 +247,7 @@ var I = {
       <p>${e.advice}</p>
       <div class="actions">
         <button class="check" @click=${() => void this._load()} ?disabled=${this._loading}>
-          ${o("refresh")}${this._loading ? "Checking…" : "Check again"}
+          ${f("refresh")}${this._loading ? "Checking…" : "Check again"}
         </button>
         ${y(e.kind)}
       </div>
@@ -267,7 +267,7 @@ var I = {
 		}}
       >
         <span class="what"><span class="name">${e}</span><span class="muted">${t}</span></span>
-        ${o("chevron")}
+        ${f("chevron")}
       </button>
     </li>`;
 		return n`<section class="card">
@@ -286,7 +286,7 @@ var I = {
 	}
 	_renderThisDevice() {
 		let e = (e, t, r) => {
-			let i = d({
+			let i = v({
 				where: e,
 				why: ""
 			}).hd;
@@ -296,7 +296,7 @@ var I = {
           <select
             aria-label=${t}
             @change=${(t) => {
-				g(e, t.target.value === "hd"), this.requestUpdate();
+				_(e, t.target.value === "hd"), this.requestUpdate();
 			}}
           >
             <option value="hd" ?selected=${i}>${r[0]}</option>
@@ -314,9 +314,9 @@ var I = {
         <label class="option">
           <input
             type="checkbox"
-            .checked=${s()}
+            .checked=${u()}
             @change=${(e) => {
-			_(e.target.checked), this.requestUpdate();
+			l(e.target.checked), this.requestUpdate();
 		}}
           />
           <span
@@ -331,7 +331,7 @@ var I = {
 		let e = (e, t, r) => n`<li>
       <a class="row" href=${F(r)} target="_blank" rel="noopener noreferrer">
         <span class="what"><span class="name">${e}</span><span class="muted">${t}</span></span>
-        ${o("external")}
+        ${f("external")}
       </a>
     </li>`;
 		return n`<section class="card">
@@ -616,7 +616,7 @@ var I = {
           <p class="now">Testing your cameras… this can take several minutes with an NVR.</p>
           ${e.log.length ? n`<p class="muted small">Now: ${e.log.at(-1)}</p>` : t}
           <details>
-            <summary class="small">Every step so far${o("chevronDown")}</summary>
+            <summary class="small">Every step so far${f("chevronDown")}</summary>
             <ol class="log">
               ${e.log.map((e) => n`<li>${e}</li>`)}
             </ol>
@@ -639,7 +639,7 @@ var I = {
             </button>
           </div>
           <details>
-            <summary class="small">Show what is in the file${o("chevronDown")}</summary>
+            <summary class="small">Show what is in the file${f("chevronDown")}</summary>
             <pre class="report">${JSON.stringify(e.report, null, 2)}</pre>
           </details>
         </div>`;
@@ -653,7 +653,7 @@ var I = {
 			started: Date.now(),
 			log: e
 		};
-		let t = p(this.hass, {
+		let t = c(this.hass, {
 			include_battery: this._includeBattery,
 			concurrency_test: this._concurrency,
 			max_streams: this._maxStreams,
@@ -707,7 +707,7 @@ var I = {
 	}
 	static styles = [
 		a,
-		f,
+		s,
 		e`
       :host {
         display: flex;

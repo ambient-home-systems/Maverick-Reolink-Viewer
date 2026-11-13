@@ -1108,6 +1108,38 @@ describe("a large Wall tile in HD (Phase 9 step 3)", () => {
     expect(hd()?.ref.spare).toBe(true);
   });
 
+  it("zooms into the picture in full screen only, from the keyboard anywhere, and forgets it on the way out (Phase 11 step 1)", async () => {
+    const tile = await mountTile({ hd: false, reason: "" });
+    const key = (k: string) => document.dispatchEvent(new KeyboardEvent("keydown", { key: k, bubbles: true }));
+    const why = () => tile.shadowRoot?.querySelector(".hd-status .small")?.textContent ?? null;
+    // On the board: the keys are the page's.
+    key("+");
+    await settle(tile);
+    expect(tile.shadowRoot?.querySelector(".zoom-pill")).toBeNull();
+    tile.enterFull();
+    await settle(tile);
+    expect(why()).toBe("HD starting…");
+    key("+");
+    key("+");
+    await settle(tile);
+    const pill = tile.shadowRoot?.querySelector(".zoom-pill");
+    expect(pill?.textContent).toContain("1.6×");
+    // What HD is doing, a line that may wrap down into the pill, waits for the zoom's end.
+    expect(why()).toBeNull();
+    // The picture's layer moves; what the tile says over it does not.
+    expect(tile.shadowRoot?.querySelector<HTMLElement>(".zoom")?.style.transform).toContain("scale(1.5625)");
+    key("0");
+    await settle(tile);
+    expect(tile.shadowRoot?.querySelector(".zoom-pill")).toBeNull();
+    expect(why()).toBe("HD starting…");
+    key("+");
+    await settle(tile);
+    tile.exitFull();
+    await settle(tile);
+    expect(tile.shadowRoot?.querySelector<HTMLElement>(".zoom")?.style.transform).toBe("");
+    tile.remove();
+  });
+
   it("full screen keeps its HD, no longer spare; SD here when chosen on this device", async () => {
     const tile = await mountTile({ hd: true, reason: "HD: the large slot" });
     hd()?.setState({ kind: "playing", transport: "WebRTC", result: { ok: true, steps: {} } });

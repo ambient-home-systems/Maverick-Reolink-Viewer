@@ -185,6 +185,9 @@ Each tile has small buttons, bottom right:
 
 Press **Esc**, or the full-screen button again, to leave full screen.
 
+**Zoom in** on any part of the picture in full screen, as on a recording (see
+[Zoom into the picture](#zoom-into-the-picture)).
+
 ### The camera's controls
 
 On a camera's **Live** tab and in full screen, the camera's own controls sit over its
@@ -376,8 +379,10 @@ against what the camera has learned. When it is unusual:
   camera's), `camera` (its name), `kind`, `score`, `line`, `reason` (the sentence) and
   `start`.
 - **Once per visit:** after it fires, more of the same kind on that camera stay quiet
-  until 30 minutes pass without one there. An animal wandering the yard for two hours
-  is one notification, not thirty. The timetable still marks each that stands out.
+  until 30 minutes pass without one there, and so does the same kind on another camera
+  within 5 minutes of the last. An animal wandering the yard for two hours is one
+  notification, not thirty; a visitor walking from the front to the back yard is one.
+  A press of the doorbell is its own. The timetable still marks each that stands out.
 - **"<Camera> unusual activity"**, a sensor per camera on the **Reolink Viewer** device
   (Settings → Devices & services → Reolink Viewer), turns on until 30 s after the
   detection ends. Its attributes hold the last mark's kind and reason.
@@ -478,6 +483,23 @@ The camera's recordings, from its NVR or its own SD card.
   recording, the next one plays by itself.
 - **SD / HD**: switch quality; playback carries on from the same moment. HD may take
   a few seconds to start: the recorder sends the full-quality recording first.
+
+#### Zoom into the picture
+
+On a recording, and on a camera in full screen, you can zoom in on part of the picture:
+a number plate, a face at the door.
+
+- **On a phone or tablet:** pinch to zoom, and drag with one finger or two to move
+  around. **Double-tap** to zoom in there, and again to come back out.
+- **On a computer:** pinch on a trackpad, or hold **Ctrl** (or **⌘** on a Mac) and turn
+  the mouse wheel. Once zoomed, scrolling moves around the picture, and dragging moves it
+  too. Not zoomed, scrolling over the picture scrolls the page, as anywhere else.
+- **From the keyboard:** **+** and **−** zoom, **0** goes back.
+
+It zooms up to 8×, and never past the picture's edges into the black around it. While
+zoomed, a pill at the top shows how far, with **Reset**. On a recording, the video's own
+controls hide while zoomed (they would be zoomed too): **Reset** brings them back.
+Dragging along the timeline while zoomed shows the same part of each picture.
 - **Speed**: from half speed to 8 times.
 - The buttons under the timeline (**Person 6**, **Vehicle 3**, …) show only those
   events, with how many there were.
@@ -685,6 +707,8 @@ a phone's browser. On a narrow screen:
 - the board shows two cameras per row, and today's events stack under it;
 - on the **Playback** timeline, **drag** it to move through the day, and **pinch** to
   zoom in on a moment;
+- on a recording, or a camera in full screen, **pinch** the picture to zoom in on it,
+  and **double-tap** to zoom in or back out;
 - **picture in picture** keeps a camera or recording playing over your other apps;
 - away from home or on mobile data, full screen starts in the lighter SD; tap **HD**
   for full quality.
@@ -703,6 +727,8 @@ Everything works from the keyboard, and with a screen reader.
 - **A camera's tabs**: **←** and **→** move between Overview, Live, Playback and
   Settings.
 - **Esc** leaves full screen and closes questions such as the siren's.
+- **The picture** (a recording, or a camera in full screen): **+** and **−** zoom into
+  it, **0** goes back.
 
 When your device asks for less motion, the panel stops its fades and movement.
 

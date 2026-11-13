@@ -1,5 +1,5 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
-import { Dt as i, Et as a, F as o, I as s, L as c, Lt as l, P as u, R as d, Z as f, bt as ee, c as p, d as m, j as h, l as te, wt as ne, yt as re, z as ie } from "./live-DbkkZT-0.js";
+import { At as i, B as a, Bt as o, Ct as s, Dt as c, H as l, L as u, P as d, R as f, St as ee, V as p, d as te, et as m, f as ne, kt as re, m as h, z as ie } from "./live-C8Ncs3qj.js";
 //#region src/integration.ts
 function ae(e) {
 	if (e?.degraded) return e.compat.ok ? !e.hosts.length && !e.cameras.length ? {
@@ -59,7 +59,7 @@ function g(e, t) {
 }
 //#endregion
 //#region src/version.ts
-var _ = "0.63.15", le = "https://github.com/ambient-home-systems/Maverick-Reolink-Viewer", ue = {
+var _ = "0.64.0", le = "https://github.com/ambient-home-systems/Maverick-Reolink-Viewer", ue = {
 	guide: ["user-guide"],
 	troubleshooting: ["troubleshooting"],
 	cameras: ["cameras"],
@@ -88,7 +88,7 @@ function y(e, r, i = {}) {
 }
 function de(e, t = "More help") {
 	return n`<a class="help-link" href=${v(e)} target="_blank" rel="noopener noreferrer"
-    >${t}${f("external")}</a
+    >${t}${m("external")}</a
   >`;
 }
 //#endregion
@@ -190,7 +190,7 @@ var D = 8, ye = "rv-board", be = class extends r {
 		_width: { state: !0 },
 		_live: { state: !0 }
 	};
-	_data = new o(this);
+	_data = new f(this);
 	_resize;
 	_announced;
 	constructor() {
@@ -238,7 +238,7 @@ var D = 8, ye = "rv-board", be = class extends r {
 		return n`<div class="head">
         <h1>Live</h1>
         ${r?.length ? n`<p class="count">
-              ${xe(r, this._live, r.filter((e) => ie(this.hass, d(e)) !== void 0).length)}
+              ${xe(r, this._live, r.filter((e) => l(this.hass, p(e)) !== void 0).length)}
             </p>` : t}
         ${r?.length ? n`<button
               class="text with-icon wall"
@@ -246,12 +246,12 @@ var D = 8, ye = "rv-board", be = class extends r {
 			C("wall"), E(this, { view: "wall" });
 		}}
             >
-              ${f("enterFull")}Wall
+              ${m("enterFull")}Wall
             </button>` : t}
         ${i && r?.length ? n`<button class="text with-icon full" @click=${() => {
 			this._toggleBoardFull();
 		}}>
-              ${f(this._boardFull ? "exitFull" : "enterFull")}${this._boardFull ? "Exit full screen" : "Full screen"}
+              ${m(this._boardFull ? "exitFull" : "enterFull")}${this._boardFull ? "Exit full screen" : "Full screen"}
             </button>` : t}
       </div>
       ${e.error ? y(g(e.error, "Live view"), e.error, {
@@ -267,10 +267,10 @@ var D = 8, ye = "rv-board", be = class extends r {
       ${r === void 0 ? e.error ? t : n`<p class="note">Loading…</p>` : r.length === 0 ? n`<p class="note">No camera can be watched live.</p>` : this._renderGrid(r)}`;
 	}
 	_renderGrid(e) {
-		let t = this._data, r = k(e), i = r.map((e) => A(d(e))), a = i.reduce((e, t) => e + (t ? 2 : 1), 0), o = this._width, s = Math.max(2, Math.min(o >= 1100 ? 5 : o >= 800 ? 4 : o >= 540 ? 3 : 2, a)), l = o ? (o - (s - 1) * D) / s : 0, f = 9 / 16 * l;
+		let t = this._data, r = k(e), i = r.map((e) => A(p(e))), o = i.reduce((e, t) => e + (t ? 2 : 1), 0), s = this._width, c = Math.max(2, Math.min(s >= 1100 ? 5 : s >= 800 ? 4 : s >= 540 ? 3 : 2, o)), l = s ? (s - (c - 1) * D) / c : 0, d = 9 / 16 * l;
 		return n`<div
       class="grid"
-      style=${`--cols: ${s}; --row: ${f ? `${f.toFixed(1)}px` : "auto"}`}
+      style=${`--cols: ${c}; --row: ${d ? `${d.toFixed(1)}px` : "auto"}`}
       @rv-live-open=${(e) => {
 			E(this, {
 				view: "device",
@@ -292,21 +292,21 @@ var D = 8, ye = "rv-board", be = class extends r {
       ${r.map((e, r) => n`<rv-live-tile
             class=${i[r] ?? ""}
             fill
-            .fit=${Se(d(e), i[r], l)}
+            .fit=${Se(p(e), i[r], l)}
             .number=${r + 1}
             .hass=${this.hass}
             .camera=${e}
-            .connection=${d(e)}
+            .connection=${p(e)}
             .image=${t.images[e.id]}
             .iceServers=${t.iceServers}
-            .warm=${c(this.hass, e)}
+            .warm=${a(this.hass, e)}
             .suspended=${this._full !== void 0 && this._full !== e.id}
             .controls=${e.controls}
             openable
           ></rv-live-tile>`)}
     </div>`;
 	}
-	static styles = [h, e`
+	static styles = [d, e`
       :host {
         display: block;
         padding: 16px 24px 28px;
@@ -377,7 +377,7 @@ function O(e) {
 	}));
 }
 function k(e) {
-	let t = e.filter((e) => A(d(e)) === "tall");
+	let t = e.filter((e) => A(p(e)) === "tall");
 	return [...t, ...e.filter((e) => !t.includes(e))];
 }
 function Se(e, t, n) {
@@ -403,7 +403,7 @@ var Ce = class extends r {
 		deviceId: { attribute: !1 },
 		_error: { state: !0 }
 	};
-	_data = new o(this);
+	_data = new f(this);
 	willUpdate() {
 		this._data.hass = this.hass;
 	}
@@ -420,15 +420,15 @@ var Ce = class extends r {
         </button>
       </div>`;
 		if (!e.cameras) return n`<p class="muted">Loading…</p>`;
-		let t = s(e.cameras, this.deviceId);
+		let t = ie(e.cameras, this.deviceId);
 		return t ? n`<div class="board">
         <rv-live-tile
           .hass=${this.hass}
           .camera=${t}
-          .connection=${d(t)}
+          .connection=${p(t)}
           .image=${e.images[t.id]}
           .iceServers=${e.iceServers}
-          .warm=${c(this.hass, t)}
+          .warm=${a(this.hass, t)}
           .controls=${t.controls}
         ></rv-live-tile>
       </div>
@@ -448,7 +448,7 @@ var Ce = class extends r {
         @change=${(e) => {
 			let t = e.target.checked;
 			this.hass?.callService("switch", t ? "turn_on" : "turn_off", { entity_id: r }).catch((e) => {
-				this._error = l(e).message;
+				this._error = o(e).message;
 			});
 		}}
       />
@@ -462,7 +462,7 @@ var Ce = class extends r {
     </label>
     ${this._error ? n`<div class="banner error" role="alert">Could not change it: ${this._error}</div>` : t}`;
 	}
-	static styles = [h, e`
+	static styles = [d, e`
       :host {
         display: flex;
         flex-direction: column;
@@ -797,7 +797,7 @@ var Je = 4, Ye = class extends r {
 		})}
       </ul>` : t;
 	}
-	static styles = [h, e`
+	static styles = [d, e`
       :host {
         display: block;
       }
@@ -916,7 +916,7 @@ var Xe = 12e4, Ze = 3600, Qe = 10, $e = "rv-timetable-feed", et = "rv-timetable-
 		}, 6e4 - this._now % 6e4 + 50);
 	}
 	get _isToday() {
-		return this.date === void 0 || this.date === p(this._now, this.hass?.config?.time_zone);
+		return this.date === void 0 || this.date === te(this._now, this.hass?.config?.time_zone);
 	}
 	willUpdate(e) {
 		e.has("date") && e.get("date") !== void 0 && (this._feed = void 0, this._marks = void 0, this._error = void 0, this._all = !1, this._newestBefore = void 0);
@@ -930,19 +930,19 @@ var Xe = 12e4, Ze = 3600, Qe = 10, $e = "rv-timetable-feed", et = "rv-timetable-
 		if (!t) return;
 		let n = ++this._seq, r = this.date;
 		try {
-			let i = await re(t, {
+			let i = await ee(t, {
 				...r === void 0 ? {} : { date: r },
 				...e ? { background: e } : { maxAge: Ze }
 			});
 			if (n !== this._seq || r !== this.date) return;
 			this._newestBefore = e ? this._feed?.events[0]?.start : void 0, this._feed = i, this._error = void 0, this.dispatchEvent(new CustomEvent($e, { detail: { feed: i } })), this._loadMarks(t, i, n), this._loadThumbs();
 		} catch (e) {
-			n === this._seq && (this._error = l(e).message);
+			n === this._seq && (this._error = o(e).message);
 		}
 	}
 	async _loadMarks(e, t, n) {
 		try {
-			let r = e.config?.time_zone, [i, a] = te(this.date ?? p(t.now, r), r), o = await ne(e, i, a);
+			let r = e.config?.time_zone, [i, a] = ne(this.date ?? te(t.now, r), r), o = await c(e, i, a);
 			if (n !== this._seq) return;
 			this._marks = q(t.events, o.marks, i, a), this.dispatchEvent(new CustomEvent(et, { detail: { marks: o } }));
 		} catch {}
@@ -972,7 +972,7 @@ var Xe = 12e4, Ze = 3600, Qe = 10, $e = "rv-timetable-feed", et = "rv-timetable-
 		}
 		await Promise.all([...t].map(async ([t, n]) => {
 			try {
-				let { urls: r } = await ee(e, t, n, Qe), i = new Map(this._thumbs);
+				let { urls: r } = await s(e, t, n, Qe), i = new Map(this._thumbs);
 				r.forEach((e, r) => i.set(`${t}:${String(n[r] ?? e.time)}`, e.url)), this._thumbs = i;
 			} catch {}
 		}));
@@ -1007,9 +1007,9 @@ var Xe = 12e4, Ze = 3600, Qe = 10, $e = "rv-timetable-feed", et = "rv-timetable-
 				}))
 			};
 			try {
-				await a(e);
+				await re(e);
 			} catch (e) {
-				this._error = l(e).message;
+				this._error = o(e).message;
 			}
 		}
 	}
@@ -1032,7 +1032,7 @@ var Xe = 12e4, Ze = 3600, Qe = 10, $e = "rv-timetable-feed", et = "rv-timetable-
 			E(this, { view: "events" });
 		}}
             >
-              All events${f("chevron")}
+              All events${m("chevron")}
             </button>` : t}
       </div>
       ${this.filters && e ? this._renderPick(e) : t}
@@ -1066,7 +1066,7 @@ var Xe = 12e4, Ze = 3600, Qe = 10, $e = "rv-timetable-feed", et = "rv-timetable-
         ><span class="right">Length</span><span></span>
       </div>
       ${s ? n`<div class="now">
-            <b>${m(this._now, r)} now</b>
+            <b>${h(this._now, r)} now</b>
           </div>` : t}
       ${i.length ? n`<ol class="rows">
             ${this._shown.map((e) => this._renderRow(e, a.get(e.camera_id), r))}
@@ -1084,7 +1084,7 @@ var Xe = 12e4, Ze = 3600, Qe = 10, $e = "rv-timetable-feed", et = "rv-timetable-
           </p>` : t}`;
 	}
 	_renderRow(e, r, i) {
-		let a = X(e.types), o = m(e.start, i), s = r?.name ?? "Camera", c = this._thumbs.get(J(e)), l = this._newestBefore !== void 0 && e.start > this._newestBefore, u = this._markOf(e);
+		let a = X(e.types), o = h(e.start, i), s = r?.name ?? "Camera", c = this._thumbs.get(J(e)), l = this._newestBefore !== void 0 && e.start > this._newestBefore, u = this._markOf(e);
 		return n`<li class=${l ? "arrived" : ""}>
       <button
         class="row ${e.new ? "new" : ""}"
@@ -1094,7 +1094,7 @@ var Xe = 12e4, Ze = 3600, Qe = 10, $e = "rv-timetable-feed", et = "rv-timetable-
       >
         <span class="t">${o}</span>
         <span class="ev">
-          ${f(Z(e.types))}<span>${a}</span>${e.new ? n`<span class="tag">New</span>` : t}${u ? n`<span class="badge unusual">Unusual</span>` : t}
+          ${m(Z(e.types))}<span>${a}</span>${e.new ? n`<span class="tag">New</span>` : t}${u ? n`<span class="badge unusual">Unusual</span>` : t}
         </span>
         <span class="cam"
           >${Y(r)}<span class="name">${s}</span></span
@@ -1109,7 +1109,7 @@ var Xe = 12e4, Ze = 3600, Qe = 10, $e = "rv-timetable-feed", et = "rv-timetable-
         >
       </button>
       ${u ? n`<details class="why">
-            <summary>Why it is unusual${f("chevronDown")}</summary>
+            <summary>Why it is unusual${m("chevronDown")}</summary>
             <rv-unusual-reason .mark=${u}></rv-unusual-reason>
             ${e.journal ? n`<p class="muted small">
                   Seen by Home Assistant's sensors; the camera's own events do
@@ -1118,7 +1118,7 @@ var Xe = 12e4, Ze = 3600, Qe = 10, $e = "rv-timetable-feed", et = "rv-timetable-
           </details>` : t}
     </li>`;
 	}
-	static styles = [h, e`
+	static styles = [d, e`
       :host {
         display: block;
         padding: 18px 24px 40px;
@@ -1500,13 +1500,13 @@ function ut(e) {
 //#endregion
 //#region src/views.ts
 var dt = {
-	events: () => import("./events-view-DHUdxE3m.js"),
-	list: () => import("./device-list-C4RPr_WU.js"),
-	device: () => import("./device-page-DkDpw6l1.js"),
-	"live-check": () => import("./live-check-XiF3faud.js"),
-	soak: () => import("./live-soak-CMmD0BNQ.js"),
-	cards: () => import("./card-report-C5tVL-bc.js"),
-	wall: () => import("./wall-DtJvjsOP.js")
+	events: () => import("./events-view-C73wHUp6.js"),
+	list: () => import("./device-list-DCK596RV.js"),
+	device: () => import("./device-page-CFMRDW6L.js"),
+	"live-check": () => import("./live-check-Cj8i5USc.js"),
+	soak: () => import("./live-soak-B7_HIemb.js"),
+	cards: () => import("./card-report-CxJtbFuB.js"),
+	wall: () => import("./wall-dMQ8UfzO.js")
 }, $ = /* @__PURE__ */ new Map();
 function ft(e) {
 	let t = dt[e];

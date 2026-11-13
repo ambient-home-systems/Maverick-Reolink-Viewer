@@ -26,8 +26,8 @@ put on it:
 | 7 | Live video on dashboards: a Reolink Viewer camera card | Standard | 1–1.5 wk | **Done** (2026-11-03, v0.45.2), closed on daily use by the owner. **Step 1 done** (v0.44.0): the Reolink camera card, `custom:reolink-viewer-camera`, with its editor, on any dashboard and for any user. The owner's check (2026-11-02): on the wall tablet (Galaxy Tab A9+, Fully Kiosk, a sections view) and the iPhone app's dashboard, the Doorbell's and the front-yard camera's cards show their picture at once and their video quickly, kept warm or not, and go full screen in HD and back. **Step 2 built** (v0.45.0): what the cards see is logged per device (Devices → Dashboard cards), they sleep while Fully Kiosk's screen is off or its screensaver on, and a doorbell's card can wake the screen and go full screen when it rings. **Step 2 done** (2026-11-03, v0.45.2): on the owner's tablet the cards sleep under Fully's screensaver (no frames decoded) and a ring wakes the screen and shows the Doorbell full screen, playing in 0.6 s (v0.45.1 fills the window from the top layer). Step 3 stays gated. Not measured: a warm camera's wake time and 8 visible hours; the wall page's cards are the owner's choice. See "Phase 7" |
 | 8 | Unusual events: learning what is normal | High | 2–3 wk, then a week of learning | **Started** (2026-11-03). **Step 1 built** (v0.46.0): the detection journal, opt-in ("Learn what is normal"), with a 10-day head start from Home Assistant's recorder; on at the owner's since 2026-11-02, all 7 cameras. v0.46.1 keeps motion as bursts and a year of history (the owner's choices, from the first 10 days' sizes). **Step 2 built** (v0.47.0): Stamina's model, ported with its tests (MIT, in `THIRD_PARTY.md`), with a daily cap for a busy property; the Devices page shows each camera's state and the week's marks with their sentences. The owner's check: 3.6 marks a day at Balanced (243 a week without the cap). v0.47.1, the owner's choices: motion never marked, time counted once, one mark per incident across cameras; 5.1 a day, the journal 1.1 MB (about 2.8 MB a month). v0.47.2: only long stands out, a kind seen 10 times is known, only detections fire first; 5.3 a day. v0.47.3: an incident's later events take what fired before it; a mark always says why; the model saved between restarts; 5.3 a day, 39 without the cap. v0.47.4: anything seen 10 times is known, only "nothing fired first" raises; 1.4 a day, all rare by count. v0.47.5: Balanced aims at a few a day (floor 0, at most 3 a day), More knows a value after 20. **Step 3 built** (v0.48.0–v0.49.0), the owner's choice: marks on the timetable's rows with why, and an Unusual filter on Events (v0.48.0; the owner's check: 2.6 a day at Balanced); "What it has learned" on each camera's Overview, and a mark's count as a total (v0.49.0). **House-wide signals built** (v0.50.0): chosen in the options, kept beside the detections, learned and said. **Step 4 built** (v0.51.0): each detection scored as it begins and ends; `reolink_viewer_unusual`, an "unusual activity" sensor per camera, and a device trigger per camera, on Reolink Viewer's own device. See "Phase 8" |
 | 9 | The Wall: the Live page as a security monitor, with layouts, arranging, HD large tiles and the detection strip | Standard / High | 2–3 wk | **Done** (2026-11-10, v0.56.0): the owner validated v0.55.0's and v0.56.0's checklists. Started 2026-11-05. **Step 1 built** (v0.52.0): the Wall, its layouts (Auto by shape, 1, 2×2, 3×3, 4×4, 1+5, 1+7), saved per user on the server, `#wall/<id>`, each device remembering board or Wall; the owner's check: it works, nothing to scroll. **Step 2 built** (v0.53.0): swapping (drag, or Arrange and two taps), the large slot or alone by a double tap or Enter, the keyboard, pages and tours. **Step 3 built** (v0.54.0–v0.54.1): HD in the large tiles while a stream slot is spare, the NVR's budget 9 streams with 2 HD tiles (the capacity test). **Step 4 built** (v0.55.0): the detection strip, a tile lit at once by its sensor, and per layout the feeds' floodlight and siren buttons. **Step 5 built** (v0.56.0): the pointer hidden when still, the screen kept awake, the tiles asleep under Fully's screen off, and the Reolink Wall dashboard card. The owner's checks of v0.55.0 and v0.56.0 passed (2026-11-10): the phase is done. See "Phase 9" |
-| 10 | Scrubbing that shows the picture while dragging | Very high | 2–4 wk | **Started** (2026-11-10). **Step 0 built** (v0.57.0): the gate's measurements, the probe's scrub cuts and key frames, and the playback check's K row (key frames decoded one at a time); the owner's runs passed it (2026-11-10). **Step 1 built** (v0.58.0): the picture at a moment, from the server: a scrub session (a signed websocket), answered from a store of key frames found, the disk cache or a 2-second cut the device sends, taking its channel's turn; the playback check's F row. **Step 2 built** (v0.59.0): dragging over what the video has not buffered shows the server's key frame at the pointer, over the video, until release plays from there. **Step 4 built** (v0.60.0, the owner's ask): the playback check's P row replaces the hand checklist. **Step 3 built** (v0.62.0): a drag pauses the video, the server answers each picture before its cut's drain, and a release plays from the picture shown; the P row drags slowly alone and beside a second viewer. The owner's runs of v0.62.0 passed it on Front Yard Right and Garage (alone, a picture every 0.05–0.06 s; beside a second viewer, no stall); v0.62.1 follows from them. See "Phase 10" |
-| 11 | Playback and settings extras: zoom, event clips, filters, copying settings | Standard | 1–2 wk | Planned. See "Phase 11" |
+| 10 | Scrubbing that shows the picture while dragging | Very high | 2–4 wk | **Done** (2026-11-13, v0.63.15): the owner's playback checks passed on every device, Chrome and Safari on the Mac, the iPhone app and the wall tablet (v0.63.10 made MSE painting show a lone key frame, for Chrome on plain HTTP and the tablet). Started 2026-11-10. **Step 0 built** (v0.57.0): the gate's measurements, the probe's scrub cuts and key frames, and the playback check's K row (key frames decoded one at a time); the owner's runs passed it (2026-11-10). **Step 1 built** (v0.58.0): the picture at a moment, from the server: a scrub session (a signed websocket), answered from a store of key frames found, the disk cache or a 2-second cut the device sends, taking its channel's turn; the playback check's F row. **Step 2 built** (v0.59.0): dragging over what the video has not buffered shows the server's key frame at the pointer, over the video, until release plays from there. **Step 4 built** (v0.60.0, the owner's ask): the playback check's P row replaces the hand checklist. **Step 3 built** (v0.62.0): a drag pauses the video, the server answers each picture before its cut's drain, and a release plays from the picture shown; the P row drags slowly alone and beside a second viewer. The owner's runs of v0.62.0 passed it on Front Yard Right and Garage (alone, a picture every 0.05–0.06 s; beside a second viewer, no stall); v0.62.1 follows from them. See "Phase 10" |
+| 11 | Playback and settings extras: zoom, event clips, filters, copying settings | Standard | 1–2 wk | **Started** (2026-11-13). **Step 1 built** (v0.64.0): zoom into the picture, on a recording and in live full screen. See "Phase 11" |
 | 12 | Optional R&D: the Doorbell's recordings and talk | Very high | 3–5 wk, gated | Planned. See "Phase 12" |
 | 13 | Optional: live picture integrity and outside live sources | High | 1–1.5 wk, gated | Planned. See "Phase 13" |
 | 14 | Copies of detection clips on a NAS or cloud | High | — | **TBD** (the owner, 2026-11-02): may be built here later; sketched, not scheduled. See "Phase 14" |
@@ -7036,7 +7036,7 @@ download cut, then the thumbnail.
 | 1. Key frames from the server | Built (v0.58.0–v0.58.1). **Passed on every device** (2026-11-10 on desktop Chrome; 2026-11-12 on the iPhone app over Tailscale and the wall tablet on the LAN) |
 | 2. Painting while dragging | Built (v0.59.0; v0.60.0 answers a drag's asks, which 0.59.0 never did; v0.63.10 makes MSE painting show a lone key frame). **Passed on every device** (2026-11-12, the P row): Chrome on the Mac through Nabu Casa (WebCodecs) and on the LAN (MSE), the iPhone app (WebCodecs: a picture every 0.1–0.2 s), the wall tablet (MSE: every 0.05 s) |
 | 3. Press and release | Built (v0.62.0, see "Step 10.3: press and release"); release is ✓ on every device |
-| 4. The checks | The playback check's P row built (v0.60.0, the owner's ask: "add automated validation for all these checks"); the CI drag check (`scrub_check.cjs` against a fake key-frame endpoint) not yet |
+| 4. The checks | The playback check's P row built (v0.60.0, the owner's ask: "add automated validation for all these checks"). In CI: `scrub_check.cjs` (long tasks while dragging the preview) and, since v0.63.10, `tests/mse_paint.cjs` (the MSE painter in a real browser, on a stream whose decoder holds frames). A drag against a fake key-frame endpoint in CI was not built: the P row on the hardware covers it |
 | 5. Optional: storyboards | Not started; only if step 0's gate fails |
 
 #### Step 10.0: measure first (the gate)
@@ -8285,6 +8285,22 @@ month's days (`timeline/days`) once a run, joined with the tab's list (the
 tab's list alone if the server cannot say). A2/A3, D's `_findLong` and R's
 `_rateRecording` use it.
 
+
+**The owner's learning check (2026-11-13, 11:01 AM, run by their Claude through
+the websocket):** nothing failed. The 6 marks that did not fire and all 38
+unmarked alerts came before `built_at` (10:43 AM, the model learned again
+when Home Assistant restarted): notes. No night has passed since v0.63.14
+went in. Since then there were 4 alerts, each on another camera; three were
+one visitor at 8:16: a person on Front Yard Right, the doorbell 14 s on, and
+a person on Back Yard 4 min on.
+
+**v0.64.0, from it:** an unusual detection of the same kind on any camera
+within `KIND_VISIT_S` (5 min) of the last said or kept quiet is the same
+visit: kept quiet. A detection in the same incident (1 min) still lights its
+camera's sensor as before. The visitor would have been 2 alerts, the person
+and the doorbell. Also in v0.64.0: Phase 11 step 1 (zoom into the picture),
+and Phase 10 closed.
+
 #### Step 10.4: the checks
 
 - **In CI:** `scrub_check.cjs` drags against a fake key-frame endpoint,
@@ -8449,7 +8465,7 @@ Goal: smaller things found in the review of Stamina and reostream (PLAN.md
 
 | Step | Status |
 | --- | --- |
-| 1. Zoom into the picture | Not started |
+| 1. Zoom into the picture | Built (v0.64.0), see "As built" below |
 | 2. Save this event | Not started |
 | 3. Filters that start useful | Not started |
 | 4. Copy settings to other cameras | Not started |
@@ -8468,6 +8484,73 @@ Goal: smaller things found in the review of Stamina and reostream (PLAN.md
   - a pill shows the zoom level, with a reset.
 - **Why it has to be ours:** HA's `user-scalable=no` stops the browser's own
   pinch.
+
+**As built (v0.64.0):**
+
+- **`zoom.ts`:** `ZoomController`, a Lit controller, with pure `clampZoom`,
+  `zoomAt` and `pictureRect` under it. The host binds the surface that takes
+  the gestures and the layer that moves. The transform is set directly as a
+  gesture moves, and the host updates for the pill.
+  - **Touch:** a pinch about the fingers' midpoint (two fingers also pan);
+    one finger pans while zoomed; a double tap zooms to 2.5× there, or back
+    out. A mouse's double click is left to the video.
+  - **Wheel:** Ctrl or ⌘ zooms about the pointer: a trackpad's pinch (Chrome,
+    Edge and Firefox send it so) in proportion, and a mouse's notch one step
+    (`wheelFactor`: a pixel delta capped at 100·ln 1.25, or a line or page
+    delta). Zoomed, a plain scroll pans. Unzoomed, a plain scroll stays the
+    page's.
+    - Telling a mouse's notch from a trackpad's scroll (50 px or more, no
+      sideways) was dropped. A Mac trackpad's quick vertical flick looks just
+      like a notch, so the Playback page would have zoomed instead of
+      scrolling.
+  - **Safari's pinch** on a Mac trackpad is its gesture events, not a wheel.
+    `gesturestart`/`gesturechange`/`gestureend` zoom about the gesture's
+    point, relative to the scale at its start. While one runs, a Ctrl wheel
+    is ignored, so it does not zoom twice. On an iPhone the fingers are
+    pointers, so its gestures are left alone.
+  - **Keys:** + − 0 on the surface. In live full screen they work wherever
+    the focus is, through the tile's document key handler.
+  - **Limits:** 1× to 8×. The picture (object-fit: contain) covers the box
+    wherever it is larger, centred where it is not. It is clamped again when
+    the box resizes. The pointer is captured only during a zoom gesture of
+    ours.
+- **On a recording** (`rv-player`): the layer holds both videos. A drag's
+  picture (`rv-scrub-picture`) is over the layer, not in it, so its time
+  label stays its size. Its picture takes the same transform from
+  `ZOOM_VAR` (`--rv-zoom-transform`), which the controller sets on the
+  surface and the slot passes on, so it lines up with the video.
+  - The video's own controls are hidden while zoomed (the transform would
+    scale them), and the keyboard moves to the pill's Reset. Reset, or 0,
+    brings the controls back and returns the focus to the video.
+  - `stop()` resets the zoom. The frame's `touch-action` is `pan-x pan-y`
+    (a pinch is ours, a scroll the page's), and `none` while zoomed.
+- **In live full screen** (`rv-live-tile`): the layer holds the poster and
+  both streams. The clamp follows the stream shown (HD or SD). Leaving full
+  screen resets the zoom.
+  - The pill sits below the top row (48 px), clear of the HD button on the
+    left and the light, siren and presets on the right.
+  - The line saying why SD (or what HD is doing) waits while zoomed, as it
+    may wrap down into the pill. It stays the badge's title.
+- **Checks:** the arithmetic (the letterbox, the clamp, a fixed point); the
+  gestures (a pinch, a pan, a double tap, a mouse's double click left alone,
+  the wheel's cases, Safari's pinch and not twice, the keys, nothing while off); the player (the
+  controls hidden and back, the focus, stop, the drag's picture over the
+  layer with the transform); live full screen (on the board the keys are the
+  page's, the keys anywhere, the line under HD waits, back out resets).
+- **In Chromium** (the preview, by hand, 13 Nov):
+  - Desktop: + + + gave 2.0× and 0 reset it. A plain wheel on the unzoomed
+    picture was not taken. Five Ctrl+wheel notches gave 3.1× (1.25× each),
+    each one cancelled, so the page did not zoom. A long mouse drag panned
+    and stopped at the picture's edge.
+  - An emulated iPhone 13 with touch input: a pinch gave 2.8× and the page's
+    own zoom stayed at 1. One finger panned by its own travel. A double tap
+    went back out, and the next one zoomed to 2.5×.
+  - A drag's picture took the transform; its time label did not.
+  - The first screenshot put the pill over the "SD only: …" line, so it
+    moved below the top row.
+  - Headless Chromium's own full screen with a larger emulated viewport
+    takes wheels only within its 800 × 600 screen, on a bare page too. So
+    those runs use 800 × 600.
 
 #### Step 11.2: save this event
 

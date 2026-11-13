@@ -1,6 +1,6 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
-import { Z as i, c as a, j as o, ot as s, u as c } from "./live-DbkkZT-0.js";
-import { A as l, C as u, G as d, L as f, j as p, u as m, v as h, w as g } from "./home-DjR_-Gv6.js";
+import { P as i, d as a, et as o, lt as s, p as c } from "./live-C8Ncs3qj.js";
+import { A as l, C as u, G as d, L as f, j as p, u as m, v as h, w as g } from "./home-CwC_gHhP.js";
 //#region src/playback/calendar.ts
 var _ = [
 	0,
@@ -86,27 +86,27 @@ var _ = [
 		}), r = _.map((e) => (e + this.firstDay) % 7).map((e) => new Date(Date.UTC(2023, 0, 1 + e)).toLocaleDateString(void 0, {
 			weekday: "narrow",
 			timeZone: "UTC"
-		})), a = _.map((e) => (e + this.firstDay) % 7).map((e) => new Date(Date.UTC(2023, 0, 1 + e)).toLocaleDateString(void 0, {
+		})), i = _.map((e) => (e + this.firstDay) % 7).map((e) => new Date(Date.UTC(2023, 0, 1 + e)).toLocaleDateString(void 0, {
 			weekday: "long",
 			timeZone: "UTC"
-		})), o = this._stop(new Date(Date.UTC(this.year, this.month, 0)).getUTCDate()), [s, c] = h(this.year, this.month, 1), l = this.today !== void 0 && u(s, c, 1) > this.today;
+		})), a = this._stop(new Date(Date.UTC(this.year, this.month, 0)).getUTCDate()), [s, c] = h(this.year, this.month, 1), l = this.today !== void 0 && u(s, c, 1) > this.today;
 		return n`<div class="head">
         <button class="text" aria-label="Previous month" @click=${() => {
 			this._move(-1);
-		}}>${i("chevronBack")}</button>
+		}}>${o("chevronBack")}</button>
         <span class="title">${e}${this.loading ? n` <span class="muted small">…</span>` : t}</span>
         <button class="text" aria-label="Next month" ?disabled=${l} @click=${() => {
 			this._move(1);
-		}}>${i("chevron")}</button>
+		}}>${o("chevron")}</button>
       </div>
       <div class="grid" role="grid" aria-label=${e}>
         <div class="week" role="row">
-          ${r.map((e, t) => n`<span class="dow" role="columnheader" aria-label=${a[t] ?? e}>${e}</span>`)}
+          ${r.map((e, t) => n`<span class="dow" role="columnheader" aria-label=${i[t] ?? e}>${e}</span>`)}
         </div>
         ${g(this.year, this.month, this.firstDay).map((e) => n`<div class="week" role="row">
             ${e.map((e) => {
 			if (e === null) return n`<span role="gridcell"></span>`;
-			let r = u(this.year, this.month, e), i = this.today !== void 0 && r > this.today, a = this.days.has(e), s = new Date(Date.UTC(this.year, this.month - 1, e)).toLocaleDateString(void 0, {
+			let r = u(this.year, this.month, e), i = this.today !== void 0 && r > this.today, o = this.days.has(e), s = new Date(Date.UTC(this.year, this.month - 1, e)).toLocaleDateString(void 0, {
 				weekday: "long",
 				month: "long",
 				day: "numeric",
@@ -116,11 +116,11 @@ var _ = [
                 role="gridcell"
                 data-day=${e}
                 class="day ${r === this.selected ? "selected" : ""} ${r === this.today ? "today" : ""}"
-                tabindex=${e === o ? "0" : "-1"}
+                tabindex=${e === a ? "0" : "-1"}
                 ?disabled=${i}
                 aria-selected=${r === this.selected ? "true" : "false"}
                 aria-current=${r === this.today ? "date" : t}
-                aria-label="${s}${a ? ", has recordings" : ""}"
+                aria-label="${s}${o ? ", has recordings" : ""}"
                 @click=${() => {
 				this._focus = e, this._emit("rv-day", { date: r });
 			}}
@@ -128,13 +128,13 @@ var _ = [
 				this._onKey(t, e);
 			}}
               >
-                ${e}${a ? n`<span class="dot"></span>` : t}
+                ${e}${o ? n`<span class="dot"></span>` : t}
               </button>`;
 		})}
           </div>`)}
       </div>`;
 	}
-	static styles = [o, e`
+	static styles = [i, e`
       :host {
         display: block;
         min-width: 240px;
@@ -261,7 +261,7 @@ var b = class extends r {
 		return n.delete(t) || n.add(t), n;
 	}
 	render() {
-		let e = this._day, r = e === this._today, a = C(e);
+		let e = this._day, r = e === this._today, i = C(e);
 		return n`<div class="head">
         <h1>Events</h1>
         <div class="day-nav" role="group" aria-label="Day">
@@ -272,17 +272,17 @@ var b = class extends r {
 			this._shift(-1);
 		}}
           >
-            ${i("chevronBack")}
+            ${o("chevronBack")}
           </button>
           <button
             class="pick"
             aria-expanded=${this._calendar ? "true" : "false"}
-            aria-label="${r ? "Today, " : ""}${a}: pick a day"
+            aria-label="${r ? "Today, " : ""}${i}: pick a day"
             @click=${() => {
 			this._calendar = !this._calendar;
 		}}
           >
-            ${r ? "Today" : w(e)}${i("chevronDown")}
+            ${r ? "Today" : w(e)}${o("chevronDown")}
           </button>
           <button
             class="step"
@@ -292,7 +292,7 @@ var b = class extends r {
 			this._shift(1);
 		}}
           >
-            ${i("chevron")}
+            ${o("chevron")}
           </button>
           ${r ? t : n`<button
                 class="text"
@@ -310,7 +310,7 @@ var b = class extends r {
         .hass=${this.hass}
         .cameras=${this.cameras}
         .date=${this.date}
-        .heading=${r ? "Today" : a}
+        .heading=${r ? "Today" : i}
         .limit=${Infinity}
         .cameraFilter=${this._cameraFilter}
         .typeFilter=${this._typeFilter}
@@ -345,13 +345,13 @@ var b = class extends r {
     </div>`;
 	}
 	_renderFilters() {
-		let e = this._feed?.events ?? [], r = new Set(e.map((e) => e.camera_id)), a = this.cameras.filter((e) => r.has(e.id) || this._cameraFilter.has(e.id)), o = [.../* @__PURE__ */ new Set([...e.flatMap((e) => l(e.types)), ...this._typeFilter])], s = this._marks?.enabled ? this._marks : void 0;
-		if (!a.length && !o.length && !s) return t;
+		let e = this._feed?.events ?? [], r = new Set(e.map((e) => e.camera_id)), i = this.cameras.filter((e) => r.has(e.id) || this._cameraFilter.has(e.id)), a = [.../* @__PURE__ */ new Set([...e.flatMap((e) => l(e.types)), ...this._typeFilter])], s = this._marks?.enabled ? this._marks : void 0;
+		if (!i.length && !a.length && !s) return t;
 		let c = this._cameraFilter.size > 0 || this._typeFilter.size > 0 || this._unusualOnly;
 		return n`<div class="filters">
-      ${a.length ? n`<div class="group" role="group" aria-label="Cameras">
+      ${i.length ? n`<div class="group" role="group" aria-label="Cameras">
             <span class="label">Cameras</span>
-            ${a.map((e) => n`<button
+            ${i.map((e) => n`<button
                   class="chip"
                   aria-pressed=${this._cameraFilter.has(e.id) ? "true" : "false"}
                   @click=${() => {
@@ -362,16 +362,16 @@ var b = class extends r {
                   >${e.name}
                 </button>`)}
           </div>` : t}
-      ${o.length ? n`<div class="group" role="group" aria-label="What was detected">
+      ${a.length ? n`<div class="group" role="group" aria-label="What was detected">
             <span class="label">Detected</span>
-            ${p(o).map((e) => n`<button
+            ${p(a).map((e) => n`<button
                   class="chip"
                   aria-pressed=${this._typeFilter.has(e) ? "true" : "false"}
                   @click=${() => {
 			this._typeFilter = this._toggle(this._typeFilter, e);
 		}}
                 >
-                  ${i(m([e]))}${f(e)}
+                  ${o(m([e]))}${f(e)}
                 </button>`)}
           </div>` : t}
       ${s ? this._renderUnusual(s) : t}
@@ -400,7 +400,7 @@ var b = class extends r {
           </button>` : n`<button class="chip plain" disabled>Learning…</button>`}
     </div>`;
 	}
-	static styles = [o, e`
+	static styles = [i, e`
       :host {
         display: block;
       }

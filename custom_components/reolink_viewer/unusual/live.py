@@ -17,6 +17,10 @@ time an incident scores as unusual:
   kept in the learning check's log as kept quiet. The owner's Front Yard Right
   saw an animal every few minutes from 00:48 to 03:15, and each was as rare as
   the first until the nightly relearn: 31 alerts for one visit.
+- **Across cameras too** (v0.64.0): an unusual detection of the same kind on
+  any camera within KIND_VISIT_S of the last one said or kept quiet is the
+  same visit (a visitor at the front, then the back yard 4 minutes on, was two
+  alerts). A doorbell press is its own kind, so it still says itself.
 
 Scored from the journal, as the panel scores it (the journal is written first,
 so what fired just before counts), so a live mark and the panel's agree on
@@ -50,6 +54,9 @@ _REACH_S = EVENT_MAX_SECONDS + 60.0
 # One alert per visit: the same kind on a camera within this long of its last
 # detection there is the same visit.
 VISIT_S = 30 * 60.0
+# ... and an unusual one of that kind on any camera within this long of the last
+# said or kept quiet (v0.64.0).
+KIND_VISIT_S = 5 * 60.0
 
 
 @dataclass(slots=True)
@@ -95,6 +102,9 @@ class UnusualWatch:
         # The visit going on, per (camera, kind): until when a detection is part
         # of it (VISIT_S after its latest).
         self._visits: dict[tuple[str, str], float] = {}
+        # The visit going on, per kind across cameras: until when (KIND_VISIT_S
+        # after its latest unusual detection).
+        self._kind_visits: dict[str, float] = {}
         self._active: dict[str, CALLBACK_TYPE | None] = {}
         self._marks: dict[str, Mark] = {}
         self._listeners: list[Callable[[], None]] = []
@@ -168,7 +178,18 @@ class UnusualWatch:
         self._said.add(key)
         if len(self._said) > 1000:
             self._said = {k for k in self._said if k[2] > now - 3600}
-        if in_visit:
+        end = event.ended_at or now
+        # The same kind on another camera within a minute of the incident's last:
+        # the same incident, said already (its camera's sensor shows it too).
+        last = self._incidents.get(kind)
+        same_incident = last is not None and event.started_at - last <= INCIDENT_SECONDS
+        kind_until = self._kind_visits.get(kind)
+        in_kind = kind_until is not None and event.started_at <= kind_until
+        self._kind_visits[kind] = max(kind_until or 0.0, end + KIND_VISIT_S)
+        self._visits[visit] = max(self._visits.get(visit) or 0.0, end + VISIT_S)
+        if len(self._visits) > 200:
+            self._visits = {k: v for k, v in self._visits.items() if v > now}
+        if not same_incident and (in_visit or in_kind):
             # Said once for this visit already: kept quiet, but logged.
             if self._fired is not None:
                 self._fired(
@@ -176,9 +197,6 @@ class UnusualWatch:
                     time.time(),
                 )
             return False
-        self._visits[visit] = (event.ended_at or now) + VISIT_S
-        if len(self._visits) > 200:
-            self._visits = {k: v for k, v in self._visits.items() if v > now}
         self._marks[camera] = Mark(
             kind=kind,
             score=result.total,
@@ -186,11 +204,8 @@ class UnusualWatch:
             reason=result.reason,
             start=event.started_at,
         )
-        # The same kind on another camera within a minute of the incident's last:
-        # the same incident, said already (its camera's sensor still shows it).
-        last = self._incidents.get(kind)
-        said = last is None or event.started_at - last > INCIDENT_SECONDS
-        self._incidents[kind] = max(last or 0.0, event.ended_at or now)
+        said = not same_incident
+        self._incidents[kind] = max(last or 0.0, end)
         if said:
             payload = self._payload(camera, kind, event, result)
             self._hass.bus.async_fire(UNUSUAL_EVENT, payload)

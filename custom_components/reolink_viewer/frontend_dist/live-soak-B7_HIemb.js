@@ -1,7 +1,7 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
-import { Lt as i, N as a, P as o, Pt as s, Z as c, j as l, n as u, pt as d } from "./live-DbkkZT-0.js";
-import { nt as f } from "./home-DjR_-Gv6.js";
-import { n as p, t as m } from "./findings-DW6UZzjC.js";
+import { Bt as i, I as a, L as o, Lt as s, P as c, et as l, gt as u, n as d } from "./live-C8Ncs3qj.js";
+import { nt as f } from "./home-CwC_gHhP.js";
+import { n as p, t as m } from "./findings-sFIw4YdU.js";
 function h(e) {
 	return v(e).text;
 }
@@ -188,7 +188,7 @@ var S = "rv-live-soak-close", C = class extends r {
 			this._read = !0, this._state = "loading";
 			try {
 				await o.flush(e);
-				let t = await d(e), n = {
+				let t = await u(e), n = {
 					version: f,
 					now: Date.now(),
 					sampleS: t.sample_s,
@@ -235,7 +235,7 @@ var S = "rv-live-soak-close", C = class extends r {
 			this.refresh();
 		}}
         >
-          ${c("refresh")}Refresh
+          ${l("refresh")}Refresh
         </button>
         ${this._confirm ? t : n`<button
               @click=${() => {
@@ -274,11 +274,11 @@ var S = "rv-live-soak-close", C = class extends r {
             </button>
           </div>` : t}
       ${r ? n`<details class="support">
-            <summary>Details for support${c("chevronDown")}</summary>
+            <summary>Details for support${l("chevronDown")}</summary>
             <div class="actions">
               <button
                 @click=${() => {
-			u(r.text).then((e) => {
+			d(r.text).then((e) => {
 				this._state = {
 					...r,
 					copied: e
@@ -293,7 +293,7 @@ var S = "rv-live-soak-close", C = class extends r {
           </details>` : t}
     </div>`;
 	}
-	static styles = [l, e`
+	static styles = [c, e`
       :host {
         display: block;
       }

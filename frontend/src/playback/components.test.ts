@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { fakePip } from "../test-fixtures";
+import { ZOOM_VAR } from "../zoom";
 import type { TimelineDay, TimelineEvent } from "../types";
 import "./calendar";
 import "./event-list";
@@ -75,6 +76,47 @@ describe("rv-player", () => {
     b.dispatchEvent(new Event("playing"));
     expect(advanced).toHaveLength(1);
     expect((advanced[0] as { segmentId: string }).segmentId).toBe("b");
+  });
+
+  it("zooms into the picture, hiding the video's controls until Reset (Phase 11 step 1)", async () => {
+    const el = await mount("rv-player");
+    const frame = () => el.renderRoot.querySelector<HTMLElement>(".frame");
+    // Nothing playing: no zoom.
+    frame()?.dispatchEvent(new KeyboardEvent("keydown", { key: "+", bubbles: true }));
+    await el.updateComplete;
+    expect(el.zoomed).toBe(false);
+    await el.play(item("a"), 0);
+    await el.updateComplete;
+    const [a] = videos(el);
+    a.focus();
+    a.dispatchEvent(new KeyboardEvent("keydown", { key: "+", bubbles: true, composed: true }));
+    await el.updateComplete;
+    expect(el.zoomed).toBe(true);
+    // The transform is on the layer holding both videos. A drag's picture is over the layer, not
+    // in it: it takes the transform from ZOOM_VAR for its picture, and its time stays its size.
+    const transform = el.renderRoot.querySelector<HTMLElement>(".zoom")?.style.transform;
+    expect(transform).toContain("scale(1.2500)");
+    expect(frame()?.style.getPropertyValue(ZOOM_VAR)).toBe(transform);
+    expect(el.renderRoot.querySelector('.zoom slot[name="over"]')).toBeNull();
+    expect(el.renderRoot.querySelector('.frame > slot[name="over"]')).not.toBeNull();
+    expect(a.controls).toBe(false);
+    const pill = el.renderRoot.querySelector(".zoom-pill");
+    expect(pill?.textContent).toContain("1.3×");
+    // The keyboard goes to Reset, as the video's controls are gone.
+    const reset = el.renderRoot.querySelector<HTMLButtonElement>(".zoom-pill button");
+    expect(el.shadowRoot?.activeElement).toBe(reset);
+    reset?.click();
+    await el.updateComplete;
+    expect(el.zoomed).toBe(false);
+    expect(frame()?.style.getPropertyValue(ZOOM_VAR)).toBe("none");
+    expect(a.controls).toBe(true);
+    expect(el.renderRoot.querySelector(".zoom-pill")).toBeNull();
+    // Stopping forgets the zoom.
+    a.dispatchEvent(new KeyboardEvent("keydown", { key: "+", bubbles: true, composed: true }));
+    await el.updateComplete;
+    el.stop();
+    await el.updateComplete;
+    expect(el.zoomed).toBe(false);
   });
 
   it("keeps a play() the browser refused, and tries again when asked (v0.63.6)", async () => {
