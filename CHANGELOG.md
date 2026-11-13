@@ -3,6 +3,18 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.66.0
+
+The third of Phase 11's extras: filters that start useful.
+
+- **Each camera remembers its Playback filters** (Person, Vehicle, …) in this browser.
+- **Motion only, hidden where it drowns the rest:** on a camera that records all the
+  time, most events are motion and nothing more. From its first visit on, those are
+  hidden from its events and its timeline.
+  - The dashed **Motion only** button shows them again.
+  - **Hide motion only** hides them again.
+  - Cameras that record only on events show every event, as before.
+
 ## 0.65.0
 
 The second of Phase 11's extras:

@@ -1,6 +1,6 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
 import { P as i, Vt as a, et as o, rt as s } from "./live-B3rIzIdQ.js";
-import { Y as c, n as l } from "./home-OYB8tDsh.js";
+import { Q as c, n as l } from "./home-1VYUEooK.js";
 //#region src/catalog.ts
 var u = {
 	id: "other",

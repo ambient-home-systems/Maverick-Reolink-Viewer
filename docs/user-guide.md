@@ -485,7 +485,10 @@ The camera's recordings, from its NVR or its own SD card.
   a few seconds to start: the recorder sends the full-quality recording first.
 - **Speed**: from half speed to 8 times.
 - The buttons under the timeline (**Person 6**, **Vehicle 3**, …) show only those
-  events, with how many there were.
+  events, with how many there were. Each camera remembers them in this browser.
+- On a camera that records all the time, most events are motion and nothing more:
+  those are hidden from its first visit on. The dashed **Motion only** button shows
+  them again, and **Hide motion only** hides them again.
 - **Picture in picture** keeps the recording playing in a small window.
 - **Save event** saves the event playing as an MP4 (see
   [Save an event](#save-an-event)). **Download recording** downloads the whole

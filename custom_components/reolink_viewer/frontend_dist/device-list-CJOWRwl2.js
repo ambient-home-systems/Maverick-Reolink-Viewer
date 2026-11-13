@@ -1,6 +1,6 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
 import { Et as i, P as a, Vt as o, dt as s, et as c, g as l, n as u } from "./live-B3rIzIdQ.js";
-import { K as d, Y as f, r as p } from "./home-OYB8tDsh.js";
+import { Q as d, Y as f, r as p } from "./home-1VYUEooK.js";
 //#region src/components/learning-check.ts
 var m = (e, t) => `${e.toLocaleString("en-US")} ${t}${e === 1 ? "" : "s"}`, h = (e) => e.replace(/_/g, " ");
 function g(e, t, n) {
@@ -139,7 +139,7 @@ var v = class extends r {
         ${typeof e == "object" && "report" in e ? n`<button
               class="text"
               @click=${async () => {
-			f(this, await u(e.report) ? "Report copied" : "Could not copy the report", "info");
+			d(this, await u(e.report) ? "Report copied" : "Could not copy the report", "info");
 		}}
             >
               Copy the report
@@ -415,7 +415,7 @@ var E = class extends r {
       <div class="head">
         <h2>
           <button class="link host" @click=${() => {
-			d(this, {
+			f(this, {
 				view: "device",
 				id: e.id,
 				tab: "overview"
@@ -451,7 +451,7 @@ var E = class extends r {
       <button
         class="row"
         @click=${() => {
-			d(this, {
+			f(this, {
 				view: "device",
 				id: e.id,
 				tab: "overview"

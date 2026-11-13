@@ -166,6 +166,30 @@ export function filterEvents(events: TimelineEvent[], only: ReadonlySet<string>)
   return events.filter((e) => shownTypes(e.types).some((type) => only.has(type)));
 }
 
+/** An event that saw motion and nothing more (Phase 11 step 3). */
+export function motionOnly(event: Pick<TimelineEvent, "types">): boolean {
+  const shown = shownTypes(event.types);
+  return shown.length === 1 && shown[0] === "MOTION";
+}
+
+/**
+ * The events the list and the timeline show: those of the types chosen (none
+ * chosen: every type), and without the motion-only ones while they are hidden
+ * (unless motion is a type chosen).
+ */
+export function visibleEvents(events: TimelineEvent[], only: ReadonlySet<string>, hideMotion: boolean): TimelineEvent[] {
+  const chosen = filterEvents(events, only);
+  return hideMotion && !only.has("MOTION") ? chosen.filter((e) => !motionOnly(e)) : chosen;
+}
+
+/** Recordings at least this long are on continuously recording cameras. */
+export const CONTINUOUS_RECORDING_MS = 10 * MINUTE;
+
+/** Whether a day's recordings are a continuously recording camera's. */
+export function recordsContinuously(segments: readonly Segment[]): boolean {
+  return segments.some((s) => s.end - s.start >= CONTINUOUS_RECORDING_MS);
+}
+
 /** The next event starting after `t` (plus a small step, so repeats move on). */
 export function nextEvent(events: TimelineEvent[], t: number): TimelineEvent | undefined {
   return events.find((e) => e.start > t + 500);

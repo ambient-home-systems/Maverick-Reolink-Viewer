@@ -32,6 +32,7 @@ import { checkSetup } from "../playback/check-util";
 import { canPlayMain, playsProgressive, type StreamDecision } from "../playback/codec";
 import "../playback/calendar";
 import "../playback/event-list";
+import { loadFilters, saveFilters } from "../playback/event-filters";
 import { mseApiName } from "../playback/mse-feeder";
 import "../playback/player";
 import {
@@ -50,13 +51,16 @@ import { dateIn, firstDayOfWeek, formatClock, formatStamp } from "../playback/ti
 import "../playback/timeline";
 import type { HoverDetail, RvTimeline, TimeDetail } from "../playback/timeline";
 import {
+  CONTINUOUS_RECORDING_MS,
   DAY,
   HOUR,
   MINUTE,
   centreOn,
   clampView,
   eventToSave,
-  filterEvents,
+  motionOnly,
+  recordsContinuously,
+  visibleEvents,
   nextEvent,
   playTarget,
   presentTypes,
@@ -105,8 +109,6 @@ export const EVENTS_RETRY_MS = 10_000;
 export const EVENTS_RETRIES = 3;
 /** Show a copy of today up to this old (s) at once, then refresh it quietly. */
 export const STALE_TODAY_S = 86_400;
-/** Recordings at least this long are on continuously recording cameras. */
-const LONG_RECORDING_MS = 10 * MINUTE;
 /** Thumbnails of the event list: one per 10 s. */
 const EVENT_THUMB_BUCKET = 10;
 /** Thumbnail loads wait at most this long for a recording to start. */
@@ -197,6 +199,7 @@ export class RvPlayback extends LitElement {
     _view: { state: true },
     _cursor: { state: true },
     _only: { state: true },
+    _hideMotion: { state: true },
     _month: { state: true },
     _monthDays: { state: true },
     _monthLoading: { state: true },
@@ -242,6 +245,10 @@ export class RvPlayback extends LitElement {
   declare _cursor: number | undefined;
   /** Only events showing one of these types (`shownTypes`; none: all). */
   declare _only: ReadonlySet<string>;
+  /** Motion-only events hidden (Phase 11 step 3): kept per camera, as `_only` is. */
+  declare _hideMotion: boolean;
+  /** This camera's filters were kept here, or its first day has decided them. */
+  private _filtersKnown = false;
   declare _month: { year: number; month: number };
   declare _monthDays: ReadonlySet<number>;
   declare _monthLoading: boolean;
@@ -320,6 +327,7 @@ export class RvPlayback extends LitElement {
     this.storage = null;
     this.recorder = "camera";
     this._only = new Set();
+    this._hideMotion = false;
     const now = new Date();
     this._month = { year: now.getFullYear(), month: now.getMonth() + 1 };
     this._monthDays = new Set();
@@ -359,7 +367,7 @@ export class RvPlayback extends LitElement {
   }
 
   private get _events() {
-    return filterEvents(this._day?.events ?? [], this._only);
+    return visibleEvents(this._day?.events ?? [], this._only, this._hideMotion);
   }
 
   override connectedCallback(): void {
@@ -384,6 +392,7 @@ export class RvPlayback extends LitElement {
 
   protected override willUpdate(changed: PropertyValues<this>): void {
     if ((changed.has("deviceId") || changed.has("hass")) && this.hass && this.deviceId && !this._date) {
+      this._restoreFilters();
       this._date = this.at !== undefined ? dateIn(this.at, this._zone) : this._today;
       const [year, month] = this._date.split("-").map(Number);
       if (year && month) this._month = { year, month };
@@ -434,8 +443,10 @@ export class RvPlayback extends LitElement {
       const first = !this._day || this._day.date !== day.date;
       this._day = day;
       this._error = undefined;
+      this._firstFilters(day);
       if (first || !options.keepView) {
-        const latest = day.events.at(-1)?.start ?? day.segments.at(-1)?.start;
+        // The latest event shown (motion-only ones may be hidden).
+        const latest = this._events.at(-1)?.start ?? day.segments.at(-1)?.start;
         this._cursor = latest;
         // Centred: a few hours either side of the play time; else the whole day.
         this._view =
@@ -460,6 +471,40 @@ export class RvPlayback extends LitElement {
     }
     // Shown at once from an older copy: now fetch the current one.
     if (stale) await this._loadDay(date, { keepView: true, quiet: true });
+  }
+
+  // ---- Filters (Phase 11 step 3) ----
+
+  /** This camera's filters, as last left in this browser. */
+  private _restoreFilters(): void {
+    const kept = loadFilters(this.deviceId);
+    if (!kept) return;
+    this._only = new Set(kept.only);
+    this._hideMotion = kept.hideMotion;
+    this._filtersKnown = true;
+  }
+
+  /**
+   * A camera's first visit here: on one recording all the time, motion-only
+   * events (many times the rest) start hidden. Decided by its first day with
+   * recordings, and kept.
+   */
+  private _firstFilters(day: TimelineDay): void {
+    if (this._filtersKnown || !day.segments.length) return;
+    this._filtersKnown = true;
+    this._hideMotion = recordsContinuously(day.segments);
+    this._keepFilters();
+  }
+
+  private _setFilters(only: ReadonlySet<string>, hideMotion: boolean): void {
+    this._only = only;
+    this._hideMotion = hideMotion;
+    this._filtersKnown = true;
+    this._keepFilters();
+  }
+
+  private _keepFilters(): void {
+    saveFilters(this.deviceId, { only: [...this._only], hideMotion: this._hideMotion });
   }
 
   /** The day's event search failed: search again shortly, quietly. */
@@ -525,7 +570,7 @@ export class RvPlayback extends LitElement {
   private _warmLongRecording(day: TimelineDay): void {
     const hass = this.hass;
     const seg = this._cursor !== undefined ? segmentAt(day.segments, this._cursor) : day.segments.at(-1);
-    if (!hass || !seg || seg.end - seg.start < LONG_RECORDING_MS) return;
+    if (!hass || !seg || seg.end - seg.start < CONTINUOUS_RECORDING_MS) return;
     prefetchSegment(hass, this._ref(seg)).catch(() => undefined);
   }
 
@@ -1557,11 +1602,21 @@ export class RvPlayback extends LitElement {
     }
   }
 
-  /** What was detected in the day's events, to show only some. */
+  /**
+   * What was detected in the day's events, to show only some. Motion-only
+   * events, while hidden, have a chip of their own that brings them back
+   * (Phase 11 step 3).
+   */
   private _renderFilters(): TemplateResult | typeof nothing {
-    const events = this._day?.events ?? [];
-    const types = [...new Set([...presentTypes(events), ...this._only])];
-    if (!types.length) return nothing;
+    const day = this._day;
+    const events = day?.events ?? [];
+    const hiding = this._hideMotion && !this._only.has("MOTION");
+    const motion = events.filter(motionOnly).length;
+    const types = [...new Set([...presentTypes(events), ...this._only])].filter(
+      (type) => !(hiding && type === "MOTION"),
+    );
+    if (!types.length && !(hiding && motion)) return nothing;
+    const continuous = day ? recordsContinuously(day.segments) : false;
     return html`<div class="chips" role="group" aria-label="What was detected">
       ${types.map((type) => {
         const on = this._only.has(type);
@@ -1571,16 +1626,34 @@ export class RvPlayback extends LitElement {
           @click=${() => {
             const only = new Set(this._only);
             if (!only.delete(type)) only.add(type);
-            this._only = only;
+            this._setFilters(only, this._hideMotion);
           }}
         >
           ${icon(pictogram([type]))}${typeLabel(type)}
           <span class="count">${events.filter((e) => shownTypes(e.types).includes(type)).length}</span>
         </button>`;
       })}
+      ${hiding && motion
+        ? html`<button
+            class="chip hidden-motion"
+            aria-label=${`Show motion-only events: ${String(motion)} hidden`}
+            title="Motion with nothing more seen: hidden on this camera. Show them"
+            @click=${() => {
+              this._setFilters(this._only, false);
+            }}
+          >
+            ${icon("plus")}Motion only
+            <span class="count">${motion}</span>
+          </button>`
+        : nothing}
+      ${!this._hideMotion && continuous && motion && motion < events.length
+        ? html`<button class="text" @click=${() => {
+            this._setFilters(this._only, true);
+          }}>Hide motion only</button>`
+        : nothing}
       ${this._only.size
         ? html`<button class="text clear" @click=${() => {
-            this._only = new Set();
+            this._setFilters(new Set(), false);
           }}>Show every event</button>`
         : nothing}
     </div>`;
@@ -1801,7 +1874,7 @@ export class RvPlayback extends LitElement {
             <h2>Events</h2>
             ${day
               ? html`<span class="muted">
-                  ${this._only.size ? `${String(this._events.length)} of ` : ""}${day.events.length}
+                  ${this._events.length < day.events.length ? `${String(this._events.length)} of ` : ""}${day.events.length}
                   ${day.events.length === 1 ? "event" : "events"}
                 </span>`
               : nothing}
@@ -2057,6 +2130,11 @@ export class RvPlayback extends LitElement {
       }
       .chip[aria-pressed="true"]:hover {
         background: var(--rv-text);
+      }
+      /* Hidden motion-only events: a dashed chip that brings them back. */
+      .chip.hidden-motion {
+        border-style: dashed;
+        color: var(--rv-muted);
       }
       .clear {
         padding-left: 4px;
