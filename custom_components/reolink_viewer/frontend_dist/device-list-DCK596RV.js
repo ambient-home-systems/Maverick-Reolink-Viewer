@@ -1,6 +1,6 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
-import { Ct as i, Lt as a, Z as o, ct as s, j as c, n as l, p as u } from "./live-DbkkZT-0.js";
-import { G as d, J as f, r as p } from "./home-DjR_-Gv6.js";
+import { Bt as i, Et as a, P as o, dt as s, et as c, g as l, n as u } from "./live-C8Ncs3qj.js";
+import { G as d, J as f, r as p } from "./home-CwC_gHhP.js";
 //#region src/components/learning-check.ts
 var m = (e, t) => `${e.toLocaleString("en-US")} ${t}${e === 1 ? "" : "s"}`, h = (e) => e.replace(/_/g, " ");
 function g(e, t, n) {
@@ -8,7 +8,7 @@ function g(e, t, n) {
 		ok: !1,
 		text: "Learning is off: turn on Learn what is normal in Reolink Viewer's options."
 	}];
-	let r = (e) => u(e, t), i = (e) => n.get(e) ?? e, a = [];
+	let r = (e) => l(e, t), i = (e) => n.get(e) ?? e, a = [];
 	if (a.push(e.built ? {
 		ok: !0,
 		text: "Learning is on, and it has learned from the journal."
@@ -44,7 +44,7 @@ function g(e, t, n) {
 			});
 		}
 	}
-	let c = e.unmarked.filter((e) => !e.relearned), l = e.unmarked.filter((e) => e.relearned), d = (e) => `${r(e.start)}, ${h(e.kind)} on ${i(e.camera)}`;
+	let c = e.unmarked.filter((e) => !e.relearned), u = e.unmarked.filter((e) => e.relearned), d = (e) => `${r(e.start)}, ${h(e.kind)} on ${i(e.camera)}`;
 	if (c.length ? a.push({
 		ok: !1,
 		text: `${m(c.length, "event")} fired for no mark`,
@@ -52,9 +52,9 @@ function g(e, t, n) {
 	}) : s.length && a.push({
 		ok: !0,
 		text: "No event fired that is not marked"
-	}), l.length && a.push({
-		text: `${m(l.length, "event")} fired before the last nightly relearn, and not marked since: the relearn judged them again with what it had learned since (expected now and then)`,
-		details: l.map(d)
+	}), u.length && a.push({
+		text: `${m(u.length, "event")} fired before the last nightly relearn, and not marked since: the relearn judged them again with what it had learned since (expected now and then)`,
+		details: u.map(d)
 	}), !e.automations.length) a.push({
 		ok: !1,
 		text: "No automation listens for unusual activity, so nothing is notified: make the user guide's example (Settings → Automations & scenes, triggered by Reolink Viewer's Unusual activity)."
@@ -74,7 +74,7 @@ function g(e, t, n) {
 function _(e, t, n) {
 	let r = (e) => e === void 0 ? "·" : e ? "✓" : "✗", i = e.filter((e) => e.ok === !1).length;
 	return [
-		`Reolink Viewer learning check · ${u(t, n)}`,
+		`Reolink Viewer learning check · ${l(t, n)}`,
 		i ? `${m(i, "thing")} to look at.` : "Everything checked is as it should be.",
 		...e.flatMap((e) => [`${r(e.ok)} ${e.text}`, ...(e.details ?? []).map((e) => `    ${e}`)])
 	].join("\n");
@@ -99,7 +99,7 @@ var v = class extends r {
 		try {
 			this._state = await s(e);
 		} catch (e) {
-			this._state = { error: a(e).message };
+			this._state = { error: i(e).message };
 		}
 	}
 	render() {
@@ -114,13 +114,13 @@ var v = class extends r {
 		if (e) {
 			this._check = "running";
 			try {
-				let t = await i(e), n = e.config?.time_zone, r = this._state, a = g(t, n, new Map(r !== "loading" && !("error" in r) && r.enabled ? r.cameras.map((e) => [e.id, e.name]) : []));
+				let t = await a(e), n = e.config?.time_zone, r = this._state, i = g(t, n, new Map(r !== "loading" && !("error" in r) && r.enabled ? r.cameras.map((e) => [e.id, e.name]) : []));
 				this._check = {
-					lines: a,
-					report: _(a, Date.now(), n)
+					lines: i,
+					report: _(i, Date.now(), n)
 				};
 			} catch (e) {
-				this._check = { error: a(e).message };
+				this._check = { error: i(e).message };
 			}
 		}
 	}
@@ -139,7 +139,7 @@ var v = class extends r {
         ${typeof e == "object" && "report" in e ? n`<button
               class="text"
               @click=${async () => {
-			f(this, await l(e.report) ? "Report copied" : "Could not copy the report", "info");
+			f(this, await u(e.report) ? "Report copied" : "Could not copy the report", "info");
 		}}
             >
               Copy the report
@@ -173,7 +173,7 @@ var v = class extends r {
       </p>`;
 		let r = this.hass?.config?.time_zone, i = e.cameras, a = e.unusual;
 		return n`<p>
-        On since ${u(e.created, r)}:
+        On since ${l(e.created, r)}:
         ${y(e.detections, "detection")} from
         ${y(i.length, "camera")} so far
         (${T(e.bytes)}).${e.imported ? ` It started with ${y(e.imported, "change")} from Home Assistant's history.` : ""}
@@ -183,7 +183,7 @@ var v = class extends r {
                   <span class="name">${e.name}</span>:
                   <span class="muted"
                     >${y(e.detections, "detection")}, since
-                    ${u(e.first, r)}</span
+                    ${l(e.first, r)}</span
                   >${a?.built ? n`. ${C(a.cameras[e.id])}` : t}
                 </li>`)}
           </ul>` : t}
@@ -194,7 +194,7 @@ var v = class extends r {
                     >${t.name}</span
                   >
                   <span class="muted"
-                    >(${y(t.changes, "change")} since ${u(t.first, r)})</span
+                    >(${y(t.changes, "change")} since ${l(t.first, r)})</span
                   >`)}.
           </p>` : t}
       ${a ? this._renderUnusual(a, r, new Map(i.map((e) => [e.id, e.name]))) : t}`;
@@ -216,7 +216,7 @@ var v = class extends r {
           </p>`}
       ${e.latest.length ? n`<ol class="marks">
             ${e.latest.map((e) => n`<li>
-                  <span class="when">${u(e.start, r)}</span>
+                  <span class="when">${l(e.start, r)}</span>
                   <span>${e.reason}</span>
                 </li>`)}
           </ol>` : t}
@@ -244,7 +244,7 @@ var v = class extends r {
           <dd>${x[e.scope]}</dd>
           <dt>Learned</dt>
           <dd>
-            ${u(e.built, r)}, in ${e.built_in_s}
+            ${l(e.built, r)}, in ${e.built_in_s}
             s${e.computed_s === void 0 ? "" : `, ${e.computed_s} s of it computing`}
           </dd>
         </dl>
@@ -256,7 +256,7 @@ var v = class extends r {
         it has seen since against that.
       </p>`;
 	}
-	static styles = [c, e`
+	static styles = [o, e`
       :host {
         display: block;
       }
@@ -446,7 +446,7 @@ var E = class extends r {
       </ul>`;
 	}
 	_renderCamera(e, r) {
-		let i = r ? e.connections.find((e) => e.host_id === r.id)?.channel : void 0, a = r !== void 0 && e.connections.some((e) => e.via === "direct"), s = this.cameras.find((t) => t.id === e.id)?.number, c = [a ? "Also added directly" : void 0, e.primary_view === "snapshot" ? "Snapshots only" : void 0].filter((e) => e !== void 0);
+		let i = r ? e.connections.find((e) => e.host_id === r.id)?.channel : void 0, a = r !== void 0 && e.connections.some((e) => e.via === "direct"), o = this.cameras.find((t) => t.id === e.id)?.number, s = [a ? "Also added directly" : void 0, e.primary_view === "snapshot" ? "Snapshots only" : void 0].filter((e) => e !== void 0);
 		return n`<li>
       <button
         class="row"
@@ -458,16 +458,16 @@ var E = class extends r {
 			});
 		}}
       >
-        <span class="plat-cell">${s === void 0 ? t : n`<span class="plat" aria-hidden="true">${s}</span>`}</span>
+        <span class="plat-cell">${o === void 0 ? t : n`<span class="plat" aria-hidden="true">${o}</span>`}</span>
         <span class="name">${e.name ?? "Camera"}</span>
         <span class="ch muted">${i == null ? "Direct" : `Ch ${String(i + 1)}`}</span>
         <span class="model muted">${e.model ?? ""}</span>
-        <span class="state">${D(e)}${c.length ? n`<span class="flags muted">${c.join(" · ")}</span>` : t}</span>
-        ${o("chevron")}
+        <span class="state">${D(e)}${s.length ? n`<span class="flags muted">${s.join(" · ")}</span>` : t}</span>
+        ${c("chevron")}
       </button>
     </li>`;
 	}
-	static styles = [c, e`
+	static styles = [o, e`
       :host {
         display: flex;
         flex-direction: column;

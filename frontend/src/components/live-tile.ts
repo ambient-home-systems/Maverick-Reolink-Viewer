@@ -9,6 +9,7 @@ import { chooseHd, type HdChoice } from "../live/hd";
 import { LivePlayer, pageCuts, pageWebRtc, type PlayerState } from "../live/player";
 import { currentLink, fullScreenHd, keepsFullScreenTaps, rememberFullScreenHd, type Link } from "../network";
 import { formatClock, formatStamp } from "../playback/time";
+import { ZOOM_STEP as ZOOM_KEY, ZoomController, zoomLabel, zoomStyles } from "../zoom";
 import { enterPip, exitPip, inPip, pipSupported } from "../pip";
 import { sharedStyles } from "../styles";
 import type { TileHd } from "../wall/hd";
@@ -291,7 +292,21 @@ export class RvLiveTile extends LitElement {
   private readonly _onKeydown = (e: KeyboardEvent): void => {
     // Filling the window: Esc leaves (the browser's full screen handles its own).
     if (e.key === "Escape" && this._full && !this._native) this.exitFull();
+    // Zoom from the keyboard wherever its focus is (Phase 11 step 1); on the tile, it handles them itself.
+    if (!this._full || e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
+    if (e.key === "+" || e.key === "=") this._zoom.step(ZOOM_KEY);
+    else if (e.key === "-" || e.key === "_") this._zoom.step(1 / ZOOM_KEY);
+    else if (e.key === "0") this._zoom.reset();
   };
+
+  /** Zoom into the picture in full screen (Phase 11 step 1): the shown stream's own size for the clamp. */
+  private readonly _zoom = new ZoomController(this, {
+    enabled: () => this._full,
+    content: () => {
+      const video = this.renderRoot.querySelector<HTMLVideoElement>(this.hdShown ? "video.hd" : "video.sub");
+      return video?.videoWidth ? { w: video.videoWidth, h: video.videoHeight } : undefined;
+    },
+  });
 
   /** Whether the tile should be playing now. */
   get shouldPlay(): boolean {
@@ -398,6 +413,7 @@ export class RvLiveTile extends LitElement {
   /** Back from full screen (to the sub stream). */
   exitFull(): void {
     if (!this._full) return;
+    this._zoom.reset();
     this._full = false;
     if (this._native && document.fullscreenElement) {
       void document.exitFullscreen().catch(() => undefined);
@@ -442,6 +458,7 @@ export class RvLiveTile extends LitElement {
   protected override updated(): void {
     this._driveSub();
     this._driveHd();
+    this._zoom.bind(this.renderRoot.querySelector<HTMLElement>(".tile"), this.renderRoot.querySelector<HTMLElement>(".zoom"));
   }
 
   private _driveSub(): void {
@@ -620,28 +637,44 @@ export class RvLiveTile extends LitElement {
           this._activate();
         }}
       >
-        ${this.image
-          ? html`<img class="poster" src=${this.image.url} alt="" />`
-          : nothing}
-        <video
-          class="sub"
-          muted
-          playsinline
-          aria-label=${`${name} live`}
-          @enterpictureinpicture=${this._onPipChange}
-          @leavepictureinpicture=${this._onPipChange}
-          @webkitpresentationmodechanged=${this._onPipChange}
-        ></video>
-        ${this._hd?.stream
-          ? html`<video
-              class="hd"
-              muted
-              playsinline
-              aria-label=${`${name} live in HD`}
-              @enterpictureinpicture=${this._onPipChange}
-              @leavepictureinpicture=${this._onPipChange}
-              @webkitpresentationmodechanged=${this._onPipChange}
-            ></video>`
+        <div class="zoom">
+          ${this.image
+            ? html`<img class="poster" src=${this.image.url} alt="" />`
+            : nothing}
+          <video
+            class="sub"
+            muted
+            playsinline
+            aria-label=${`${name} live`}
+            @enterpictureinpicture=${this._onPipChange}
+            @leavepictureinpicture=${this._onPipChange}
+            @webkitpresentationmodechanged=${this._onPipChange}
+          ></video>
+          ${this._hd?.stream
+            ? html`<video
+                class="hd"
+                muted
+                playsinline
+                aria-label=${`${name} live in HD`}
+                @enterpictureinpicture=${this._onPipChange}
+                @leavepictureinpicture=${this._onPipChange}
+                @webkitpresentationmodechanged=${this._onPipChange}
+              ></video>`
+            : nothing}
+        </div>
+        ${this._full && this._zoom.zoomed
+          ? html`<div class="zoom-pill" role="status">
+              ${zoomLabel(this._zoom.zoom)}
+              <button
+                aria-label="Reset zoom"
+                @click=${(e: Event) => {
+                  e.stopPropagation();
+                  this._zoom.reset();
+                }}
+              >
+                Reset
+              </button>
+            </div>`
           : nothing}
         ${interactive
           ? // The whole tile is this button (its click is the tile's); it says what the tile shows.
@@ -765,9 +798,12 @@ export class RvLiveTile extends LitElement {
     const hd = this._hd;
     if (!hd?.stream) {
       // A dashboard card keeps why off the picture (a wall tablet's doorbell): it is the badge's title.
+      // So does a zoomed picture, whose Reset sits below this row.
       return html`<div class="hd-status" title=${hd?.reason ?? nothing}>
         <span class="badge">SD</span>
-        ${this.compact ? nothing : html`<span class="small">${hd ? hd.reason : "Choosing the HD stream…"}</span>`}
+        ${this.compact || this._zoom.zoomed
+          ? nothing
+          : html`<span class="small">${hd ? hd.reason : "Choosing the HD stream…"}</span>`}
       </div>`;
     }
     const hdState = this._hdState;
@@ -791,7 +827,7 @@ export class RvLiveTile extends LitElement {
       >
         HD
       </button>
-      ${detail ? html`<span class="small">${detail}</span>` : nothing}
+      ${detail && !this._zoom.zoomed ? html`<span class="small">${detail}</span>` : nothing}
     </div>`;
   }
 
@@ -845,6 +881,7 @@ export class RvLiveTile extends LitElement {
 
   static override styles = [
     sharedStyles,
+    zoomStyles,
     css`
       :host {
         display: block;
@@ -900,6 +937,16 @@ export class RvLiveTile extends LitElement {
       }
       :host([full]) .tile {
         aspect-ratio: auto;
+        /* A pinch and a pan are the zoom's (Phase 11 step 1). */
+        touch-action: none;
+      }
+      .zoom {
+        position: absolute;
+        inset: 0;
+      }
+      /* Below the top row: HD, and the camera's light, siren and presets. */
+      .zoom-pill {
+        top: 48px;
       }
       :host([full]) .poster,
       :host([full]) video {

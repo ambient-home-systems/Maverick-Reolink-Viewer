@@ -240,6 +240,9 @@ export class RvScrubPicture extends LitElement {
       height: 100%;
       object-fit: contain;
       visibility: hidden;
+      /* Zoomed as the player's picture is (Phase 11 step 1, ZOOM_VAR); its time is not. */
+      transform: var(--rv-zoom-transform, none);
+      transform-origin: 0 0;
     }
     canvas.on,
     video.on,

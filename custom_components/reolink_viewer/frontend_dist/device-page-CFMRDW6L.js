@@ -1,6 +1,6 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
-import { Lt as i, Z as a, it as o, j as s, rt as c } from "./live-DbkkZT-0.js";
-import { G as l, r as u } from "./home-DjR_-Gv6.js";
+import { Bt as i, P as a, et as o, ot as s, st as c } from "./live-C8Ncs3qj.js";
+import { G as l, r as u } from "./home-CwC_gHhP.js";
 //#region src/render-filter.ts
 function d(e, t, n) {
 	if (e === t) return !1;
@@ -11,10 +11,10 @@ function d(e, t, n) {
 //#endregion
 //#region src/components/device-page.ts
 var f = {
-	overview: () => import("./overview-BF7AS2XF.js"),
-	playback: () => import("./playback-Dq0U4ITc.js"),
-	pictures: () => import("./event-pictures-DCN8KbJh.js"),
-	settings: () => import("./settings-Nr-JdyDW.js")
+	overview: () => import("./overview-Dra2xkmv.js"),
+	playback: () => import("./playback-DUL_fkhC.js"),
+	pictures: () => import("./event-pictures-BugIn-0h.js"),
+	settings: () => import("./settings-Bp00YvM7.js")
 }, p = 1e3, m = class extends r {
 	static properties = {
 		hass: { attribute: !1 },
@@ -74,7 +74,7 @@ var f = {
 		let n = ++this._loadSeq;
 		e || (this._device = void 0, this._error = void 0);
 		try {
-			let [e, r] = await Promise.all([o(t, this.deviceId), c(t)]);
+			let [e, r] = await Promise.all([c(t, this.deviceId), s(t)]);
 			if (n !== this._loadSeq) return;
 			this._catalog = r, this._device = e, this._error = void 0, this._watched = w(e);
 		} catch (e) {
@@ -98,7 +98,7 @@ var f = {
       <div class="header">
         <button class="text with-icon back" @click=${() => {
 			l(this, { view: "list" });
-		}}>${a("back")}All devices</button>
+		}}>${o("back")}All devices</button>
       </div>
       ${this._error ? n`<div class="banner error" role="alert">Could not load the device: ${this._error}</div>` : t}
       ${r ? n`<div class="title">
@@ -170,7 +170,7 @@ var f = {
             </div>` : this._error ? t : n`<p class="muted">Loading…</p>`}
     `;
 	}
-	static styles = [s, e`
+	static styles = [a, e`
       :host {
         display: flex;
         flex-direction: column;

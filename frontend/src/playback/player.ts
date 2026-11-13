@@ -1,6 +1,7 @@
 import { LitElement, css, html, nothing, type TemplateResult } from "lit";
 
 import { enterPip, exitPip, inPip, movePip } from "../pip";
+import { ZoomController, zoomLabel, zoomStyles } from "../zoom";
 import { MseFeeder, MseUnsupported, type FeederStats, type MseSource, type NudgeDetail } from "./mse-feeder";
 
 /** One recording the player can show: a file URL, or MSE fragments. */
@@ -102,6 +103,24 @@ export class RvPlayer extends LitElement {
   private _pendingOffset: [number, number] = [0, 0];
   /** The last play() the browser refused or cut short (v0.63.6: once silent). */
   private _refusal: PlayRefusal | undefined;
+  /**
+   * Zoom into the picture (Phase 11 step 1). While zoomed the video's own
+   * controls are hidden (the transform would scale them too): the pill's Reset,
+   * or 0, brings them back.
+   */
+  private readonly _zoom = new ZoomController(this, {
+    enabled: () => this._started,
+    content: () => {
+      const video = this._video(this._active);
+      return video?.videoWidth ? { w: video.videoWidth, h: video.videoHeight } : undefined;
+    },
+    onReset: () => {
+      // Back to the video (its controls), where the keyboard was.
+      void this.updateComplete.then(() => {
+        if (this.shadowRoot?.activeElement === null) this._video(this._active)?.focus();
+      });
+    },
+  });
 
   constructor() {
     super();
@@ -155,6 +174,16 @@ export class RvPlayer extends LitElement {
     if (changed.has("rate")) {
       for (const slot of [0, 1] as const) this._applyRate(this._video(slot));
     }
+    this._zoom.bind(this.renderRoot.querySelector<HTMLElement>(".frame"), this.renderRoot.querySelector<HTMLElement>(".zoom"));
+    // Zoomed from the keyboard on the video: its controls are gone, so the keyboard goes to Reset.
+    if (this._zoom.zoomed && this.shadowRoot?.activeElement instanceof HTMLVideoElement) {
+      this.renderRoot.querySelector<HTMLButtonElement>(".zoom-pill button")?.focus();
+    }
+  }
+
+  /** Whether the picture is zoomed in. */
+  get zoomed(): boolean {
+    return this._zoom.zoomed;
   }
 
   /** The active feeder's counters, if the recording plays through MSE. */
@@ -355,6 +384,7 @@ export class RvPlayer extends LitElement {
   }
 
   stop(): void {
+    this._zoom.reset();
     for (const slot of [0, 1] as const) {
       const video = this._video(slot);
       video?.pause();
@@ -548,7 +578,7 @@ export class RvPlayer extends LitElement {
       class=${slot === this._active ? "active" : "hidden"}
       playsinline
       .muted=${this.muted}
-      ?controls=${slot === this._active && this._started}
+      ?controls=${slot === this._active && this._started && !this._zoom.zoomed}
       preload="auto"
       @loadedmetadata=${(e: Event) => {
         this._onMetadata(slot, e);
@@ -586,71 +616,100 @@ export class RvPlayer extends LitElement {
 
   protected override render(): TemplateResult {
     const note = this._waiting || (this._requestedAt !== undefined && this.note) ? this.note : undefined;
-    return html`<div class="frame">
-      ${this._renderVideo(0)}${this._renderVideo(1)}
+    const zoomed = this._zoom.zoomed;
+    return html`<div class="frame ${zoomed ? "zoomed" : ""}">
+      <div class="zoom">${this._renderVideo(0)}${this._renderVideo(1)}</div>
       <slot name="over"></slot>
+      ${zoomed
+        ? html`<div class="zoom-pill" role="status">
+            ${zoomLabel(this._zoom.zoom)}
+            <button
+              aria-label="Reset zoom"
+              @click=${() => {
+                this._zoom.reset();
+              }}
+            >
+              Reset
+            </button>
+          </div>`
+        : nothing}
       ${note ? html`<div class="note" role="status">${note}</div>` : nothing}
       ${this._started ? nothing : html`<p class="empty">Pick an event or a time on the timeline to play it.</p>`}
     </div>`;
   }
 
-  static override styles = css`
-    :host {
-      display: block;
-    }
-    .frame {
-      position: relative;
-      width: 100%;
-      aspect-ratio: 16 / 9;
-      background: var(--rv-board, #000);
-      overflow: hidden;
-    }
-    video {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      object-fit: contain;
-      background: var(--rv-board, #000);
-    }
-    .note {
-      position: absolute;
-      left: 50%;
-      bottom: 48px;
-      transform: translateX(-50%);
-      max-width: calc(100% - 32px);
-      padding: 6px 12px;
-      background: rgba(17, 20, 24, 0.82);
-      color: var(--rv-on-board, #fff);
-      font-family: var(--rv-font, sans-serif);
-      font-size: 14px;
-      font-weight: 500;
-      text-align: center;
-      pointer-events: none;
-    }
-    .empty {
-      position: absolute;
-      inset: 0;
-      margin: 0;
-      display: grid;
-      place-items: center;
-      padding: 16px;
-      color: var(--rv-on-board-muted, #a9b0c4);
-      font-family: var(--rv-font, sans-serif);
-      font-size: 15px;
-      text-align: center;
-    }
-    /* What a scrub shows over the video (Phase 10, rv-scrub-picture). */
-    ::slotted([slot="over"]) {
-      position: absolute;
-      inset: 0;
-    }
-    /* The hidden buffer stays laid out (some browsers do not load hidden video). */
-    video.hidden {
-      opacity: 0;
-      pointer-events: none;
-    }
-  `;
+  static override styles = [
+    zoomStyles,
+    css`
+      :host {
+        display: block;
+      }
+      .frame {
+        position: relative;
+        width: 100%;
+        aspect-ratio: 16 / 9;
+        background: var(--rv-board, #000);
+        overflow: hidden;
+        /* A pinch is ours (zoom); a one-finger scroll stays the page's. */
+        touch-action: pan-x pan-y;
+      }
+      /* Zoomed: a finger or the pointer moves the picture. */
+      .frame.zoomed {
+        touch-action: none;
+        cursor: grab;
+      }
+      .zoom {
+        position: absolute;
+        inset: 0;
+      }
+      video {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        background: var(--rv-board, #000);
+      }
+      .note {
+        position: absolute;
+        left: 50%;
+        bottom: 48px;
+        transform: translateX(-50%);
+        max-width: calc(100% - 32px);
+        padding: 6px 12px;
+        background: rgba(17, 20, 24, 0.82);
+        color: var(--rv-on-board, #fff);
+        font-family: var(--rv-font, sans-serif);
+        font-size: 14px;
+        font-weight: 500;
+        text-align: center;
+        pointer-events: none;
+      }
+      .empty {
+        position: absolute;
+        inset: 0;
+        margin: 0;
+        display: grid;
+        place-items: center;
+        padding: 16px;
+        color: var(--rv-on-board-muted, #a9b0c4);
+        font-family: var(--rv-font, sans-serif);
+        font-size: 15px;
+        text-align: center;
+      }
+      /* What a scrub shows over the video (Phase 10, rv-scrub-picture): over the
+         zoomed layer, not in it, its picture zoomed by ZOOM_VAR and its time not. */
+      ::slotted([slot="over"]) {
+        position: absolute;
+        inset: 0;
+      }
+      /* The hidden buffer stays laid out (some browsers do not load hidden video). */
+      video.hidden {
+        opacity: 0;
+        pointer-events: none;
+      }
+    `,
+  ];
 }
 
 if (!customElements.get("rv-player")) {
