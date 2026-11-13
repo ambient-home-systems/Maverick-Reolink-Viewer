@@ -15,12 +15,18 @@ movie-fragment relative addressing and a ``tfdt`` in every ``traf``. So:
 - :func:`key_sample` takes a fragment's first video sample, a key frame,
   out on its own (Phase 10, scrubbing that shows the picture): an init segment
   of the video track alone and a fragment of that one sample.
+- :func:`clip_fragments` and :func:`write_clip` cut a stretch of the recording
+  out (Phase 11 step 2, "save this event"): from the key frame at or before
+  its start to the fragment holding its end, normalized as above, with every
+  track's decode times moved back together so the clip starts at 0. The
+  samples are copied as stored.
 
 Everything here is blocking file and byte work: run it in the executor.
 """
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+import math
 import struct
 from typing import BinaryIO
 
@@ -278,6 +284,68 @@ def normalize_fragment(
             raise FragmentError("data offset too large")
         struct.pack_into(">i", out, position, relative)
     return bytes(out) + data[moof_size:]
+
+
+def clip_fragments(
+    index: FragmentIndex, start_ms: float, end_ms: float
+) -> tuple[int, int] | None:
+    """Return the first and last fragment of the stretch [start_ms, end_ms).
+
+    The first starts with a key frame at or before ``start_ms``; the last is
+    the last fragment starting before ``end_ms``. None if the index holds
+    none of it.
+    """
+    if not index.fragments or end_ms <= start_ms:
+        return None
+    first = index.find(max(0.0, start_ms))
+    if first is None:
+        return None
+    last = first
+    for i in range(first, len(index.fragments)):
+        if index.fragments[i].start_ms >= end_ms:
+            break
+        last = i
+    return first, last
+
+
+def write_clip(
+    file: BinaryIO, index: FragmentIndex, first: int, last: int, out: BinaryIO
+) -> int:
+    """Write fragments ``first``..``last`` after the init segment, from time 0.
+
+    Every track's decode times move back by the same span (the earliest
+    track's start), so they keep their places against each other. Returns
+    the bytes written.
+    """
+    if index.init is None:
+        raise FragmentError("no init segment")
+    start = dict(index.fragments[first].decode)
+    base_s = min(
+        start[track_id] / track.timescale
+        for track_id, track in index.tracks.items()
+        if track_id in start and track.timescale
+    )
+    shift = {
+        track_id: math.floor(base_s * track.timescale)
+        for track_id, track in index.tracks.items()
+    }
+    out.write(index.init)
+    written = len(index.init)
+    for number in range(first, last + 1):
+        fragment = index.fragments[number]
+        data = _read(file, fragment.offset, fragment.end)
+        if len(data) != fragment.size:
+            raise FragmentError("fragment not on disk")
+        decode = {
+            track_id: max(0, value - shift.get(track_id, 0))
+            for track_id, value in fragment.decode
+        }
+        normalized = normalize_fragment(
+            data, fragment.offset, fragment.moof_size, decode, index.tracks
+        )
+        out.write(normalized)
+        written += len(normalized)
+    return written
 
 
 def _traf(

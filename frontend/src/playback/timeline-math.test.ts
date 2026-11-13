@@ -12,6 +12,7 @@ import {
   bars,
   centreOn,
   clampView,
+  eventToSave,
   filterEvents,
   isoDate,
   monthGrid,
@@ -20,6 +21,7 @@ import {
   presentTypes,
   previousEvent,
   primaryType,
+  SAVE_GRACE_MS,
   segmentAt,
   shownTypes,
   thumbBucket,
@@ -128,6 +130,19 @@ describe("events", () => {
     expect(filterEvents(events, new Set(["PERSON", "ANIMAL"])).map((e) => e.start)).toEqual([T0 + HOUR, T0 + 2 * HOUR]);
     expect(shownTypes(["MOTION", "VEHICLE", "PERSON"])).toEqual(["PERSON", "VEHICLE"]);
     expect(shownTypes([])).toEqual(["MOTION"]);
+  });
+
+  it("saves the event at the play position, or one just ended (Phase 11 step 2)", () => {
+    // Each lasts 30 s.
+    expect(eventToSave(events, T0 + 10_000)?.start).toBe(T0);
+    expect(eventToSave(events, T0 + 30_000 + SAVE_GRACE_MS - 1)?.start).toBe(T0);
+    expect(eventToSave(events, T0 + 30_000 + SAVE_GRACE_MS)).toBeUndefined();
+    expect(eventToSave(events, T0 - 1)).toBeUndefined();
+    expect(eventToSave(events, T0 + HOUR)?.start).toBe(T0 + HOUR);
+    // Overlapping: the later one.
+    const overlapping = [ev(T0, ["MOTION"]), ev(T0 + 20_000, ["PERSON"])];
+    expect(eventToSave(overlapping, T0 + 25_000)?.start).toBe(T0 + 20_000);
+    expect(eventToSave([], T0)).toBeUndefined();
   });
 
   it("steps to the next and previous event", () => {

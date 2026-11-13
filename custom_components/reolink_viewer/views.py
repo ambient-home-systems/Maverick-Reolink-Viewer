@@ -22,6 +22,8 @@ the grant expire.
   to a fill behind a click.
 - ``/api/reolink_viewer/clip/{token}`` serves the recording as a download
   (the plain copy if there is one).
+- ``/api/reolink_viewer/event_clip/{token}`` serves an event's saved clip
+  (Phase 11 step 2, ``clips.py``) as a download, while it is kept.
 - ``/api/reolink_viewer/thumb/{token}`` serves a timeline thumbnail (JPEG).
 - ``/api/reolink_viewer/scrub/{token}`` is a scrub session (Phase 10), a
   websocket behind a signed path (a browser's WebSocket cannot send HA's
@@ -42,6 +44,7 @@ from http import HTTPStatus
 import json
 import logging
 import math
+from pathlib import Path
 import secrets
 import time
 from typing import TYPE_CHECKING, Any
@@ -68,6 +71,7 @@ _LOGGER = logging.getLogger(__name__)
 VOD_PATH = "/api/reolink_viewer/vod"
 MSE_PATH = "/api/reolink_viewer/mse"
 CLIP_PATH = "/api/reolink_viewer/clip"
+EVENT_CLIP_PATH = "/api/reolink_viewer/event_clip"
 THUMB_PATH = "/api/reolink_viewer/thumb"
 SCRUB_PATH = "/api/reolink_viewer/scrub"
 # A recording's URLs live this long plus the recording's length, so one
@@ -138,7 +142,23 @@ class LiveImageGrant:
     camera_id: str
 
 
-type Grant = VodGrant | MseGrant | ThumbGrant | LiveGrant | LiveImageGrant | ScrubGrant
+@dataclass(frozen=True, slots=True)
+class EventClipGrant:
+    """Permission to download one event's saved clip (Phase 11 step 2)."""
+
+    path: Path
+    name: str
+
+
+type Grant = (
+    VodGrant
+    | MseGrant
+    | ThumbGrant
+    | LiveGrant
+    | LiveImageGrant
+    | ScrubGrant
+    | EventClipGrant
+)
 
 
 class Grants:
@@ -159,9 +179,17 @@ class Grants:
         self._items[token] = (now + ttl.total_seconds(), grant)
         return token
 
-    def get[T: (VodGrant, MseGrant, ThumbGrant, LiveGrant, LiveImageGrant, ScrubGrant)](
-        self, token: str, kind: type[T]
-    ) -> T | None:
+    def get[
+        T: (
+            VodGrant,
+            MseGrant,
+            ThumbGrant,
+            LiveGrant,
+            LiveImageGrant,
+            ScrubGrant,
+            EventClipGrant,
+        )
+    ](self, token: str, kind: type[T]) -> T | None:
         """Return a live grant of the given kind."""
         item = self._items.get(token)
         if item is None:
@@ -299,6 +327,31 @@ class ClipView(_Base):
     async def get(self, request: web.Request, token: str) -> web.StreamResponse:
         """Return the recording as an attachment."""
         return await self._vod(request, token, download=True)
+
+
+class EventClipView(HomeAssistantView):
+    """Serve an event's saved clip as a download (Phase 11 step 2)."""
+
+    url = EVENT_CLIP_PATH + "/{token}"
+    name = "api:reolink_viewer:event_clip"
+    requires_auth = True
+
+    async def get(self, request: web.Request, token: str) -> web.StreamResponse:
+        """Return the clip as an attachment, while it is kept."""
+        hass: HomeAssistant = request.app["hass"]
+        if (data := loaded_data(hass)) is None:
+            return _not_found()
+        grant = data.grants.get(token, EventClipGrant)
+        if grant is None or not await hass.async_add_executor_job(grant.path.is_file):
+            return _not_found()
+        return web.FileResponse(
+            grant.path,
+            headers={
+                "Content-Type": "video/mp4",
+                "Cache-Control": "private, no-store",
+                "Content-Disposition": f'attachment; filename="{grant.name}"',
+            },
+        )
 
 
 class MseView(HomeAssistantView):

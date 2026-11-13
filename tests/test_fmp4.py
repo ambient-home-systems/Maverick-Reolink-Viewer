@@ -1,6 +1,8 @@
 """Tests for the MSE fragment index and normalizer."""
 
+import dataclasses
 import io
+import math
 from pathlib import Path
 import struct
 
@@ -10,15 +12,19 @@ from custom_components.reolink_viewer import fmp4
 from custom_components.reolink_viewer.fmp4 import (
     FragmentError,
     FragmentIndex,
+    clip_fragments,
     normalize_fragment,
+    write_clip,
 )
 
 from .mp4_fixtures import (
     AUDIO_FRAME,
     AUDIO_FRAMES,
+    AUDIO_TIMESCALE,
     FRAME,
     FRAMES,
     FTYP,
+    VIDEO_TIMESCALE,
     av_moov,
     box,
     fragmented_av,
@@ -255,3 +261,77 @@ def test_set_sample_size() -> None:
     nvr = fragmented_av(1)
     nvr_moof = nvr[nvr.index(b"moof") - 4 :]
     assert fmp4.set_sample_size(nvr_moof, 7) is None
+
+
+def test_a_clip_starts_at_the_key_frame_before_it() -> None:
+    """Saving an event (Phase 11 step 2): the fragments that hold the stretch."""
+    index = _index(NVR)  # four fragments of 2 s
+    assert clip_fragments(index, 4500, 6500) == (2, 3)
+    assert clip_fragments(index, 0, 2000) == (0, 0)
+    assert clip_fragments(index, -3000, 100) == (0, 0)
+    # To the recording's end, and no further.
+    assert clip_fragments(index, 3000, 60_000) == (1, 3)
+    # A fragment without a key frame: back to the one before it.
+    gop = _index(fragmented_av(4, absolute=True, tfdt=False, non_sync=frozenset({2})))
+    assert clip_fragments(gop, 4500, 5000) == (1, 2)
+    # Nothing to cut.
+    assert clip_fragments(index, 9000, 9500) is None
+    assert clip_fragments(index, 3000, 3000) is None
+    assert clip_fragments(FragmentIndex(), 0, 1000) is None
+
+
+def test_a_clip_is_its_fragments_from_time_zero() -> None:
+    """The init segment, then the fragments normalized, every track from 0."""
+    index = _index(NVR)
+    out = io.BytesIO()
+    size = write_clip(Strict(NVR), index, 2, 3, out)
+    clip = out.getvalue()
+    assert size == len(clip)
+    assert clip.startswith(FTYP + av_moov())
+    again = _index(clip)
+    assert again.error is None
+    # Every track moved back by the earliest one's start: here the audio's
+    # (its 2 s fragments are 1.984 s), so it starts at 0 and the video 32 ms on,
+    # as they played.
+    shift = _shift(dict(index.fragments[2].decode))
+    assert shift == {1: 4.0 * VIDEO_TIMESCALE - 2880, 2: 2 * AUDIO_FRAMES * AUDIO_FRAME}
+    assert [dict(f.decode) for f in again.fragments] == [
+        {t: v - shift[t] for t, v in f.decode} for f in index.fragments[2:]
+    ]
+    assert [f.start_ms for f in again.fragments] == [32, 2032]
+    # The samples as stored, each fragment's own.
+    for kept, original in zip(again.fragments, index.fragments[2:], strict=True):
+        assert (
+            clip[kept.offset + kept.moof_size : kept.end]
+            == (NVR[original.offset + original.moof_size : original.end])
+        )
+        _check_mse_ready(
+            clip[kept.offset : kept.end],
+            {1: dict(kept.decode)[1], 2: dict(kept.decode)[2]},
+        )
+
+
+def test_a_clip_keeps_its_tracks_in_step() -> None:
+    """A track starting later than the other keeps its distance from it."""
+    index = _index(NVR)
+    third = index.fragments[2]
+    late = dict(third.decode)
+    late[2] += AUDIO_FRAME * 4  # the audio 4 frames behind the video
+    index.fragments[2] = dataclasses.replace(third, decode=tuple(late.items()))
+    out = io.BytesIO()
+    write_clip(Strict(NVR), index, 2, 2, out)
+    (kept,) = _index(out.getvalue()).fragments
+    # Now the video is the earlier: it starts at 0, the audio as far after it as before.
+    assert dict(kept.decode) == {1: 0, 2: late[2] - _shift(late)[2]}
+    assert dict(kept.decode)[2] / AUDIO_TIMESCALE == pytest.approx(
+        late[2] / AUDIO_TIMESCALE - late[1] / VIDEO_TIMESCALE, abs=1 / AUDIO_TIMESCALE
+    )
+    with pytest.raises(FragmentError, match="no init segment"):
+        write_clip(Strict(NVR), FragmentIndex(), 0, 0, io.BytesIO())
+
+
+def _shift(decode: dict[int, int]) -> dict[int, int]:
+    """How far a clip moves each track back: the earliest track's start."""
+    scales = {1: VIDEO_TIMESCALE, 2: AUDIO_TIMESCALE}
+    base = min(value / scales[track] for track, value in decode.items())
+    return {track: math.floor(base * scale) for track, scale in scales.items()}

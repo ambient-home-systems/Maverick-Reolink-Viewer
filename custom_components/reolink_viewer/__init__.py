@@ -22,6 +22,7 @@ from homeassistant.util.ssl import SSLCipherList
 from . import bridge, devices
 from .baichuan_source import BaichuanSource
 from .checks import CheckReports
+from .clips import EventClips
 from .const import (
     CAMERA_HOST_CONCURRENCY,
     CARD_FILENAME,
@@ -35,6 +36,7 @@ from .const import (
     DEFAULT_LEARN_NORMAL,
     DEFAULT_STREAM_BUDGET,
     DOMAIN,
+    EVENT_CLIPS_DIR,
     FRONTEND_DIST_DIR,
     GO2RTC_DIR,
     ISSUE_INCOMPATIBLE,
@@ -69,7 +71,7 @@ from .unusual.check import FiredLog
 from .unusual.const import DEFAULT_SCOPE, DEFAULT_SENSITIVITY
 from .unusual.live import UnusualWatch
 from .unusual.model import Unusual
-from .views import ClipView, MseView, ScrubView, ThumbView, VodView
+from .views import ClipView, EventClipView, MseView, ScrubView, ThumbView, VodView
 from .vodcache import VodCache
 from .wall import WallStore
 from .websocket_api import async_register_commands
@@ -92,6 +94,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     # Views cannot be unregistered; they find the loaded entry per request.
     hass.http.register_view(VodView())
     hass.http.register_view(ClipView())
+    hass.http.register_view(EventClipView())
     hass.http.register_view(MseView())
     hass.http.register_view(ThumbView())
     hass.http.register_view(ScrubView())
@@ -198,6 +201,11 @@ async def async_setup_entry(
     seen = SeenStore(hass)
     wall = WallStore(hass)
     await vod_cache.async_setup()
+    # Phase 11 step 2: "Save event" (clips cut from the cached copies).
+    clips = EventClips(
+        hass, vod_cache, cache_dir / EVENT_CLIPS_DIR, get_ffmpeg_manager(hass).binary
+    )
+    await clips.async_setup()
     await thumbnails.async_setup()
     await scrub.store.async_setup()
     await check_reports.async_load()
@@ -255,6 +263,7 @@ async def async_setup_entry(
         wall=wall,
         scrub=scrub,
         loop=loop_watch,
+        clips=clips,
     )
     entry.async_on_unload(loop_watch.stop)
     entry.async_on_unload(journal.listen_detections(watch.detected))
@@ -408,6 +417,8 @@ async def async_unload_entry(
         await entry.runtime_data.live.async_shutdown()
     if entry.runtime_data.baichuan is not None:
         await entry.runtime_data.baichuan.async_shutdown()
+    if entry.runtime_data.clips is not None:
+        await entry.runtime_data.clips.async_shutdown()
     await entry.runtime_data.vod_cache.async_shutdown()
     await entry.runtime_data.scheduler.async_shutdown()
     return True

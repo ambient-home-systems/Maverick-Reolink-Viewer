@@ -429,6 +429,22 @@ export interface PlaybackUrl {
   timing?: Timing;
 }
 
+/** An event saved as an MP4 (playback/save_event, Phase 11 step 2). */
+export interface SavedClip {
+  /** Signed: the file, as a download, for `expires_in` seconds. */
+  url: string;
+  /** `<camera>-<date>-<time>-<type>.mp4` */
+  name: string;
+  size: number;
+  /** What it holds (UTC ms): from the key frame at or before the margin before the event. */
+  start: number;
+  end: number;
+  /** A plain MP4 (else fragmented, as ffmpeg could not rewrite it). */
+  plain: boolean;
+  expires_in: number;
+  timing?: Timing;
+}
+
 export interface CacheStatusResult {
   /** The download of the copy a URL serves (null once evicted). */
   cache: CacheStatus | null;

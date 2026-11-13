@@ -1,5 +1,5 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
-import { Bt as i, Ot as a } from "./live-BD2sk3pJ.js";
+import { Ot as i, Vt as a } from "./live-B3rIzIdQ.js";
 import { a as o, o as s, r as c } from "./wall-config-CRjQhRDF.js";
 import { t as l } from "./editor-event-DOL4ACcL.js";
 //#region src/card/wall-editor.ts
@@ -30,9 +30,9 @@ var u = class extends r {
 	async _load(e) {
 		this._loading = !0;
 		try {
-			this._layouts = (await a(e)).layouts;
+			this._layouts = (await i(e)).layouts;
 		} catch (e) {
-			this._error = i(e).message;
+			this._error = a(e).message;
 		} finally {
 			this._loading = !1;
 		}

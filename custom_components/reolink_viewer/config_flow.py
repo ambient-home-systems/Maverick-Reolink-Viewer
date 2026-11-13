@@ -16,18 +16,25 @@ from homeassistant.helpers.selector import (
     EntitySelector,
     EntitySelectorConfig,
     EntityWithDeviceFilterSelectorConfig,
+    NumberSelector,
+    NumberSelectorConfig,
+    NumberSelectorMode,
     SelectSelector,
     SelectSelectorConfig,
     SelectSelectorMode,
 )
 
+from .clips import MARGIN_MAX_S
 from .const import (
     CONF_BAICHUAN_DEEP_START,
+    CONF_EVENT_CLIP_AFTER,
+    CONF_EVENT_CLIP_BEFORE,
     CONF_LEARN_NORMAL,
     CONF_UNUSUAL_SCOPE,
     CONF_UNUSUAL_SENSITIVITY,
     CONF_UNUSUAL_SIGNALS,
     DEFAULT_BAICHUAN_DEEP_START,
+    DEFAULT_EVENT_CLIP_MARGIN,
     DEFAULT_LEARN_NORMAL,
     DOMAIN,
     NAME,
@@ -53,6 +60,17 @@ from .unusual.const import (
 # default); turning it off deletes the journal. Applied at once. How much is
 # marked unusual, what each camera is compared with, and the house-wide
 # signals learned with, apply at once too (the model is rebuilt).
+# Phase 11 step 2: how much "Save event" keeps before and after an event, read
+# at each save.
+_MARGIN = NumberSelector(
+    NumberSelectorConfig(
+        min=0,
+        max=MARGIN_MAX_S,
+        step=1,
+        unit_of_measurement="s",
+        mode=NumberSelectorMode.BOX,
+    )
+)
 OPTIONS_SCHEMA = probatio.Schema(
     {
         probatio.Required(
@@ -75,6 +93,12 @@ OPTIONS_SCHEMA = probatio.Schema(
                 translation_key=CONF_UNUSUAL_SCOPE,
             )
         ),
+        probatio.Required(
+            CONF_EVENT_CLIP_BEFORE, default=DEFAULT_EVENT_CLIP_MARGIN
+        ): _MARGIN,
+        probatio.Required(
+            CONF_EVENT_CLIP_AFTER, default=DEFAULT_EVENT_CLIP_MARGIN
+        ): _MARGIN,
     }
 )
 

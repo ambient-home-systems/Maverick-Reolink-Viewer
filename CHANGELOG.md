@@ -3,6 +3,25 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.65.0
+
+The second of Phase 11's extras:
+
+- **Save an event:** while an event plays, **Save event** under the player saves it as
+  an MP4, from 10 seconds before it to 10 seconds after it, in the quality playing.
+  - It is downloaded as soon as it is made, named for the camera, the day, the time
+    and what was seen, for example `front-door-20261113-081603-person.mp4`.
+  - It is the recording's own video and sound, cut at the key frame before the start,
+    not re-encoded.
+  - It takes as long as the recording takes to copy that far from the recorder.
+  - Once saved, **Event saved** downloads it again for 15 minutes.
+  - How much it keeps before and after is in Reolink Viewer's options (0 to 120
+    seconds each).
+- **Download recording:** "Download clip" is now called that, as it is the whole
+  recording.
+- **Picture in picture** under the player shows its icon and words on one line again.
+  They were squeezed into a button the size of the ⏮ ▶ ⏭ ones.
+
 ## 0.64.1
 
 - **Reset now resets the zoom:** clicking **Reset** on a zoomed recording or full-screen

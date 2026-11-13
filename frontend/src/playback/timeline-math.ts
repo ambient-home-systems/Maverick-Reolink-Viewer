@@ -180,6 +180,23 @@ export function previousEvent(events: TimelineEvent[], t: number): TimelineEvent
   return found;
 }
 
+/**
+ * "Save event" saves the event at the play position (Phase 11 step 2): the
+ * latest one started by `t` and not ended more than `graceMs` before it (a
+ * pause just after an event still means it).
+ */
+export function eventToSave(events: readonly TimelineEvent[], t: number, graceMs = SAVE_GRACE_MS): TimelineEvent | undefined {
+  let found: TimelineEvent | undefined;
+  for (const e of events) {
+    if (e.start > t) break;
+    if (t < e.end + graceMs) found = e;
+  }
+  return found;
+}
+
+/** How long after an event ends "Save event" still offers it. */
+export const SAVE_GRACE_MS = 15_000;
+
 /** Every Reolink VOD trigger type, most specific first, with its label. */
 export const EVENT_TYPES: readonly { type: string; label: string }[] = [
   { type: "PERSON", label: "Person" },

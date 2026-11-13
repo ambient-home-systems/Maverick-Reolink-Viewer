@@ -11,6 +11,7 @@ import {
   openScrubSession,
   prefetchSegment,
   releasePlayback,
+  saveEventClip,
   toError,
   urlToken,
   type SegmentRef,
@@ -54,6 +55,7 @@ import {
   MINUTE,
   centreOn,
   clampView,
+  eventToSave,
   filterEvents,
   nextEvent,
   playTarget,
@@ -72,7 +74,17 @@ import { pipSupported } from "../pip";
 import { parseInShort } from "../plain";
 import { problem } from "../problem";
 import { sharedStyles } from "../styles";
-import type { CacheStatus, HomeAssistant, PlaybackUrl, Segment, Stream, TimelineDay, Timing } from "../types";
+import type {
+  CacheStatus,
+  HomeAssistant,
+  PlaybackUrl,
+  SavedClip,
+  Segment,
+  Stream,
+  TimelineDay,
+  TimelineEvent,
+  Timing,
+} from "../types";
 import { LIVE_REPORT_PREFIX, wsUrl } from "../live/check-util";
 import { dayLabel, shortDay } from "./events-view";
 import "./findings";
@@ -191,6 +203,7 @@ export class RvPlayback extends LitElement {
     _stream: { state: true },
     _hd: { state: true },
     _playing: { state: true },
+    _saving: { state: true },
     _hover: { state: true },
     _thumbs: { state: true },
     _metrics: { state: true },
@@ -235,6 +248,8 @@ export class RvPlayback extends LitElement {
   declare _stream: Stream;
   declare _hd: StreamDecision;
   declare _playing: PlaybackUrl | undefined;
+  /** "Save event" (Phase 11 step 2): the event being saved, or saved, and its clip. */
+  declare _saving: { key: string; clip?: SavedClip } | undefined;
   declare _hover: { x: number; time: number; url?: string; gap?: boolean; bare?: boolean } | undefined;
   declare _thumbs: ReadonlyMap<number, string>;
   declare _metrics: Metrics;
@@ -1465,11 +1480,81 @@ export class RvPlayback extends LitElement {
               ${icon("pip")}Picture in picture
             </button>`
           : nothing}
+        ${this._renderSave()}
         ${this._playing
-          ? html`<a class="download" href=${this._playing.clip_url} download>${icon("download")}Download clip</a>`
+          ? html`<a
+              class="download"
+              href=${this._playing.clip_url}
+              download
+              title="The whole recording this moment is in"
+              >${icon("download")}Download recording</a
+            >`
           : nothing}
       </div>
     </div>`;
+  }
+
+  /** The event at the play position, while one plays: "Save event" saves it. */
+  private _eventToSave(): TimelineEvent | undefined {
+    if (!this._playing || this._cursor === undefined) return undefined;
+    return eventToSave(this._day?.events ?? [], this._cursor);
+  }
+
+  /** "Save event", "Saving event…", then the saved clip's link (Phase 11 step 2). */
+  private _renderSave(): TemplateResult | typeof nothing {
+    const event = this._eventToSave();
+    if (!event || !this._playing) return nothing;
+    const key = saveKey(this._playing, event);
+    const saving = this._saving?.key === key ? this._saving : undefined;
+    if (saving?.clip) {
+      return html`<a
+        class="download saved"
+        href=${saving.clip.url}
+        download=${saving.clip.name}
+        title=${saving.clip.name}
+        >${icon("download")}Event saved (${clipSize(saving.clip.size)})</a
+      >`;
+    }
+    const busy = saving !== undefined;
+    // One at a time (the server makes them in turn).
+    const another = this._saving !== undefined && !this._saving.clip;
+    return html`<button
+      class="save"
+      ?disabled=${busy || another}
+      title="An MP4 of this event, with a few seconds before and after"
+      @click=${() => void this._saveEvent(event)}
+    >
+      ${icon("download")}${busy ? "Saving event…" : "Save event"}
+    </button>`;
+  }
+
+  /**
+   * Make the event's clip, then download it. Its link stays (the download
+   * again, or the first one where the browser would not start it unasked).
+   */
+  private async _saveEvent(event: TimelineEvent): Promise<void> {
+    const hass = this.hass;
+    const playing = this._playing;
+    if (!hass || !playing || (this._saving && !this._saving.clip)) return;
+    const key = saveKey(playing, event);
+    this._saving = { key };
+    const type = shownTypes(event.types)[0] ?? "MOTION";
+    const ref: SegmentRef = {
+      deviceId: this.deviceId,
+      date: this._date,
+      segmentId: playing.segment_id,
+      stream: playing.stream,
+    };
+    try {
+      // Downloaded even if another camera or day is on screen by now: it was asked for.
+      const clip = await saveEventClip(hass, ref, event.start, event.end, typeLabel(type));
+      this._saving = { key, clip };
+      download(this.renderRoot, clip.url, clip.name);
+      toast(this, `Saved ${clip.name}`);
+    } catch (err) {
+      this._saving = undefined;
+      toast(this, `Could not save the event: ${toError(err).message}`, "error");
+    }
   }
 
   /** What was detected in the day's events, to show only some. */
@@ -1840,14 +1925,25 @@ export class RvPlayback extends LitElement {
       }
       .group {
         display: flex;
+        flex-wrap: wrap;
         align-items: center;
-        gap: 6px;
+        gap: 8px 6px;
       }
       .group > button {
         width: 40px;
         padding: 0;
         display: grid;
         place-items: center;
+      }
+      /* Buttons with words keep them on one line (Picture in picture, Save event). */
+      .group > button.pip,
+      .group > button.save {
+        width: auto;
+        padding: 0 12px;
+        white-space: nowrap;
+      }
+      .group > .download {
+        white-space: nowrap;
       }
       .group > button.play {
         width: 48px;
@@ -1893,13 +1989,15 @@ export class RvPlayback extends LitElement {
       .speed select {
         min-height: 36px;
       }
-      button.pip {
+      button.pip,
+      button.save {
         display: inline-flex;
         align-items: center;
         gap: 6px;
         margin-left: 6px;
       }
-      button.pip svg {
+      button.pip svg,
+      button.save svg {
         width: 18px;
         height: 18px;
       }
@@ -2161,4 +2259,26 @@ declare global {
   interface HTMLElementTagNameMap {
     "rv-playback": RvPlayback;
   }
+}
+
+/** Which event of which recording and stream a save is of. */
+export function saveKey(playing: Pick<PlaybackUrl, "segment_id" | "stream">, event: Pick<TimelineEvent, "start">): string {
+  return `${playing.segment_id}|${playing.stream}|${event.start}`;
+}
+
+/** A clip's size, as a person reads it: "2.4 MB", "830 KB". */
+export function clipSize(bytes: number): string {
+  if (bytes < 1_000_000) return `${Math.max(1, Math.round(bytes / 1000))} KB`;
+  return `${(bytes / 1_000_000).toFixed(1)} MB`;
+}
+
+/** Start a download of `url` as `name`, as a click on a link to it would. */
+function download(root: HTMLElement | DocumentFragment, url: string, name: string): void {
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = name;
+  link.hidden = true;
+  root.appendChild(link);
+  link.click();
+  link.remove();
 }

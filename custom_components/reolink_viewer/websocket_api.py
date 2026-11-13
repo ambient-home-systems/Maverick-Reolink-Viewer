@@ -1,7 +1,7 @@
 """Websocket commands for the Reolink Viewer panel."""
 
 from collections.abc import Callable
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 import logging
 import re
 import time
@@ -21,7 +21,15 @@ from . import bridge, devices, events
 from .binary_sensor import UNUSUAL_DEVICE, UNUSUAL_SENSOR_SUFFIX
 from .catalog import async_get_catalog
 from .checks import MAX_TEXT
-from .const import DOMAIN, PROBE_HARD_MAX_STREAMS, PROBE_PLAYBACK_HARD_MAX_STREAMS
+from .clips import CLIP_KEEP_S, ClipError, clip_name
+from .const import (
+    CONF_EVENT_CLIP_AFTER,
+    CONF_EVENT_CLIP_BEFORE,
+    DEFAULT_EVENT_CLIP_MARGIN,
+    DOMAIN,
+    PROBE_HARD_MAX_STREAMS,
+    PROBE_PLAYBACK_HARD_MAX_STREAMS,
+)
 from .models import ReolinkViewerConfigEntry
 from .probe import ProbeOptions, Prober
 from .probe_baichuan import BaichuanOptions
@@ -37,12 +45,14 @@ from .unusual.score import incidents
 from .unusual.shapes import profile_payload
 from .views import (
     CLIP_PATH,
+    EVENT_CLIP_PATH,
     MSE_PATH,
     SCRUB_PATH,
     SCRUB_TTL,
     THUMB_PATH,
     THUMB_TTL,
     VOD_PATH,
+    EventClipGrant,
     MseGrant,
     ScrubGrant,
     ThumbGrant,
@@ -61,6 +71,7 @@ ERR_PROBE_RUNNING = "probe_running"
 ERR_NO_PLAYBACK = "no_playback"
 ERR_SEARCH_FAILED = "search_failed"
 ERR_CACHE_FAILED = "cache_failed"
+ERR_CLIP_FAILED = "clip_failed"
 ERR_NOT_LEARNING = "not_learning"
 MAX_THUMB_TIMES = 200
 MAX_RELEASE = 20
@@ -87,6 +98,7 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_playback_scrub)
     websocket_api.async_register_command(hass, ws_playback_prefetch)
     websocket_api.async_register_command(hass, ws_playback_release)
+    websocket_api.async_register_command(hass, ws_playback_save_event)
     websocket_api.async_register_command(hass, ws_thumbnail_urls)
     websocket_api.async_register_command(hass, ws_media_info)
     websocket_api.async_register_command(hass, ws_playback_peek)
@@ -901,6 +913,82 @@ async def ws_playback_prefetch(
     )
 
 
+@websocket_api.websocket_command(
+    {
+        probatio.Required("type"): f"{DOMAIN}/playback/save_event",
+        **_SEGMENT_SCHEMA,
+        # The event (UTC ms): the margins before and after (the options) are added.
+        probatio.Required("start"): int,
+        probatio.Required("end"): int,
+        # What it was (person, vehicle...), for the file's name.
+        probatio.Optional("label", default="event"): probatio.All(
+            str, probatio.Length(max=40)
+        ),
+    }
+)
+@websocket_api.async_response
+async def ws_playback_save_event(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Save an event (Phase 11 step 2): an MP4 of it, with a margin either side.
+
+    Answers once the clip is made (waiting, if need be, for the recording's
+    download to reach the event's end) with its signed download URL.
+    """
+    if msg["end"] < msg["start"]:
+        connection.send_error(
+            msg["id"],
+            websocket_api.ERR_INVALID_FORMAT,
+            "The event ends before it starts",
+        )
+        return
+    if (resolved := _playback_source(hass, connection, msg)) is None:
+        return
+    entry, source = resolved
+    data = entry.runtime_data
+    if data.clips is None:
+        connection.send_error(msg["id"], ERR_NOT_LOADED, "Saving events is not ready")
+        return
+    margin = DEFAULT_EVENT_CLIP_MARGIN
+    before = int(entry.options.get(CONF_EVENT_CLIP_BEFORE, margin)) * 1000
+    after = int(entry.options.get(CONF_EVENT_CLIP_AFTER, margin)) * 1000
+    start, end = msg["start"] - before, msg["end"] + after
+    try:
+        recording, _segment_id = await _recording(entry, source, msg)
+        # A copy of a recording still being written must reach the end.
+        cache_entry = await data.vod_cache.async_open(
+            recording, Priority.PLAYBACK, at=end
+        )
+        name = clip_name(source.name, msg["start"], msg["label"], hass.config.time_zone)
+        clip = await data.clips.async_make(cache_entry, start, end, name)
+    except TimelineError as err:
+        connection.send_error(msg["id"], ERR_SEARCH_FAILED, str(err))
+        return
+    except VodCacheError as err:
+        connection.send_error(msg["id"], ERR_CACHE_FAILED, str(err))
+        return
+    except ClipError as err:
+        connection.send_error(msg["id"], ERR_CLIP_FAILED, str(err))
+        return
+    ttl = timedelta(seconds=CLIP_KEEP_S)
+    token = data.grants.issue(EventClipGrant(clip.path, clip.name), ttl)
+    connection.send_result(
+        msg["id"],
+        {
+            "url": sign(hass, EVENT_CLIP_PATH, token, ttl),
+            "name": clip.name,
+            "size": clip.size,
+            "start": clip.start_ms,
+            "end": clip.end_ms,
+            "plain": clip.plain,
+            "expires_in": CLIP_KEEP_S,
+            "timing": {"total_ms": clip.took_ms},
+        },
+    )
+
+
 @callback
 @websocket_api.websocket_command(
     {
@@ -1119,6 +1207,7 @@ async def ws_playback_stats(
             "thumbnails": data.thumbnails.stats(),
             "scrub": data.scrub.stats() if data.scrub is not None else None,
             "loop": data.loop.snapshot() if data.loop is not None else None,
+            "event_clips": data.clips.stats() if data.clips is not None else None,
         },
     )
 

@@ -7,6 +7,7 @@ from homeassistant.config_entries import ConfigEntry
 
 from .baichuan_source import BaichuanSource
 from .checks import CheckReports
+from .clips import EventClips
 from .events import SeenStore
 from .journal import Journal
 from .live.service import LiveService
@@ -54,6 +55,8 @@ class ReolinkViewerData:
     scrub: ScrubService | None = None
     # How late the event loop runs (the playback check reads it with each start).
     loop: LoopWatch | None = None
+    # Phase 11 step 2: events' saved clips, each kept a quarter of an hour.
+    clips: EventClips | None = None
 
 
 type ReolinkViewerConfigEntry = ConfigEntry[ReolinkViewerData]
