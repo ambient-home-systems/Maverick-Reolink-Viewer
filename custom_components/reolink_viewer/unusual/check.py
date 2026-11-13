@@ -84,9 +84,15 @@ class FiredLog:
             "fired": fired,
             "automations": [],
         }
+        if payload.get("quiet"):
+            # Kept quiet, once per visit (v0.63.14): not fired, so nothing ran on it.
+            entry["quiet"] = True
         self._entries.append(entry)
         cutoff = fired - KEEP_DAYS * 86_400
         self._entries = [e for e in self._entries if e["fired"] >= cutoff][-KEEP_MAX:]
+        if entry.get("quiet"):
+            self._save()
+            return
 
         @callback
         def ran(event: Event) -> None:
@@ -132,9 +138,10 @@ def compare(
     """Match the panel's marks with the events fired.
 
     Returns each mark (``kind``, ``start`` ms, ``camera_ids``, ``members``) with
-    ``fired`` (how many fired for it: one is right), ``delay`` (s, from its
+    ``fired`` (how many fired for it: one is right), ``quiet`` (how many were
+    kept quiet as part of a visit said already), ``delay`` (s, from its
     detection's start to the first fired) and ``automations`` (those that ran
-    on it); and the events fired for no mark.
+    on it); and the events fired for no mark (those kept quiet left out).
     """
     left = list(fired)
     matched: list[dict[str, Any]] = []
@@ -154,6 +161,8 @@ def compare(
         ]
         for event in found:
             left.remove(event)
+        quiet = [e for e in found if e.get("quiet")]
+        found = [e for e in found if not e.get("quiet")]
         first = min(found, key=lambda e: e["fired"]) if found else None
         matched.append(
             {
@@ -162,6 +171,8 @@ def compare(
                     for k in ("kind", "start", "end", "camera", "cameras", "reason")
                 },
                 "fired": len(found),
+                # Kept quiet as part of a visit said already (v0.63.14).
+                "quiet": len(quiet),
                 "delay": None
                 if first is None
                 else round(first["fired"] - first["start"], 1),
@@ -169,7 +180,7 @@ def compare(
                 "automations": sorted({a for e in found for a in e["automations"]}),
             }
         )
-    return matched, left
+    return matched, [e for e in left if not e.get("quiet")]
 
 
 def _when(event: dict[str, Any], mark: dict[str, Any]) -> str:

@@ -121,6 +121,15 @@ describe("the learning check's lines", () => {
     expect(marks(after)).toContainEqual([false, "1 event fired for no mark"]);
   });
 
+  it("counts a mark kept quiet within its camera's visit as right (v0.63.14: one alert per visit)", () => {
+    const quiet = mark({ start: DAY + 300_000, fired: 0, quiet: 1, delay: null, when: null, automations: [] });
+    const lines = learningCheckLines(check({ marks: [mark(), quiet] }), ZONE, NAMES);
+    expect(marks(lines)).toContainEqual([true, "2 marks since Oct 31, 2026, 10:00: 1 of 2 fired its event once"]);
+    expect(lines[2]?.details).toEqual([
+      "kept quiet, its camera's visit had fired already (one alert per visit): Nov 3, 2026, 09:05, person on Drive",
+    ]);
+  });
+
   it("says each thing to look at: not fired, twice, late, unmarked, a signal gone, an automation that did not run", () => {
     const lines = learningCheckLines(
       check({

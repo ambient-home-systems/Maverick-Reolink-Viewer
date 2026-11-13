@@ -125,7 +125,7 @@ describe("PlaybackCheck", () => {
       changes.push(1),
     );
     const report = await check.run();
-    expect(report).toContain("Reolink Viewer playback check v0.8.9 · Desktop Chrome, LAN · Garage");
+    expect(report).toContain("Reolink Viewer playback check v0.9.0 · Desktop Chrome, LAN · Garage");
     expect(report).toContain("A1 Time to timeline, today (as the tab opened): 120 ms (server: memory, total 4 ms)");
     expect(report).toContain("A2/A3 skipped: no earlier recording day this month");
     expect(report).toContain("B  skipped: no events today");
@@ -798,6 +798,35 @@ describe("a release that showed no first frame (v0.63.6)", () => {
     const result = await stuck(stuckPlayer("NotAllowedError: not allowed"), performance.now());
     expect(result.detail[1]).toBe("pressing play then: refused (NotAllowedError: not allowed)");
     expect(result.plain).toBe("Letting go did not start the video: the browser refused to play it (NotAllowedError: not allowed).");
+  });
+});
+
+describe("the rates' recording", () => {
+  it("takes one long enough for every rate, from an earlier day when today has none (v0.9.0)", async () => {
+    // The tablet at 6:27 AM: today one 40 s recording; the 16th a 3.7 min one.
+    const seg = (start: number, ms: number) => ({ id: String(start), start, end: start + ms, triggers: [], ambiguous: false });
+    const today = { ...emptyDay(), segments: [seg(T0 + 3_600_000, 40_000)] };
+    const earlier = { ...emptyDay(), date: "2026-10-16", now: T0, segments: [seg(T0 - 50_000_000, 222_000), seg(T0 - 40_000_000, 60_000)] };
+    const hass = reportingHass();
+    const asked: string[] = [];
+    const base = hass.callWS.bind(hass);
+    hass.callWS = <T,>(message: Record<string, unknown>) => {
+      if (message.type !== "reolink_viewer/timeline/day") return base<T>(message);
+      asked.push(String(message.date));
+      return Promise.resolve((message.date === "2026-10-16" ? earlier : today) as T);
+    };
+    const target = { ...stubTarget(hass), day: today, monthDays: new Set([16]) };
+    const check = new PlaybackCheck(target, { setup: "test", soakMinutes: 0 }) as unknown as {
+      _rateRecording(): Promise<{ date: string; segment: { start: number; end: number } } | undefined>;
+    };
+    const found = await check._rateRecording();
+    expect(found?.date).toBe("2026-10-16");
+    expect(found?.segment.end).toBe(T0 - 50_000_000 + 222_000);
+    expect(asked).toEqual(["2026-10-16"]);
+    // Today long enough: today's, asked of no one.
+    const long = { ...today, segments: [seg(T0 + 3_600_000, 180_000)] };
+    const own = new PlaybackCheck({ ...target, day: long }, { setup: "test", soakMinutes: 0 }) as unknown as typeof check;
+    expect((await own._rateRecording())?.date).toBe("2026-10-17");
   });
 });
 
