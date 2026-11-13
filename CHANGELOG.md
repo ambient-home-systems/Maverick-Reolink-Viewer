@@ -3,6 +3,13 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.64.1
+
+- **Reset now resets the zoom:** clicking **Reset** on a zoomed recording or full-screen
+  camera did nothing in Chrome and Safari, as the click was taken for a drag of the
+  picture. A tap on a phone worked. A check with a real mouse and a phone's touch now
+  runs on every change.
+
 ## 0.64.0
 
 Scrubbing (Phase 10) is done: dragging along the timeline shows the picture on every

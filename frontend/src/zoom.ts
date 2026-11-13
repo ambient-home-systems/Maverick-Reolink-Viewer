@@ -38,6 +38,8 @@ export const ZOOM_TAP = 2.5;
  * rather than in it: "none" unzoomed. It inherits through a slot.
  */
 export const ZOOM_VAR = "--rv-zoom-transform";
+/** What over the picture takes its own presses. */
+const CONTROLS = "button, a[href], input, select, textarea, [role='button'], [role='slider']";
 const DOUBLE_TAP_MS = 300;
 const DOUBLE_TAP_PX = 30;
 
@@ -241,8 +243,21 @@ export class ZoomController implements ReactiveController {
     this._surface?.style.setProperty(ZOOM_VAR, transform || "none");
   }
 
+  /**
+   * Whether a press is on a control over the picture (Reset, HD): its own, not
+   * a pan. Capturing it for a pan would send its click to the surface instead
+   * (v0.64.1: Reset did nothing in Chrome).
+   */
+  private _onControl(e: Event): boolean {
+    for (const node of e.composedPath()) {
+      if (node === this._surface) return false;
+      if (node instanceof Element && node.matches(CONTROLS)) return true;
+    }
+    return false;
+  }
+
   private readonly _onDown = (e: PointerEvent): void => {
-    if (!this._options.enabled()) return;
+    if (!this._options.enabled() || this._onControl(e)) return;
     this._pointers.set(e.pointerId, this._point(e));
     this._moved = false;
     if (this._pointers.size === 2) {

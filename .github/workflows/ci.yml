@@ -130,6 +130,9 @@ jobs:
         run: |
           npx vite build -c vite.preview.config.ts
           NODE_PATH="$(npm root -g)" node ../scripts/scrub_check.cjs
+      - name: Zooming into the picture with a mouse and a phone's touch (Reset, wheel, drag, pinch)
+        working-directory: frontend
+        run: NODE_PATH="$(npm root -g)" node ../scripts/zoom_check.cjs
 
   accessibility:
     name: Accessibility (axe and the keyboard)

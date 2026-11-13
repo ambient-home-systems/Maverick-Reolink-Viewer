@@ -97,6 +97,32 @@ describe("zooming into the picture: the gestures", () => {
     expect(surface.style.getPropertyValue(ZOOM_VAR)).toBe("");
   });
 
+  it("leaves a press on a control over the picture to it: Reset's click is its own (v0.64.1)", () => {
+    const { zoom, surface, layer, pointer } = setUp();
+    const pill = document.createElement("div");
+    const reset = document.createElement("button");
+    pill.append(reset);
+    surface.append(pill);
+    const capture = vi.fn();
+    surface.setPointerCapture = capture;
+    zoom.step(2);
+    const before: Zoom = { ...zoom.zoom };
+    // A mouse's press on Reset: no pan, no capture (which sent its click to the surface, in Chrome).
+    const down = new PointerEvent("pointerdown", { pointerId: 1, clientX: 200, clientY: 20, pointerType: "mouse", bubbles: true, cancelable: true });
+    reset.dispatchEvent(down);
+    expect(down.defaultPrevented).toBe(false);
+    pointer("pointermove", 1, 260, 60, "mouse");
+    pointer("pointerup", 1, 260, 60, "mouse");
+    expect(capture).not.toHaveBeenCalled();
+    expect(zoom.zoom).toEqual(before);
+    // The picture itself, pressed: a pan, with the pointer kept.
+    pointer("pointerdown", 2, 200, 100, "mouse");
+    pointer("pointermove", 2, 230, 120, "mouse");
+    expect(capture).toHaveBeenCalledWith(2);
+    expect(zoom.zoom.x).not.toBe(before.x);
+    expect(layer.style.transform).toContain("scale(2.0000)");
+  });
+
   it("zooms in at a double tap, and back out at the next", () => {
     const { zoom, pointer, onReset } = setUp();
     const tap = (times: number, kind = "touch") => {
