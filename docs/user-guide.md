@@ -586,6 +586,35 @@ line saying what it does. **About this setting** opens a fuller explanation.
 Every change goes through Home Assistant, as if made on a Home Assistant dashboard,
 and the panel always shows what the camera reports back.
 
+#### Copy settings to other cameras
+
+**Copy to…** at the top of a camera's Settings copies its settings to other cameras:
+tune one camera's picture, then give the others the same.
+
+1. Choose **what** to copy: image, detection tuning, lights and night vision,
+   recording, notifications, audio, and the like. Each shows how many of its settings
+   can be copied.
+2. Choose the cameras to copy **to**. Cameras of the same model come first, marked
+   **Same model**: they have the same settings.
+3. **Preview** shows, for each camera, every change, from its value now to the new
+   one. It also shows how many are already the same, and what that camera **cannot
+   take**, with why:
+   - it has no such setting;
+   - it does not offer that option;
+   - the value is out of its range;
+   - the setting is turned off in Home Assistant, or unavailable now.
+
+   A change that can disrupt the camera says so, as **Asks first** does.
+4. **Copy** sets each change through Home Assistant, one at a time. Each then says
+   **Changed** once the camera shows the new value, or **Refused** with Home
+   Assistant's reason, or that the camera still shows its old value.
+
+Nothing changes until you press **Copy**. Never copied:
+- the camera's name and on-screen text;
+- its pan, tilt and zoom positions and settings;
+- its privacy settings;
+- actions such as starting a recording or turning the floodlight on now.
+
 ## A camera on a dashboard
 
 Any Home Assistant dashboard can show a camera the way the panel does: its last

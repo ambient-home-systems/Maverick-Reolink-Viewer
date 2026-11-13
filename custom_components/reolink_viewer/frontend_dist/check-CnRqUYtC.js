@@ -1,5 +1,5 @@
 import { $ as e, Ht as t, Tt as n, Vt as r, it as i, jt as a, v as o, wt as s, yt as c } from "./live-B3rIzIdQ.js";
-import { lt as l, ot as u } from "./home-1VYUEooK.js";
+import { st as l, ut as u } from "./home-BppZWJWj.js";
 import { a as d, n as f, o as p, r as m, s as h, t as g } from "./findings-6PHDV5xU.js";
 //#region src/playback/check-util.ts
 var _ = (e) => /iPhone|iPad|iPod/.test(e);
@@ -824,8 +824,8 @@ var Y = (e) => new Date(e).toLocaleTimeString(), jt = class {
 		this._log(`Reolink Viewer playback check v${He} · ${this.options.setup} · ${e.cameraName} · ${(/* @__PURE__ */ new Date()).toLocaleString()}`), this._log(`Browser: ${S(navigator.userAgent)} · page ${o(location.hostname)} over ${location.protocol.replace(":", "")} · screen ${screen.width}×${screen.height} @${window.devicePixelRatio}x` + (t?.effectiveType ? ` · network ${t.effectiveType}, ${t.downlink ?? "?"} Mbit/s (browser estimate)` : ""));
 		let n = performance.getEntriesByType("navigation")[0];
 		this._log(`User agent: ${navigator.userAgent}`), this._log(`Connection: page loaded over ${n?.nextHopProtocol || "? (from the app's cache)"}; each video request line gives its own (h2/h3 share one connection; http/1.1 allows 6 at once)`), this._log(`Player: ${e.mode} · file player delivery: ${e.progressive ? "progressive" : "whole file first (WebKit)"}`), this._summary.push(`Player: ${e.mode}`);
-		let r = await e.hass.callWS({ type: "reolink_viewer/devices" }).catch(() => void 0), i = l(r, u);
-		this._log(`Reolink Viewer: this page ${u}, Home Assistant ${r ? r.version ?? "older than 0.61.1" : "not read"}` + (i ? ` · NOT THE SAME: ${i.advice ?? ""}` : "")), i && this._plain.push({
+		let r = await e.hass.callWS({ type: "reolink_viewer/devices" }).catch(() => void 0), i = u(r, l);
+		this._log(`Reolink Viewer: this page ${l}, Home Assistant ${r ? r.version ?? "older than 0.61.1" : "not read"}` + (i ? ` · NOT THE SAME: ${i.advice ?? ""}` : "")), i && this._plain.push({
 			grade: "problem",
 			text: i.text,
 			...i.advice ? { advice: i.advice } : {}

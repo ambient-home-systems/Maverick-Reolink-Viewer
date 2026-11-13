@@ -3,6 +3,21 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.67.0
+
+The fourth of Phase 11's extras: copy settings to other cameras.
+
+- **Copy to…** at the top of a camera's Settings copies its settings to other cameras.
+  - Choose what (image, detection tuning, lights, recording, notifications, audio, …)
+    and to which cameras. The same model comes first.
+  - A preview shows every change, from the value now to the new one. It also shows
+    what each camera cannot take, and why: no such setting, an option it does not
+    offer, out of its range, turned off.
+  - Nothing changes until you press Copy. Each change then goes through Home
+    Assistant, one at a time, and says whether the camera took it.
+  - Never copied: the camera's name and on-screen text, pan, tilt and zoom, privacy,
+    and actions such as recording now.
+
 ## 0.66.0
 
 The third of Phase 11's extras: filters that start useful.

@@ -45,3 +45,9 @@ export function probeFilename(now: Date): string {
 export function connectionLabel(conn: Pick<DeviceConnection, "via" | "host_name" | "entry_title">): string {
   return conn.via === "nvr" ? `Through ${conn.host_name ?? conn.entry_title}` : "Added directly";
 }
+
+/** A select's option as a person reads it: "black&white" is "Black & white". */
+export function optionLabel(option: string): string {
+  const words = option.replace(/_/g, " ").replace(/\s*&\s*/g, " & ").trim();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}

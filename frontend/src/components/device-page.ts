@@ -282,6 +282,7 @@ export class RvDevicePage extends LitElement {
                   .hass=${this.hass}
                   .device=${device}
                   .catalog=${this._catalog}
+                  .cameras=${this.devices?.cameras ?? []}
                   @rv-entity-enabled=${() => void this.reload()}
                 ></rv-settings>`}
             </div>`
