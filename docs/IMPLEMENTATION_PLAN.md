@@ -8264,6 +8264,27 @@ the Mac, on the LAN over plain HTTP):** no problem found.
   - R's recording from an earlier day; `referenceFps` from the counter (the
     tablet's 1×); `frameStep`; a rate that ran out as a note.
 
+**The owner's run of v0.63.14 (2026-11-13, 8:12 AM, the wall tablet, Garage):**
+one ✗, 2×.
+
+- **A1 156 ms** (stale, 3415 s old). The copy was kept from before the
+  update's restart; `async_keep_today` first runs 15 min after setup.
+- **R** used 2026-11-12's 3.7 min recording, since today's longest was 40 s.
+  0.5×, 1×, 4× and 8× ✓. 2× ✗: 26 of 30 painted, gaps up to 150 ms (28 and
+  24 in earlier runs). It is this entry-level tablet's WebView at the edge,
+  so it is left as it is.
+- **P, V, B** ✓. Home Assistant was held 8 ms at most.
+- **A2/A3 were skipped,** "no earlier recording day this month", though the
+  9th, 10th and 12th have recordings. With today shown at once, the check
+  read the tab's month list (`monthDays`) before it had loaded.
+- **Every device has now passed:** Chrome and Safari on the Mac, the iPhone
+  app, and the wall tablet.
+
+**v0.63.15, from it (check v0.9.1):** `_recordingDays` asks the server for the
+month's days (`timeline/days`) once a run, joined with the tab's list (the
+tab's list alone if the server cannot say). A2/A3, D's `_findLong` and R's
+`_rateRecording` use it.
+
 #### Step 10.4: the checks
 
 - **In CI:** `scrub_check.cjs` drags against a fake key-frame endpoint,

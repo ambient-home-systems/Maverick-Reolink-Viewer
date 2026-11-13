@@ -71,7 +71,7 @@ var _ = class extends r {
   `;
 }, v;
 function y() {
-	return v ??= import("./wall-card-Bf4M6UEv.js").catch((e) => {
+	return v ??= import("./wall-card-DgU5tds6.js").catch((e) => {
 		throw v = void 0, e;
 	}), v;
 }
