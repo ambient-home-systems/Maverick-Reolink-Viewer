@@ -28,7 +28,7 @@ put on it:
 | 9 | The Wall: the Live page as a security monitor, with layouts, arranging, HD large tiles and the detection strip | Standard / High | 2–3 wk | **Done** (2026-11-10, v0.56.0): the owner validated v0.55.0's and v0.56.0's checklists. Started 2026-11-05. **Step 1 built** (v0.52.0): the Wall, its layouts (Auto by shape, 1, 2×2, 3×3, 4×4, 1+5, 1+7), saved per user on the server, `#wall/<id>`, each device remembering board or Wall; the owner's check: it works, nothing to scroll. **Step 2 built** (v0.53.0): swapping (drag, or Arrange and two taps), the large slot or alone by a double tap or Enter, the keyboard, pages and tours. **Step 3 built** (v0.54.0–v0.54.1): HD in the large tiles while a stream slot is spare, the NVR's budget 9 streams with 2 HD tiles (the capacity test). **Step 4 built** (v0.55.0): the detection strip, a tile lit at once by its sensor, and per layout the feeds' floodlight and siren buttons. **Step 5 built** (v0.56.0): the pointer hidden when still, the screen kept awake, the tiles asleep under Fully's screen off, and the Reolink Wall dashboard card. The owner's checks of v0.55.0 and v0.56.0 passed (2026-11-10): the phase is done. See "Phase 9" |
 | 10 | Scrubbing that shows the picture while dragging | Very high | 2–4 wk | **Done** (2026-11-13, v0.63.15): the owner's playback checks passed on every device, Chrome and Safari on the Mac, the iPhone app and the wall tablet (v0.63.10 made MSE painting show a lone key frame, for Chrome on plain HTTP and the tablet). Started 2026-11-10. **Step 0 built** (v0.57.0): the gate's measurements, the probe's scrub cuts and key frames, and the playback check's K row (key frames decoded one at a time); the owner's runs passed it (2026-11-10). **Step 1 built** (v0.58.0): the picture at a moment, from the server: a scrub session (a signed websocket), answered from a store of key frames found, the disk cache or a 2-second cut the device sends, taking its channel's turn; the playback check's F row. **Step 2 built** (v0.59.0): dragging over what the video has not buffered shows the server's key frame at the pointer, over the video, until release plays from there. **Step 4 built** (v0.60.0, the owner's ask): the playback check's P row replaces the hand checklist. **Step 3 built** (v0.62.0): a drag pauses the video, the server answers each picture before its cut's drain, and a release plays from the picture shown; the P row drags slowly alone and beside a second viewer. The owner's runs of v0.62.0 passed it on Front Yard Right and Garage (alone, a picture every 0.05–0.06 s; beside a second viewer, no stall); v0.62.1 follows from them. See "Phase 10" |
 | 11 | Playback and settings extras: zoom, event clips, filters, copying settings | Standard | 1–2 wk | **Started** (2026-11-13). **Steps 1 to 4 built**: zoom into the picture (v0.64.0, Reset fixed in v0.64.1); save this event (v0.65.0, confirmed on the owner's NVR); filters that start useful (v0.66.0); copy settings to other cameras (v0.67.0). Step 5's research: the probe asks (v0.68.0), awaiting the owner's run. See "Phase 11" |
-| 12 | Optional R&D: the Doorbell's recordings and talk | Very high | 3–5 wk, gated | Planned. See "Phase 12" |
+| 12 | Optional R&D: the Doorbell's recordings and talk | Very high | 3–5 wk, gated | **Started** (2026-11-13). **Step a built** (v0.69.0): the gate reuses Home Assistant's own UDP session to the Doorbell (reolink-aio 0.23.0 streams a 143 cut over it), so no UDP client of our own; the probe's Doorbell test reads its talk format and times a 10 s cut, awaiting the owner's run. See "Phase 12" |
 | 13 | Optional: live picture integrity and outside live sources | High | 1–1.5 wk, gated | Planned. See "Phase 13" |
 | 14 | Copies of detection clips on a NAS or cloud | High | — | **TBD** (the owner, 2026-11-02): may be built here later; sketched, not scheduled. See "Phase 14" |
 
@@ -8858,7 +8858,7 @@ UDP (the desktop client could not add it by IP). Phase 5a captured talk on it:
 
 | Step | Status |
 | --- | --- |
-| a. UDP transport and the gate | Not started |
+| a. UDP transport and the gate | Built (v0.69.0): Home Assistant's own UDP session reused; the verdict awaits the owner's run |
 | b. SD playback | Not started; after a go for playback |
 | c. Talk | Not started; after a go for talk |
 | d. Fallback for playback: clips by FTP | Not started; only if a says no to playback |
@@ -8875,6 +8875,67 @@ UDP (the desktop client could not add it by IP). Phase 5a captured talk on it:
   - its sessions before, during and after.
 - **Only on wired power.**
 - **Go or no-go per target:** playback, talk.
+
+**As built (v0.69.0): Home Assistant's own session, reused.** Writing a UDP
+transport turned out to be unneeded for the gate.
+
+- **What reolink-aio already does:**
+  - HA's Reolink integration holds a Baichuan session to the Doorbell, over
+    UDP (reolink-aio's `BaichuanUdpConnection`, chosen at setup).
+  - reolink-aio 0.23.0 (pinned by HA 2026.11.2) adds
+    `Baichuan.send_payload_stream`: a payload streamed as it arrives, with
+    a stop command sent if the reader leaves early, one at a time per
+    device. Its own `stream_mp4` uses it for 143 cuts.
+  - 0.22.0 and earlier collect payloads only for 109 and 298, so a 143 cut
+    cannot come through them. The check says so ("needs reolink-aio 0.23.0
+    or later") and tests talk alone.
+- **The bridge (the only module touching reolink-aio's internals):**
+  - `baichuan_session()`: HA's session as reolink-aio holds it: `tcp` or
+    `udp`, events flowing, session up, whether it can stream a cut. No I/O.
+  - `async_talk_ability(channel)`: 10 `TalkAbility`, read-only. Returns the
+    duplex modes, the stream modes and each audio format.
+  - `async_stream_cut(channel, start, end, stream)`: a 143 cut through
+    `send_payload_stream`, with stop 144 and one cut at a time per device.
+    Its body has the same fields as reolink-aio's `FileInfoListDownload`;
+    a test compares them on 0.23.0.
+- **The probe's check (`probe_doorbell.py`):** opt-in from the panel
+  ("Test the doorbell's recordings and talk…", "only this test").
+  - **Targets:** cameras that record where Reolink Viewer cannot play
+    (Phase 6's test).
+  - **Power:** never on battery, even with "Include battery cameras".
+  - **Scheduling:** every request is a scheduler job at prefetch priority.
+  - **For each target:**
+    - the session, before and after;
+    - the talk ability;
+    - the day search (142, the last 7 days);
+    - the event search (272, sub; today, else yesterday), keeping the
+      newest recording finished 30 s ago or more;
+    - a cut of its first 10 s on the sub stream, as one job. It records the
+      first chunk and the first key frame (ms), bytes, Mbit/s, frames, media
+      seconds and **speed** (media seconds per second of transfer). The
+      media is summed up as size, codec, frame rate, key-frame interval and
+      audio.
+  - **Limits:** a cut stops at 16 MB or 60 s.
+  - **HA's session during and after the cut:** a clock query (104) once
+    the first key frame is in, and once after.
+  - **Verdict:**
+    - playback is go when the cut brought pictures at least at real time
+      (0.9x allowed, for measuring) and HA's session answered after it. The report notes whether the
+      first picture beat 12b's 2 s;
+    - talk is go when the device names an audio format.
+  - **Privacy:** the report holds no event's time of day; the stream
+    header's times are left out.
+- **Not tried, and why:**
+  - **a second login:** not needed while HA's session is reused;
+  - **a replay (123 → 5):** reolink-aio does not receive its messages, and
+    Phase 5 plays from cuts;
+  - **talk itself (201 → 202 → 11):** it sounds at the door, so it waits
+    for 12c, with the owner there. 12c must also find out whether
+    reolink-aio can send 202 at real time: its `send` waits for each
+    answer, and the Doorbell acknowledges in batches 0.2–0.5 s behind.
+- **The owner's run:** Devices → Hardware probe; tick the Doorbell test
+  ("only this test"), with the Doorbell on wired power and a ring or a
+  motion event recorded earlier that day. One run, about a minute.
 
 #### Step 12b: SD playback
 

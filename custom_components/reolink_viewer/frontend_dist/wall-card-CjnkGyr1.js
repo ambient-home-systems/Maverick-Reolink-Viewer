@@ -1,8 +1,8 @@
 import { a as e, r as t, t as n } from "./lit-DdRjbP0M.js";
 import { N as r, t as i } from "./live-B3rIzIdQ.js";
-import { Q as a } from "./home-PCSob070.js";
+import { Q as a } from "./home-BQW3lILK.js";
 import { n as o } from "./panel-C_Oja-Tm.js";
-import "./wall-C2AzuX2K.js";
+import "./wall-D8X5JNGQ.js";
 //#region src/card/wall-card.ts
 var s = class extends n {
 	static properties = {

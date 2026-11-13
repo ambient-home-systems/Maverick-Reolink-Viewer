@@ -314,6 +314,9 @@ export interface ProbeOptions {
   /** Factory values of each camera's settings (Phase 11 step 5, research). */
   factory_test?: boolean;
   factory_only?: boolean;
+  /** The Doorbell's recordings and talk over HA's session (Phase 12 step a). */
+  doorbell_test?: boolean;
+  doorbell_only?: boolean;
 }
 
 export type ProbeReport = Record<string, unknown>;

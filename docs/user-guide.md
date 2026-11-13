@@ -760,6 +760,15 @@ question for a future version: if the cameras can say, Settings could mark what 
 from factory. It only reads. The camera's on-screen text, which names it, stays out of
 the file.
 
+**Test the doorbell's recordings and talk** finds out whether Reolink Viewer could play
+your doorbell's SD card recordings, and later let you talk through it. It uses Home
+Assistant's own connection to the doorbell: it reads which sound format the doorbell
+takes for talk, and times the first 10 seconds of its newest recording. It only reads,
+and nothing is said at the door. It runs only while the doorbell is on wired power, and
+needs Home Assistant 2026.11.2 or later for the recording part. The file says how soon
+the first picture came, and whether Home Assistant's connection kept answering. It
+holds no event's time of day.
+
 ## On a phone
 
 <img src="images/live-board-phone.jpg" width="300" align="right" alt="The live board on a phone">

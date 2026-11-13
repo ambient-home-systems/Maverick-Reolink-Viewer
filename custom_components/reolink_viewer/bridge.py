@@ -14,7 +14,8 @@ Methods on :class:`ReolinkHostHandle` that perform device I/O are prefixed with
 """
 
 import asyncio
-from collections.abc import Awaitable, Callable, Iterable
+from collections.abc import AsyncGenerator, Awaitable, Callable, Iterable
+import contextlib
 from dataclasses import asdict, dataclass, field, fields, is_dataclass
 from datetime import date, datetime, timedelta, tzinfo
 from enum import StrEnum
@@ -44,6 +45,10 @@ if TYPE_CHECKING:
 
 _LOGGER = logging.getLogger(__name__)
 
+# What streaming a recording cut over Home Assistant's own session needs.
+CUT_NEEDS_LIBRARY = (
+    "needs reolink-aio 0.23.0 or later (the release Home Assistant 2026.11.2 pins)"
+)
 # The NVR's event search fails now and then and works when asked again.
 EVENT_SEARCH_RETRY_DELAY = 1.0
 
@@ -331,6 +336,57 @@ def _time_xml(tag: str, value: datetime) -> str:
     units = ("year", "month", "day", "hour", "minute", "second")
     parts = "".join(f"<{unit}>{getattr(value, unit)}</{unit}>\n" for unit in units)
     return f"<{tag}>\n{parts}</{tag}>\n"
+
+
+def _download_cut_xml(
+    channel: int, uid: str, stream: str, start: datetime, end: datetime
+) -> str:
+    """Return a download cut's body (143), the fields reolink-aio 0.23.0 sends.
+
+    reolink-aio's ``stream_mp4`` sends the camera's UID, all channels in the
+    bitmap and no sub stream flag; Phase 5 found the same fields (but the UID)
+    on the NVR.
+    """
+    kind = "mainStream" if stream == "main" else "subStream"
+    return (
+        '<?xml version="1.0" encoding="UTF-8" ?>\n<body>\n'
+        '<FileInfoList version="1.1">\n<FileInfo>\n'
+        f"<uid>{uid}</uid>\n<logicChnBitmap>255</logicChnBitmap>\n"
+        f"<channelId>{channel}</channelId>\n<supportSub>0</supportSub>\n"
+        f"<streamType>{kind}</streamType>\n"
+        f"{_time_xml('startTime', start)}{_time_xml('endTime', end)}"
+        "</FileInfo>\n</FileInfoList>\n</body>\n"
+    )
+
+
+# Talk ability fields kept (plain values; the answer holds no identifiers).
+_TALK_TEXT_MAX = 40
+
+
+def talk_ability(root: ET.Element) -> dict[str, Any]:
+    """Return a ``TalkAbility`` answer's duplex modes, stream modes and formats."""
+
+    def texts(tag: str) -> list[str]:
+        return [
+            (el.text or "").strip()[:_TALK_TEXT_MAX]
+            for el in root.iter(tag)
+            if (el.text or "").strip()
+        ]
+
+    formats = [
+        {
+            child.tag: (child.text or "").strip()[:_TALK_TEXT_MAX]
+            for child in config
+            if len(child) == 0 and (child.text or "").strip()
+        }
+        for config in root.iter("audioConfig")
+    ]
+    return {
+        "duplex": texts("duplex"),
+        "stream_modes": texts("audioStreamMode"),
+        "formats": [f for f in formats if f],
+        "fields": sorted({el.tag for el in root.iter()}),
+    }
 
 
 def _cover_preview_xml(channel: int, stream: str, start: datetime) -> str:
@@ -1011,6 +1067,71 @@ class ReolinkHostHandle:
             time_zone=number("timeZone"),
             fields=tuple(sorted({el.tag for el in root.iter()})),
         )
+
+    def baichuan_session(self) -> dict[str, Any]:
+        """Describe Home Assistant's own Baichuan session to the host (Phase 12a).
+
+        What reolink-aio holds of it, without I/O: how it connects (``tcp``,
+        ``udp``), whether its push events flow and the session is up, and
+        whether it can stream a recording cut (reolink-aio 0.23.0 and later).
+        """
+        baichuan = _safe(lambda: self._api.baichuan)
+        kind = _safe(lambda: baichuan.connection_type.value)
+        events = _safe(lambda: baichuan.events_active)
+        session = _safe(lambda: baichuan.session_active)
+        return {
+            "connection": kind if isinstance(kind, str) else None,
+            "events_active": events if isinstance(events, bool) else None,
+            "session_active": session if isinstance(session, bool) else None,
+            "can_stream_cut": callable(getattr(baichuan, "send_payload_stream", None)),
+            "library_version": library_version(),
+        }
+
+    async def async_talk_ability(self, channel: int) -> dict[str, Any]:
+        """Read how the device takes talk (Baichuan 10 ``TalkAbility``, read-only).
+
+        reolink-aio asks 10 at start-up and keeps only whether the camera has
+        two-way audio. Asked again here for Phase 12a: the duplex modes, the
+        audio stream modes and the audio formats, which talk (12c) must send
+        in. Nothing is set and no talk is started.
+        """
+        send = getattr(self._api.baichuan, "send", None)
+        if send is None:
+            raise NotApplicableError("reolink-aio's Baichuan has no send")
+        answer = await send(cmd_id=10, channel=channel)
+        return talk_ability(ET.fromstring(answer))  # noqa: S314 - the device's answer
+
+    async def async_stream_cut(
+        self, channel: int, start: datetime, end: datetime, stream: str
+    ) -> AsyncGenerator[bytes]:
+        """Stream a download cut (143) over Home Assistant's own session (Phase 12a).
+
+        reolink-aio 0.23.0 streams a payload as it arrives
+        (``send_payload_stream``) and sends the stop (144) when the reader
+        stops first. Over Home Assistant's own session, a device that speaks
+        Baichuan over UDP only (the battery Doorbell, which this integration's
+        TCP client cannot reach) answers too, with no second login.
+        ``start``/``end`` are device wall-clock times; ``stream`` is "main" or
+        "sub". Yields the media as it comes (the encrypted part decrypted by
+        reolink-aio). Close the generator (``aclosing``) to stop early.
+        """
+        send_stream = getattr(self._api.baichuan, "send_payload_stream", None)
+        if send_stream is None:
+            raise NotApplicableError(CUT_NEEDS_LIBRARY)
+        uid = self.channel_uid(channel)
+        if uid is None:
+            raise BridgeError("the camera's UID is unknown")
+        body = _download_cut_xml(channel, uid.split("_")[0], stream, start, end)
+        payload = send_stream(
+            cmd_id=143,
+            channel=channel,
+            body=body,
+            stop_cmd_id=144,
+            lock_per_device=True,
+        )
+        async with contextlib.aclosing(payload) as chunks:
+            async for chunk in chunks:
+                yield bytes(chunk)
 
     def live_protocols(self) -> frozenset[LiveProtocol]:
         """Return the protocols live streams can be read with (cached data only).
