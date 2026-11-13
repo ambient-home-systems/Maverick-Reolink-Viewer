@@ -125,7 +125,7 @@ describe("PlaybackCheck", () => {
       changes.push(1),
     );
     const report = await check.run();
-    expect(report).toContain("Reolink Viewer playback check v0.9.0 · Desktop Chrome, LAN · Garage");
+    expect(report).toContain("Reolink Viewer playback check v0.9.1 · Desktop Chrome, LAN · Garage");
     expect(report).toContain("A1 Time to timeline, today (as the tab opened): 120 ms (server: memory, total 4 ms)");
     expect(report).toContain("A2/A3 skipped: no earlier recording day this month");
     expect(report).toContain("B  skipped: no events today");
@@ -798,6 +798,29 @@ describe("a release that showed no first frame (v0.63.6)", () => {
     const result = await stuck(stuckPlayer("NotAllowedError: not allowed"), performance.now());
     expect(result.detail[1]).toBe("pressing play then: refused (NotAllowedError: not allowed)");
     expect(result.plain).toBe("Letting go did not start the video: the browser refused to play it (NotAllowedError: not allowed).");
+  });
+});
+
+describe("the month's recording days", () => {
+  it("are asked of the server once a run, not taken from the tab's list alone (v0.9.1)", async () => {
+    // The tablet: today shown at once, the tab's month list not come yet.
+    const hass = reportingHass();
+    const asked: Record<string, unknown>[] = [];
+    const base = hass.callWS.bind(hass);
+    hass.callWS = <T,>(message: Record<string, unknown>) => {
+      if (message.type !== "reolink_viewer/timeline/days") return base<T>(message);
+      asked.push(message);
+      return Promise.resolve({ days: [9, 10, 12], timing: {} } as T);
+    };
+    const check = new PlaybackCheck({ ...stubTarget(hass), monthDays: new Set<number>() }, { setup: "test", soakMinutes: 0 }) as unknown as {
+      _recordingDays(): Promise<ReadonlySet<number>>;
+    };
+    expect([...(await check._recordingDays())]).toEqual([9, 10, 12]);
+    expect([...(await check._recordingDays())]).toEqual([9, 10, 12]);
+    expect(asked).toEqual([{ type: "reolink_viewer/timeline/days", device_id: "cam1", year: 2026, month: 10 }]);
+    // The server cannot say: the tab's list.
+    const offline = new PlaybackCheck({ ...stubTarget(reportingHass()), monthDays: new Set([3]) }, { setup: "test", soakMinutes: 0 }) as unknown as typeof check;
+    expect([...(await offline._recordingDays())]).toEqual([3]);
   });
 });
 

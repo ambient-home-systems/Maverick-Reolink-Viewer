@@ -69,11 +69,22 @@ async function run(pictures) {
       target.addEventListener(type, () => { clearTimeout(timer); resolve(true); }, { once: true });
     });
   const canvas = document.getElementById("c").getContext("2d", { willReadFrequently: true });
-  const lit = (video) => {
+  const litNow = (video) => {
     canvas.clearRect(0, 0, 64, 48);
     canvas.drawImage(video, 0, 0, 64, 48);
     const [r, g, b] = canvas.getImageData(32, 24, 1, 1).data;
     return r + g + b > 0;
+  };
+  // Drawn within a second of the painter saying so: it says so once the video
+  // has the frame at its time, which a busy machine may draw a moment later
+  // (one run beside the other browser checks read black at once, v0.63.15).
+  // Code that never shows it (v0.63.9's) stays black for good.
+  const lit = async (video) => {
+    for (let i = 0; i < 20; i += 1) {
+      if (litNow(video)) return true;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    return litNow(video);
   };
   // The control: the first picture appended and sought without ending the stream.
   const control = document.getElementById("control");
@@ -102,7 +113,7 @@ async function run(pictures) {
       at: Number(video.currentTime.toFixed(3)),
       for: p.time,
       readyState: video.readyState,
-      lit: lit(video),
+      lit: await lit(video),
     });
   }
   return result;

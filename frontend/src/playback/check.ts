@@ -7,7 +7,7 @@
 // recordings) and saves its report on the server as it goes, so a run on a
 // phone can be copied on a desktop, and a run cut short by a page reload (iOS
 // under memory pressure) keeps what it measured.
-import { fetchCacheStatus, fetchMediaInfo, fetchTimelineDay, openScrubSession, toError, urlToken } from "../api";
+import { fetchCacheStatus, fetchMediaInfo, fetchTimelineDay, fetchTimelineDays, openScrubSession, toError, urlToken } from "../api";
 import { wsUrl } from "../live/check-util";
 import { count, inShortLines, middle, secondsText, speed, worst, type Finding, type Grade, type InShort } from "../plain";
 import { versionProblem } from "../integration";
@@ -72,7 +72,7 @@ import { ScrubClient, isPicture, type ScrubPicture, type SocketLike } from "./sc
 import { SHAPES, mseApi, mseSupports, pickSample, probeShape, type MseApi } from "./mse-probe";
 import type { RvPlayer } from "./player";
 
-export const CHECK_VERSION = "0.9.0";
+export const CHECK_VERSION = "0.9.1";
 export const SETUPS = [
   "Desktop Chrome, LAN",
   "Desktop Chrome, Tailscale",
@@ -381,6 +381,8 @@ export class PlaybackCheck {
   private _lastSave = 0;
   private _saving: Promise<void> = Promise.resolve();
   private _long: Long | undefined;
+  /** This month's days with recordings, once read (`_recordingDays`). */
+  private _monthDays: ReadonlySet<number> | undefined;
   private _hdPlayed = false;
   private readonly _summary: string[] = [];
   private readonly _plain: Finding[] = [];
@@ -569,6 +571,26 @@ export class PlaybackCheck {
     await this._wait(() => Boolean(t.day) && !t.loading, 30_000);
   }
 
+  /**
+   * This month's days with recordings, asked of the server once a run (v0.9.1):
+   * the tab's list may not have come yet when today shows at once (the
+   * tablet's A2/A3 "no earlier recording day this month", with three). The
+   * tab's list if the server cannot say.
+   */
+  private async _recordingDays(): Promise<ReadonlySet<number>> {
+    if (this._monthDays) return this._monthDays;
+    const t = this._t;
+    let days: ReadonlySet<number> = t.monthDays;
+    try {
+      const result = await fetchTimelineDays(t.hass, t.deviceId, Number(t.today.slice(0, 4)), Number(t.today.slice(5, 7)));
+      days = new Set([...result.days, ...t.monthDays]);
+    } catch {
+      // The tab's list, as before.
+    }
+    this._monthDays = days;
+    return days;
+  }
+
   private async _loadDay(date: string): Promise<CheckMetrics> {
     const t = this._t;
     const before = t.metrics.timelineMs;
@@ -584,7 +606,7 @@ export class PlaybackCheck {
     const a1 = t.metrics;
     this._log(`A1 Time to timeline, today (as the tab opened): ${ms(a1.timelineMs)} (server: ${server(a1.timelineServer)})${searchFailed(t.day)}`);
     const day = Number(today.slice(8, 10));
-    const past = [...t.monthDays].filter((n) => n < day).sort((a, b) => b - a);
+    const past = [...(await this._recordingDays())].filter((n) => n < day).sort((a, b) => b - a);
     const pick = past.at(Math.min(2, past.length - 1));
     if (pick === undefined) {
       this._log("A2/A3 skipped: no earlier recording day this month");
@@ -846,7 +868,7 @@ export class PlaybackCheck {
     const dayNumber = Number(today.slice(8, 10));
     const dates = [
       today,
-      ...[...t.monthDays]
+      ...[...(await this._recordingDays())]
         .filter((n) => n < dayNumber)
         .sort((a, b) => b - a)
         .slice(0, PAST_DAYS)
@@ -1117,7 +1139,7 @@ export class PlaybackCheck {
     const dates = [
       t.date,
       today,
-      ...[...t.monthDays]
+      ...[...(await this._recordingDays())]
         .filter((n) => n < dayNumber)
         .sort((a, b) => b - a)
         .slice(0, PAST_DAYS)

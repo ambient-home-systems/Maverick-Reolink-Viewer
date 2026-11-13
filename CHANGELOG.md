@@ -3,6 +3,17 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.63.15
+
+From the owner's wall tablet check of 0.63.14 at 8:12 AM. Today's timeline appeared in
+0.16 s (5.8 s the morning before), and the speeds ran on yesterday's 3.7 min recording,
+as today's longest was 40 s. With this run, every device has passed.
+
+- **The playback check (v0.9.1) finds the earlier days again:** it said "no earlier
+  recording day this month", with recordings on the 9th, 10th and 12th. Today's
+  timeline now shows at once, so the check looked before the page had loaded the
+  month's list. It now asks Home Assistant for the month's recording days itself.
+
 ## 0.63.14
 
 From the owner's wall tablet check at 6:27 AM and the learning check the same morning.
