@@ -754,6 +754,12 @@ test wakes them. A battery camera on wired power never sleeps, so the test of ev
 cameras whose recordings Reolink Viewer cannot play (a doorbell's SD card) checks it
 either way.
 
+**Ask each camera for its settings' factory values** finds out whether your cameras
+keep their factory settings, and which of their settings you have changed. It is a
+question for a future version: if the cameras can say, Settings could mark what differs
+from factory. It only reads. The camera's on-screen text, which names it, stays out of
+the file.
+
 ## On a phone
 
 <img src="images/live-board-phone.jpg" width="300" align="right" alt="The live board on a phone">

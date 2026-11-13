@@ -512,6 +512,8 @@ describe("reolink-viewer-panel", () => {
       baichuan_cut: 20,
       events_test: false,
       events_only: false,
+      factory_test: false,
+      factory_only: false,
     });
     hass.emit({ type: "progress", message: "ch0 live rtsp main" });
     await el.updateComplete;
@@ -620,6 +622,16 @@ describe("reolink-viewer-panel", () => {
     button(el, "Run probe")?.click();
     await flush();
     expect(hass.sent.at(-1)).toMatchObject({ events_test: true, events_only: false });
+    button(el, "Cancel")?.click();
+    await flush();
+
+    // The factory values check (Phase 11 step 5) too: read-only, "only" by default.
+    expect(boxes()[14]?.disabled).toBe(true);
+    await toggle(13);
+    expect(boxes()[14]?.disabled).toBe(false);
+    button(el, "Run probe")?.click();
+    await flush();
+    expect(hass.sent.at(-1)).toMatchObject({ factory_test: true, factory_only: true });
   });
 
   it("shows probe errors and supports cancel", async () => {

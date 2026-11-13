@@ -1,6 +1,6 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
 import { F as i, P as a, Pt as o, S as s, Ut as c, Vt as l, b as u, ct as d, et as f, m as p, mt as m, ot as h, t as g, x as _, y as v } from "./live-B3rIzIdQ.js";
-import { G as y, J as b, Q as x, Y as S, Z as C, at as w, c as T, ct as E, it as D, lt as O, nt as k, ot as A, rt as j, s as M, st as N, t as P, ut as F } from "./home-BppZWJWj.js";
+import { G as y, J as b, Q as x, Y as S, Z as C, at as w, c as T, ct as E, it as D, lt as O, nt as k, ot as A, rt as j, s as M, st as N, t as P, ut as F } from "./home-PCSob070.js";
 //#region src/reolink-viewer-panel.ts
 var I = {
 	live: "Live",
@@ -40,6 +40,8 @@ var I = {
 		_baichuanHold: { state: !0 },
 		_events: { state: !0 },
 		_eventsOnly: { state: !0 },
+		_factory: { state: !0 },
+		_factoryOnly: { state: !0 },
 		_copied: { state: !0 },
 		_route: { state: !0 },
 		_toast: { state: !0 },
@@ -54,7 +56,7 @@ var I = {
 		this._route = C(window.location.hash);
 	};
 	constructor() {
-		super(), this.narrow = !1, this._now = Date.now(), this._board = [], this._probe = { status: "idle" }, this._includeBattery = !1, this._concurrency = !1, this._maxStreams = 4, this._playback = !1, this._playbackOnly = !1, this._playbackConcurrency = !1, this._playbackStreams = 4, this._baichuan = !1, this._baichuanOnly = !0, this._baichuanMain = !1, this._baichuanDownload = !0, this._baichuanSession = !1, this._baichuanScrub = !1, this._baichuanCameras = "", this._baichuanHold = 5, this._events = !1, this._eventsOnly = !0, this._copied = !1, this._route = { view: "live" }, this.addEventListener(b, (e) => {
+		super(), this.narrow = !1, this._now = Date.now(), this._board = [], this._probe = { status: "idle" }, this._includeBattery = !1, this._concurrency = !1, this._maxStreams = 4, this._playback = !1, this._playbackOnly = !1, this._playbackConcurrency = !1, this._playbackStreams = 4, this._baichuan = !1, this._baichuanOnly = !0, this._baichuanMain = !1, this._baichuanDownload = !0, this._baichuanSession = !1, this._baichuanScrub = !1, this._baichuanCameras = "", this._baichuanHold = 5, this._events = !1, this._eventsOnly = !0, this._factory = !1, this._factoryOnly = !0, this._copied = !1, this._route = { view: "live" }, this.addEventListener(b, (e) => {
 			this.navigate(e.detail);
 		}), this.addEventListener(S, (e) => {
 			this.showToast(e.detail);
@@ -593,6 +595,32 @@ var I = {
           />
           <span>Only this test (skip the live video and recording checks on every camera)</span>
         </label>
+        <label class="option">
+          <input
+            type="checkbox"
+            .checked=${this._factory}
+            ?disabled=${e}
+            @change=${(e) => {
+			this._factory = e.target.checked;
+		}}
+          />
+          <span
+            >Ask each camera for its settings' factory values (Phase 11 step 5): whether it keeps
+            them, and which of its settings differ. Read-only: nothing is changed. The on-screen text,
+            which names the camera, is left out of the report.</span
+          >
+        </label>
+        <label class="option nested">
+          <input
+            type="checkbox"
+            .checked=${this._factoryOnly}
+            ?disabled=${e || !this._factory}
+            @change=${(e) => {
+			this._factoryOnly = e.target.checked;
+		}}
+          />
+          <span>Only this test (skip the live video and recording checks on every camera)</span>
+        </label>
       </div>
       <div class="actions">
         ${e ? n`<button @click=${() => {
@@ -671,7 +699,9 @@ var I = {
 			baichuan_hold: this._baichuanHold,
 			baichuan_cut: 20,
 			events_test: this._events,
-			events_only: this._events && this._eventsOnly
+			events_only: this._events && this._eventsOnly,
+			factory_test: this._factory,
+			factory_only: this._factory && this._factoryOnly
 		}, (e) => {
 			this._probe.status === "running" && (this._probe = {
 				...this._probe,

@@ -938,6 +938,25 @@ class ReolinkHostHandle:
         """Return the stream encoding, fetching GetEnc if needed."""
         return str(await self._api.get_encoding(channel, stream))
 
+    async def async_get_initial(
+        self, cmd: str, param: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Ask one read command with ``"action": 1`` (Phase 11 step 5's research).
+
+        Its reply holds the value and, where the firmware keeps them, the
+        ``initial`` (factory) value and the ``range``. reolink-aio asks a few
+        commands so, keeping only their ranges. Read-only: anything but a
+        ``Get`` command is refused here. Returns the reply's item: ``value``,
+        ``initial``, ``range``, or ``error``.
+        """
+        if not cmd.startswith("Get"):
+            raise ValueError(f"{cmd} is not a read")
+        reply = await self._api.send(
+            [{"cmd": cmd, "action": 1, "param": param}], expected_response_type="json"
+        )
+        item = reply[0] if isinstance(reply, list) and reply else None
+        return item if isinstance(item, dict) else {}
+
     async def async_refresh_ports(self) -> bool | None:
         """Read the network port state (read-only GetNetPort) and return RTMP state."""
         await self._api.get_state("GetNetPort")
