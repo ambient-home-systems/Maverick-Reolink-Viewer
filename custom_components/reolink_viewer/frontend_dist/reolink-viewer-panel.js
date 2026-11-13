@@ -1,6 +1,6 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
 import { F as i, P as a, Pt as o, S as s, Ut as c, Vt as l, b as u, ct as d, et as f, m as p, mt as m, ot as h, t as g, x as _, y as v } from "./live-B3rIzIdQ.js";
-import { J as y, W as b, X as x, Z as S, at as C, ct as w, it as T, lt as E, nt as D, o as O, ot as k, q as A, rt as j, s as M, st as N, t as P, tt as F } from "./home-1VYUEooK.js";
+import { G as y, J as b, Q as x, Y as S, Z as C, at as w, c as T, ct as E, it as D, lt as O, nt as k, ot as A, rt as j, s as M, st as N, t as P, ut as F } from "./home-BppZWJWj.js";
 //#region src/reolink-viewer-panel.ts
 var I = {
 	live: "Live",
@@ -51,17 +51,17 @@ var I = {
 	_toastTimer;
 	_clockTimer;
 	_onHashChange = () => {
-		this._route = x(window.location.hash);
+		this._route = C(window.location.hash);
 	};
 	constructor() {
-		super(), this.narrow = !1, this._now = Date.now(), this._board = [], this._probe = { status: "idle" }, this._includeBattery = !1, this._concurrency = !1, this._maxStreams = 4, this._playback = !1, this._playbackOnly = !1, this._playbackConcurrency = !1, this._playbackStreams = 4, this._baichuan = !1, this._baichuanOnly = !0, this._baichuanMain = !1, this._baichuanDownload = !0, this._baichuanSession = !1, this._baichuanScrub = !1, this._baichuanCameras = "", this._baichuanHold = 5, this._events = !1, this._eventsOnly = !0, this._copied = !1, this._route = { view: "live" }, this.addEventListener(A, (e) => {
+		super(), this.narrow = !1, this._now = Date.now(), this._board = [], this._probe = { status: "idle" }, this._includeBattery = !1, this._concurrency = !1, this._maxStreams = 4, this._playback = !1, this._playbackOnly = !1, this._playbackConcurrency = !1, this._playbackStreams = 4, this._baichuan = !1, this._baichuanOnly = !0, this._baichuanMain = !1, this._baichuanDownload = !0, this._baichuanSession = !1, this._baichuanScrub = !1, this._baichuanCameras = "", this._baichuanHold = 5, this._events = !1, this._eventsOnly = !0, this._copied = !1, this._route = { view: "live" }, this.addEventListener(b, (e) => {
 			this.navigate(e.detail);
-		}), this.addEventListener(y, (e) => {
+		}), this.addEventListener(S, (e) => {
 			this.showToast(e.detail);
 		});
 	}
 	connectedCallback() {
-		super.connectedCallback(), g(import.meta.url), this._route = this._start(x(window.location.hash)), window.addEventListener("hashchange", this._onHashChange), this._tick();
+		super.connectedCallback(), g(import.meta.url), this._route = this._start(C(window.location.hash)), window.addEventListener("hashchange", this._onHashChange), this._tick();
 	}
 	disconnectedCallback() {
 		super.disconnectedCallback(), window.removeEventListener("hashchange", this._onHashChange), clearTimeout(this._toastTimer), clearTimeout(this._clockTimer), this._run?.cancel(), this._run = void 0;
@@ -86,15 +86,15 @@ var I = {
 		}
 	}
 	_start(e) {
-		if (e.view !== "live" || D() !== "wall") return e;
-		let t = F(), n = t ? {
+		if (e.view !== "live" || j() !== "wall") return e;
+		let t = k(), n = t ? {
 			view: "wall",
 			layout: t
-		} : { view: "wall" }, r = S(n);
+		} : { view: "wall" }, r = x(n);
 		return window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}${r}`), n;
 	}
 	navigate(e) {
-		let t = this._start(e), n = S(t);
+		let t = this._start(e), n = x(t);
 		if (window.location.hash !== n) {
 			let e = `${window.location.pathname}${window.location.search}${n}`;
 			window.history.pushState(null, "", e);
@@ -111,7 +111,7 @@ var I = {
 			this._loading = !0;
 			try {
 				this._devices = await d(this.hass), this._loadError = void 0, !this._board.length && !this._devices.degraded && m(this.hass).then(({ cameras: e }) => {
-					this._board.length || (this._board = b(e));
+					this._board.length || (this._board = y(e));
 				}).catch(() => void 0), !this._warmed && !this._devices.degraded && (this._warmed = !0, c(this.hass).catch(() => void 0));
 			} catch (e) {
 				this._loadError = l(e).message;
@@ -176,7 +176,7 @@ var I = {
           Try again
         </button>
       </div>`;
-		let r = w(this._devices), i = r ? this._renderIntegration(r) : t;
+		let r = O(this._devices), i = r ? this._renderIntegration(r) : t;
 		switch (e.view) {
 			case "live": return r ? n`<div class="wide-note">${i}</div>` : n`<rv-live-grid
             .hass=${this.hass}
@@ -229,14 +229,14 @@ var I = {
     </div>`;
 	}
 	_renderBanner() {
-		if (this._loadError) return T(N(this._loadError, "Your devices"), this._loadError, {
+		if (this._loadError) return w(E(this._loadError, "Your devices"), this._loadError, {
 			action: n`<button @click=${() => void this._load()} ?disabled=${this._loading}>Try again</button>`,
 			help: "loading"
 		});
-		let e = E(this._devices, k), r = e ? T(e, `This page: ${k} · Home Assistant: ${this._devices?.version ?? "older than 0.61.1"}`, {
+		let e = F(this._devices, N), r = e ? w(e, `This page: ${N} · Home Assistant: ${this._devices?.version ?? "older than 0.61.1"}`, {
 			kind: "warning",
 			help: "updated"
-		}) : t, i = w(this._devices);
+		}) : t, i = O(this._devices);
 		return !i || i.kind === "none" ? r : n`${r}${this._renderIntegration(i)}`;
 	}
 	_renderIntegration(e) {
@@ -249,7 +249,7 @@ var I = {
         <button class="check" @click=${() => void this._load()} ?disabled=${this._loading}>
           ${f("refresh")}${this._loading ? "Checking…" : "Check again"}
         </button>
-        ${j(e.kind)}
+        ${D(e.kind)}
       </div>
       ${e.technical ? n`<details>
             <summary>Details</summary>
@@ -329,14 +329,14 @@ var I = {
 	}
 	_renderHelp() {
 		let e = (e, t, r) => n`<li>
-      <a class="row" href=${C(r)} target="_blank" rel="noopener noreferrer">
+      <a class="row" href=${A(r)} target="_blank" rel="noopener noreferrer">
         <span class="what"><span class="name">${e}</span><span class="muted">${t}</span></span>
         ${f("external")}
       </a>
     </li>`;
 		return n`<section class="card">
       <h2>Help</h2>
-      <p class="muted">The guides to this version of Reolink Viewer (${k}). They open in a new tab.</p>
+      <p class="muted">The guides to this version of Reolink Viewer (${N}). They open in a new tab.</p>
       <ul class="checks">
         ${e("User guide", "What each part of the panel does, and how to use it.", "guide")}
         ${e("Troubleshooting", "What a message means, and what to do about it.", "troubleshooting")}
@@ -630,7 +630,7 @@ var I = {
           </p>
           <div class="actions">
             <button @click=${() => {
-				M(e.report, e.filename);
+				T(e.report, e.filename);
 			}}>
               Download again
             </button>
@@ -681,12 +681,12 @@ var I = {
 		this._run = t, t.result.then((e) => {
 			if (this._run !== t) return;
 			this._run = void 0;
-			let n = O(/* @__PURE__ */ new Date());
+			let n = M(/* @__PURE__ */ new Date());
 			this._probe = {
 				status: "done",
 				report: e,
 				filename: n
-			}, M(e, n);
+			}, T(e, n);
 		}, (e) => {
 			this._run === t && (this._run = void 0, this._probe = {
 				status: "error",

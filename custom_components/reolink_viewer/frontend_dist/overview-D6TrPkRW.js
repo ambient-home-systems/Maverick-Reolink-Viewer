@@ -1,10 +1,10 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
 import { P as i, et as a, pt as o } from "./live-B3rIzIdQ.js";
-import { B as s, a as c, d as l, i as u, n as d, r as f } from "./home-1VYUEooK.js";
-import "./device-list-CJOWRwl2.js";
+import { V as s, f as c, i as l, n as u, o as d, r as f } from "./home-BppZWJWj.js";
+import "./device-list-CKqPnImr.js";
 var p = (e) => `${String(e % 24).padStart(2, "0")}:00`, m = (e) => e.toLocaleString("en-US");
 function h(e) {
-	let t = s(l(e));
+	let t = s(c(e));
 	return t.charAt(0).toUpperCase() + t.slice(1);
 }
 function g(e) {
@@ -361,7 +361,7 @@ var b = 3e4, x = {
 		let i = e.details, a = r.node.kind === "camera", o = [e.channel !== void 0 && e.channel !== null && e.via === "nvr" ? `channel ${String(e.channel + 1)}` : void 0, e.playback_source ? "playback source" : void 0].filter((e) => e !== void 0);
 		return n`<section class="card">
       <div class="header">
-        <h2>${a ? d(e) : "Device"}</h2>
+        <h2>${a ? u(e) : "Device"}</h2>
         ${o.length ? n`<span class="muted">${o.join(" · ")}</span>` : t}
       </div>
       ${i === null ? n`<p class="muted">
@@ -463,9 +463,9 @@ function C(e) {
     <dt>Status</dt>
     <dd>${r}</dd>
     <dt>Clear stream</dt>
-    <dd>${u(e.encodings.main)}</dd>
+    <dd>${l(e.encodings.main)}</dd>
     <dt>Fluent stream</dt>
-    <dd>${u(e.encodings.sub)}</dd>
+    <dd>${l(e.encodings.sub)}</dd>
     <dt>Network</dt>
     <dd>${D(e.network)}</dd>
     ${e.battery ? n`<dt>Battery</dt>
@@ -497,9 +497,9 @@ function w(e) {
     </dd>
     <dt>Protocols</dt>
     <dd>
-      RTSP ${c(r.rtsp.enabled)}${r.rtsp.port ? ` (${r.rtsp.port})` : ""} · RTMP
-      ${c(r.rtmp.enabled)}${r.rtmp.port ? ` (${r.rtmp.port})` : ""} · ONVIF
-      ${c(r.onvif.enabled)}${r.onvif.port ? ` (${r.onvif.port})` : ""}
+      RTSP ${d(r.rtsp.enabled)}${r.rtsp.port ? ` (${r.rtsp.port})` : ""} · RTMP
+      ${d(r.rtmp.enabled)}${r.rtmp.port ? ` (${r.rtmp.port})` : ""} · ONVIF
+      ${d(r.onvif.enabled)}${r.onvif.port ? ` (${r.onvif.port})` : ""}
     </dd>
     <dt>HA stream protocol</dt>
     <dd>${e.stream_protocol ?? "?"}</dd>

@@ -1,6 +1,6 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
 import { P as i, Vt as a, et as o, ot as s, st as c } from "./live-B3rIzIdQ.js";
-import { Y as l, r as u } from "./home-1VYUEooK.js";
+import { X as l, r as u } from "./home-BppZWJWj.js";
 //#region src/render-filter.ts
 function d(e, t, n) {
 	if (e === t) return !1;
@@ -11,10 +11,10 @@ function d(e, t, n) {
 //#endregion
 //#region src/components/device-page.ts
 var f = {
-	overview: () => import("./overview-CiV2s06E.js"),
-	playback: () => import("./playback-C9vOWp38.js"),
-	pictures: () => import("./event-pictures-Bl_UwjMR.js"),
-	settings: () => import("./settings-DpxlvbJU.js")
+	overview: () => import("./overview-D6TrPkRW.js"),
+	playback: () => import("./playback-RJ68tmML.js"),
+	pictures: () => import("./event-pictures-FS9AT0i6.js"),
+	settings: () => import("./settings-DFDfOa-h.js")
 }, p = 1e3, m = class extends r {
 	static properties = {
 		hass: { attribute: !1 },
@@ -165,6 +165,7 @@ var f = {
                   .hass=${this.hass}
                   .device=${e}
                   .catalog=${this._catalog}
+                  .cameras=${this.devices?.cameras ?? []}
                   @rv-entity-enabled=${() => void this.reload()}
                 ></rv-settings>`}
             </div>` : this._error ? t : n`<p class="muted">Loading…</p>`}

@@ -59,7 +59,7 @@ function _(e, t) {
 }
 //#endregion
 //#region src/version.ts
-var v = "0.66.0", ce = "https://github.com/ambient-home-systems/Maverick-Reolink-Viewer", le = {
+var v = "0.67.0", ce = "https://github.com/ambient-home-systems/Maverick-Reolink-Viewer", le = {
 	guide: ["user-guide"],
 	troubleshooting: ["troubleshooting"],
 	cameras: ["cameras"],
@@ -79,57 +79,57 @@ function y(e) {
 function b(e, r, i = {}) {
 	return n`<div class="banner ${i.kind ?? "error"} problem" role="alert">
     <strong>${e.text}</strong>${e.advice ? n` ${e.advice}` : t}
-    ${i.action ?? t} ${i.help ? x(i.help) : t}
+    ${i.action ?? t} ${i.help ? ue(i.help) : t}
     ${r ? n`<details>
           <summary>Details</summary>
           <span class="technical">${r}</span>
         </details>` : t}
   </div>`;
 }
-function x(e, t = "More help") {
+function ue(e, t = "More help") {
 	return n`<a class="help-link" href=${y(e)} target="_blank" rel="noopener noreferrer"
     >${t}${h("external")}</a
   >`;
 }
 //#endregion
 //#region src/wall/remember.ts
-var ue = "rv-live-mode", de = "rv-wall-layout";
-function S(e) {
+var de = "rv-live-mode", fe = "rv-wall-layout";
+function x(e) {
 	try {
 		return window.localStorage.getItem(e);
 	} catch {
 		return null;
 	}
 }
-function C(e, t) {
+function S(e, t) {
 	try {
 		t === void 0 ? window.localStorage.removeItem(e) : window.localStorage.setItem(e, t);
 	} catch {}
 }
-function fe() {
-	return S(ue) === "wall" ? "wall" : "board";
-}
-function w(e) {
-	C(ue, e);
-}
 function pe() {
-	return S(de) ?? void 0;
+	return x(de) === "wall" ? "wall" : "board";
 }
-function me(e) {
-	C(de, e);
+function C(e) {
+	S(de, e);
+}
+function me() {
+	return x(fe) ?? void 0;
+}
+function he(e) {
+	S(fe, e);
 }
 //#endregion
 //#region src/components/navigation.ts
-var T = "rv-navigate", E = "rv-toast";
-function D(e, t) {
-	e.dispatchEvent(new CustomEvent(T, {
+var w = "rv-navigate", T = "rv-toast";
+function E(e, t) {
+	e.dispatchEvent(new CustomEvent(w, {
 		detail: t,
 		bubbles: !0,
 		composed: !0
 	}));
 }
-function he(e, t, n = "info") {
-	e.dispatchEvent(new CustomEvent(E, {
+function ge(e, t, n = "info") {
+	e.dispatchEvent(new CustomEvent(T, {
 		detail: {
 			message: t,
 			kind: n
@@ -138,7 +138,7 @@ function he(e, t, n = "info") {
 		composed: !0
 	}));
 }
-function ge(e) {
+function _e(e) {
 	if (e.view === "live-check") return "#live-check";
 	if (e.view === "soak") return "#soak";
 	if (e.view === "cards") return "#cards";
@@ -149,7 +149,7 @@ function ge(e) {
 	let t = e.tab === "playback" && e.at !== void 0 ? `/${e.at}` : "";
 	return `#device/${encodeURIComponent(e.id)}/${e.tab}${t}`;
 }
-function _e(e) {
+function ve(e) {
 	if (e === "#live-check") return { view: "live-check" };
 	if (e === "#soak") return { view: "soak" };
 	if (e === "#cards") return { view: "cards" };
@@ -182,7 +182,7 @@ function _e(e) {
 }
 //#endregion
 //#region src/components/live-grid.ts
-var O = 8, ve = "rv-board", ye = class extends r {
+var D = 8, ye = "rv-board", be = class extends r {
 	static properties = {
 		hass: { attribute: !1 },
 		_full: { state: !0 },
@@ -225,8 +225,8 @@ var O = 8, ve = "rv-board", ye = class extends r {
 		let e = this._data.cameras;
 		if (e && e !== this._announced) {
 			this._announced = e;
-			let t = k(e);
-			this.dispatchEvent(new CustomEvent(ve, {
+			let t = O(e);
+			this.dispatchEvent(new CustomEvent(ye, {
 				detail: { cameras: t },
 				bubbles: !0,
 				composed: !0
@@ -238,12 +238,12 @@ var O = 8, ve = "rv-board", ye = class extends r {
 		return n`<div class="head">
         <h1>Live</h1>
         ${r?.length ? n`<p class="count">
-              ${be(r, this._live, r.filter((e) => c(this.hass, f(e)) !== void 0).length)}
+              ${xe(r, this._live, r.filter((e) => c(this.hass, f(e)) !== void 0).length)}
             </p>` : t}
         ${r?.length ? n`<button
               class="text with-icon wall"
               @click=${() => {
-			w("wall"), D(this, { view: "wall" });
+			C("wall"), E(this, { view: "wall" });
 		}}
             >
               ${h("enterFull")}Wall
@@ -267,12 +267,12 @@ var O = 8, ve = "rv-board", ye = class extends r {
       ${r === void 0 ? e.error ? t : n`<p class="note">Loading…</p>` : r.length === 0 ? n`<p class="note">No camera can be watched live.</p>` : this._renderGrid(r)}`;
 	}
 	_renderGrid(e) {
-		let t = this._data, r = A(e), i = r.map((e) => j(f(e))), o = i.reduce((e, t) => e + (t ? 2 : 1), 0), s = this._width, c = Math.max(2, Math.min(s >= 1100 ? 5 : s >= 800 ? 4 : s >= 540 ? 3 : 2, o)), u = s ? (s - (c - 1) * O) / c : 0, d = 9 / 16 * u;
+		let t = this._data, r = k(e), i = r.map((e) => A(f(e))), o = i.reduce((e, t) => e + (t ? 2 : 1), 0), s = this._width, c = Math.max(2, Math.min(s >= 1100 ? 5 : s >= 800 ? 4 : s >= 540 ? 3 : 2, o)), u = s ? (s - (c - 1) * D) / c : 0, d = 9 / 16 * u;
 		return n`<div
       class="grid"
       style=${`--cols: ${c}; --row: ${d ? `${d.toFixed(1)}px` : "auto"}`}
       @rv-live-open=${(e) => {
-			D(this, {
+			E(this, {
 				view: "device",
 				id: e.detail.cameraId,
 				tab: "live"
@@ -292,7 +292,7 @@ var O = 8, ve = "rv-board", ye = class extends r {
       ${r.map((e, r) => n`<rv-live-tile
             class=${i[r] ?? ""}
             fill
-            .fit=${xe(f(e), i[r], u)}
+            .fit=${Se(f(e), i[r], u)}
             .number=${r + 1}
             .hass=${this.hass}
             .camera=${e}
@@ -350,7 +350,7 @@ var O = 8, ve = "rv-board", ye = class extends r {
         grid-template-columns: repeat(var(--cols, 2), minmax(0, 1fr));
         grid-auto-rows: var(--row, auto);
         grid-auto-flow: dense;
-        gap: ${O}px;
+        gap: ${D}px;
       }
       rv-live-tile.tall {
         grid-row: span 2;
@@ -365,39 +365,39 @@ var O = 8, ve = "rv-board", ye = class extends r {
       }
     `];
 };
-function be(e, t, n = 0) {
+function xe(e, t, n = 0) {
 	let r = e.filter((e) => t.has(e.id)).length, i = r ? `${String(r)} of ${String(e.length)} playing` : `${String(e.length)} ${e.length === 1 ? "camera" : "cameras"}`;
 	return n ? `${i} · ${String(n)} offline` : i;
 }
-function k(e) {
-	return A(e).map((e, t) => ({
+function O(e) {
+	return k(e).map((e, t) => ({
 		id: e.id,
 		name: e.name,
 		number: t + 1
 	}));
 }
-function A(e) {
-	let t = e.filter((e) => j(f(e)) === "tall");
+function k(e) {
+	let t = e.filter((e) => A(f(e)) === "tall");
 	return [...t, ...e.filter((e) => !t.includes(e))];
 }
-function xe(e, t, n) {
-	let r = M(e);
+function Se(e, t, n) {
+	let r = j(e);
 	if (!r) return "cover";
-	let i = n ? O / n : 0, a = 9 / 16;
+	let i = n ? D / n : 0, a = 9 / 16;
 	return r > (t === "tall" ? 1 / (2 * a + i) : t === "wide" ? (2 + i) / a : 1 / a) * 1.02 ? "contain" : "cover";
 }
-function j(e) {
-	let t = M(e);
+function A(e) {
+	let t = j(e);
 	if (t) {
 		if (t < 1.2) return "tall";
 		if (t > 2.4) return "wide";
 	}
 }
-function M(e) {
+function j(e) {
 	let t = e?.streams.sub?.encoding, n = t?.width, r = t?.height;
 	return n && r ? n / r : void 0;
 }
-var Se = class extends r {
+var Ce = class extends r {
 	static properties = {
 		hass: { attribute: !1 },
 		deviceId: { attribute: !1 },
@@ -485,24 +485,24 @@ var Se = class extends r {
       }
     `];
 };
-customElements.get("rv-live-grid") || customElements.define("rv-live-grid", ye), customElements.get("rv-live-camera") || customElements.define("rv-live-camera", Se);
+customElements.get("rv-live-grid") || customElements.define("rv-live-grid", be), customElements.get("rv-live-camera") || customElements.define("rv-live-camera", Ce);
 //#endregion
 //#region src/playback/timeline-math.ts
-var N = 6e4, P = 60 * N, F = 24 * P, I = [
-	F,
-	6 * P,
+var M = 6e4, N = 60 * M, P = 24 * N, F = [
 	P,
-	15 * N,
-	5 * N
+	6 * N,
+	N,
+	15 * M,
+	5 * M
 ];
-function Ce(e, t, n) {
+function we(e, t, n) {
 	return (e - t.start) / t.span * n;
 }
-function we(e, t, n) {
+function Te(e, t, n) {
 	return t.start + e / n * t.span;
 }
-function L(e, t) {
-	let n = t.end - t.start, r = I[I.length - 1] ?? 6e4, i = Math.min(Math.max(e.span, r), Math.max(n, r));
+function I(e, t) {
+	let n = t.end - t.start, r = F[F.length - 1] ?? 6e4, i = Math.min(Math.max(e.span, r), Math.max(n, r));
 	return i >= n ? {
 		start: t.start,
 		span: n
@@ -511,45 +511,45 @@ function L(e, t) {
 		span: i
 	};
 }
-function Te(e, t, n, r) {
-	return L({
+function Ee(e, t, n, r) {
+	return I({
 		start: n - (n - e.start) / e.span * t,
 		span: t
 	}, r);
 }
-function Ee(e, t) {
+function De(e, t) {
 	let n = e * .01;
-	return t > 0 ? I.find((t) => t < e - n) : [...I].reverse().find((t) => t > e + n);
+	return t > 0 ? F.find((t) => t < e - n) : [...F].reverse().find((t) => t > e + n);
 }
-function De(e, t, n) {
-	return L({
+function Oe(e, t, n) {
+	return I({
 		start: t - e.span / 2,
 		span: e.span
 	}, n);
 }
-var R = [
+var L = [
 	1e4,
 	3e4,
+	M,
+	5 * M,
+	10 * M,
+	15 * M,
+	30 * M,
 	N,
-	5 * N,
-	10 * N,
-	15 * N,
-	30 * N,
-	P,
-	2 * P,
-	3 * P,
-	6 * P
+	2 * N,
+	3 * N,
+	6 * N
 ];
-function z(e, t, n = 60) {
-	for (let r of R) if (r / e.span * t >= n) return r;
-	return R[R.length - 1] ?? 36e5;
+function R(e, t, n = 60) {
+	for (let r of L) if (r / e.span * t >= n) return r;
+	return L[L.length - 1] ?? 36e5;
 }
-function Oe(e, t, n) {
-	let r = z(e, t), i = [], a = e.start + e.span, o = n(e.start), s = Math.ceil((e.start + o) / r) * r - o;
+function ke(e, t, n) {
+	let r = R(e, t), i = [], a = e.start + e.span, o = n(e.start), s = Math.ceil((e.start + o) / r) * r - o;
 	for (let e = 0; s <= a && e < 500; e += 1) i.push(s), s += r;
 	return i;
 }
-function ke(e, t, n, r = 1) {
+function Ae(e, t, n, r = 1) {
 	let i = r / n * t.span, a = t.start + t.span, o = [];
 	for (let n of e) {
 		if (n.end < t.start || n.start > a) continue;
@@ -561,7 +561,7 @@ function ke(e, t, n, r = 1) {
 	}
 	return o;
 }
-function B(e, t) {
+function z(e, t) {
 	let n = 0, r = e.length - 1, i;
 	for (; n <= r;) {
 		let a = n + r >> 1, o = e.at(a);
@@ -570,46 +570,46 @@ function B(e, t) {
 	}
 	return i;
 }
-function Ae(e, t) {
+function je(e, t) {
 	return e.find((e) => e.start > t);
 }
-function je(e, t) {
-	let n = B(e, t);
+function Me(e, t) {
+	let n = z(e, t);
 	if (n) return {
 		segment: n,
 		offset: t - n.start
 	};
-	let r = Ae(e, t);
+	let r = je(e, t);
 	return r ? {
 		segment: r,
 		offset: 0
 	} : void 0;
 }
-function Me(e, t) {
-	return t.size === 0 ? e : e.filter((e) => q(e.types).some((e) => t.has(e)));
+function Ne(e, t) {
+	return t.size === 0 ? e : e.filter((e) => K(e.types).some((e) => t.has(e)));
 }
-function V(e) {
-	let t = q(e.types);
+function B(e) {
+	let t = K(e.types);
 	return t.length === 1 && t[0] === "MOTION";
 }
-function Ne(e, t, n) {
-	let r = Me(e, t);
-	return n && !t.has("MOTION") ? r.filter((e) => !V(e)) : r;
+function Pe(e, t, n) {
+	let r = Ne(e, t);
+	return n && !t.has("MOTION") ? r.filter((e) => !B(e)) : r;
 }
-var H = 10 * N;
-function Pe(e) {
-	return e.some((e) => e.end - e.start >= H);
-}
-function Fe(e, t) {
-	return e.find((e) => e.start > t + 500);
+var V = 10 * M;
+function Fe(e) {
+	return e.some((e) => e.end - e.start >= V);
 }
 function Ie(e, t) {
+	return e.find((e) => e.start > t + 500);
+}
+function Le(e, t) {
 	let n;
 	for (let r of e) if (r.start < t - 1500) n = r;
 	else break;
 	return n;
 }
-function Le(e, t, n = Re) {
+function Re(e, t, n = ze) {
 	let r;
 	for (let i of e) {
 		if (i.start > t) break;
@@ -617,7 +617,7 @@ function Le(e, t, n = Re) {
 	}
 	return r;
 }
-var Re = 15e3, U = [
+var ze = 15e3, H = [
 	{
 		type: "PERSON",
 		label: "Person"
@@ -678,43 +678,43 @@ var Re = 15e3, U = [
 		type: "TIMER",
 		label: "Scheduled"
 	}
-], W = new Map(U.map((e, t) => [e.type, t]));
-function ze(e) {
+], U = new Map(H.map((e, t) => [e.type, t]));
+function Be(e) {
 	let t;
-	for (let n of e) (t === void 0 || (W.get(n) ?? 99) < (W.get(t) ?? 99)) && (t = n);
+	for (let n of e) (t === void 0 || (U.get(n) ?? 99) < (U.get(t) ?? 99)) && (t = n);
 	return t ?? "MOTION";
 }
+function W(e) {
+	return H[U.get(e) ?? -1]?.label ?? e.toLowerCase();
+}
 function G(e) {
-	return U[W.get(e) ?? -1]?.label ?? e.toLowerCase();
+	return [...e].sort((e, t) => (U.get(e) ?? 99) - (U.get(t) ?? 99));
 }
 function K(e) {
-	return [...e].sort((e, t) => (W.get(e) ?? 99) - (W.get(t) ?? 99));
-}
-function q(e) {
 	let t = e.filter((e) => e !== "MOTION");
-	return K(t.length ? t : e.length ? e : ["MOTION"]);
-}
-function Be(e) {
-	return K(new Set(e.flatMap((e) => q(e.types))));
+	return G(t.length ? t : e.length ? e : ["MOTION"]);
 }
 function Ve(e) {
+	return G(new Set(e.flatMap((e) => K(e.types))));
+}
+function He(e) {
 	return e >= 216e5 ? 300 : e >= 36e5 ? 60 : e >= 9e5 ? 10 : 5;
 }
-function He(e, t, n) {
+function Ue(e, t, n) {
 	let r = new Date(Date.UTC(e, t - 1, 1)).getUTCDay(), i = new Date(Date.UTC(e, t, 0)).getUTCDate(), a = (r - n % 7 + 7) % 7, o = [...Array.from({ length: a }, () => null), ...Array.from({ length: i }, (e, t) => t + 1)];
 	for (; o.length % 7;) o.push(null);
 	let s = [];
 	for (let e = 0; e < o.length; e += 7) s.push(o.slice(e, e + 7));
 	return s;
 }
-function Ue(e, t, n) {
+function We(e, t, n) {
 	let r = e * 12 + (t - 1) + n;
 	return [Math.floor(r / 12), r % 12 + 1];
 }
-function We(e, t, n) {
+function Ge(e, t, n) {
 	return `${String(e).padStart(4, "0")}-${String(t).padStart(2, "0")}-${String(n).padStart(2, "0")}`;
 }
-var Ge = {
+var Ke = {
 	person: "PERSON",
 	vehicle: "VEHICLE",
 	animal: "ANIMAL",
@@ -726,25 +726,25 @@ var Ge = {
 	taken_item: "TAKEN_ITEM",
 	motion: "MOTION"
 };
-function J(e) {
-	return Ge[e] ?? e.toUpperCase();
+function q(e) {
+	return Ke[e] ?? e.toUpperCase();
 }
-function Y(e) {
+function J(e) {
 	return `${e.camera_id}:${String(e.start)}`;
 }
-function X(e, t, n, r) {
+function Y(e, t, n, r) {
 	let i = /* @__PURE__ */ new Map();
 	for (let t of e) i.set(t.camera_id, [...i.get(t.camera_id) ?? [], t]);
 	let a = /* @__PURE__ */ new Map(), o = [];
 	for (let e of t) {
-		let t = J(e.kind);
+		let t = q(e.kind);
 		for (let s of e.members ?? [{
 			camera: e.camera,
 			start: e.start,
 			end: e.end
 		}]) {
 			let c = s.end ?? s.start, l = (i.get(s.camera) ?? []).filter((e) => e.start <= c + 3e4 && e.end >= s.start - 3e4), u = l.filter((e) => e.types.includes(t)), d = u.length ? u : l;
-			if (d.length) for (let t of d) a.set(Y(t), e);
+			if (d.length) for (let t of d) a.set(J(t), e);
 			else if (s.start >= n && s.start < r) {
 				let n = {
 					camera_id: s.camera,
@@ -755,7 +755,7 @@ function X(e, t, n, r) {
 					new: !1,
 					journal: !0
 				};
-				o.push(n), a.set(Y(n), e);
+				o.push(n), a.set(J(n), e);
 			}
 		}
 	}
@@ -764,7 +764,7 @@ function X(e, t, n, r) {
 		journal: o
 	};
 }
-var Ke = {
+var qe = {
 	kind: "What it was",
 	clock: "Time of day",
 	solar: "Light",
@@ -772,15 +772,15 @@ var Ke = {
 	predecessor: "What came before",
 	weekend: "Day"
 };
-function qe(e) {
-	return e.name === "signal" ? e.subject || "Signal" : Ke[e.name] ?? e.name;
-}
 function Je(e) {
+	return e.name === "signal" ? e.subject || "Signal" : qe[e.name] ?? e.name;
+}
+function Ye(e) {
 	let t = e.replace(/_/g, " ").trim();
 	return t.charAt(0).toUpperCase() + t.slice(1);
 }
-function Ye(e) {
-	if (e.name === "signal") return Je(e.label);
+function Xe(e) {
+	if (e.name === "signal") return Ye(e.label);
 	if (e.name !== "duration") return e.label;
 	if (e.label === "open") return "Still going";
 	if (e.label === "instant") return "An instant";
@@ -790,23 +790,23 @@ function Ye(e) {
 	let n = Math.round(t / 60);
 	return n >= 2 ? `About ${String(n)} min` : "About a minute";
 }
-function Xe(e) {
+function Ze(e) {
 	return e.contribution > .05 ? "rarer than chance" : e.contribution < -.05 ? "more usual" : "as by chance";
 }
 //#endregion
 //#region src/components/unusual-reason.ts
-var Ze = 4, Qe = class extends r {
+var Qe = 4, $e = class extends r {
 	static properties = { mark: { attribute: !1 } };
 	render() {
 		let e = this.mark;
 		return e ? n`<p class="sentence">${e.reason}</p>
       <ul class="terms" aria-label="Each signal">
         ${e.terms.map((e) => {
-			let t = Math.abs(e.contribution), r = t > .05 ? Math.min(1, t / Ze) * 50 : 0, i = e.contribution >= 0 ? "rarer" : "usual";
+			let t = Math.abs(e.contribution), r = t > .05 ? Math.min(1, t / Qe) * 50 : 0, i = e.contribution >= 0 ? "rarer" : "usual";
 			return n`<li>
-            <span class="name">${qe(e)}</span>
-            <span class="value">${Ye(e)}</span>
-            <span class="way">${Xe(e)}</span>
+            <span class="name">${Je(e)}</span>
+            <span class="value">${Xe(e)}</span>
+            <span class="way">${Ze(e)}</span>
             <span class="bar" aria-hidden="true">
               <span
                 class="fill ${i}"
@@ -891,8 +891,8 @@ var Ze = 4, Qe = class extends r {
       }
     `];
 };
-customElements.get("rv-unusual-reason") || customElements.define("rv-unusual-reason", Qe);
-var $e = 12e4, et = 3600, tt = 10, nt = "rv-timetable-feed", rt = "rv-timetable-marks", it = class extends r {
+customElements.get("rv-unusual-reason") || customElements.define("rv-unusual-reason", $e);
+var et = 12e4, tt = 3600, nt = 10, rt = "rv-timetable-feed", it = "rv-timetable-marks", at = class extends r {
 	static properties = {
 		hass: { attribute: !1 },
 		cameras: { attribute: !1 },
@@ -922,7 +922,7 @@ var $e = 12e4, et = 3600, tt = 10, nt = "rv-timetable-feed", rt = "rv-timetable-
 	connectedCallback() {
 		super.connectedCallback(), document.addEventListener("visibilitychange", this._onVisibility), this._refresh = setInterval(() => {
 			document.visibilityState !== "hidden" && this._isToday && this._load(!0);
-		}, $e), this._tick();
+		}, et), this._tick();
 	}
 	disconnectedCallback() {
 		super.disconnectedCallback(), document.removeEventListener("visibilitychange", this._onVisibility), clearInterval(this._refresh), clearTimeout(this._clock);
@@ -952,10 +952,10 @@ var $e = 12e4, et = 3600, tt = 10, nt = "rv-timetable-feed", rt = "rv-timetable-
 		try {
 			let i = await ee(t, {
 				...r === void 0 ? {} : { date: r },
-				...e ? { background: e } : { maxAge: et }
+				...e ? { background: e } : { maxAge: tt }
 			});
 			if (n !== this._seq || r !== this.date) return;
-			this._newestBefore = e ? this._feed?.events[0]?.start : void 0, this._feed = i, this._error = void 0, this.dispatchEvent(new CustomEvent(nt, { detail: { feed: i } })), this._loadMarks(t, i, n), this._loadThumbs();
+			this._newestBefore = e ? this._feed?.events[0]?.start : void 0, this._feed = i, this._error = void 0, this.dispatchEvent(new CustomEvent(rt, { detail: { feed: i } })), this._loadMarks(t, i, n), this._loadThumbs();
 		} catch (e) {
 			n === this._seq && (this._error = p(e).message);
 		}
@@ -964,7 +964,7 @@ var $e = 12e4, et = 3600, tt = 10, nt = "rv-timetable-feed", rt = "rv-timetable-
 		try {
 			let r = e.config?.time_zone, [i, a] = te(this.date ?? m(t.now, r), r), o = await s(e, i, a);
 			if (n !== this._seq) return;
-			this._marks = X(t.events, o.marks, i, a), this.dispatchEvent(new CustomEvent(rt, { detail: { marks: o } }));
+			this._marks = Y(t.events, o.marks, i, a), this.dispatchEvent(new CustomEvent(it, { detail: { marks: o } }));
 		} catch {}
 	}
 	get _rows() {
@@ -972,11 +972,11 @@ var $e = 12e4, et = 3600, tt = 10, nt = "rv-timetable-feed", rt = "rv-timetable-
 		return t.length ? [...e, ...t].sort((e, t) => t.start - e.start) : e;
 	}
 	_markOf(e) {
-		return this._marks?.marks.get(Y(e));
+		return this._marks?.marks.get(J(e));
 	}
 	get _matching() {
 		let e = this.cameraFilter.size ? this.cameraFilter : this._pick, t = this.typeFilter;
-		return this._rows.filter((n) => (!e.size || e.has(n.camera_id)) && (!t.size || q(n.types).some((e) => t.has(e))) && (!this.unusualOnly || this._markOf(n) !== void 0));
+		return this._rows.filter((n) => (!e.size || e.has(n.camera_id)) && (!t.size || K(n.types).some((e) => t.has(e))) && (!this.unusualOnly || this._markOf(n) !== void 0));
 	}
 	get _shown() {
 		let e = this._matching;
@@ -987,19 +987,19 @@ var $e = 12e4, et = 3600, tt = 10, nt = "rv-timetable-feed", rt = "rv-timetable-
 		if (!e) return;
 		let t = /* @__PURE__ */ new Map();
 		for (let e of this._shown) {
-			let n = Z(e);
+			let n = X(e);
 			this._thumbsAsked.has(n) || (this._thumbsAsked.add(n), t.set(e.camera_id, [...t.get(e.camera_id) ?? [], e.start]));
 		}
 		await Promise.all([...t].map(async ([t, n]) => {
 			try {
-				let { urls: r } = await o(e, t, n, tt), i = new Map(this._thumbs);
+				let { urls: r } = await o(e, t, n, nt), i = new Map(this._thumbs);
 				r.forEach((e, r) => i.set(`${t}:${String(n[r] ?? e.time)}`, e.url)), this._thumbs = i;
 			} catch {}
 		}));
 	}
 	_open(e) {
 		let t = this.hass;
-		t && e.new && (this._markOpened(e), i(t, e.camera_id, e.start).catch(() => void 0)), D(this, {
+		t && e.new && (this._markOpened(e), i(t, e.camera_id, e.start).catch(() => void 0)), E(this, {
 			view: "device",
 			id: e.camera_id,
 			tab: "playback",
@@ -1049,7 +1049,7 @@ var $e = 12e4, et = 3600, tt = 10, nt = "rv-timetable-feed", rt = "rv-timetable-
         ${this.filters ? n`<button
               class="text with-icon all-events"
               @click=${() => {
-			D(this, { view: "events" });
+			E(this, { view: "events" });
 		}}
             >
               All events${h("chevron")}
@@ -1100,11 +1100,11 @@ var $e = 12e4, et = 3600, tt = 10, nt = "rv-timetable-feed", rt = "rv-timetable-
             Show all ${i.length} events
           </button>` : t}
       ${e.failed.length ? n`<p class="failed">
-            ${at(e.failed.map((e) => a.get(e.camera_id)?.name ?? "A camera"), s)}
+            ${ot(e.failed.map((e) => a.get(e.camera_id)?.name ?? "A camera"), s)}
           </p>` : t}`;
 	}
 	_renderRow(e, r, i) {
-		let a = st(e.types), o = g(e.start, i), s = r?.name ?? "Camera", c = this._thumbs.get(Z(e)), l = this._newestBefore !== void 0 && e.start > this._newestBefore, u = this._markOf(e);
+		let a = st(e.types), o = g(e.start, i), s = r?.name ?? "Camera", c = this._thumbs.get(X(e)), l = this._newestBefore !== void 0 && e.start > this._newestBefore, u = this._markOf(e);
 		return n`<li class=${l ? "arrived" : ""}>
       <button
         class="row ${e.new ? "new" : ""}"
@@ -1117,14 +1117,14 @@ var $e = 12e4, et = 3600, tt = 10, nt = "rv-timetable-feed", rt = "rv-timetable-
           ${h(ct(e.types))}<span>${a}</span>${e.new ? n`<span class="tag">New</span>` : t}${u ? n`<span class="badge unusual">Unusual</span>` : t}
         </span>
         <span class="cam"
-          >${ot(r)}<span class="name">${s}</span></span
+          >${Z(r)}<span class="name">${s}</span></span
         >
         <span class="len">${Q(e.end - e.start)}</span>
         <span class="thumb"
           >${c ? n`<img src=${c} alt="" loading="lazy" />` : t}</span
         >
         <span class="meta"
-          >${ot(r)}${s} ·
+          >${Z(r)}${s} ·
           ${Q(e.end - e.start)}</span
         >
       </button>
@@ -1451,21 +1451,21 @@ var $e = 12e4, et = 3600, tt = 10, nt = "rv-timetable-feed", rt = "rv-timetable-
       }
     `];
 };
-function at(e, t) {
+function ot(e, t) {
 	return `${e.join(", ")}: ${t ? "today's" : "this day's"} recordings could not be searched, so some events may be missing.`;
 }
-function Z(e) {
+function X(e) {
 	return `${e.camera_id}:${String(e.start)}`;
 }
-function ot(e) {
+function Z(e) {
 	return e ? n`<span class="plat" aria-hidden="true">${e.number}</span>` : t;
 }
 function st(e) {
-	return q(e).map(G).join(" · ");
+	return K(e).map(W).join(" · ");
 }
 function ct(e) {
 	if (e.includes("DOORBELL")) return "visitor";
-	switch (ze(e)) {
+	switch (Be(e)) {
 		case "PERSON":
 		case "FACE": return "person";
 		case "VEHICLE": return "vehicle";
@@ -1480,7 +1480,7 @@ function Q(e) {
 	let t = Math.max(0, Math.round(e / 1e3)), n = Math.floor(t / 3600), r = Math.floor(t % 3600 / 60), i = String(t % 60).padStart(2, "0");
 	return n ? `${String(n)}:${String(r).padStart(2, "0")}:${i}` : `${String(r)}:${i}`;
 }
-customElements.get("rv-timetable") || customElements.define("rv-timetable", it);
+customElements.get("rv-timetable") || customElements.define("rv-timetable", at);
 //#endregion
 //#region src/download.ts
 function lt(e, t, n = document) {
@@ -1517,19 +1517,23 @@ function ht(e) {
 function gt(e) {
 	return e.via === "nvr" ? `Through ${e.host_name ?? e.entry_title}` : "Added directly";
 }
+function _t(e) {
+	let t = e.replace(/_/g, " ").replace(/\s*&\s*/g, " & ").trim();
+	return t.charAt(0).toUpperCase() + t.slice(1);
+}
 //#endregion
 //#region src/views.ts
-var _t = {
-	events: () => import("./events-view-QEKrZxRi.js"),
-	list: () => import("./device-list-CJOWRwl2.js"),
-	device: () => import("./device-page-DpircXSd.js"),
-	"live-check": () => import("./live-check--fSM1JMf.js"),
-	soak: () => import("./live-soak-CH353EiU.js"),
-	cards: () => import("./card-report-BLdp-uO5.js"),
-	wall: () => import("./wall-B5LqBIDS.js")
+var vt = {
+	events: () => import("./events-view-CAHuLq_a.js"),
+	list: () => import("./device-list-CKqPnImr.js"),
+	device: () => import("./device-page-mFf3C8-R.js"),
+	"live-check": () => import("./live-check-kxFJEhR-.js"),
+	soak: () => import("./live-soak-DsX6C-KX.js"),
+	cards: () => import("./card-report-Dn7s8lW8.js"),
+	wall: () => import("./wall-wnq30BNp.js")
 }, $ = /* @__PURE__ */ new Map();
-function vt(e) {
-	let t = _t[e];
+function yt(e) {
+	let t = vt[e];
 	if (!t) return Promise.resolve();
 	let n = $.get(e);
 	return n || (n = t().catch((t) => {
@@ -1537,4 +1541,4 @@ function vt(e) {
 	}), $.set(e, n)), n;
 }
 //#endregion
-export { me as $, Ie as A, G as B, Le as C, Fe as D, V as E, Ee as F, A as G, we as H, Ve as I, E as J, j as K, z as L, B as M, q as N, je as O, K as P, he as Q, Oe as R, L as S, He as T, Te as U, Ne as V, k as W, _e as X, D as Y, ge as Z, N as _, mt as a, y as at, ke as b, st as c, ie as ct, J as d, w as et, X as f, P as g, F as h, ft as i, b as it, Pe as j, Be as k, Q as l, oe as lt, H as m, gt as n, fe as nt, ht as o, v as ot, Y as p, T as q, dt as r, x as rt, lt as s, _ as st, vt as t, pe as tt, ct as u, I as v, We as w, De as x, Ue as y, Ce as z };
+export { ge as $, Ve as A, we as B, I as C, B as D, Ue as E, G as F, O as G, Pe as H, De as I, w as J, k as K, He as L, Fe as M, z as N, Ie as O, K as P, _e as Q, R, Oe as S, Ge as T, Te as U, W as V, Ee as W, E as X, T as Y, ve as Z, N as _, _t as a, b as at, We as b, lt as c, _ as ct, ct as d, he as et, q as f, P as g, V as h, ft as i, ue as it, Le as j, Me as k, st as l, ie as lt, J as m, gt as n, me as nt, mt as o, y as ot, Y as p, A as q, dt as r, pe as rt, ht as s, v as st, yt as t, C as tt, Q as u, oe as ut, M as v, Re as w, Ae as x, F as y, ke as z };

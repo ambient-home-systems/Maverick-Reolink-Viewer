@@ -11,12 +11,13 @@ import {
   type Action,
 } from "../catalog";
 import { icon } from "../icons";
-import { connectionLabel } from "../format";
+import { connectionLabel, optionLabel } from "../format";
 
-export { connectionLabel };
+export { connectionLabel, optionLabel };
 import { brightnessCall, serviceFor, type ServiceCall } from "../services";
 import { sharedStyles } from "../styles";
 import type {
+  CameraNode,
   Catalog,
   CatalogEntry,
   DeviceConnection,
@@ -26,6 +27,7 @@ import type {
   HomeAssistant,
 } from "../types";
 import { PendingWrites, SETTLE_TIMEOUT_MS, type WriteValue } from "../writes";
+import "./copy-settings";
 import { toast } from "./navigation";
 
 // HA's UpdateEntityFeature.INSTALL.
@@ -49,7 +51,9 @@ export class RvSettings extends LitElement {
     hass: { attribute: false },
     device: { attribute: false },
     catalog: { attribute: false },
+    cameras: { attribute: false },
     _connection: { state: true },
+    _copying: { state: true },
     _search: { state: true },
     _showDisabled: { state: true },
     _open: { state: true },
@@ -60,7 +64,10 @@ export class RvSettings extends LitElement {
   declare hass: HomeAssistant | undefined;
   declare device: DeviceResponse | undefined;
   declare catalog: Catalog | undefined;
+  /** Every camera, for "Copy to…" (Phase 11 step 4). */
+  declare cameras: readonly CameraNode[];
   declare _connection: number | undefined;
+  declare _copying: boolean;
   declare _search: string;
   declare _showDisabled: boolean;
   declare _open: ReadonlySet<string>;
@@ -78,6 +85,8 @@ export class RvSettings extends LitElement {
   constructor() {
     super();
     this._search = "";
+    this.cameras = [];
+    this._copying = false;
     this._showDisabled = false;
     this._open = new Set();
     this._enabling = new Set();
@@ -154,6 +163,11 @@ export class RvSettings extends LitElement {
           />
           Show disabled entities (${disabled})
         </label>
+        ${this._canCopy()
+          ? html`<button class="copy" @click=${() => {
+              this._copying = true;
+            }}>Copy to…</button>`
+          : nothing}
       </div>
       ${this._renderConnections()}
       ${this._showDisabled
@@ -176,7 +190,27 @@ export class RvSettings extends LitElement {
           )
         : html`<p class="muted">No settings match “${this._search}”.</p>`}
       ${this._renderConfirm()}
+      ${this._copying && this.device.node.kind === "camera"
+        ? html`<rv-copy-settings
+            .hass=${this.hass}
+            .source=${conn}
+            .sourceId=${this.device.node.id}
+            .sourceName=${this.device.node.name ?? "this camera"}
+            .sourceModel=${this.device.node.model}
+            .cameras=${this.cameras}
+            .catalog=${this.catalog}
+            @rv-close=${() => {
+              this._copying = false;
+            }}
+          ></rv-copy-settings>`
+        : nothing}
     `;
+  }
+
+  /** A camera, with another camera to copy its settings to. */
+  private _canCopy(): boolean {
+    const node = this.device?.node;
+    return node?.kind === "camera" && this.cameras.some((c) => c.id !== node.id && c.connections.length > 0);
   }
 
   private _renderConnections(): TemplateResult | typeof nothing {
@@ -799,10 +833,6 @@ export class RvSettings extends LitElement {
 
 
 /** A select's raw option as words: "black&white" → "Black & white". */
-export function optionLabel(option: string): string {
-  const words = option.replace(/_/g, " ").replace(/\s*&\s*/g, " & ").trim();
-  return words.charAt(0).toUpperCase() + words.slice(1);
-}
 
 function numberAttr(value: unknown, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;

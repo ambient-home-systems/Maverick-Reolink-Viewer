@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   CATALOG,
   deepText,
+  makeCamera,
   makeConnection,
   makeDevice,
   makeEntity,
@@ -360,5 +361,24 @@ describe("rv-settings", () => {
     expect(formatState(makeState("sensor.x", "unavailable"), "sensor")).toBe("Unavailable");
     expect(formatState(makeState("sensor.x", "unknown"), "sensor")).toBe("Unknown");
     expect(formatState(makeState("camera.x", "idle"), "camera")).toBe("idle");
+  });
+});
+
+describe("Copy to… (Phase 11 step 4)", () => {
+  it("opens the copy dialog for a camera with another camera to copy to, and closes it", async () => {
+    const el = await mount(makeHass(okDevices()));
+    // No other camera: nothing to copy to.
+    expect(buttonByText(el, "Copy to…")).toBeUndefined();
+    el.cameras = [makeCamera(), makeCamera({ id: "dev-back", name: "Back Yard" })];
+    await el.updateComplete;
+    buttonByText(el, "Copy to…")?.click();
+    await el.updateComplete;
+    const dialog = root(el).querySelector("rv-copy-settings");
+    expect(dialog?.sourceId).toBe("dev-cam");
+    expect(dialog?.sourceName).toBe("Front Yard");
+    expect(dialog?.source).toBe(el.connection);
+    dialog?.dispatchEvent(new CustomEvent("rv-close", { bubbles: true, composed: true }));
+    await el.updateComplete;
+    expect(root(el).querySelector("rv-copy-settings")).toBeNull();
   });
 });
