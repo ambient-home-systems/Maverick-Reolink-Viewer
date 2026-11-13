@@ -27,7 +27,7 @@ put on it:
 | 8 | Unusual events: learning what is normal | High | 2–3 wk, then a week of learning | **Started** (2026-11-03). **Step 1 built** (v0.46.0): the detection journal, opt-in ("Learn what is normal"), with a 10-day head start from Home Assistant's recorder; on at the owner's since 2026-11-02, all 7 cameras. v0.46.1 keeps motion as bursts and a year of history (the owner's choices, from the first 10 days' sizes). **Step 2 built** (v0.47.0): Stamina's model, ported with its tests (MIT, in `THIRD_PARTY.md`), with a daily cap for a busy property; the Devices page shows each camera's state and the week's marks with their sentences. The owner's check: 3.6 marks a day at Balanced (243 a week without the cap). v0.47.1, the owner's choices: motion never marked, time counted once, one mark per incident across cameras; 5.1 a day, the journal 1.1 MB (about 2.8 MB a month). v0.47.2: only long stands out, a kind seen 10 times is known, only detections fire first; 5.3 a day. v0.47.3: an incident's later events take what fired before it; a mark always says why; the model saved between restarts; 5.3 a day, 39 without the cap. v0.47.4: anything seen 10 times is known, only "nothing fired first" raises; 1.4 a day, all rare by count. v0.47.5: Balanced aims at a few a day (floor 0, at most 3 a day), More knows a value after 20. **Step 3 built** (v0.48.0–v0.49.0), the owner's choice: marks on the timetable's rows with why, and an Unusual filter on Events (v0.48.0; the owner's check: 2.6 a day at Balanced); "What it has learned" on each camera's Overview, and a mark's count as a total (v0.49.0). **House-wide signals built** (v0.50.0): chosen in the options, kept beside the detections, learned and said. **Step 4 built** (v0.51.0): each detection scored as it begins and ends; `reolink_viewer_unusual`, an "unusual activity" sensor per camera, and a device trigger per camera, on Reolink Viewer's own device. See "Phase 8" |
 | 9 | The Wall: the Live page as a security monitor, with layouts, arranging, HD large tiles and the detection strip | Standard / High | 2–3 wk | **Done** (2026-11-10, v0.56.0): the owner validated v0.55.0's and v0.56.0's checklists. Started 2026-11-05. **Step 1 built** (v0.52.0): the Wall, its layouts (Auto by shape, 1, 2×2, 3×3, 4×4, 1+5, 1+7), saved per user on the server, `#wall/<id>`, each device remembering board or Wall; the owner's check: it works, nothing to scroll. **Step 2 built** (v0.53.0): swapping (drag, or Arrange and two taps), the large slot or alone by a double tap or Enter, the keyboard, pages and tours. **Step 3 built** (v0.54.0–v0.54.1): HD in the large tiles while a stream slot is spare, the NVR's budget 9 streams with 2 HD tiles (the capacity test). **Step 4 built** (v0.55.0): the detection strip, a tile lit at once by its sensor, and per layout the feeds' floodlight and siren buttons. **Step 5 built** (v0.56.0): the pointer hidden when still, the screen kept awake, the tiles asleep under Fully's screen off, and the Reolink Wall dashboard card. The owner's checks of v0.55.0 and v0.56.0 passed (2026-11-10): the phase is done. See "Phase 9" |
 | 10 | Scrubbing that shows the picture while dragging | Very high | 2–4 wk | **Done** (2026-11-13, v0.63.15): the owner's playback checks passed on every device, Chrome and Safari on the Mac, the iPhone app and the wall tablet (v0.63.10 made MSE painting show a lone key frame, for Chrome on plain HTTP and the tablet). Started 2026-11-10. **Step 0 built** (v0.57.0): the gate's measurements, the probe's scrub cuts and key frames, and the playback check's K row (key frames decoded one at a time); the owner's runs passed it (2026-11-10). **Step 1 built** (v0.58.0): the picture at a moment, from the server: a scrub session (a signed websocket), answered from a store of key frames found, the disk cache or a 2-second cut the device sends, taking its channel's turn; the playback check's F row. **Step 2 built** (v0.59.0): dragging over what the video has not buffered shows the server's key frame at the pointer, over the video, until release plays from there. **Step 4 built** (v0.60.0, the owner's ask): the playback check's P row replaces the hand checklist. **Step 3 built** (v0.62.0): a drag pauses the video, the server answers each picture before its cut's drain, and a release plays from the picture shown; the P row drags slowly alone and beside a second viewer. The owner's runs of v0.62.0 passed it on Front Yard Right and Garage (alone, a picture every 0.05–0.06 s; beside a second viewer, no stall); v0.62.1 follows from them. See "Phase 10" |
-| 11 | Playback and settings extras: zoom, event clips, filters, copying settings | Standard | 1–2 wk | **Started** (2026-11-13). **Steps 1 to 4 built**: zoom into the picture (v0.64.0, Reset fixed in v0.64.1); save this event (v0.65.0, confirmed on the owner's NVR); filters that start useful (v0.66.0); copy settings to other cameras (v0.67.0). See "Phase 11" |
+| 11 | Playback and settings extras: zoom, event clips, filters, copying settings | Standard | 1–2 wk | **Started** (2026-11-13). **Steps 1 to 4 built**: zoom into the picture (v0.64.0, Reset fixed in v0.64.1); save this event (v0.65.0, confirmed on the owner's NVR); filters that start useful (v0.66.0); copy settings to other cameras (v0.67.0). Step 5's research: the probe asks (v0.68.0), awaiting the owner's run. See "Phase 11" |
 | 12 | Optional R&D: the Doorbell's recordings and talk | Very high | 3–5 wk, gated | Planned. See "Phase 12" |
 | 13 | Optional: live picture integrity and outside live sources | High | 1–1.5 wk, gated | Planned. See "Phase 13" |
 | 14 | Copies of detection clips on a NAS or cloud | High | — | **TBD** (the owner, 2026-11-02): may be built here later; sketched, not scheduled. See "Phase 14" |
@@ -8469,7 +8469,7 @@ Goal: smaller things found in the review of Stamina and reostream (PLAN.md
 | 2. Save this event | Built (v0.65.0), confirmed on the owner's NVR, see "As built" below |
 | 3. Filters that start useful | Built (v0.66.0), see "As built" below |
 | 4. Copy settings to other cameras | Built (v0.67.0), see "As built" below |
-| 5. Research: settings changed from factory | Not started; a note only |
+| 5. Research: settings changed from factory | The probe asks (v0.68.0); the note awaits the owner's run |
 
 #### Step 11.1: zoom into the picture
 
@@ -8787,6 +8787,51 @@ It downloaded as expected and played.
   - Baichuan's replies.
 - The outcome is recorded as a note here, with no UI unless the values can be
   read.
+
+**What is known without the hardware (13 Nov):**
+
+- **reolink-aio's cache holds no factory value.**
+  - It asks a few commands with `action` 1 at setup, for their ranges:
+    `GetRec(V20)`, `GetPowerLed`, `GetAutoFocus`, `GetZoomFocus`,
+    `Get3DPos`, `GetAiCfg`.
+  - It keeps only their `range`; it never reads `initial`.
+  - It asks the image settings (`GetIsp`) with `action` 0.
+  - Nothing in Home Assistant holds a factory value either.
+- **Baichuan:** our client speaks only replay, download and the clock
+  (Phase 5). Its settings messages (XML of the current values) were not
+  tried, as the HTTP API answers first.
+- **The HTTP API** is the question, and only a camera can answer it.
+  Reolink's API documents `action` 1 as "the value, with the initial value
+  and the range".
+
+**The probe's check (v0.68.0, `probe_factory.py`):** opt-in from the panel
+("Ask each camera for its settings' factory values", "only this test"),
+read-only.
+
+- **What it asks:** each camera, one command at a time, as scheduler jobs at
+  prefetch priority:
+  - `GetImage`, `GetIsp`, `GetEnc`, `GetOsd`;
+  - `GetMdAlarm`, `GetAiAlarm` (people);
+  - `GetIrLights`, `GetWhiteLed`, `GetPowerLed`;
+  - `GetRecV20`, `GetAudioCfg`, `GetPushV20`.
+
+  Each is asked with `action` 1, through `ReolinkHostHandle.async_get_initial`,
+  which refuses anything but a `Get`.
+- **What it records, per command:**
+  - whether it answered;
+  - whether it holds `initial` and `range`;
+  - how many values it holds;
+  - each value that differs from `initial`, with both values. On-screen
+    text, which names the camera, shows only as "(text)"; long text is cut
+    short.
+- **A summary** per camera and per host: commands answered, with `initial`,
+  values that differ.
+- **Battery cameras:** one on its battery is asked only with "Include
+  battery cameras".
+- **What comes next:** if the owner's cameras answer with `initial`, Settings
+  can mark each setting changed from factory, and offer "Back to factory"
+  through HA's actions. If they do not, this note says so and the step
+  closes with no UI.
 
 **Exit criteria:**
 

@@ -3,6 +3,20 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.68.0
+
+The last of Phase 11's steps, research: can your cameras say which settings you changed
+from factory?
+
+- **Devices → Hardware probe → Ask each camera for its settings' factory values.**
+  - It asks each camera for its settings with their factory values (image, motion and
+    AI detection, lights, recording, audio, notifications, …).
+  - The report says whether the camera keeps them, and which settings differ.
+  - It only reads, and keeps the camera's on-screen text, which names it, out of the
+    report.
+  - If the cameras can say, a future version can mark changed settings and offer to
+    put them back.
+
 ## 0.67.0
 
 The fourth of Phase 11's extras: copy settings to other cameras.

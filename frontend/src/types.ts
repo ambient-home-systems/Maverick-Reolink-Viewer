@@ -311,6 +311,9 @@ export interface ProbeOptions {
   /** Events of cameras that record but cannot be played (Phase 6, step 1). */
   events_test?: boolean;
   events_only?: boolean;
+  /** Factory values of each camera's settings (Phase 11 step 5, research). */
+  factory_test?: boolean;
+  factory_only?: boolean;
 }
 
 export type ProbeReport = Record<string, unknown>;

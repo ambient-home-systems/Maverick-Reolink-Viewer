@@ -233,6 +233,27 @@ async def test_probe_events_options(
     assert (options.enabled, options.only) == (False, False)
 
 
+async def test_probe_factory_options(
+    hass: HomeAssistant,
+    hass_ws_client: WebSocketGenerator,
+    loaded_viewer: MockConfigEntry,
+) -> None:
+    """The panel's factory values check options (Phase 11 step 5) reach the probe."""
+    client = await hass_ws_client(hass)
+    with patch.object(
+        probe.Prober, "async_run", autospec=True, return_value={"ok": 1}
+    ) as run:
+        await _collect_probe(client, {"factory_test": True, "factory_only": True})
+    options = run.call_args.args[0]._options.factory
+    assert (options.enabled, options.only) == (True, True)
+    with patch.object(
+        probe.Prober, "async_run", autospec=True, return_value={"ok": 1}
+    ) as run:
+        await _collect_probe(client, {})
+    options = run.call_args.args[0]._options.factory
+    assert (options.enabled, options.only) == (False, False)
+
+
 async def test_probe_requires_admin(
     hass: HomeAssistant,
     hass_ws_client: WebSocketGenerator,

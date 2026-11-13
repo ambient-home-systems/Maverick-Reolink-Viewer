@@ -84,6 +84,8 @@ export class ReolinkViewerPanel extends LitElement {
     _baichuanHold: { state: true },
     _events: { state: true },
     _eventsOnly: { state: true },
+    _factory: { state: true },
+    _factoryOnly: { state: true },
     _copied: { state: true },
     _route: { state: true },
     _toast: { state: true },
@@ -117,6 +119,9 @@ export class ReolinkViewerPanel extends LitElement {
   /** The events check of cameras that record but cannot be played (Phase 6). */
   declare _events: boolean;
   declare _eventsOnly: boolean;
+  /** The factory values check (Phase 11 step 5, research). */
+  declare _factory: boolean;
+  declare _factoryOnly: boolean;
   declare _copied: boolean;
   declare _route: Route;
   /** The current view's file could not be loaded. */
@@ -155,6 +160,8 @@ export class ReolinkViewerPanel extends LitElement {
     this._baichuanHold = 5;
     this._events = false;
     this._eventsOnly = true;
+    this._factory = false;
+    this._factoryOnly = true;
     this._copied = false;
     this._route = { view: "live" };
     this.addEventListener(NAVIGATE_EVENT, (e) => {
@@ -796,6 +803,32 @@ export class ReolinkViewerPanel extends LitElement {
           />
           <span>Only this test (skip the live video and recording checks on every camera)</span>
         </label>
+        <label class="option">
+          <input
+            type="checkbox"
+            .checked=${this._factory}
+            ?disabled=${running}
+            @change=${(e: Event) => {
+              this._factory = (e.target as HTMLInputElement).checked;
+            }}
+          />
+          <span
+            >Ask each camera for its settings' factory values (Phase 11 step 5): whether it keeps
+            them, and which of its settings differ. Read-only: nothing is changed. The on-screen text,
+            which names the camera, is left out of the report.</span
+          >
+        </label>
+        <label class="option nested">
+          <input
+            type="checkbox"
+            .checked=${this._factoryOnly}
+            ?disabled=${running || !this._factory}
+            @change=${(e: Event) => {
+              this._factoryOnly = (e.target as HTMLInputElement).checked;
+            }}
+          />
+          <span>Only this test (skip the live video and recording checks on every camera)</span>
+        </label>
       </div>
       <div class="actions">
         ${running
@@ -882,6 +915,8 @@ export class ReolinkViewerPanel extends LitElement {
         baichuan_cut: 20,
         events_test: this._events,
         events_only: this._events && this._eventsOnly,
+        factory_test: this._factory,
+        factory_only: this._factory && this._factoryOnly,
       },
       (message) => {
         if (this._probe.status !== "running") return;
