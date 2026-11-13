@@ -33,6 +33,7 @@ from .const import (
 from .models import ReolinkViewerConfigEntry
 from .probe import ProbeOptions, Prober
 from .probe_baichuan import BaichuanOptions
+from .probe_doorbell import DoorbellOptions
 from .probe_events import EventsOptions
 from .probe_factory import FactoryOptions
 from .probe_playback import PlaybackOptions
@@ -292,6 +293,8 @@ def _redacted_error(err: Exception, hosts: list[bridge.ReolinkHostHandle]) -> st
         probatio.Optional("events_only", default=False): bool,
         probatio.Optional("factory_test", default=False): bool,
         probatio.Optional("factory_only", default=False): bool,
+        probatio.Optional("doorbell_test", default=False): bool,
+        probatio.Optional("doorbell_only", default=False): bool,
     }
 )
 @websocket_api.require_admin
@@ -361,6 +364,9 @@ async def ws_probe(
         ),
         events=EventsOptions(enabled=msg["events_test"], only=msg["events_only"]),
         factory=FactoryOptions(enabled=msg["factory_test"], only=msg["factory_only"]),
+        doorbell=DoorbellOptions(
+            enabled=msg["doorbell_test"], only=msg["doorbell_only"]
+        ),
     )
 
     def progress(message: str) -> None:

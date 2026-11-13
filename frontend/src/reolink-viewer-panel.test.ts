@@ -514,6 +514,8 @@ describe("reolink-viewer-panel", () => {
       events_only: false,
       factory_test: false,
       factory_only: false,
+      doorbell_test: false,
+      doorbell_only: false,
     });
     hass.emit({ type: "progress", message: "ch0 live rtsp main" });
     await el.updateComplete;
@@ -632,6 +634,16 @@ describe("reolink-viewer-panel", () => {
     button(el, "Run probe")?.click();
     await flush();
     expect(hass.sent.at(-1)).toMatchObject({ factory_test: true, factory_only: true });
+    button(el, "Cancel")?.click();
+    await flush();
+
+    // The Doorbell check (Phase 12 step a): read-only, "only" by default.
+    expect(boxes()[16]?.disabled).toBe(true);
+    await toggle(15);
+    expect(boxes()[16]?.disabled).toBe(false);
+    button(el, "Run probe")?.click();
+    await flush();
+    expect(hass.sent.at(-1)).toMatchObject({ doorbell_test: true, doorbell_only: true });
   });
 
   it("shows probe errors and supports cancel", async () => {

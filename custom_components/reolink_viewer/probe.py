@@ -21,6 +21,9 @@ Safety rules:
 - The events check of cameras that record but cannot be played (Phase 6,
   ``probe_events.py``) is opt-in; it checks a camera on battery only with
   ``include_battery``.
+- The Doorbell check (Phase 12 step a, ``probe_doorbell.py``) is opt-in and
+  read-only: a recording cut and the talk format over Home Assistant's own
+  session, only on wired power.
 - The report is redacted: passwords, tokens, UIDs, serial numbers and MAC
   addresses are removed and no URL is ever recorded.
 """
@@ -66,6 +69,7 @@ from .media import (
     async_hold_stream,
 )
 from .probe_baichuan import NOT_RECORDER, BaichuanCheck, BaichuanOptions
+from .probe_doorbell import DoorbellCheck, DoorbellOptions
 from .probe_events import EventsCheck, EventsOptions
 from .probe_factory import FactoryCheck, FactoryOptions
 from .probe_playback import PlaybackCheck, PlaybackOptions
@@ -106,6 +110,7 @@ class ProbeOptions:
     baichuan: BaichuanOptions = field(default_factory=BaichuanOptions)
     events: EventsOptions = field(default_factory=EventsOptions)
     factory: FactoryOptions = field(default_factory=FactoryOptions)
+    doorbell: DoorbellOptions = field(default_factory=DoorbellOptions)
 
     def __post_init__(self) -> None:
         """Clamp to safe values."""
@@ -276,6 +281,8 @@ class Prober:
             result["concurrency"] = _skipped("events check only")
         elif self._only_factory:
             result["concurrency"] = _skipped("factory values check only")
+        elif self._only_doorbell:
+            result["concurrency"] = _skipped("Doorbell check only")
         else:
             result["concurrency"] = await self._concurrency(host, info, channels)
         if playback is not None:
@@ -288,6 +295,8 @@ class Prober:
             result["events"] = await self._events_check(host, info)
         if self._options.factory.enabled:
             result["factory"] = await self._factory_check(host, info)
+        if self._options.doorbell.enabled:
+            result["doorbell"] = await self._doorbell_check(host, info)
         result["duration_ms"] = _ms(start)
         return result
 
@@ -375,6 +384,31 @@ class Prober:
             _LOGGER.debug("Factory values check failed", exc_info=True)
             return {"ok": False, "error": _err(err)}
 
+    async def _doorbell_check(
+        self, host: ReolinkHostHandle, info: HostInfo
+    ) -> dict[str, Any]:
+        """Run the Phase 12 step a Doorbell check (opt-in, read-only)."""
+
+        def job[T](
+            factory: Callable[[], Awaitable[T]],
+            *,
+            timeout: float | None = None,
+            exclusive: bool = False,
+        ) -> Awaitable[T]:
+            return self._job(host, factory, timeout=timeout, exclusive=exclusive)
+
+        check = DoorbellCheck(
+            host,
+            job,
+            step_timeout=self._options.step_timeout,
+            progress=self._report_progress,
+        )
+        try:
+            return await check.async_host(info)
+        except Exception as err:
+            _LOGGER.debug("Doorbell check failed", exc_info=True)
+            return {"ok": False, "error": _err(err)}
+
     def _playback_check(self, host: ReolinkHostHandle) -> PlaybackCheck | None:
         if not self._options.playback.enabled:
             return None
@@ -428,6 +462,11 @@ class Prober:
         return self._options.factory.enabled and self._options.factory.only
 
     @property
+    def _only_doorbell(self) -> bool:
+        """Return True when only the Doorbell check was asked for."""
+        return self._options.doorbell.enabled and self._options.doorbell.only
+
+    @property
     def _only_events(self) -> bool:
         """Return True when only the events check was asked for."""
         return self._options.events.enabled and self._options.events.only
@@ -471,6 +510,7 @@ class Prober:
             or self._only_baichuan
             or self._only_events
             or self._only_factory
+            or self._only_doorbell
         ):
             return result
 

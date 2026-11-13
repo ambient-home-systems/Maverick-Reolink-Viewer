@@ -3,6 +3,21 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.69.0
+
+The first step of Phase 12, the doorbell's recordings and talk: can they come over Home
+Assistant's own connection to the doorbell?
+
+- **Devices → Hardware probe → Test the doorbell's recordings and talk.**
+  - It reads which sound format the doorbell takes for talk.
+  - It times the first 10 seconds of the doorbell's newest recording, fetched from its
+    SD card over Home Assistant's own connection (no second login).
+  - It checks that Home Assistant's connection keeps answering while the recording
+    comes, and after.
+  - The report gives a go or no-go for playing the doorbell's recordings, and for talk.
+  - It only reads, and nothing is said at the door. Only on wired power. The recording
+    part needs Home Assistant 2026.11.2 or later (reolink-aio 0.23.0).
+
 ## 0.68.0
 
 The last of Phase 11's steps, research: can your cameras say which settings you changed

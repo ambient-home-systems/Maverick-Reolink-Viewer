@@ -84,6 +84,52 @@ def is_target(host: ReolinkHostHandle, channel: int) -> bool:
     return host.stores_recordings(channel) and not host.records_locally(channel)
 
 
+async def device_clock(
+    host: ReolinkHostHandle, job: JobRunner
+) -> tuple[dict[str, Any], datetime]:
+    """Return what is known of the device's clock, and its wall time now.
+
+    The device's time as reolink-aio reads it; else Baichuan's time query
+    (104); else Home Assistant's own clock (the camera is at home).
+    """
+    clock: dict[str, Any] = {"timezone_known": host.timezone() is not None}
+    try:
+        now = await job(host.async_get_time)
+    except Exception as err:  # noqa: BLE001 - recorded in the report
+        clock["device_error"] = _err(err)
+    else:
+        clock["source"] = "device"
+        return clock, now.replace(tzinfo=None)
+
+    local = dt_util.now()
+    offset = local.utcoffset()
+    clock["home_assistant_utc_offset_s"] = (
+        round(offset.total_seconds()) if offset is not None else None
+    )
+    began = time.monotonic()
+    try:
+        answer = await job(host.async_baichuan_clock)
+    except Exception as err:  # noqa: BLE001 - recorded in the report
+        clock["baichuan"] = {"ok": False, "error": _err(err)}
+    else:
+        baichuan: dict[str, Any] = {
+            "ok": answer.wall is not None,
+            "latency_ms": _ms(began),
+            "time_zone": answer.time_zone,
+            "fields": list(answer.fields),
+        }
+        clock["baichuan"] = baichuan
+        if answer.wall is not None:
+            # Its wall clock against Home Assistant's: the zones agree when
+            # this is a few seconds, not hours.
+            ahead = answer.wall - local.replace(tzinfo=None)
+            baichuan["ahead_of_home_assistant_s"] = round(ahead.total_seconds())
+            clock["source"] = "baichuan"
+            return clock, answer.wall
+    clock["source"] = "home_assistant"
+    return clock, local.replace(tzinfo=None)
+
+
 class EventsCheck:
     """The events check for one host."""
 
@@ -139,7 +185,7 @@ class EventsCheck:
         if (reason := self._skip_reason(channel)) is not None:
             result["skipped"] = reason
             return result
-        result["clock"], wall = await self._clock()
+        result["clock"], wall = await device_clock(self._host, self._job)
         today = datetime.combine(wall.date(), datetime.min.time())
 
         self._progress(f"ch{ch} events: day search")
@@ -172,49 +218,6 @@ class EventsCheck:
             "thumbnails": _thumbnails(result["snapshot_past"]),
         }
         return result
-
-    async def _clock(self) -> tuple[dict[str, Any], datetime]:
-        """Return what is known of the device's clock, and its wall time now.
-
-        The device's time as reolink-aio reads it; else Baichuan's time query
-        (104); else Home Assistant's own clock (the camera is at home).
-        """
-        clock: dict[str, Any] = {"timezone_known": self._host.timezone() is not None}
-        try:
-            now = await self._job(self._host.async_get_time)
-        except Exception as err:  # noqa: BLE001 - recorded in the report
-            clock["device_error"] = _err(err)
-        else:
-            clock["source"] = "device"
-            return clock, now.replace(tzinfo=None)
-
-        local = dt_util.now()
-        offset = local.utcoffset()
-        clock["home_assistant_utc_offset_s"] = (
-            round(offset.total_seconds()) if offset is not None else None
-        )
-        began = time.monotonic()
-        try:
-            answer = await self._job(self._host.async_baichuan_clock)
-        except Exception as err:  # noqa: BLE001 - recorded in the report
-            clock["baichuan"] = {"ok": False, "error": _err(err)}
-        else:
-            baichuan: dict[str, Any] = {
-                "ok": answer.wall is not None,
-                "latency_ms": _ms(began),
-                "time_zone": answer.time_zone,
-                "fields": list(answer.fields),
-            }
-            clock["baichuan"] = baichuan
-            if answer.wall is not None:
-                # Its wall clock against Home Assistant's: the zones agree when
-                # this is a few seconds, not hours.
-                ahead = answer.wall - local.replace(tzinfo=None)
-                baichuan["ahead_of_home_assistant_s"] = round(ahead.total_seconds())
-                clock["source"] = "baichuan"
-                return clock, answer.wall
-        clock["source"] = "home_assistant"
-        return clock, local.replace(tzinfo=None)
 
     async def _days(self, ch: int, start: datetime, end: datetime) -> dict[str, Any]:
         began = time.monotonic()
