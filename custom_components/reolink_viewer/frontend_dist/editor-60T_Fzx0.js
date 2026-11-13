@@ -1,5 +1,5 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
-import { B as i, Bt as a, V as o, mt as s } from "./live-C8Ncs3qj.js";
+import { B as i, Bt as a, V as o, mt as s } from "./live-BD2sk3pJ.js";
 import { a as c, c as l, r as u } from "./config-D80frQMF.js";
 import { t as d } from "./editor-event-DOL4ACcL.js";
 //#region src/card/editor.ts

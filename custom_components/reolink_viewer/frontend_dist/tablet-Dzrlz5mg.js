@@ -1,4 +1,4 @@
-import { I as e } from "./live-C8Ncs3qj.js";
+import { I as e } from "./live-BD2sk3pJ.js";
 //#region src/card/tablet.ts
 var t = 6e4, n = 3e5, r = 300, i = {
 	screenOff: "screen off",

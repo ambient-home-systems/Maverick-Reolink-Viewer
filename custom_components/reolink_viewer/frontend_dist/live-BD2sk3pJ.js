@@ -1995,12 +1995,12 @@ function $t(e) {
 	} catch {}
 	return +!/^en-(US|CA)|^ja|^he/.test(e ?? navigator.language);
 }
-var W = 1.25, en = 2.5, tn = "--rv-zoom-transform", nn = 300, rn = 30, G = {
+var W = 1.25, en = 2.5, tn = "--rv-zoom-transform", nn = "button, a[href], input, select, textarea, [role='button'], [role='slider']", rn = 300, an = 30, G = {
 	scale: 1,
 	x: 0,
 	y: 0
 };
-function an(e, t) {
+function on(e, t) {
 	if (!t || t.w <= 0 || t.h <= 0 || e.w <= 0 || e.h <= 0) return {
 		x: 0,
 		y: 0,
@@ -2015,7 +2015,7 @@ function an(e, t) {
 		h: i
 	};
 }
-function on(e, t, n, r, i) {
+function sn(e, t, n, r, i) {
 	let a = r * t;
 	if (a <= i) return (i - a) / 2 - n * t;
 	let o = -n * t, s = i - (n + r) * t;
@@ -2024,11 +2024,11 @@ function on(e, t, n, r, i) {
 function K(e, t, n) {
 	let r = Math.min(8, Math.max(1, e.scale));
 	if (r <= 1.0001) return G;
-	let i = an(t, n);
+	let i = on(t, n);
 	return {
 		scale: r,
-		x: on(e.x, r, i.x, i.w, t.w) || 0,
-		y: on(e.y, r, i.y, i.h, t.h) || 0
+		x: sn(e.x, r, i.x, i.w, t.w) || 0,
+		y: sn(e.y, r, i.y, i.h, t.h) || 0
 	};
 }
 function q(e, t, n, r, i, a) {
@@ -2039,10 +2039,10 @@ function q(e, t, n, r, i, a) {
 		y: r - c * o
 	}, i, a);
 }
-function sn(e) {
+function cn(e) {
 	return e.scale === 1 ? "" : `translate(${e.x.toFixed(2)}px, ${e.y.toFixed(2)}px) scale(${e.scale.toFixed(4)})`;
 }
-var cn = class {
+var ln = class {
 	_host;
 	_options;
 	zoom = G;
@@ -2103,11 +2103,18 @@ var cn = class {
 		this.zoom = n, this._apply(), r && this._host.requestUpdate();
 	}
 	_apply() {
-		let e = sn(this.zoom), t = this._layer;
+		let e = cn(this.zoom), t = this._layer;
 		t && (t.style.transformOrigin = "0 0", t.style.transform = e), this._surface?.style.setProperty(tn, e || "none");
 	}
+	_onControl(e) {
+		for (let t of e.composedPath()) {
+			if (t === this._surface) return !1;
+			if (t instanceof Element && t.matches(nn)) return !0;
+		}
+		return !1;
+	}
 	_onDown = (e) => {
-		if (this._options.enabled()) {
+		if (this._options.enabled() && !this._onControl(e)) {
 			if (this._pointers.set(e.pointerId, this._point(e)), this._moved = !1, this._pointers.size === 2) {
 				let [t, n] = [...this._pointers.values()];
 				this._pinch = {
@@ -2173,7 +2180,7 @@ var cn = class {
 			return;
 		}
 		let r = this._lastTap;
-		if (r && e.timeStamp - r.at < nn && Math.hypot(t.x - r.x, t.y - r.y) < rn) {
+		if (r && e.timeStamp - r.at < rn && Math.hypot(t.x - r.x, t.y - r.y) < an) {
 			this._lastTap = void 0;
 			let n = this._box();
 			if (!n) return;
@@ -2191,7 +2198,7 @@ var cn = class {
 			if (e.ctrlKey || e.metaKey) {
 				if (e.preventDefault(), this._gestureFrom !== void 0) return;
 				let n = this._point(e);
-				this._set(q(this.zoom, this.zoom.scale * dn(e), n.x, n.y, t, this._options.content()));
+				this._set(q(this.zoom, this.zoom.scale * fn(e), n.x, n.y, t, this._options.content()));
 			} else this.zoomed && (this._set({
 				...this.zoom,
 				x: this.zoom.x - e.deltaX,
@@ -2226,7 +2233,7 @@ var cn = class {
 			e.preventDefault(), e.stopPropagation();
 		}
 	};
-}, ln = e`
+}, un = e`
   .zoom-pill {
     position: absolute;
     top: 8px;
@@ -2259,23 +2266,23 @@ var cn = class {
     outline: 2px solid #fff;
     outline-offset: 1px;
   }
-`, un = Math.log(W) * 100;
-function dn(e) {
+`, dn = Math.log(W) * 100;
+function fn(e) {
 	if (e.deltaMode !== 0) return e.deltaY < 0 ? W : e.deltaY > 0 ? 1 / W : 1;
-	let t = Math.max(-un, Math.min(un, e.deltaY));
+	let t = Math.max(-dn, Math.min(dn, e.deltaY));
 	return Math.exp(-t / 100);
 }
-function fn(e) {
+function pn(e) {
 	return `${e.scale.toFixed(1)}×`;
 }
 //#endregion
 //#region src/pip.ts
 var J = "picture-in-picture";
-function pn() {
+function mn() {
 	return document.pictureInPictureEnabled && typeof HTMLVideoElement.prototype.requestPictureInPicture == "function";
 }
-function mn(e = document.createElement("video")) {
-	if (pn()) return !0;
+function hn(e = document.createElement("video")) {
+	if (mn()) return !0;
 	let t = e;
 	return typeof t.webkitSupportsPresentationMode == "function" && t.webkitSupportsPresentationMode(J);
 }
@@ -2283,7 +2290,7 @@ function Y(e) {
 	return e ? document.pictureInPictureElement === e || e.webkitPresentationMode === J : !1;
 }
 async function X(e) {
-	if (pn()) {
+	if (mn()) {
 		await e.requestPictureInPicture();
 		return;
 	}
@@ -2300,7 +2307,7 @@ async function Z(e) {
 	let t = e;
 	t.webkitPresentationMode === J && t.webkitSetPresentationMode?.("inline");
 }
-async function hn(e, t) {
+async function gn(e, t) {
 	if (!Y(e)) return !1;
 	try {
 		return await X(t), !0;
@@ -2310,7 +2317,7 @@ async function hn(e, t) {
 }
 //#endregion
 //#region src/components/live-controls.ts
-var gn = 5e3, _n = [
+var _n = 5e3, vn = [
 	"left_up",
 	"up",
 	"right_up",
@@ -2320,7 +2327,7 @@ var gn = 5e3, _n = [
 	"left_down",
 	"down",
 	"right_down"
-], vn = {
+], yn = {
 	left: 0,
 	left_up: 45,
 	up: 90,
@@ -2329,7 +2336,7 @@ var gn = 5e3, _n = [
 	right_down: 225,
 	down: 270,
 	left_down: 315
-}, yn = {
+}, bn = {
 	left: "Move left",
 	right: "Move right",
 	up: "Move up",
@@ -2340,7 +2347,7 @@ var gn = 5e3, _n = [
 	right_down: "Move right and down",
 	zoom_in: "Zoom in",
 	zoom_out: "Zoom out"
-}, bn = class extends i {
+}, xn = class extends i {
 	static properties = {
 		hass: { attribute: !1 },
 		controls: { attribute: !1 },
@@ -2359,7 +2366,7 @@ var gn = 5e3, _n = [
 	}
 	press(e) {
 		let t = this.controls?.ptz?.[e];
-		!this._moving && t && this._usable(t) && (this._moving = e, this._movement = this._call("button", "press", t, yn[e].toLowerCase()));
+		!this._moving && t && this._usable(t) && (this._moving = e, this._movement = this._call("button", "press", t, bn[e].toLowerCase()));
 	}
 	release() {
 		if (!this._moving) return;
@@ -2384,7 +2391,7 @@ var gn = 5e3, _n = [
 	_showError(e) {
 		this._error = e, clearTimeout(this._errorTimer), this._errorTimer = setTimeout(() => {
 			this._error = void 0;
-		}, gn);
+		}, _n);
 	}
 	_step(e, t, n) {
 		let r = this._state(e), i = Number(r?.state);
@@ -2475,7 +2482,7 @@ var gn = 5e3, _n = [
 	_renderPad(e) {
 		let i = e.ptz;
 		return i?.stop ? r`<div class="pad" role="group" aria-label="Move the camera">
-      ${_n.map((e) => e && i[e] ? this._holdButton(e, r`<svg viewBox="0 0 24 24" aria-hidden="true" style="transform: rotate(${vn[e] ?? 0}deg)">
+      ${vn.map((e) => e && i[e] ? this._holdButton(e, r`<svg viewBox="0 0 24 24" aria-hidden="true" style="transform: rotate(${yn[e] ?? 0}deg)">
               ${t`<path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />`}
             </svg>`) : r`<span></span>`)}
     </div>` : n;
@@ -2515,7 +2522,7 @@ var gn = 5e3, _n = [
 		let n = this.controls?.ptz?.[e];
 		return r`<button
       class="hold ${this._moving === e ? "held" : ""}"
-      aria-label=${yn[e]}
+      aria-label=${bn[e]}
       ?disabled=${!this._usable(n)}
       @pointerdown=${(t) => {
 			t.preventDefault();
@@ -2679,10 +2686,10 @@ var gn = 5e3, _n = [
       }
     `];
 };
-customElements.get("rv-live-controls") || customElements.define("rv-live-controls", bn);
+customElements.get("rv-live-controls") || customElements.define("rv-live-controls", xn);
 //#endregion
 //#region src/clipboard.ts
-async function xn(e) {
+async function Sn(e) {
 	let t = navigator.clipboard;
 	try {
 		if (window.isSecureContext && t) return await t.writeText(e), !0;
@@ -2700,27 +2707,27 @@ async function xn(e) {
 //#endregion
 //#region src/live/debug.ts
 var Q = (e) => `${(e / 1e3).toFixed(e < 1e4 ? 2 : 0)} s`;
-function Sn(e, t, n = Date.now()) {
+function Cn(e, t, n = Date.now()) {
 	let r = e.connection, i = [`${e.camera}${r ? ` · ${r.via === "nvr" ? "through the NVR" : "direct"} (${r.entry_title})${r.is_battery ? " · on battery" : ""}` : ""}`];
 	for (let r of e.players) {
-		if (i.push(`${r.label} (${r.stream}, ${r.warm ? "kept warm" : "cold"}): ${Cn(r.state, n)}`), r.state.kind === "playing") {
+		if (i.push(`${r.label} (${r.stream}, ${r.warm ? "kept warm" : "cold"}): ${wn(r.state, n)}`), r.state.kind === "playing") {
 			let e = r.state.result.pair;
 			e?.local && i.push(`  path: ${e.local} ↔ ${e.remote ?? "?"}${e.rttMs === void 0 ? "" : `, rtt ${e.rttMs} ms`}`);
 		}
-		i.push(`  server: ${wn(t[r.label])}`);
+		i.push(`  server: ${Tn(t[r.label])}`);
 	}
 	if (e.hd && i.push(`HD choice: ${e.hd}`), e.tile?.length) {
 		i.push(`Wall tile: ${e.tile[0] ?? ""}`);
 		for (let t of e.tile.slice(1)) i.push(`  ${t}`);
 	}
-	e.webRtcFirstUntil !== void 0 && e.webRtcFirstUntil > n && i.push(`Network: it cut MSE's connections twice, so WebRTC goes first until ${Tn(e.webRtcFirstUntil)}`), e.mseFirstUntil !== void 0 && e.mseFirstUntil > n && i.push(`Network: WebRTC does not connect from here, so MSE goes first until ${En(e.mseFirstUntil)}`);
+	e.webRtcFirstUntil !== void 0 && e.webRtcFirstUntil > n && i.push(`Network: it cut MSE's connections twice, so WebRTC goes first until ${En(e.webRtcFirstUntil)}`), e.mseFirstUntil !== void 0 && e.mseFirstUntil > n && i.push(`Network: WebRTC does not connect from here, so MSE goes first until ${Dn(e.mseFirstUntil)}`);
 	for (let t of e.players) if (t.events.length) {
 		i.push(`Events (${t.label}):`);
-		for (let e of t.events) i.push(`  ${Tn(e.at)} ${e.text}`);
+		for (let e of t.events) i.push(`  ${En(e.at)} ${e.text}`);
 	}
 	return i.join("\n");
 }
-function Cn(e, t) {
+function wn(e, t) {
 	switch (e.kind) {
 		case "idle": return "stopped";
 		case "starting": return `starting over ${e.transport}`;
@@ -2736,20 +2743,20 @@ function Cn(e, t) {
 		}
 	}
 }
-function wn(e) {
+function Tn(e) {
 	if (e === void 0) return "…";
 	if (typeof e == "string") return `cannot read: ${e}`;
 	let t = [e.state ? `go2rtc ${e.state.active ? "streaming" : "idle"}, ${e.state.consumers} consumer${e.state.consumers === 1 ? "" : "s"}` : "not in go2rtc", `held ${e.holds}×`], n = e.cache;
 	return n ? (t.push(`${n.warm ? "warm feed" : "feed"} ${Q(n.age_ms)} old, ${n.viewers} viewer${n.viewers === 1 ? "" : "s"}`), n.key_frame_age_ms !== null && t.push(`key frame ${Q(n.key_frame_age_ms)} ago${n.key_interval_ms === null ? "" : `, every ${Q(n.key_interval_ms)}`}`), n.parameter_sets && t.push(`parameter sets ${n.parameter_sets}`), n.ends && t.push(`${n.ends} feed${n.ends === 1 ? "" : "s"} dropped (last: ${n.last_end ?? "?"})`)) : t.push("no MSE feed"), t.join(", ");
 }
-function Tn(e) {
+function En(e) {
 	return new Date(e).toLocaleTimeString([], {
 		hour: "2-digit",
 		minute: "2-digit",
 		second: "2-digit"
 	});
 }
-function En(e) {
+function Dn(e) {
 	return new Date(e).toLocaleString([], {
 		weekday: "short",
 		hour: "2-digit",
@@ -2758,7 +2765,7 @@ function En(e) {
 }
 //#endregion
 //#region src/components/live-debug.ts
-var Dn = 2e3, On = "rv-live-debug-close", kn = class extends i {
+var On = 2e3, kn = "rv-live-debug-close", An = class extends i {
 	static properties = {
 		hass: { attribute: !1 },
 		info: { attribute: !1 },
@@ -2772,7 +2779,7 @@ var Dn = 2e3, On = "rv-live-debug-close", kn = class extends i {
 	connectedCallback() {
 		super.connectedCallback(), this._poll(), this._timer = setInterval(() => {
 			this._poll();
-		}, Dn);
+		}, On);
 	}
 	disconnectedCallback() {
 		super.disconnectedCallback(), clearInterval(this._timer);
@@ -2796,13 +2803,13 @@ var Dn = 2e3, On = "rv-live-debug-close", kn = class extends i {
 		this.renderRoot.querySelector(".panel")?.focus();
 	}
 	_close() {
-		this.dispatchEvent(new CustomEvent(On, {
+		this.dispatchEvent(new CustomEvent(kn, {
 			bubbles: !0,
 			composed: !0
 		}));
 	}
 	render() {
-		let e = this.info, t = e ? Sn(e, this._states) : "";
+		let e = this.info, t = e ? Cn(e, this._states) : "";
 		return r`<div
       class="panel"
       role="dialog"
@@ -2816,7 +2823,7 @@ var Dn = 2e3, On = "rv-live-debug-close", kn = class extends i {
       <div class="actions">
         <button
           @click=${() => {
-			xn(t).then((e) => {
+			Sn(t).then((e) => {
 				this._copied = e;
 			});
 		}}
@@ -2868,10 +2875,10 @@ var Dn = 2e3, On = "rv-live-debug-close", kn = class extends i {
       }
     `];
 };
-customElements.get("rv-live-debug") || customElements.define("rv-live-debug", kn);
+customElements.get("rv-live-debug") || customElements.define("rv-live-debug", An);
 //#endregion
 //#region src/components/live-tile.ts
-var An = 3e3, jn = 6e4, Mn = "rv-live-open", Nn = "rv-live-full", Pn = "rv-live-count", Fn = "rv-live-state", In = "rv-live-player", Ln = class extends i {
+var jn = 3e3, Mn = 6e4, Nn = "rv-live-open", Pn = "rv-live-full", Fn = "rv-live-count", In = "rv-live-state", Ln = "rv-live-player", Rn = class extends i {
 	static properties = {
 		hass: { attribute: !1 },
 		camera: { attribute: !1 },
@@ -2962,7 +2969,7 @@ var An = 3e3, jn = 6e4, Mn = "rv-live-open", Nn = "rv-live-full", Pn = "rv-live-
 		this._pageVisible = document.visibilityState !== "hidden";
 	};
 	_count = (e) => {
-		this.dispatchEvent(new CustomEvent(Pn, {
+		this.dispatchEvent(new CustomEvent(Fn, {
 			detail: {
 				camera: this.camera?.name ?? "Camera",
 				kind: e
@@ -2976,7 +2983,7 @@ var An = 3e3, jn = 6e4, Mn = "rv-live-open", Nn = "rv-live-full", Pn = "rv-live-
 	_onKeydown = (e) => {
 		e.key === "Escape" && this._full && !this._native && this.exitFull(), !(!this._full || e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) && (e.key === "+" || e.key === "=" ? this._zoom.step(W) : e.key === "-" || e.key === "_" ? this._zoom.step(1 / W) : e.key === "0" && this._zoom.reset());
 	};
-	_zoom = new cn(this, {
+	_zoom = new ln(this, {
 		enabled: () => this._full,
 		content: () => {
 			let e = this.renderRoot.querySelector(this.hdShown ? "video.hd" : "video.sub");
@@ -3039,7 +3046,7 @@ var An = 3e3, jn = 6e4, Mn = "rv-live-open", Nn = "rv-live-full", Pn = "rv-live-
 		this._full && (this._zoom.reset(), this._full = !1, this._native && document.fullscreenElement && document.exitFullscreen().catch(() => void 0), this._native = !1, this._leaveTopLayer(), this._fullChanged());
 	}
 	_fullChanged() {
-		this.dispatchEvent(new CustomEvent(Nn, {
+		this.dispatchEvent(new CustomEvent(Pn, {
 			detail: {
 				cameraId: this.camera?.id,
 				full: this._full
@@ -3065,7 +3072,7 @@ var An = 3e3, jn = 6e4, Mn = "rv-live-open", Nn = "rv-live-full", Pn = "rv-live-
 		let e = this._ensurePlayer();
 		e && (e.options.warm = this.warm ?? this.connection?.streams[this.stream]?.warm === !0, this.shouldPlay && !this.hdShown || this._pip === "sub" ? (clearTimeout(this._offscreenTimer), this._offscreenTimer = void 0, this._start(e)) : e.running && (!this._pageVisible || !this._wanted || this.suspended || this.hdShown ? e.stop() : this._offscreenTimer ??= setTimeout(() => {
 			this._offscreenTimer = void 0, this.shouldPlay || (this._pip !== "sub" && this._player?.stop(), this._pip !== "hd" && this._hdPlayer?.stop());
-		}, An)));
+		}, jn)));
 	}
 	_toggleHd() {
 		this._hdWanted = !this._hdWanted, this._link = {
@@ -3101,17 +3108,17 @@ var An = 3e3, jn = 6e4, Mn = "rv-live-open", Nn = "rv-live-full", Pn = "rv-live-
 			iceServers: []
 		}, (e) => {
 			let t = e.kind === "playing";
-			t !== (this._state.kind === "playing") && this.dispatchEvent(new CustomEvent(Fn, {
+			t !== (this._state.kind === "playing") && this.dispatchEvent(new CustomEvent(In, {
 				detail: {
 					cameraId: this.camera?.id ?? "",
 					live: t
 				},
 				bubbles: !0
-			})), Rn(this._state, e) && this._playerChanged(this.playsHd ? "HD" : "SD", this.stream, e), this._state = e;
+			})), zn(this._state, e) && this._playerChanged(this.playsHd ? "HD" : "SD", this.stream, e), this._state = e;
 		}), this._player.onCount = this._count, this._player;
 	}
 	_playerChanged(e, t, n) {
-		this.dispatchEvent(new CustomEvent(In, { detail: {
+		this.dispatchEvent(new CustomEvent(Ln, { detail: {
 			which: e,
 			stream: t,
 			state: n
@@ -3129,7 +3136,7 @@ var An = 3e3, jn = 6e4, Mn = "rv-live-open", Nn = "rv-live-full", Pn = "rv-live-
 			warm: n.streams[e]?.warm === !0,
 			iceServers: []
 		}, (t) => {
-			if (Rn(this._hdState, t) && this._playerChanged("HD", e, t), this._hdState = t, t.kind === "playing" && (this._tileHdError = void 0), t.kind === "waiting") {
+			if (zn(this._hdState, t) && this._playerChanged("HD", e, t), this._hdState = t, t.kind === "playing" && (this._tileHdError = void 0), t.kind === "waiting") {
 				if (this._full || this._pip === "hd") delete r.spare;
 				else if (r.spare) {
 					let e = t.error;
@@ -3141,12 +3148,12 @@ var An = 3e3, jn = 6e4, Mn = "rv-live-open", Nn = "rv-live-full", Pn = "rv-live-
 		}), this._hdPlayer.onCount = this._count, this._hdPlayer;
 	}
 	_holdTileHd(e) {
-		this._full || this._pip === "hd" || (this._hdPlayer?.stop(), this._tileHdError = e, this._tileHdUntil = Date.now() + jn, clearTimeout(this._tileHdTimer), this._tileHdTimer = setTimeout(() => {
+		this._full || this._pip === "hd" || (this._hdPlayer?.stop(), this._tileHdError = e, this._tileHdUntil = Date.now() + Mn, clearTimeout(this._tileHdTimer), this._tileHdTimer = setTimeout(() => {
 			this.requestUpdate();
-		}, jn), this.requestUpdate());
+		}, Mn), this.requestUpdate());
 	}
 	_activate() {
-		this._full || (this._wanted ? this.openable && this.camera && this.dispatchEvent(new CustomEvent(Mn, {
+		this._full || (this._wanted ? this.openable && this.camera && this.dispatchEvent(new CustomEvent(Nn, {
 			detail: { cameraId: this.camera.id },
 			bubbles: !0,
 			composed: !0
@@ -3183,7 +3190,7 @@ var An = 3e3, jn = 6e4, Mn = "rv-live-open", Nn = "rv-live-full", Pn = "rv-live-
               ></video>` : n}
         </div>
         ${this._full && this._zoom.zoomed ? r`<div class="zoom-pill" role="status">
-              ${fn(this._zoom.zoom)}
+              ${pn(this._zoom.zoom)}
               <button
                 aria-label="Reset zoom"
                 @click=${(e) => {
@@ -3234,7 +3241,7 @@ var An = 3e3, jn = 6e4, Mn = "rv-live-open", Nn = "rv-live-full", Pn = "rv-live-
             .controls=${this.controls}
             .cameraName=${i}
           ></rv-live-controls>` : n}
-      ${(this._full || o) && (t || this.hdShown || this._pip) && mn() ? r`<button
+      ${(this._full || o) && (t || this.hdShown || this._pip) && hn() ? r`<button
             class="corner-button pip"
             aria-label=${this._pip ? "Leave picture in picture" : `${i} in picture in picture`}
             aria-pressed=${this._pip ? "true" : "false"}
@@ -3344,7 +3351,7 @@ var An = 3e3, jn = 6e4, Mn = "rv-live-open", Nn = "rv-live-full", Pn = "rv-live-
 	}
 	static styles = [
 		y,
-		ln,
+		un,
 		e`
       :host {
         display: block;
@@ -3781,16 +3788,16 @@ var An = 3e3, jn = 6e4, Mn = "rv-live-open", Nn = "rv-live-full", Pn = "rv-live-
     `
 	];
 };
-function Rn(e, t) {
+function zn(e, t) {
 	return e.kind !== t.kind || e.kind === "starting" && t.kind === "starting" && e.transport !== t.transport;
 }
 function $(e, t) {
 	return r`<span class="state" id="state">${t ?? n}${e}</span>`;
 }
-customElements.get("rv-live-tile") || customElements.define("rv-live-tile", Ln);
+customElements.get("rv-live-tile") || customElements.define("rv-live-tile", Rn);
 //#endregion
 //#region src/fonts.ts
-var zn = [
+var Bn = [
 	[
 		"Barlow",
 		400,
@@ -3816,11 +3823,11 @@ var zn = [
 		600,
 		"barlow-semi-condensed-600.woff2"
 	]
-], Bn = "reolink-viewer-fonts";
-function Vn(e, t = document) {
-	if (t.getElementById(Bn)) return;
+], Vn = "reolink-viewer-fonts";
+function Hn(e, t = document) {
+	if (t.getElementById(Vn)) return;
 	let n = t.createElement("style");
-	n.id = Bn, n.textContent = zn.map(([t, n, r]) => `@font-face{font-family:"${t}";font-style:normal;font-weight:${n};font-display:swap;src:url("${new URL(`fonts/${r}`, e).href}") format("woff2");}`).join("\n"), t.head.appendChild(n);
+	n.id = Vn, n.textContent = Bn.map(([t, n, r]) => `@font-face{font-family:"${t}";font-style:normal;font-weight:${n};font-display:swap;src:url("${new URL(`fonts/${r}`, e).href}") format("woff2");}`).join("\n"), t.head.appendChild(n);
 }
 //#endregion
-export { v as $, gt as A, ie as At, Ze as B, d as Bt, D as C, pe as Ct, C as D, ye as Dt, jt as E, ve as Et, at as F, Ie as Ft, Ye as G, Qe as H, oe as Ht, rt as I, ke as It, Ve as J, Ue as K, nt as L, Oe as Lt, b as M, fe as Mt, it as N, ue as Nt, T as O, Fe as Ot, y as P, u as Pt, Je as Q, Xe as R, Pe as Rt, qt as S, te as St, Bt as T, f as Tt, ze as U, $e as V, le as Vt, qe as W, We as X, He as Y, _ as Z, U as _, h as _t, Y as a, xe as at, Kt as b, ce as bt, cn as c, a as ct, Zt as d, _e as dt, g as et, Qt as f, ne as ft, Yt as g, Ee as gt, Xt as h, Te as ht, Z as i, de as it, _t as j, he as jt, S as k, ae as kt, fn as l, re as lt, H as m, Ce as mt, xn as n, Le as nt, hn as o, c as ot, $t as p, be as pt, Ke as q, X as r, l as rt, mn as s, o as st, Vn as t, Se as tt, ln as u, Ae as ut, I as v, ge as vt, zt as w, ee as wt, Wt as x, se as xt, B as y, me as yt, et as z, Ne as zt };
+export { v as $, gt as A, ie as At, Ze as B, d as Bt, D as C, pe as Ct, C as D, ye as Dt, jt as E, ve as Et, at as F, Ie as Ft, Ye as G, Qe as H, oe as Ht, rt as I, ke as It, Ve as J, Ue as K, nt as L, Oe as Lt, b as M, fe as Mt, it as N, ue as Nt, T as O, Fe as Ot, y as P, u as Pt, Je as Q, Xe as R, Pe as Rt, qt as S, te as St, Bt as T, f as Tt, ze as U, $e as V, le as Vt, qe as W, We as X, He as Y, _ as Z, U as _, h as _t, Y as a, xe as at, Kt as b, ce as bt, ln as c, a as ct, Zt as d, _e as dt, g as et, Qt as f, ne as ft, Yt as g, Ee as gt, Xt as h, Te as ht, Z as i, de as it, _t as j, he as jt, S as k, ae as kt, pn as l, re as lt, H as m, Ce as mt, Sn as n, Le as nt, gn as o, c as ot, $t as p, be as pt, Ke as q, X as r, l as rt, hn as s, o as st, Hn as t, Se as tt, un as u, Ae as ut, I as v, ge as vt, zt as w, ee as wt, Wt as x, se as xt, B as y, me as yt, et as z, Ne as zt };
