@@ -164,6 +164,35 @@ async def test_dedup_raises_priority_of_queued_job() -> None:
     assert thumb.calls == 1
 
 
+async def test_raise_priority_by_key() -> None:
+    """A queued job moves up by its key; a running or unknown one does not (v0.63.13)."""
+    sched = Scheduler(default_limit=1)
+    host = sched.host("h")
+    log: list[str] = []
+    blocker = Gate(log, "blocker")
+    first = asyncio.create_task(
+        sched.run("h", blocker, priority=Priority.LIVE, key="b")
+    )
+    await blocker.started.wait()
+    warm = Gate(log, "warm")
+    other = Gate(log, "other")
+    for g in (warm, other):
+        g.release.set()
+    t1 = asyncio.create_task(sched.run("h", other, priority=Priority.PREFETCH))
+    t2 = asyncio.create_task(sched.run("h", warm, priority=Priority.PREFETCH, key="w"))
+    await _settle()
+    # The running job, a lower or equal priority, an unknown key or host: nothing moves.
+    assert not sched.raise_priority("h", "b", Priority.LIVE)
+    assert not sched.raise_priority("h", "w", Priority.PREFETCH)
+    assert not sched.raise_priority("h", "nope", Priority.LIVE)
+    assert not sched.raise_priority("elsewhere", "w", Priority.LIVE)
+    assert sched.raise_priority("h", "w", Priority.PLAYBACK)
+    assert host.queued == 2
+    blocker.release.set()
+    await asyncio.gather(first, t1, t2)
+    assert log == ["blocker", "warm", "other"]
+
+
 async def test_timeout() -> None:
     """A job exceeding its timeout raises TimeoutError and frees its slot."""
     sched = HostScheduler("h", limit=1)

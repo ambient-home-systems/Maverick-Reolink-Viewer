@@ -243,6 +243,24 @@ async def test_the_learning_check_compares_the_marks_with_what_fired(
     assert result["marks"][0]["automations"] == ["automation.notify_unusual"]
     assert result["unmarked"] == []
     (automation,) = result["automations"]
+    # Fired for no mark: before the model the marks are scored with was built
+    # (the nightly relearn judged it again), or after it (v0.63.13).
+    built = start + 5
+    for kind, at in (("animal", start + 2), ("animal", start + 8)):
+        fired.record(
+            {"device_id": "cam-yard", "kind": kind, "start": _iso(at)}, at + 0.5
+        )
+    with (
+        patch.object(unusual, "async_marks", AsyncMock(return_value=marks)),
+        patch.object(unusual.model, "built_at", built),
+    ):
+        await client.send_json_auto_id({"type": "reolink_viewer/unusual/check"})
+        again = (await client.receive_json())["result"]
+    assert again["built_at"] == int(built * 1000)
+    assert [(e["start"], e["relearned"]) for e in again["unmarked"]] == [
+        (int((start + 2) * 1000), True),
+        (int((start + 8) * 1000), False),
+    ]
     assert automation["entity_id"] == "automation.notify_unusual"
     assert automation["how"] == "the event"
     assert automation["on"] is True

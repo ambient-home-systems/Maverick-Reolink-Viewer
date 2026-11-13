@@ -72,6 +72,55 @@ describe("the learning check's lines", () => {
     ]);
   });
 
+  it("says what the nightly relearn judged again as a note, not a fault (v0.63.13: the owner's 3 fired for no mark)", () => {
+    const built = DAY + 3_000_000;
+    const vehicle = mark({
+      kind: "vehicle",
+      start: DAY + 600_000,
+      camera: "cam-yard",
+      cameras: ["Yard"],
+      fired: 0,
+      delay: null,
+      when: null,
+      automations: [],
+    });
+    const lines = learningCheckLines(
+      check({
+        built_at: built,
+        // Marked by the relearn; before it, no alert fired for it.
+        marks: [mark(), vehicle],
+        unmarked: [
+          // Fired before the relearn, and not marked since.
+          { camera: "cam-drive", kind: "person", start: DAY - 3_600_000, delay: 0.6, relearned: true },
+          { camera: "cam-yard", kind: "animal", start: DAY + 120_000, delay: 0.4, relearned: true },
+        ],
+      }),
+      ZONE,
+      NAMES,
+    );
+    expect(marks(lines)).toEqual([
+      [true, "Learning is on, and it has learned from the journal."],
+      [true, "House-wide signal House alarm: armed_away now, 12 changes learned with"],
+      [true, "2 marks since Oct 31, 2026, 10:00: 1 of 2 fired its event once"],
+      [true, "1 of 1 fired within 2 s of the detection's start"],
+      [true, "No event fired that is not marked"],
+      [
+        undefined,
+        "2 events fired before the last nightly relearn, and not marked since: the relearn judged them again with what it had learned since (expected now and then)",
+      ],
+      [true, "Automation Notify unusual (by the event): ran on 1 of 1 event fired; last ran Nov 3, 2026, 09:10"],
+    ]);
+    expect(lines[2]?.details).toEqual(["not fired, marked since by the nightly relearn: Nov 3, 2026, 09:10, vehicle on Yard"]);
+    expect(lines[5]?.details).toEqual(["Nov 3, 2026, 08:00, person on Drive", "Nov 3, 2026, 09:02, animal on Yard"]);
+    // One fired after the relearn and not marked: that is still a fault.
+    const after = learningCheckLines(
+      check({ built_at: built, unmarked: [{ camera: "cam-yard", kind: "animal", start: built + 60_000, delay: 0.5, relearned: false }] }),
+      ZONE,
+      NAMES,
+    );
+    expect(marks(after)).toContainEqual([false, "1 event fired for no mark"]);
+  });
+
   it("says each thing to look at: not fired, twice, late, unmarked, a signal gone, an automation that did not run", () => {
     const lines = learningCheckLines(
       check({
