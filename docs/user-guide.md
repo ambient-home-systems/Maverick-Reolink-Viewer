@@ -375,6 +375,9 @@ against what the camera has learned. When it is unusual:
 - **The event `reolink_viewer_unusual`** fires once per incident, with `device_id` (the
   camera's), `camera` (its name), `kind`, `score`, `line`, `reason` (the sentence) and
   `start`.
+- **Once per visit:** after it fires, more of the same kind on that camera stay quiet
+  until 30 minutes pass without one there. An animal wandering the yard for two hours
+  is one notification, not thirty. The timetable still marks each that stands out.
 - **"<Camera> unusual activity"**, a sensor per camera on the **Reolink Viewer** device
   (Settings → Devices & services → Reolink Viewer), turns on until 30 s after the
   detection ends. Its attributes hold the last mark's kind and reason.

@@ -3,6 +3,29 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.63.14
+
+From the owner's wall tablet check at 6:27 AM and the learning check the same morning.
+
+- **One alert per visit:** overnight, an animal on Front Yard Right was alerted 31 times,
+  about every 5 minutes for two and a half hours. Each detection looked as rare as the
+  first, because the camera only learns at night. Now, after an alert, more of the same
+  kind on that camera stay quiet until 30 minutes pass without one there. The panel
+  still tags each that stands out, and the learning check counts the quiet ones as
+  right.
+- **Today's timeline is ready at any time of day:** every 15 minutes, each camera's
+  today is brought up to date in the background, one camera at a time and only what is
+  new. The first open of a day no longer waits for a full search (5.8 s on the tablet).
+  The panel's own warm-up now also searches one camera at a time, so the camera on
+  screen isn't stuck behind the others.
+- **The playback check (v0.9.0), speeds:**
+  - It uses a recording of 2 minutes or more, from an earlier day if today has none.
+    Early this morning Garage's only recording was 40 s, and 4× ran out of it.
+  - A speed that runs out of recording is "not measured", not a stutter.
+  - The frame rate it measures against now comes from the 1× counter when that is
+    right, and otherwise from the average time between frames. It read 17 frames a
+    second for Garage's 15.
+
 ## 0.63.13
 
 From the owner's playback checks of 0.63.12: the iPhone app over Tailscale found no

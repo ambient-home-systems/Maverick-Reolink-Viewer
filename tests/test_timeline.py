@@ -370,6 +370,69 @@ async def test_a_panel_joining_a_queued_warm_up_goes_first(
     assert shown is day
 
 
+def _overlap(host: FakeHost) -> list[int]:
+    """Count the searches running at once: [the most] (wraps the host's search)."""
+    most = [0]
+    running = [0]
+    real = host.async_search_day
+
+    async def search(
+        channel: int, start: datetime, end: datetime, stream: str
+    ) -> DaySearch:
+        running[0] += 1
+        most[0] = max(most[0], running[0])
+        try:
+            await asyncio.sleep(0.01)
+            return await real(channel, start, end, stream)
+        finally:
+            running[0] -= 1
+
+    host.async_search_day = search  # type: ignore[method-assign]
+    return most
+
+
+async def test_today_is_kept_up_one_camera_at_a_time(
+    host: FakeHost, service: TimelineService, clock: Clock
+) -> None:
+    """Each playable camera's today, in turn; the battery Doorbell left alone (v0.63.14)."""
+    most = _overlap(host)
+    yard = PlaybackSource("cam2", "Yard", "entry1", 5)
+    doorbell = PlaybackSource(
+        "cam3", "Doorbell", "entry1", 9, is_battery=True, playable=False
+    )
+    await service.async_keep_today([SOURCE, yard, doorbell])
+    assert len(host.searches) == 2
+    assert most == [1]
+    assert host.event_searches == []
+    # Within the minute it is current: nothing searched again.
+    await service.async_keep_today([SOURCE, yard])
+    assert len(host.searches) == 2
+    # Later, each is caught up from where it ended.
+    clock.advance(900)
+    await service.async_keep_today([SOURCE])
+    assert host.searches[-1][0] == wall(2026, 10, 17, 12, 50)
+    # A run still going is not doubled.
+    clock.advance(900)
+    host.gate = asyncio.Event()
+    first = asyncio.create_task(service.async_keep_today([SOURCE]))
+    await asyncio.sleep(0.01)
+    await service.async_keep_today([SOURCE])
+    host.gate.set()
+    await first
+    assert len(host.searches) == 4
+
+
+async def test_warm_searches_today_one_camera_at_a_time(
+    host: FakeHost, service: TimelineService
+) -> None:
+    """The warm-up no longer holds every request slot at once (v0.63.14)."""
+    most = _overlap(host)
+    cameras = [PlaybackSource(f"cam{n}", f"Cam {n}", "entry1", n) for n in range(4)]
+    await service.async_warm(cameras)
+    assert len(host.searches) >= 4
+    assert most == [1]
+
+
 async def test_concurrent_requests_share_one_search(
     host: FakeHost, service: TimelineService
 ) -> None:

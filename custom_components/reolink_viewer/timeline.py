@@ -55,6 +55,10 @@ STORAGE_KEY = "reolink_viewer.timeline.{key}"
 # saved apart from the camera's days so a minute's refresh does not write them all.
 TODAY_STORAGE_KEY = "reolink_viewer.timeline_today"
 TODAY_SAVE_DELAY = 30.0
+# Each playable camera's today is caught up this often in the background
+# (v0.63.14), so the panel has a recent copy to show at once at any time, the
+# first open of a day included (the owner's tablet waited 5.8 s at 6:27 AM).
+KEEP_TODAY_INTERVAL = timedelta(minutes=15)
 # Stored days of an older format are searched again (months are kept).
 # 2: the NVR's per-type alarm records for one moment are merged into one event.
 DAYS_FORMAT = 2
@@ -292,6 +296,7 @@ class TimelineService:
         self._inflight: dict[tuple[Any, ...], asyncio.Future[Any]] = {}
         self._months: dict[tuple[str, int, int], tuple[float, list[int], bool]] = {}
         self._warming_past = False
+        self._keeping = False
         self._warm_status: dict[str, WarmStatus] = {}
         self._today_store: Store[dict[str, Any]] | None = None
         self._today_kept: dict[str, Any] | None = None
@@ -657,11 +662,12 @@ class TimelineService:
     async def async_warm(self, sources: list[PlaybackSource]) -> None:
         """Fetch today for each camera, then recent past days not stored yet.
 
-        All at prefetch priority; errors are logged. Today is fetched for every
-        camera at once. Past days with recordings (last WARM_PAST_DAYS) follow
-        one search at a time, yesterday first for every camera: a day search
-        on the NVR takes several seconds, and past days are kept for good, so
-        each is searched once.
+        All at prefetch priority, one search at a time; errors are logged.
+        Today first, for every camera (v0.63.14: no longer all at once, which
+        held the NVR's request slots while the panel's own search waited).
+        Past days with recordings (last WARM_PAST_DAYS) follow, yesterday
+        first for every camera: a day search on the NVR takes several
+        seconds, and past days are kept for good, so each is searched once.
         """
 
         async def today(source: PlaybackSource) -> str | None:
@@ -674,7 +680,7 @@ class TimelineService:
                 return _error_text(err)
             return None
 
-        today_errors = await asyncio.gather(*(today(s) for s in sources))
+        today_errors = [await today(s) for s in sources]
         if self._warming_past:
             return
         self._warming_past = True
@@ -705,6 +711,30 @@ class TimelineService:
                 status.finished = True
         finally:
             self._warming_past = False
+
+    async def async_keep_today(self, sources: list[PlaybackSource]) -> None:
+        """Catch up each playable camera's today, one at a time (v0.63.14).
+
+        At prefetch priority; what it has is searched on from where it ended
+        (incremental), so each search is short. Cameras whose recordings
+        cannot be played (a battery Doorbell) are left alone: it would wake
+        them. Errors are logged; a run still going is not doubled.
+        """
+        if self._keeping:
+            return
+        self._keeping = True
+        try:
+            for source in sources:
+                if not source.playable:
+                    continue
+                try:
+                    host = bridge.async_get_host(self._hass, source.entry_id)
+                    now = local_now(host.timezone()).date()
+                    await self.async_day(source, now, "sub", Priority.PREFETCH)
+                except Exception as err:  # noqa: BLE001 - best effort
+                    _LOGGER.debug("Keeping today of %s failed: %s", source.name, err)
+        finally:
+            self._keeping = False
 
     async def _past_days_to_warm(
         self, source: PlaybackSource, status: WarmStatus

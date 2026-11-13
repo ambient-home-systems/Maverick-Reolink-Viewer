@@ -143,14 +143,33 @@ export interface RateSample {
 }
 
 /**
- * The recording's frame rate from the frames painted at 1× (their media
- * times a frame apart), for judging the rates where the browser's frame
- * counter cannot be trusted: the owner's iPhone (v0.8.8) counted 96 frames
- * at 0.5× for the 45 there were, and 0.5× was judged a stutter by that.
+ * The recording's frame rate at 1×, for judging the rates where the
+ * browser's frame counter cannot be trusted: the owner's iPhone (v0.8.8)
+ * counted 96 frames at 0.5× for the 45 there were, and 0.5× was judged a
+ * stutter by that. From 1×'s own counter where it agrees with the frames
+ * painted; else from the frames painted, their media times a frame apart
+ * (`frameS`). A 1× pass that ran out of recording gives none.
  */
 export function referenceFps(results: readonly RateSample[]): number | undefined {
-  const frameS = results.find((r) => r.rate === 1 && r.focused)?.frameS;
-  return frameS !== undefined && frameS > 0 ? 1 / frameS : undefined;
+  const one = results.find((r) => r.rate === 1 && r.focused && !r.ended);
+  if (!one) return undefined;
+  const counted = countersAgree(one) ? sourceFps(one) : undefined;
+  if (counted !== undefined) return counted;
+  return one.frameS !== undefined && one.frameS > 0 ? 1 / one.frameS : undefined;
+}
+
+/**
+ * The frame interval from the steps between painted frames' media times (s):
+ * their mean, leaving out steps of a skipped frame (over 1.8 times the
+ * median). Not the median alone (v0.8.9): a camera's frame times vary, and
+ * Garage's median step read 17 frames a second for its 15.
+ */
+export function frameStep(steps: readonly number[]): number | undefined {
+  if (!steps.length) return undefined;
+  const sorted = [...steps].sort((a, b) => a - b);
+  const median = sorted[Math.floor(sorted.length / 2)] ?? 0;
+  const kept = sorted.filter((step) => step <= median * 1.8);
+  return kept.length ? kept.reduce((sum, step) => sum + step, 0) / kept.length : undefined;
 }
 
 /**
@@ -214,8 +233,10 @@ export function countersAgree(sample: RateSample): boolean {
  */
 export function rateFindings(results: readonly RateSample[]): Finding[] {
   const reference = referenceFps(results);
-  const measured = results.filter((r) => r.focused);
+  // A rate whose recording ran out was not measured (v0.9.0: the tablet's 4× at 6:27 AM).
+  const measured = results.filter((r) => r.focused && !r.ended);
   const unmeasured = results.filter((r) => !r.focused);
+  const ranOut = results.filter((r) => r.focused && r.ended);
   const rough = measured.filter((r) => !smooth(r, reference));
   const rates = (list: readonly RateSample[]) => list.map((r) => `${String(r.rate)}×`).join(", ");
   const findings: Finding[] = [];
@@ -234,6 +255,13 @@ export function rateFindings(results: readonly RateSample[]): Finding[] {
       grade: "note",
       text: `Playback at ${rates(unmeasured)} was not measured: the page was not in front.`,
       advice: "Keep the page in front, and the screen on, while the check runs.",
+    });
+  }
+  if (ranOut.length) {
+    findings.push({
+      grade: "note",
+      text: `Playback at ${rates(ranOut)} was not measured: the recording ran out.`,
+      advice: "Run the check later in the day, when the camera has a recording of 2 minutes or more.",
     });
   }
   return findings;

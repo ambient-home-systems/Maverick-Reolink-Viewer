@@ -496,6 +496,8 @@ export type UnusualCheck =
         reason: string | null;
         /** How many events fired for it (one is right), the first's delay (s) and when it came. */
         fired: number;
+        /** How many were kept quiet, as part of a visit already said (v0.63.14). */
+        quiet?: number;
         delay: number | null;
         when: "start" | "end" | "late" | null;
         automations: string[];

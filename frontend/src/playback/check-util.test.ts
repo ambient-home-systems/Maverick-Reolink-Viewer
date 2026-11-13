@@ -20,6 +20,7 @@ import {
   loginReport,
   longRecordings,
   mb,
+  frameStep,
   rateFindings,
   referenceFps,
   restInside,
@@ -210,17 +211,18 @@ describe("rates and sums", () => {
     expect(clamped).not.toContain("painted");
   });
 
-  it("judges 0.5× by the frame rate painted at 1× where WebKit's counter disagrees (v0.8.9: the owner's iPhone)", () => {
+  it("judges 0.5× by the frame rate at 1× where WebKit's counter disagrees (v0.8.9: the owner's iPhone)", () => {
     // 0.5×: 7 frames a second painted, each one frame apart (136 ms); WebKit counted 96 for the 45 there were.
     const half = sample({ rate: 0.5, applied: 0.5, mediaS: 3, decoded: 96, dropped: 0, painted: 44, maxGapMs: 136, frameS: 1 / 15 });
+    // 1×: its counter agrees with the frames painted (94 and 90): the reference is its count.
     const one = sample({ rate: 1, applied: 1, mediaS: 6, decoded: 94, dropped: 0, painted: 90, maxGapMs: 103, frameS: 1 / 15 });
     // By the counter alone, as v0.8.8 judged it: a stutter.
     expect(smooth(half)).toBe(false);
     const reference = referenceFps([half, one]);
-    expect(reference).toBeCloseTo(15);
+    expect(reference).toBeCloseTo(94 / 6);
     expect(smooth(half, reference)).toBe(true);
     expect(describeRate(half, reference)).toBe(
-      "0.5×: 0.50× effective, 7.3 fps painted of 7.5, longest frame gap 136 ms, dropped 0 of 96 frames (0.0 %), 0 stalls," +
+      "0.5×: 0.50× effective, 7.3 fps painted of 7.8, longest frame gap 136 ms, dropped 0 of 96 frames (0.0 %), 0 stalls," +
         " the dropped-frame counter disagrees with the frames painted: judged by those",
     );
     expect(rateFindings([half, one])).toEqual([{ grade: "good", text: "Slow motion and fast forward (0.5× to 1×) play smoothly." }]);
@@ -228,11 +230,43 @@ describe("rates and sums", () => {
     expect(smooth({ ...half, painted: 30, maxGapMs: 270 }, reference)).toBe(false);
     // Fewer counted at the edges, but none skipped (no gap of two frames): smooth.
     expect(smooth({ ...half, painted: 39, maxGapMs: 140 }, reference)).toBe(true);
-    // No 1× pass painted, or not in front: the counter, as before.
+    // 1×'s counter lagging (WebKit: 60 counted, 90 painted): the frames painted, a frame apart.
+    expect(referenceFps([half, { ...one, decoded: 60 }])).toBeCloseTo(15);
+    // No 1× pass, one not in front, or one that ran out of recording: the counter, as before.
     expect(referenceFps([half])).toBeUndefined();
     expect(referenceFps([half, { ...one, focused: false }])).toBeUndefined();
+    expect(referenceFps([half, { ...one, ended: true }])).toBeUndefined();
     // Where the counter agrees, it counts.
     expect(smooth(sample({ rate: 1, mediaS: 6, decoded: 90, dropped: 9, painted: 81, maxGapMs: 120 }), reference)).toBe(false);
+  });
+
+  it("takes the 1× frame rate from the counter when it agrees (v0.9.0: the tablet's median step read 17 fps for 15)", () => {
+    // The tablet's 1×: 2 of 90 dropped, 84 painted (the counter agrees), the median step 1/17 s.
+    const one = sample({ rate: 1, applied: 1, mediaS: 6, decoded: 90, dropped: 2, painted: 84, maxGapMs: 134, frameS: 1 / 17 });
+    expect(referenceFps([one])).toBeCloseTo(15);
+    // Its 2×: 24 of 30 painted, the counter disagreeing: a stutter, against 30 (not 34).
+    const two = sample({ rate: 2, applied: 2, mediaS: 12, decoded: 181, dropped: 0, painted: 144, maxGapMs: 100 });
+    expect(describeRate(two, referenceFps([one]))).toContain("24 fps painted of 30");
+  });
+
+  it("gives the frame interval from the steps between painted frames, without the skipped ones", () => {
+    // A camera whose frame times vary: the mean, not the median.
+    expect(frameStep([0.05, 0.083, 0.05, 0.083, 0.05, 0.083, 0.0665])).toBeCloseTo(0.0665, 3);
+    // A skipped frame (two frames' step) is left out.
+    expect(frameStep([0.0667, 0.0667, 0.1333, 0.0667])).toBeCloseTo(0.0667, 4);
+    expect(frameStep([])).toBeUndefined();
+  });
+
+  it("says a rate whose recording ran out was not measured, never a stutter (v0.9.0: the tablet's 4×)", () => {
+    const ran = sample({ rate: 4, applied: 4, mediaS: 11, wallMs: 6000, painted: 120, decoded: 159, dropped: 24, ended: true });
+    expect(rateFindings([sample({ rate: 2, applied: 2 }), ran])).toEqual([
+      { grade: "good", text: "Slow motion and fast forward (2× to 2×) play smoothly." },
+      {
+        grade: "note",
+        text: "Playback at 4× was not measured: the recording ran out.",
+        advice: "Run the check later in the day, when the camera has a recording of 2 minutes or more.",
+      },
+    ]);
   });
 
   it("fits a slope and sums buffered ranges", () => {

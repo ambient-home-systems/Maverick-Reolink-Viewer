@@ -1,9 +1,13 @@
 """Tests for setup, the panel and degraded mode."""
 
+from datetime import timedelta
 import re
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant_custom_component.common import (
+    MockConfigEntry,
+    async_fire_time_changed,
+)
 from pytest_homeassistant_custom_component.typing import ClientSessionGenerator
 
 from custom_components.reolink_viewer.const import (
@@ -20,6 +24,7 @@ from homeassistant.const import EVENT_HOMEASSISTANT_STOP
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.setup import async_setup_component
+from homeassistant.util import dt as dt_util
 
 
 async def test_setup_registers_panel(
@@ -55,6 +60,23 @@ async def test_setup_registers_panel(
         loaded_viewer, options={CONF_BAICHUAN_DEEP_START: True}
     )
     assert baichuan.enabled
+
+
+async def test_today_is_kept_up_every_15_minutes(
+    hass: HomeAssistant, loaded_viewer: MockConfigEntry
+) -> None:
+    """Each camera's today is caught up in the background (v0.63.14), until unloaded."""
+    timeline = loaded_viewer.runtime_data.timeline
+    with patch.object(timeline, "async_keep_today", AsyncMock()) as keep:
+        async_fire_time_changed(
+            hass, dt_util.utcnow() + timedelta(minutes=15, seconds=1)
+        )
+        await hass.async_block_till_done()
+        assert keep.await_count == 1
+        assert await hass.config_entries.async_unload(loaded_viewer.entry_id)
+        async_fire_time_changed(hass, dt_util.utcnow() + timedelta(minutes=31))
+        await hass.async_block_till_done()
+        assert keep.await_count == 1
 
 
 async def test_unload_and_reload(

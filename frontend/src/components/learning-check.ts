@@ -58,18 +58,22 @@ export function learningCheckLines(check: UnusualCheck, zone: string | undefined
     // A detection before the relearn the marks are scored with was judged, as it
     // happened, by the model before: it may not have fired (v0.63.13).
     const built = check.built_at ?? undefined;
-    const notFired = marks.filter((m) => m.fired === 0 && (built === undefined || m.start >= built));
-    const markedByRelearn = marks.filter((m) => m.fired === 0 && built !== undefined && m.start < built);
+    // Kept quiet: its camera's visit had fired already (one alert per visit, v0.63.14).
+    const keptQuiet = marks.filter((m) => m.fired === 0 && (m.quiet ?? 0) > 0);
+    const silent = marks.filter((m) => m.fired === 0 && !(m.quiet ?? 0));
+    const notFired = silent.filter((m) => built === undefined || m.start >= built);
+    const markedByRelearn = silent.filter((m) => built !== undefined && m.start < built);
     const twice = marks.filter((m) => m.fired > 1);
     const describe = (m: Check["marks"][number]) =>
       `${when(m.start)}, ${kindText(m.kind)} on ${(m.cameras ?? []).join(", ") || camera(m.camera)}`;
     lines.push({
-      ok: once.length + markedByRelearn.length === marks.length,
+      ok: once.length + markedByRelearn.length + keptQuiet.length === marks.length,
       text: `${plural(marks.length, "mark")} ${since}: ${String(once.length)} of ${String(marks.length)} fired its event once`,
       details: [
         ...notFired.map((m) => `not fired: ${describe(m)}`),
         ...twice.map((m) => `fired ${String(m.fired)} times: ${describe(m)}`),
         ...markedByRelearn.map((m) => `not fired, marked since by the nightly relearn: ${describe(m)}`),
+        ...keptQuiet.map((m) => `kept quiet, its camera's visit had fired already (one alert per visit): ${describe(m)}`),
       ],
     });
     const fired = marks.filter((m) => m.fired > 0);

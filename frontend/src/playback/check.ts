@@ -41,6 +41,7 @@ import {
   mb,
   ms,
   slope,
+  frameStep,
   rateFindings,
   referenceFps,
   smooth,
@@ -71,7 +72,7 @@ import { ScrubClient, isPicture, type ScrubPicture, type SocketLike } from "./sc
 import { SHAPES, mseApi, mseSupports, pickSample, probeShape, type MseApi } from "./mse-probe";
 import type { RvPlayer } from "./player";
 
-export const CHECK_VERSION = "0.8.9";
+export const CHECK_VERSION = "0.9.0";
 export const SETUPS = [
   "Desktop Chrome, LAN",
   "Desktop Chrome, Tailscale",
@@ -98,6 +99,12 @@ export const RATES = [0.5, 1, 2, 4, 8] as const;
 const RATE_MS = 6_000;
 /** After a rate change, measuring starts this much later. */
 const RATE_SETTLE_MS = 1_000;
+/**
+ * A recording long enough for every rate from 5 % in (each rate's settle and
+ * measure, at its speed: about 109 s of media) (v0.9.0: the tablet at 6:27 AM
+ * had one 40 s recording today, and 4× ran out of it).
+ */
+const RATES_MIN_MS = 120_000;
 const SAMPLE_MS = 60_000;
 /** The link test reads up to this much, for at most LINK_MS. */
 const LINK_BYTES = 32 * 1024 * 1024;
@@ -1042,10 +1049,21 @@ export class PlaybackCheck {
     const t = this._t;
     const segments = t.day?.segments ?? [];
     const long = this._long;
-    const seg =
+    let seg =
       long && long.date === t.day?.date
         ? long.segment
         : [...segments].sort((a, b) => b.end - b.start - (a.end - a.start)).at(0);
+    // Too short for every rate: one long enough on a recent day, if there is one (v0.9.0).
+    let elsewhere = "";
+    if (!seg || seg.end - seg.start < RATES_MIN_MS) {
+      const found = await this._rateRecording();
+      if (found) {
+        const shown = seg ? `${t.date}'s longest is ${span(seg.end - seg.start)}` : `${t.date} has none`;
+        if (found.date !== t.date) await this._loadDay(found.date);
+        seg = found.segment;
+        elsewhere = ` on ${found.date} (${shown})`;
+      }
+    }
     if (!seg) {
       this._log("R  skipped: no recording on this day");
       return;
@@ -1055,7 +1073,9 @@ export class PlaybackCheck {
       this._log(`R  skipped: the recording did not play (${played.line})`);
       return;
     }
-    this._log(`R  Playback rates, ${span(seg.end - seg.start)} recording, ${RATE_MS / 1000} s each (sub stream):`);
+    this._log(
+      `R  Playback rates, ${span(seg.end - seg.start)} recording${elsewhere}, ${RATE_MS / 1000} s each (sub stream):`,
+    );
     const results: RateSample[] = [];
     try {
       for (const rate of RATES) {
@@ -1074,9 +1094,50 @@ export class PlaybackCheck {
     const reference = referenceFps(results);
     for (const sample of results) this._log(`     ${describeRate(sample, reference)}`);
     this._summary.push(
-      `Rates: ${results.map((r) => `${r.rate}× ${!r.focused ? "– (not in front)" : smooth(r, reference) ? "✓" : "✗"}`).join(" ") || "not measured"} (smooth = ${SMOOTH_RULE})`,
+      `Rates: ${
+        results
+          .map(
+            (r) =>
+              `${r.rate}× ${!r.focused ? "– (not in front)" : r.ended ? "– (the recording ran out)" : smooth(r, reference) ? "✓" : "✗"}`,
+          )
+          .join(" ") || "not measured"
+      } (smooth = ${SMOOTH_RULE})`,
     );
     this._plain.push(...rateFindings(results));
+  }
+
+  /**
+   * A recording long enough for every rate (RATES_MIN_MS): the longest on the
+   * day shown, today or a recent day of this month, one not being written.
+   */
+  private async _rateRecording(): Promise<{ date: string; segment: Segment } | undefined> {
+    const t = this._t;
+    const today = t.today;
+    const dayNumber = Number(today.slice(8, 10));
+    const dates = [
+      t.date,
+      today,
+      ...[...t.monthDays]
+        .filter((n) => n < dayNumber)
+        .sort((a, b) => b - a)
+        .slice(0, PAST_DAYS)
+        .map((n) => `${today.slice(0, 8)}${String(n).padStart(2, "0")}`),
+    ].filter((date, i, all) => all.indexOf(date) === i);
+    for (const date of dates) {
+      this._checkStopped();
+      let day: TimelineDay;
+      try {
+        day = date === t.date && t.day ? t.day : await fetchTimelineDay(t.hass, t.deviceId, date);
+      } catch {
+        continue;
+      }
+      const segment = day.segments
+        .filter((s) => s.end - s.start >= RATES_MIN_MS && day.now - s.end > 60_000)
+        .sort((a, b) => b.end - b.start - (a.end - a.start))
+        .at(0);
+      if (segment) return { date, segment };
+    }
+    return undefined;
   }
 
   /**
@@ -2026,7 +2087,7 @@ export class PlaybackCheck {
       mediaS: Math.max(0, video.currentTime - media0),
       painted: frames.painted,
       maxGapMs: frames.maxGap,
-      frameS: middle(frames.steps),
+      frameS: frameStep(frames.steps),
       decoded: quality0 && quality1 ? quality1.totalVideoFrames - quality0.totalVideoFrames : undefined,
       dropped: quality0 && quality1 ? quality1.droppedVideoFrames - quality0.droppedVideoFrames : undefined,
       stalls,

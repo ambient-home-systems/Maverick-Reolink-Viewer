@@ -12,6 +12,11 @@ time an incident scores as unusual:
 - **The camera's "Unusual activity" binary sensor** turns on, and off HOLD_S
   after its detection ends (at the latest EVENT_MAX_SECONDS and HOLD_S after
   it began). Every camera in the incident turns its own on.
+- **Once per visit** (v0.63.14): after that, more of the same kind on a camera
+  of the incident say nothing until VISIT_S passes without one there. They are
+  kept in the learning check's log as kept quiet. The owner's Front Yard Right
+  saw an animal every few minutes from 00:48 to 03:15, and each was as rare as
+  the first until the nightly relearn: 31 alerts for one visit.
 
 Scored from the journal, as the panel scores it (the journal is written first,
 so what fired just before counts), so a live mark and the panel's agree on
@@ -42,6 +47,9 @@ UNUSUAL_EVENT = "reolink_viewer_unusual"
 HOLD_S = 30.0
 # How far back to look for the start of the detection being scored.
 _REACH_S = EVENT_MAX_SECONDS + 60.0
+# One alert per visit: the same kind on a camera within this long of its last
+# detection there is the same visit.
+VISIT_S = 30 * 60.0
 
 
 @dataclass(slots=True)
@@ -84,6 +92,9 @@ class UnusualWatch:
         self._said: set[tuple[str, str, float]] = set()
         # The incident going on, per kind: until when (its latest activity).
         self._incidents: dict[str, float] = {}
+        # The visit going on, per (camera, kind): until when a detection is part
+        # of it (VISIT_S after its latest).
+        self._visits: dict[tuple[str, str], float] = {}
         self._active: dict[str, CALLBACK_TYPE | None] = {}
         self._marks: dict[str, Mark] = {}
         self._listeners: list[Callable[[], None]] = []
@@ -138,6 +149,12 @@ class UnusualWatch:
             return False
         event, result = found[-1]
         key = (camera, kind, event.started_at)
+        visit = (camera, kind)
+        until = self._visits.get(visit)
+        in_visit = until is not None and event.started_at <= until
+        if in_visit:
+            # More of the same on this camera: the visit goes on.
+            self._visits[visit] = max(until or 0.0, (event.ended_at or now) + VISIT_S)
         if key in self._said:
             # Said already: its sensor goes off once it ends.
             if ending or event.ended_at is not None:
@@ -151,6 +168,17 @@ class UnusualWatch:
         self._said.add(key)
         if len(self._said) > 1000:
             self._said = {k for k in self._said if k[2] > now - 3600}
+        if in_visit:
+            # Said once for this visit already: kept quiet, but logged.
+            if self._fired is not None:
+                self._fired(
+                    {**self._payload(camera, kind, event, result), "quiet": True},
+                    time.time(),
+                )
+            return False
+        self._visits[visit] = (event.ended_at or now) + VISIT_S
+        if len(self._visits) > 200:
+            self._visits = {k: v for k, v in self._visits.items() if v > now}
         self._marks[camera] = Mark(
             kind=kind,
             score=result.total,
@@ -164,22 +192,25 @@ class UnusualWatch:
         said = last is None or event.started_at - last > INCIDENT_SECONDS
         self._incidents[kind] = max(last or 0.0, event.ended_at or now)
         if said:
-            payload = {
-                "device_id": camera,
-                "camera": self._names().get(camera, camera),
-                "kind": kind,
-                "score": round(result.total, 2),
-                "line": None
-                if result.threshold is None
-                else round(result.threshold, 2),
-                "reason": result.reason,
-                "start": dt_util.utc_from_timestamp(event.started_at).isoformat(),
-            }
+            payload = self._payload(camera, kind, event, result)
             self._hass.bus.async_fire(UNUSUAL_EVENT, payload)
             if self._fired is not None:
                 self._fired(payload, time.time())
         self._activate(camera, event)
         return said
+
+    def _payload(
+        self, camera: str, kind: str, event: Event, result: Score
+    ) -> dict[str, Any]:
+        return {
+            "device_id": camera,
+            "camera": self._names().get(camera, camera),
+            "kind": kind,
+            "score": round(result.total, 2),
+            "line": None if result.threshold is None else round(result.threshold, 2),
+            "reason": result.reason,
+            "start": dt_util.utc_from_timestamp(event.started_at).isoformat(),
+        }
 
     @callback
     def _activate(self, camera: str, event: Event) -> None:

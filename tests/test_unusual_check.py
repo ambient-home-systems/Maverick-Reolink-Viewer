@@ -83,6 +83,23 @@ def test_each_mark_is_matched_with_what_fired_for_it() -> None:
     assert [m["when"] for m in matched] == ["start", None, "start"]
 
 
+def test_kept_quiet_in_a_visit_is_neither_fired_nor_unmarked() -> None:
+    """One alert per visit (v0.63.14): the rest are kept quiet, and said as such."""
+    marks = [
+        _mark("animal", [("yard", START)]),
+        _mark("animal", [("yard", START + 300)]),
+    ]
+    fired = [
+        _fired("yard", "animal", START, 0.6),
+        {**_fired("yard", "animal", START + 300, 0.5), "quiet": True},
+        # Kept quiet for no mark: not "fired for no mark".
+        {**_fired("yard", "animal", START + 900, 0.5), "quiet": True},
+    ]
+    matched, unmarked = compare(marks, fired)
+    assert [(m["fired"], m["quiet"]) for m in matched] == [(1, 0), (0, 1)]
+    assert unmarked == []
+
+
 def test_a_mark_that_stands_out_by_its_length_fires_at_its_end() -> None:
     """Long, it stands out only when it ends: fired then, not late."""
     mark = {**_mark("person", [("drive", START)]), "end": int((START + 600) * 1000)}

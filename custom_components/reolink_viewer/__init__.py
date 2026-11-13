@@ -3,6 +3,7 @@
 import hashlib
 import logging
 from pathlib import Path
+from typing import Any
 
 from homeassistant.components import frontend, panel_custom
 from homeassistant.components.ffmpeg import get_ffmpeg_manager
@@ -11,6 +12,7 @@ from homeassistant.const import EVENT_HOMEASSISTANT_STOP, Platform
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers import config_validation as cv, issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.start import async_at_started
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.loader import async_get_integration
@@ -62,7 +64,7 @@ from .models import ReolinkViewerConfigEntry, ReolinkViewerData
 from .scheduler import HostLimits, Scheduler
 from .scrub import STORE_BYTES as SCRUB_STORE_BYTES, KeyFrameStore, ScrubService
 from .thumbnails import ThumbnailService
-from .timeline import TimelineService
+from .timeline import KEEP_TODAY_INTERVAL, TimelineService
 from .unusual.check import FiredLog
 from .unusual.const import DEFAULT_SCOPE, DEFAULT_SENSITIVITY
 from .unusual.live import UnusualWatch
@@ -282,6 +284,22 @@ async def async_setup_entry(
             live.warm.start()
 
     entry.async_on_unload(async_at_started(hass, started))
+
+    @callback
+    def keep_today(_now: Any) -> None:
+        # Today's timeline of each playable camera, caught up in the background
+        # (v0.63.14): the panel shows it at once at any time.
+        if not bridge.async_check_compat(hass).ok:
+            return
+        entry.async_create_background_task(
+            hass,
+            timeline.async_keep_today(devices.async_event_sources(hass)),
+            "reolink_viewer keep today",
+        )
+
+    entry.async_on_unload(
+        async_track_time_interval(hass, keep_today, KEEP_TODAY_INTERVAL)
+    )
 
     if not hass.data.get(DATA_STATIC_REGISTERED):
         await hass.http.async_register_static_paths(

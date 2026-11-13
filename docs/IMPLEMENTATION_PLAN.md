@@ -8199,6 +8199,71 @@ the Mac, on the LAN over plain HTTP):** no problem found.
   - `raise_priority` moves only a queued job, to a higher priority.
   - The learning check's notes and its ✗ for an alert after the relearn.
 
+**The owner's runs of v0.63.13 (2026-11-13, morning):**
+
+- **The wall tablet, 6:27 AM (Garage):**
+  - **A1 5.8 s, fresh:** queue 1.76 s, the NVR's recordings search 4.6 s,
+    joined the warm-up. It was the first open of a new day, so there was no
+    copy of the 13th to show; the kept copy is per day.
+  - **R, today's one recording of 40 s:**
+    - 4× ran out of it ("the file ended": 1.82× effective), and 8× never ran.
+    - 2× was judged against 34 fps: 1×'s median media-time step read 17 fps
+      for Garage's 15. Against 30 it was still 24 painted, a small real
+      stutter (28 the night before).
+    - 1× dropped 2 of 90 (the rule allows 1).
+  - C, P and V skipped: no recordings yet to work with.
+- **The learning check:**
+  - 5 marks were "not fired, marked since by the nightly relearn", and 33
+    alerts "fired before the last nightly relearn": v0.63.13's notes, as
+    meant.
+  - Of those 33, 31 were an animal on Front Yard Right, about every 5 min
+    from 00:48 to 03:15. Each was as rare as the first under the model of
+    the night before, so each fired. The owner's automation, "Tell me about
+    anything unusual", had been created by then.
+  - ✗ 2 fired for no mark (05:16 and 05:17, an animal on Front Yard Right,
+    after the relearn): most likely their length. The alert is decided at
+    the start; the panel decides with the length known.
+
+**v0.63.14, from them:**
+
+- **One alert per visit** (`UnusualWatch`, `VISIT_S` 30 min):
+  - After an alert for a kind on a camera, more of that kind there (unusual
+    or not) carry the visit on. An unusual one within it is kept quiet:
+    there is no bus event, no sensor and no mark.
+  - It is logged as quiet in `FiredLog`. `compare` gives each mark `quiet`
+    (kept quiet for it), and leaves quiet ones out of "fired for no mark".
+    The learning check counts a mark kept quiet as right.
+  - The incident's other cameras are in the visit too. Overnight, the 31
+    would have been about 2 alerts.
+- **Today kept up** (`TimelineService.async_keep_today`, every
+  `KEEP_TODAY_INTERVAL` of 15 min, from setup):
+  - Each playable camera's today is fetched in turn at prefetch priority,
+    incrementally from its copy. It is not doubled while a run is still
+    going, and a battery Doorbell is left alone.
+  - The first open of a day finds a copy from the last quarter-hour (the
+    first run of a day starts it).
+- **The warm-up searches today one camera at a time** (it was every camera
+  at once).
+- **Check v0.9.0, R:**
+  - `_rateRecording` takes a recording of `RATES_MIN_MS` (2 min) or more: the
+    day's, today's, or a recent day's of this month. The rows after R then
+    use that day.
+  - A rate that ran out of recording is "not measured (the recording ran
+    out)" in "In short" and "–" in the summary, not ✗.
+  - `referenceFps` comes from 1×'s counter when it agrees with the frames
+    painted, else from `frameStep`: the mean step, leaving out skipped
+    frames' steps (over 1.8 times the median).
+- **Checks:**
+  - The owner's night as a test: one alert, the rest kept quiet, and a new
+    visit after 30 min quiet.
+  - Quiet entries in `compare`; the learning check's line for them.
+  - `async_keep_today` one at a time, the Doorbell left alone, not doubled,
+    incremental.
+  - The warm-up never running two searches at once.
+  - The interval wired at setup, and gone at unload.
+  - R's recording from an earlier day; `referenceFps` from the counter (the
+    tablet's 1×); `frameStep`; a rate that ran out as a note.
+
 #### Step 10.4: the checks
 
 - **In CI:** `scrub_check.cjs` drags against a fake key-frame endpoint,

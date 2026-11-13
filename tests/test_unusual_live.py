@@ -22,6 +22,7 @@ from custom_components.reolink_viewer.unusual.events import Event
 from custom_components.reolink_viewer.unusual.live import (
     HOLD_S,
     UNUSUAL_EVENT,
+    VISIT_S,
     UnusualWatch,
 )
 from custom_components.reolink_viewer.unusual.score import Score
@@ -157,6 +158,47 @@ async def test_one_incident_is_said_once_and_lights_every_camera_in_it(
     # A person an hour on is another incident.
     journal.window = [(_event("cam-gate", "person", now + 3600, None), _score(True))]
     assert await watch.async_check("cam-gate", "person", now + 3600)
+    assert len(fired) == 2
+    watch.async_stop()
+
+
+async def test_one_alert_per_visit(hass: HomeAssistant) -> None:
+    """The owner's night: an animal on Front Yard Right every few minutes (v0.63.14).
+
+    The first says it; the rest of the visit, unusual or not, keeps it going
+    and says nothing (logged as kept quiet); after VISIT_S without one, a new
+    visit says it again. The incident's other camera is in the visit too.
+    """
+    journal = _Journal()
+    logged: list[dict[str, Any]] = []
+    watch = UnusualWatch(
+        hass,
+        flush=journal.flush,
+        window=journal.read,
+        model_built=lambda: True,
+        running=lambda: True,
+        names=lambda: {"cam-drive": "Drive", "cam-gate": "Gate"},
+        fired=lambda payload, _at: logged.append(payload),
+    )
+    fired = async_capture_events(hass, UNUSUAL_EVENT)
+    t0 = time.time() - 4 * 3600
+
+    async def seen(camera: str, at: float, unusual: bool = True) -> bool:
+        journal.window = [(_event(camera, "animal", at, at + 20), _score(unusual))]
+        return await watch.async_check(camera, "animal", at)
+
+    assert await seen("cam-drive", t0)
+    # The same incident on the gate's camera 20 s on: not said, but in the visit.
+    assert not await seen("cam-gate", t0 + 20)
+    # Every 5 to 25 minutes for an hour, unusual or not: one visit, nothing said.
+    for minutes in (5, 12, 37, 50, 75):
+        assert not await seen("cam-drive", t0 + minutes * 60, unusual=minutes != 37)
+    assert not await seen("cam-gate", t0 + 10 * 60)
+    assert len(fired) == 1
+    assert [p.get("quiet") for p in logged] == [None] + [True] * 5
+    assert all(p["kind"] == "animal" for p in logged)
+    # Quiet for longer than VISIT_S after the last: a new visit, said again.
+    assert await seen("cam-drive", t0 + 75 * 60 + 20 + VISIT_S + 60)
     assert len(fired) == 2
     watch.async_stop()
 
