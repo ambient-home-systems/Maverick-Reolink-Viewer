@@ -4,6 +4,7 @@ import type { Segment, TimelineEvent } from "../types";
 import { canPlayMain, playsProgressive } from "./codec";
 import { dateIn, firstDayOfWeek, formatClock, formatDuration, formatStamp, offsetAt } from "./time";
 import {
+  CONTINUOUS_RECORDING_MS,
   DAY,
   HOUR,
   MINUTE,
@@ -16,11 +17,13 @@ import {
   filterEvents,
   isoDate,
   monthGrid,
+  motionOnly,
   nextEvent,
   playTarget,
   presentTypes,
   previousEvent,
   primaryType,
+  recordsContinuously,
   SAVE_GRACE_MS,
   segmentAt,
   shownTypes,
@@ -29,6 +32,7 @@ import {
   ticks,
   timeToX,
   typeLabel,
+  visibleEvents,
   xToTime,
   stepZoom,
   zoomAt,
@@ -143,6 +147,24 @@ describe("events", () => {
     const overlapping = [ev(T0, ["MOTION"]), ev(T0 + 20_000, ["PERSON"])];
     expect(eventToSave(overlapping, T0 + 25_000)?.start).toBe(T0 + 20_000);
     expect(eventToSave([], T0)).toBeUndefined();
+  });
+
+  it("hides motion-only events on request, unless motion is chosen (Phase 11 step 3)", () => {
+    // [motion only, motion and a person, an animal]
+    expect(events.map(motionOnly)).toEqual([true, false, false]);
+    expect(visibleEvents(events, new Set(), false)).toBe(events);
+    expect(visibleEvents(events, new Set(), true).map((e) => e.start)).toEqual([T0 + HOUR, T0 + 2 * HOUR]);
+    expect(visibleEvents(events, new Set(["ANIMAL"]), true).map((e) => e.start)).toEqual([T0 + 2 * HOUR]);
+    expect(visibleEvents(events, new Set(["MOTION"]), true).map((e) => e.start)).toEqual([T0]);
+    expect(motionOnly({ types: [] })).toBe(true);
+  });
+
+  it("tells a camera recording all the time by its long recordings", () => {
+    const seg = (minutes: number): Segment => ({ id: "s", start: T0, end: T0 + minutes * MINUTE, triggers: [], ambiguous: false });
+    expect(recordsContinuously([seg(2), seg(60)])).toBe(true);
+    expect(recordsContinuously([seg(2), seg(9)])).toBe(false);
+    expect(recordsContinuously([])).toBe(false);
+    expect(CONTINUOUS_RECORDING_MS).toBe(10 * MINUTE);
   });
 
   it("steps to the next and previous event", () => {

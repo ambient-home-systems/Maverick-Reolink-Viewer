@@ -4,6 +4,7 @@ import { fakePip, makeHass, okDevices, type FakeHass } from "../test-fixtures";
 import type { PlaybackUrl, TimelineDay } from "../types";
 import { playsProgressive } from "../playback/codec";
 import { PlaybackCheck, type CheckTarget } from "../playback/check";
+import { FILTERS_KEY, loadFilters } from "../playback/event-filters";
 import type { ScrubPicture, SocketLike } from "../playback/scrub-client";
 import type { KeyFramePainter } from "../playback/scrub-paint";
 import { ThumbLoader } from "../playback/thumb-loader";
@@ -126,6 +127,8 @@ afterEach(() => {
   document.body.innerHTML = "";
   vi.useRealTimers();
   vi.restoreAllMocks();
+  // Each camera's filters are kept between visits: not between tests.
+  window.localStorage.removeItem(FILTERS_KEY);
 });
 
 describe("rv-playback", () => {
@@ -241,6 +244,100 @@ describe("rv-playback", () => {
     expect(clipSize(2_400_000)).toBe("2.4 MB");
     expect(clipSize(830_000)).toBe("830 KB");
     expect(clipSize(12)).toBe("1 KB");
+  });
+
+  describe("filters that start useful (Phase 11 step 3)", () => {
+    /** A camera recording all the time: an hour's recording, mostly motion. */
+    function continuousDay(): TimelineDay {
+      const at = (minutes: number) => T0 + 60 * MIN + minutes * MIN;
+      const motion = (minutes: number) => ({
+        start: at(minutes),
+        end: at(minutes) + 20_000,
+        types: ["MOTION"],
+        segment: "h1",
+        ambiguous: false,
+      });
+      return makeDay({
+        segments: [{ id: "h1", start: T0 + 60 * MIN, end: T0 + 120 * MIN, triggers: ["MOTION", "PERSON"], ambiguous: false }],
+        events: [
+          motion(1),
+          motion(5),
+          { start: at(10), end: at(11), types: ["MOTION", "PERSON"], segment: "h1", ambiguous: false },
+          motion(20),
+          motion(40),
+          motion(55),
+        ],
+      });
+    }
+    const chip = (el: RvPlayback, text: string) =>
+      [...el.renderRoot.querySelectorAll<HTMLButtonElement>(".chips button")].find((b) =>
+        b.textContent.replace(/\s+/g, " ").includes(text),
+      );
+    const heading = (el: RvPlayback) =>
+      el.renderRoot.querySelector(".events-head .muted")?.textContent.replace(/\s+/g, " ").trim();
+
+    it("hide motion-only events at a continuously recording camera's first visit, until the chip brings them back", async () => {
+      const el = await mount(playbackHass(continuousDay()));
+      expect(el._hideMotion).toBe(true);
+      expect(el.renderRoot.querySelector("rv-event-list")?.events.map((e) => e.types)).toEqual([["MOTION", "PERSON"]]);
+      expect(el.renderRoot.querySelector("rv-timeline")?.events).toHaveLength(1);
+      expect(heading(el)).toBe("1 of 6 events");
+      // The play point starts on the latest event shown, not a hidden one.
+      expect(el._cursor).toBe(T0 + 70 * MIN);
+      // Motion has no chip of its own while hidden: this one brings them back.
+      expect(chip(el, "Motion only 5")?.classList.contains("hidden-motion")).toBe(true);
+      expect(chip(el, "Motion only")?.getAttribute("aria-label")).toBe("Show motion-only events: 5 hidden");
+      expect([...el.renderRoot.querySelectorAll(".chips button.chip:not(.hidden-motion)")].map((b) => b.textContent.trim().split(/\s+/)[0])).toEqual(["Person"]);
+      // Kept: the next visit starts so too.
+      expect(loadFilters("dev-cam")).toEqual({ only: [], hideMotion: true });
+
+      chip(el, "Motion only")?.click();
+      await el.updateComplete;
+      expect(el.renderRoot.querySelector("rv-event-list")?.events).toHaveLength(6);
+      expect(heading(el)).toBe("6 events");
+      expect(chip(el, "Motion only")).toBeUndefined();
+      expect(chip(el, "Motion 5")).toBeDefined();
+      expect(loadFilters("dev-cam")).toEqual({ only: [], hideMotion: false });
+      // And hidden again.
+      chip(el, "Hide motion only")?.click();
+      await el.updateComplete;
+      expect(el.renderRoot.querySelector("rv-event-list")?.events).toHaveLength(1);
+      expect(loadFilters("dev-cam")?.hideMotion).toBe(true);
+    });
+
+    it("remembers each camera's filters, and leaves them as left", async () => {
+      const first = await mount(playbackHass(continuousDay()));
+      chip(first, "Motion only")?.click();
+      await first.updateComplete;
+      chip(first, "Person")?.click();
+      await first.updateComplete;
+      expect(loadFilters("dev-cam")).toEqual({ only: ["PERSON"], hideMotion: false });
+      first.remove();
+
+      // The next visit: as left, not decided again.
+      const again = await mount(playbackHass(continuousDay()));
+      expect(again._hideMotion).toBe(false);
+      expect(chip(again, "Person")?.getAttribute("aria-pressed")).toBe("true");
+      expect(heading(again)).toBe("1 of 6 events");
+      chip(again, "Show every event")?.click();
+      await again.updateComplete;
+      expect(heading(again)).toBe("6 events");
+      expect(loadFilters("dev-cam")).toEqual({ only: [], hideMotion: false });
+    });
+
+    it("shows every event at the first visit of a camera that records events only", async () => {
+      const el = await mount(playbackHass());
+      expect(el._hideMotion).toBe(false);
+      expect(heading(el)).toBe("2 events");
+      expect(chip(el, "Hide motion only")).toBeUndefined();
+      expect(loadFilters("dev-cam")).toEqual({ only: [], hideMotion: false });
+    });
+
+    it("decides nothing on a day without recordings", async () => {
+      const el = await mount(playbackHass(makeDay({ segments: [], events: [] })));
+      expect(el._hideMotion).toBe(false);
+      expect(loadFilters("dev-cam")).toBeUndefined();
+    });
   });
 
   it("saves the event playing as an MP4, and keeps its link (Phase 11 step 2)", async () => {
