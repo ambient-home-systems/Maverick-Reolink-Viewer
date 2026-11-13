@@ -1,6 +1,6 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
-import { Bt as i, P as a, et as o, rt as s } from "./live-BD2sk3pJ.js";
-import { J as c, n as l } from "./home-DJZam5_I.js";
+import { P as i, Vt as a, et as o, rt as s } from "./live-B3rIzIdQ.js";
+import { Y as c, n as l } from "./home-OYB8tDsh.js";
 //#region src/catalog.ts
 var u = {
 	id: "other",
@@ -423,17 +423,17 @@ var b = 1e4, x = class {
           </button>` : t}
     </span>`;
 	}
-	async _write(e, t, n, r, a) {
+	async _write(e, t, n, r, i) {
 		let o = this.hass;
 		if (!o) return;
 		let s = m(d(this.catalog, e.domain, e.key), r);
 		if (s !== null && !await this.confirm(t, s)) return;
-		let l = a ?? v(e.domain, e.domain === "button" ? "press" : e.domain === "update" ? "install" : n), u = e.entity_id, f = this.writes.begin(u, n, o.states[u]);
+		let l = i ?? v(e.domain, e.domain === "button" ? "press" : e.domain === "update" ? "install" : n), u = e.entity_id, f = this.writes.begin(u, n, o.states[u]);
 		this.requestUpdate();
 		try {
 			await o.callService(l.domain, l.service, l.data, { entity_id: u }, !1), this.writes.confirm(u, f), this._scheduleSettle();
 		} catch (e) {
-			this.writes.fail(u, f) && c(this, `Could not change ${t}: ${i(e).message}`, "error");
+			this.writes.fail(u, f) && c(this, `Could not change ${t}: ${a(e).message}`, "error");
 		}
 		this.requestUpdate();
 	}
@@ -492,14 +492,14 @@ var b = 1e4, x = class {
 					composed: !0
 				}));
 			} catch (e) {
-				c(this, `Could not enable ${t}: ${i(e).message}`, "error");
+				c(this, `Could not enable ${t}: ${a(e).message}`, "error");
 			} finally {
 				let t = new Set(this._enabling);
 				t.delete(e.entity_id), this._enabling = t;
 			}
 		}
 	}
-	static styles = [a, e`
+	static styles = [i, e`
       :host {
         display: flex;
         flex-direction: column;

@@ -14,6 +14,7 @@ import {
   EVENTS_RETRY_MS,
   STALE_TODAY_S,
   SCRUB_HOLD_MS,
+  clipSize,
   deliveryOf,
   describeCache,
   describeScrub,
@@ -234,6 +235,97 @@ describe("rv-playback", () => {
     expect(el._cursor).toBe(T0 + 62 * MIN);
     // s2 is the last recording: nothing more to preload.
     expect(sentOf(hass, "reolink_viewer/playback/url")).toHaveLength(2);
+  });
+
+  it("says a saved clip's size as a person reads it", () => {
+    expect(clipSize(2_400_000)).toBe("2.4 MB");
+    expect(clipSize(830_000)).toBe("830 KB");
+    expect(clipSize(12)).toBe("1 KB");
+  });
+
+  it("saves the event playing as an MP4, and keeps its link (Phase 11 step 2)", async () => {
+    const hass = playbackHass();
+    let answer: (clip: unknown) => void = () => undefined;
+    let fail: (err: unknown) => void = () => undefined;
+    const base = hass.callWS.bind(hass);
+    hass.callWS = <T,>(message: Record<string, unknown>) => {
+      if (message.type !== "reolink_viewer/playback/save_event") return base<T>(message);
+      hass.sent.push(message);
+      return new Promise<T>((resolve, reject) => {
+        answer = resolve as (clip: unknown) => void;
+        fail = reject;
+      });
+    };
+    const el = await mount(hass);
+    const toasts: string[] = [];
+    el.addEventListener(TOAST_EVENT, (e) => toasts.push((e as CustomEvent<{ message: string }>).detail.message));
+    const event = el._day?.events[0];
+    if (!event) throw new Error("no event");
+    const save = () => el.renderRoot.querySelector<HTMLButtonElement>("button.save");
+    // Nothing playing: nothing to save.
+    expect(save()).toBeNull();
+    await el.playAt(event.start + 5_000);
+    await el.updateComplete;
+    expect(save()?.textContent.trim()).toBe("Save event");
+    // The whole recording is still there, named for what it is.
+    const recording = el.renderRoot.querySelector<HTMLAnchorElement>("a.download");
+    expect(recording?.textContent.trim()).toBe("Download recording");
+    expect(recording?.getAttribute("href")).toContain("/clip/s1");
+
+    save()?.click();
+    await el.updateComplete;
+    expect(sentOf(hass, "reolink_viewer/playback/save_event")[0]).toEqual({
+      type: "reolink_viewer/playback/save_event",
+      device_id: "dev-cam",
+      date: "2026-10-17",
+      segment_id: "s1",
+      stream: "sub",
+      start: event.start,
+      end: event.end,
+      label: "Person",
+    });
+    expect(save()?.textContent.trim()).toBe("Saving event…");
+    expect(save()?.disabled).toBe(true);
+
+    // Made: downloaded at once, and its link stays for another go.
+    const clicks = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+    answer({
+      url: "/api/reolink_viewer/event_clip/tok?authSig=z",
+      name: "front-yard-20261017-010010-person.mp4",
+      size: 2_400_000,
+      start: event.start - 10_000,
+      end: event.end + 10_000,
+      plain: true,
+      expires_in: 900,
+    });
+    await flush();
+    await el.updateComplete;
+    expect(clicks).toHaveBeenCalledTimes(1);
+    expect(clicks.mock.contexts[0]).toMatchObject({
+      href: expect.stringContaining("/event_clip/tok") as unknown,
+      download: "front-yard-20261017-010010-person.mp4",
+    });
+    expect(el.renderRoot.querySelectorAll("a[hidden]")).toHaveLength(0);
+    const saved = el.renderRoot.querySelector<HTMLAnchorElement>("a.saved");
+    expect(saved?.textContent.trim()).toBe("Event saved (2.4 MB)");
+    expect(saved?.getAttribute("download")).toBe("front-yard-20261017-010010-person.mp4");
+    expect(save()).toBeNull();
+    expect(toasts).toContain("Saved front-yard-20261017-010010-person.mp4");
+
+    // Another event: its own button, free to save.
+    const other = el._day?.events[1];
+    if (!other) throw new Error("no second event");
+    await el.playAt(other.start);
+    await el.updateComplete;
+    expect(el.renderRoot.querySelector("a.saved")).toBeNull();
+    expect(save()?.disabled).toBe(false);
+    save()?.click();
+    fail(new Error("the recording took too long to download"));
+    await flush();
+    await el.updateComplete;
+    expect(toasts.at(-1)).toBe("Could not save the event: the recording took too long to download");
+    expect(save()?.textContent.trim()).toBe("Save event");
+    expect(save()?.disabled).toBe(false);
   });
 
   it("preloads the next recording only once the start shows its first frame", async () => {

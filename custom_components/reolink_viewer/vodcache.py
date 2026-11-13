@@ -87,7 +87,15 @@ from . import bridge
 from .baichuan_source import BaichuanSource, Cut, CutError
 from .bridge import VodFile, VodMethod
 from .devices import PlaybackSource
-from .fmp4 import Fragment, FragmentError, FragmentIndex, KeySample, key_sample
+from .fmp4 import (
+    Fragment,
+    FragmentError,
+    FragmentIndex,
+    KeySample,
+    clip_fragments,
+    key_sample,
+    write_clip,
+)
 from .mp4 import BoxScanner
 from .mp4index import (
     OffsetShifter,
@@ -951,6 +959,43 @@ class VodCache:
             if window.source == "cut" and cut is not None:
                 cut.readers -= 1
                 cut.last_read = time.monotonic()
+
+    # ---- Saving an event (Phase 11 step 2) ----
+
+    async def async_write_clip(
+        self, entry: Entry, start_ms: float, end_ms: float, target: Path
+    ) -> tuple[float, float, int]:
+        """Write the stretch [start_ms, end_ms) (ms of media) of the original.
+
+        Waits until the download has it (resuming one stopped at a cut), then
+        writes a fragmented MP4 from the key frame at or before ``start_ms``,
+        starting at time 0 (``fmp4.write_clip``). The recording is held on
+        disk meanwhile. Returns the clip's start and end in the recording's
+        media time, and its size.
+        """
+        entry.readers += 1
+        entry.last_access = time.monotonic()
+        try:
+            index, _complete = await self._await_index(
+                entry, lambda i: i.duration_ms >= end_ms
+            )
+            chosen = clip_fragments(index, start_ms, end_ms)
+            if chosen is None:
+                raise VodCacheError("the recording does not reach the event")
+            first, last = chosen
+            size = await self._hass.async_add_executor_job(
+                _write_clip, self._candidates(entry), index, first, last, target
+            )
+        except FragmentError as err:
+            raise VodCacheError(f"not playable as fragments: {err}") from err
+        except FileNotFoundError as err:
+            raise VodCacheError(entry.error or "recording file gone") from err
+        finally:
+            entry.readers -= 1
+            entry.last_access = time.monotonic()
+        begin = index.fragments[first]
+        end = index.fragments[last]
+        return begin.start_ms, end.start_ms + end.duration_ms, size
 
     # ---- Scrubbing (Phase 10) ----
 
@@ -1852,6 +1897,17 @@ def _open_original(candidates: tuple[Path, Path]) -> BinaryIO:
     except FileNotFoundError:
         # Renamed between the check and the open.
         return candidates[1].open("rb")
+
+
+def _write_clip(
+    candidates: tuple[Path, Path],
+    index: FragmentIndex,
+    first: int,
+    last: int,
+    target: Path,
+) -> int:
+    with _open_original(candidates) as file, target.open("wb") as out:
+        return write_clip(file, index, first, last, out)
 
 
 def _scan_fragments(

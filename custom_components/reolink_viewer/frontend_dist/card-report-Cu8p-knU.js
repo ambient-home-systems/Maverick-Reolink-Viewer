@@ -1,6 +1,6 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
-import { Bt as i, P as a, at as o, et as s, g as c, h as l, m as u, n as d, tt as f } from "./live-BD2sk3pJ.js";
-import { nt as p, s as m } from "./home-DJZam5_I.js";
+import { P as i, Vt as a, at as o, et as s, g as c, h as l, m as u, n as d, tt as f } from "./live-B3rIzIdQ.js";
+import { rt as p, s as m } from "./home-OYB8tDsh.js";
 //#region src/live/card-report.ts
 var h = /* @__PURE__ */ new Set([
 	"visible",
@@ -101,7 +101,7 @@ var w = class extends r {
 			try {
 				this._state = { devices: (await o(e)).devices };
 			} catch (e) {
-				this._state = { error: i(e).message };
+				this._state = { error: a(e).message };
 			}
 		}
 	}
@@ -109,7 +109,7 @@ var w = class extends r {
 		if (this._confirm = !1, this.hass) try {
 			await f(this.hass), await this.refresh();
 		} catch (e) {
-			this._state = { error: i(e).message };
+			this._state = { error: a(e).message };
 		}
 	}
 	render() {
@@ -196,7 +196,7 @@ var w = class extends r {
         <pre class="report">${r}</pre>
       </details>`;
 	}
-	static styles = [a, e`
+	static styles = [i, e`
       :host {
         display: block;
       }

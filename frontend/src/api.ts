@@ -30,6 +30,7 @@ import type {
   ProbeOptions,
   ProbeReport,
   RecentEvents,
+  SavedClip,
   LearnedProfile,
   UnusualMarks,
   WallLayout,
@@ -282,6 +283,29 @@ export const fetchPlaybackMse = (hass: HomeAssistant, ref: SegmentRef, at?: numb
     segment_id: ref.segmentId,
     stream: ref.stream,
     ...(at === undefined ? {} : { at: Math.round(at) }),
+  });
+
+/**
+ * Save an event (Phase 11 step 2): an MP4 from `start` minus the margin before
+ * it to `end` plus the margin after (the options), in `ref`'s stream. Answers
+ * once it is made, which waits for the recording's download to reach it.
+ */
+export const saveEventClip = (
+  hass: HomeAssistant,
+  ref: SegmentRef,
+  start: number,
+  end: number,
+  label: string,
+): Promise<SavedClip> =>
+  hass.callWS<SavedClip>({
+    type: "reolink_viewer/playback/save_event",
+    device_id: ref.deviceId,
+    date: ref.date,
+    segment_id: ref.segmentId,
+    stream: ref.stream,
+    start: Math.round(start),
+    end: Math.round(end),
+    label,
   });
 
 /** The token of a playback URL or fragment path (its last path segment). */

@@ -902,6 +902,8 @@ async def test_peek_stats_and_check_reports(
     # Reading the statistics starts the loop's timer: nothing measured yet.
     assert msg["result"]["loop"]["held_10s_ms"] is None
     assert msg["result"]["loop"]["period_ms"] == 250
+    # Saved events' clips kept (Phase 11 step 2): none yet.
+    assert msg["result"]["event_clips"] == {"kept": 0}
 
     for text, done in (("first part", False), ("all of it", True)):
         msg = await _ws(

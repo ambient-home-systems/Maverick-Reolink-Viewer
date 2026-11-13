@@ -5,6 +5,8 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.reolink_viewer.config_flow import unhelpful_signals
 from custom_components.reolink_viewer.const import (
     CONF_BAICHUAN_DEEP_START,
+    CONF_EVENT_CLIP_AFTER,
+    CONF_EVENT_CLIP_BEFORE,
     CONF_LEARN_NORMAL,
     CONF_UNUSUAL_SCOPE,
     CONF_UNUSUAL_SENSITIVITY,
@@ -56,6 +58,9 @@ async def test_options_flow(hass: HomeAssistant) -> None:
         CONF_UNUSUAL_SENSITIVITY: "balanced",
         CONF_UNUSUAL_SCOPE: "together",
         CONF_UNUSUAL_SIGNALS: [],
+        # "Save event" (Phase 11 step 2): 10 s either side.
+        CONF_EVENT_CLIP_BEFORE: 10,
+        CONF_EVENT_CLIP_AFTER: 10,
     }
     chosen = {
         CONF_BAICHUAN_DEEP_START: False,
@@ -63,6 +68,8 @@ async def test_options_flow(hass: HomeAssistant) -> None:
         CONF_UNUSUAL_SENSITIVITY: "few",
         CONF_UNUSUAL_SCOPE: "host",
         CONF_UNUSUAL_SIGNALS: ["alarm_control_panel.house", "person.josh"],
+        CONF_EVENT_CLIP_BEFORE: 5,
+        CONF_EVENT_CLIP_AFTER: 30,
     }
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], chosen

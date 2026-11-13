@@ -1,5 +1,5 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
-import { B as i, Bt as a, V as o, mt as s } from "./live-BD2sk3pJ.js";
+import { B as i, V as a, Vt as o, mt as s } from "./live-B3rIzIdQ.js";
 import { a as c, c as l, r as u } from "./config-D80frQMF.js";
 import { t as d } from "./editor-event-DOL4ACcL.js";
 //#region src/card/editor.ts
@@ -33,7 +33,7 @@ var f = class extends r {
 		try {
 			this._cameras = (await s(e)).cameras;
 		} catch (e) {
-			this._error = a(e).message;
+			this._error = o(e).message;
 		} finally {
 			this._loading = !1;
 		}
@@ -97,7 +97,7 @@ var f = class extends r {
     </div>`;
 	}
 	_renderWarm(e, r) {
-		if (o(e)?.is_battery) return n`<p class="note">
+		if (a(e)?.is_battery) return n`<p class="note">
         A battery camera is never kept warm, so it can sleep: the card shows its last picture, and its video plays when
         tapped.
       </p>`;
@@ -116,7 +116,7 @@ var f = class extends r {
           @change=${(e) => {
 			let t = e.target.checked;
 			this._switchError = void 0, this.hass?.callService("switch", t ? "turn_on" : "turn_off", { entity_id: s }).catch((e) => {
-				this._switchError = a(e).message;
+				this._switchError = o(e).message;
 			});
 		}}
         />

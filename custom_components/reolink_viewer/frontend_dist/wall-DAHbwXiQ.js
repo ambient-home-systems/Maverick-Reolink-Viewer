@@ -1,7 +1,7 @@
 import { a as e, i as t, n, r, t as i } from "./lit-DdRjbP0M.js";
-import { At as a, B as o, Bt as s, Ct as c, Dt as l, Ft as u, Ot as d, P as f, R as p, V as m, d as h, et as g, ft as _, g as v, m as y, nt as b } from "./live-BD2sk3pJ.js";
-import { G as x, H as ee, V as S, X as C, Y as w, Z as T, c as E, f as D, p as O, u as k } from "./home-DJZam5_I.js";
-import { t as A } from "./tablet-Dzrlz5mg.js";
+import { At as a, B as o, Ct as s, Dt as c, It as l, Ot as u, P as d, R as f, V as p, Vt as m, d as h, et as g, ft as _, g as v, m as y, nt as b } from "./live-B3rIzIdQ.js";
+import { H as x, K as S, Q as C, U as ee, X as w, Z as T, c as E, f as D, p as O, u as k } from "./home-OYB8tDsh.js";
+import { t as A } from "./tablet-D5PcLiV7.js";
 //#region src/wall/arrange.ts
 function te(e, t) {
 	return e.cameras.length ? [...e.cameras] : [...t];
@@ -182,7 +182,7 @@ function H(e, t = 1) {
 	let n = /* @__PURE__ */ new Map(), r = [];
 	e.forEach((e, i) => {
 		if (!e) return;
-		let a = m(e.camera);
+		let a = p(e.camera);
 		if (!a) return;
 		let o = a.streams.sub?.encoding, s = o?.width && o.height ? `${String(o.width)}×${String(o.height)}` : void 0;
 		if (!a.streams.main && !a.streams.ext) {
@@ -287,7 +287,7 @@ var U = 12e4, W = 2e4, G = 120, K = 10, q = 60474e4, J = "rv-strip-live", ae = c
 		for (let e of n) this._asked.add(O(e));
 		await Promise.all(n.map(async (t) => {
 			try {
-				let { urls: n } = await c(e, t.camera_id, [t.start], K), r = n[0]?.url;
+				let { urls: n } = await s(e, t.camera_id, [t.start], K), r = n[0]?.url;
 				r && (this._thumbs = new Map(this._thumbs).set(O(t), r));
 			} catch {}
 		}));
@@ -296,7 +296,7 @@ var U = 12e4, W = 2e4, G = 120, K = 10, q = 60474e4, J = "rv-strip-live", ae = c
 		if (!t.events.length) return;
 		let r = t.now, i = Math.max(Math.min(...t.events.map((e) => e.start)), r - q);
 		try {
-			let { marks: a } = await l(e, i, r);
+			let { marks: a } = await c(e, i, r);
 			if (n !== this._seq) return;
 			this._marked = new Set(D(t.events, a, i, r).marks.keys());
 		} catch {}
@@ -336,7 +336,7 @@ var U = 12e4, W = 2e4, G = 120, K = 10, q = 60474e4, J = "rv-strip-live", ae = c
 					} : e)
 				});
 			}
-			x(this, {
+			S(this, {
 				view: "device",
 				id: t.camera_id,
 				tab: "playback",
@@ -375,7 +375,7 @@ var U = 12e4, W = 2e4, G = 120, K = 10, q = 60474e4, J = "rv-strip-live", ae = c
       </button>
     </li>`;
 	}
-	static styles = [f, e`
+	static styles = [d, e`
       :host {
         display: block;
         flex: none;
@@ -508,12 +508,12 @@ var Y = {
 	tour_s: null
 };
 function oe(e, t) {
-	if (!e.cameras.length) return S([...t]);
+	if (!e.cameras.length) return x([...t]);
 	let n = new Map(t.map((e) => [e.id, e]));
 	return e.cameras.map((e) => e ? n.get(e) : void 0);
 }
 function se(e) {
-	let t = m(e)?.streams.sub?.encoding;
+	let t = p(e)?.streams.sub?.encoding;
 	return t?.width && t.height ? t.width / t.height : void 0;
 }
 var X = 3e3, Z = class extends i {
@@ -543,7 +543,7 @@ var X = 3e3, Z = class extends i {
 		_said: { state: !0 },
 		_over: { state: !0 }
 	};
-	_data = new p(this);
+	_data = new f(this);
 	_resize;
 	_clock;
 	_tour;
@@ -569,7 +569,7 @@ var X = 3e3, Z = class extends i {
 		}, this._wallFull = !1, this._now = Date.now(), this.card = !1, this.showBar = !0, this._asleep = !1;
 	}
 	connectedCallback() {
-		super.connectedCallback(), this.card || C("wall"), document.addEventListener("fullscreenchange", this._onFullscreen), document.addEventListener("visibilitychange", this._onVisibility), this.addEventListener("pointermove", this._onPointer), this.addEventListener("pointerdown", this._onPointer), this._onPointer(), this._keepAwake(), A.listenToFully(), this._asleep = A.asleep, this._unsleep = A.onSleep(() => {
+		super.connectedCallback(), this.card || T("wall"), document.addEventListener("fullscreenchange", this._onFullscreen), document.addEventListener("visibilitychange", this._onVisibility), this.addEventListener("pointermove", this._onPointer), this.addEventListener("pointerdown", this._onPointer), this._onPointer(), this._keepAwake(), A.listenToFully(), this._asleep = A.asleep, this._unsleep = A.onSleep(() => {
 			this._asleep = A.asleep;
 		}), this._tick();
 	}
@@ -633,13 +633,13 @@ var X = 3e3, Z = class extends i {
 	}
 	async _loadLayouts(e) {
 		try {
-			this._layouts = (await d(e)).layouts;
+			this._layouts = (await u(e)).layouts;
 		} catch (e) {
-			this._layouts = [], this._error = `The saved layouts could not be read: ${s(e).message}`;
+			this._layouts = [], this._error = `The saved layouts could not be read: ${m(e).message}`;
 		}
 	}
 	get _layout() {
-		let e = this._layouts ?? [], t = this.layoutId ?? (this.card ? void 0 : T());
+		let e = this._layouts ?? [], t = this.layoutId ?? (this.card ? void 0 : C());
 		return e.find((e) => e.id === t) ?? Y;
 	}
 	get _shown() {
@@ -686,7 +686,7 @@ var X = 3e3, Z = class extends i {
 		document.fullscreenElement === this ? document.exitFullscreen().catch(() => void 0) : this.requestFullscreen().catch(() => void 0);
 	}
 	_show(e) {
-		e || w(void 0), x(this, e ? {
+		e || w(void 0), S(this, e ? {
 			view: "wall",
 			layout: e
 		} : { view: "wall" });
@@ -706,7 +706,7 @@ var X = 3e3, Z = class extends i {
 		let n = this._layout, r = this._draft.name.trim();
 		if (!r) this._error = "Give the layout a name.";
 		else try {
-			let { layout: i } = await u(t, {
+			let { layout: i } = await l(t, {
 				...n.id && !e ? { id: n.id } : {},
 				name: r,
 				grid: this._draft.grid,
@@ -716,12 +716,12 @@ var X = 3e3, Z = class extends i {
 				siren: this._draft.siren,
 				strip: this._draft.strip
 			});
-			await this._loadLayouts(t), this._editing = !1, this._error = void 0, x(this, {
+			await this._loadLayouts(t), this._editing = !1, this._error = void 0, S(this, {
 				view: "wall",
 				layout: i.id
 			});
 		} catch (e) {
-			this._error = `Could not save it: ${s(e).message}`;
+			this._error = `Could not save it: ${m(e).message}`;
 		}
 	}
 	async _delete() {
@@ -729,11 +729,11 @@ var X = 3e3, Z = class extends i {
 		if (e && t.id) try {
 			await b(e, t.id), await this._loadLayouts(e), this._editing = !1, this._show("");
 		} catch (e) {
-			this._error = `Could not delete it: ${s(e).message}`;
+			this._error = `Could not delete it: ${m(e).message}`;
 		}
 	}
 	get _view() {
-		let e = this._layout, t = this._editing ? this._draft.grid : e.grid, n = this._data.cameras ?? [], r = new Map(n.map((e) => [e.id, e])), i = this._order ?? te(e, S([...n]).map((e) => e.id)), { width: a, height: o } = this._size, s = (e) => e.map((e) => e ? ee(m(e)) : void 0);
+		let e = this._layout, t = this._editing ? this._draft.grid : e.grid, n = this._data.cameras ?? [], r = new Map(n.map((e) => [e.id, e])), i = this._order ?? te(e, x([...n]).map((e) => e.id)), { width: a, height: o } = this._size, s = (e) => e.map((e) => e ? ee(p(e)) : void 0);
 		if (this._alone && r.has(this._alone)) return {
 			order: i,
 			perPage: 1,
@@ -764,13 +764,13 @@ var X = 3e3, Z = class extends i {
 	async _keep(e) {
 		let t = this.hass, n = this._layout;
 		if (t && n.id) try {
-			let { layout: r } = await u(t, {
+			let { layout: r } = await l(t, {
 				...n,
 				cameras: e
 			});
 			this._layouts = (this._layouts ?? []).map((e) => e.id === r.id ? r : e);
 		} catch (e) {
-			this._error = `Could not keep the new order: ${s(e).message}`;
+			this._error = `Could not keep the new order: ${m(e).message}`;
 		}
 	}
 	_enlarge(e) {
@@ -820,13 +820,13 @@ var X = 3e3, Z = class extends i {
 		clearInterval(this._tour), this._tour = void 0, this._tourEvery = 0;
 	}
 	render() {
-		let e = this._layout, t = this._data.cameras, i = this._view, { width: a, height: o } = this._size, s = this.layoutId !== void 0 && this._layouts !== void 0 && e.id !== this.layoutId, c = document.fullscreenEnabled && typeof this.requestFullscreen == "function", l = this._detecting(), u = new Map(S([...t ?? []]).map((e, t) => [e.id, t + 1]));
+		let e = this._layout, t = this._data.cameras, i = this._view, { width: a, height: o } = this._size, s = this.layoutId !== void 0 && this._layouts !== void 0 && e.id !== this.layoutId, c = document.fullscreenEnabled && typeof this.requestFullscreen == "function", l = this._detecting(), u = new Map(x([...t ?? []]).map((e, t) => [e.id, t + 1]));
 		return r`${this.card ? this._renderCardBar(e, i, s, c) : this._renderBar(e, i, s, c)}
       ${this._editing ? this._renderEditor(e) : this._error ? r`<p class="error" role="alert">${this._error}</p>` : n}
       ${t === void 0 ? r`<p class="note pad">${this._data.error ? `Live view could not load: ${this._data.error}` : "Loading…"}</p>` : this._renderCells(i.plan, i.shown, a, o, l, u)}
       ${t && this._shown.strip ? r`<rv-wall-strip
             .hass=${this.hass}
-            .cameras=${S([...t])}
+            .cameras=${x([...t])}
             .numbers=${u}
             .now=${l}
             .pictures=${this._data.images}
@@ -882,7 +882,7 @@ var X = 3e3, Z = class extends i {
         <button
           class="text with-icon"
           @click=${() => {
-			C("board"), x(this, { view: "live" });
+			T("board"), S(this, { view: "live" });
 		}}
         >
           ${g("close")}Board
@@ -951,7 +951,7 @@ var X = 3e3, Z = class extends i {
 		}}
     >
       ${e.slots.map((i, a) => {
-			let l = `grid-column: ${String(i.col + 1)} / span ${String(i.cols)}; grid-row: ${String(i.row + 1)} / span ${String(i.rows)}`, f = t[a], p = this._view, h = p.page * p.perPage + a, g = f?.name ?? "Empty cell", _ = f ? s.get(f.id) : void 0, v = this._alone ? "alone on the screen" : `cell ${String(a + 1)} of ${String(e.slots.length)}`;
+			let l = `grid-column: ${String(i.col + 1)} / span ${String(i.cols)}; grid-row: ${String(i.row + 1)} / span ${String(i.rows)}`, f = t[a], m = this._view, h = m.page * m.perPage + a, g = f?.name ?? "Empty cell", _ = f ? s.get(f.id) : void 0, v = this._alone ? "alone on the screen" : `cell ${String(a + 1)} of ${String(e.slots.length)}`;
 			return r`<div
           class="cell ${this._picked === h ? "picked" : ""} ${this._over === a ? "over" : ""}"
           style=${l}
@@ -995,7 +995,7 @@ var X = 3e3, Z = class extends i {
                 .number=${c.get(f.id)}
                 .hass=${this.hass}
                 .camera=${f}
-                .connection=${m(f)}
+                .connection=${p(f)}
                 .image=${this._data.images[f.id]}
                 .iceServers=${this._data.iceServers}
                 .warm=${o(this.hass, f)}
@@ -1123,7 +1123,7 @@ var X = 3e3, Z = class extends i {
       </p>
     </form>`;
 	}
-	static styles = [f, e`
+	static styles = [d, e`
       :host {
         display: flex;
         flex-direction: column;

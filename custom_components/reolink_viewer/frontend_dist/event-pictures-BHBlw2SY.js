@@ -1,6 +1,6 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
-import { Bt as i, Ct as a, P as o, d as s, et as c, m as l, wt as u } from "./live-BD2sk3pJ.js";
-import { c as d, l as f } from "./home-DJZam5_I.js";
+import { Ct as i, P as a, Vt as o, d as s, et as c, m as l, wt as u } from "./live-B3rIzIdQ.js";
+import { c as d, l as f } from "./home-OYB8tDsh.js";
 //#region src/components/event-pictures.ts
 var p = 5e3, m = 15, h = 5, g = 1e3;
 function _(e) {
@@ -63,7 +63,7 @@ var y = class extends r {
 			let a = v(i.events, t);
 			a && this._open(a);
 		} catch (e) {
-			r === this._loadSeq && (this._error = i(e).message);
+			r === this._loadSeq && (this._error = o(e).message);
 		}
 	}
 	async _open(e) {
@@ -72,7 +72,7 @@ var y = class extends r {
 		let n = ++this._picturesSeq;
 		this._stop(), this._selected = e.start, this._urls = [], this._index = 0, this._picture = "loading";
 		try {
-			let { urls: r } = await a(t, this.deviceId, _(e), h);
+			let { urls: r } = await i(t, this.deviceId, _(e), h);
 			if (n !== this._picturesSeq) return;
 			this._urls = r.map((e) => e.url), this._preload(1);
 		} catch {
@@ -181,7 +181,7 @@ var y = class extends r {
       </div>
     </figure>`;
 	}
-	static styles = [o, e`
+	static styles = [a, e`
       :host {
         display: block;
         padding: 16px 0;

@@ -27,7 +27,7 @@ put on it:
 | 8 | Unusual events: learning what is normal | High | 2–3 wk, then a week of learning | **Started** (2026-11-03). **Step 1 built** (v0.46.0): the detection journal, opt-in ("Learn what is normal"), with a 10-day head start from Home Assistant's recorder; on at the owner's since 2026-11-02, all 7 cameras. v0.46.1 keeps motion as bursts and a year of history (the owner's choices, from the first 10 days' sizes). **Step 2 built** (v0.47.0): Stamina's model, ported with its tests (MIT, in `THIRD_PARTY.md`), with a daily cap for a busy property; the Devices page shows each camera's state and the week's marks with their sentences. The owner's check: 3.6 marks a day at Balanced (243 a week without the cap). v0.47.1, the owner's choices: motion never marked, time counted once, one mark per incident across cameras; 5.1 a day, the journal 1.1 MB (about 2.8 MB a month). v0.47.2: only long stands out, a kind seen 10 times is known, only detections fire first; 5.3 a day. v0.47.3: an incident's later events take what fired before it; a mark always says why; the model saved between restarts; 5.3 a day, 39 without the cap. v0.47.4: anything seen 10 times is known, only "nothing fired first" raises; 1.4 a day, all rare by count. v0.47.5: Balanced aims at a few a day (floor 0, at most 3 a day), More knows a value after 20. **Step 3 built** (v0.48.0–v0.49.0), the owner's choice: marks on the timetable's rows with why, and an Unusual filter on Events (v0.48.0; the owner's check: 2.6 a day at Balanced); "What it has learned" on each camera's Overview, and a mark's count as a total (v0.49.0). **House-wide signals built** (v0.50.0): chosen in the options, kept beside the detections, learned and said. **Step 4 built** (v0.51.0): each detection scored as it begins and ends; `reolink_viewer_unusual`, an "unusual activity" sensor per camera, and a device trigger per camera, on Reolink Viewer's own device. See "Phase 8" |
 | 9 | The Wall: the Live page as a security monitor, with layouts, arranging, HD large tiles and the detection strip | Standard / High | 2–3 wk | **Done** (2026-11-10, v0.56.0): the owner validated v0.55.0's and v0.56.0's checklists. Started 2026-11-05. **Step 1 built** (v0.52.0): the Wall, its layouts (Auto by shape, 1, 2×2, 3×3, 4×4, 1+5, 1+7), saved per user on the server, `#wall/<id>`, each device remembering board or Wall; the owner's check: it works, nothing to scroll. **Step 2 built** (v0.53.0): swapping (drag, or Arrange and two taps), the large slot or alone by a double tap or Enter, the keyboard, pages and tours. **Step 3 built** (v0.54.0–v0.54.1): HD in the large tiles while a stream slot is spare, the NVR's budget 9 streams with 2 HD tiles (the capacity test). **Step 4 built** (v0.55.0): the detection strip, a tile lit at once by its sensor, and per layout the feeds' floodlight and siren buttons. **Step 5 built** (v0.56.0): the pointer hidden when still, the screen kept awake, the tiles asleep under Fully's screen off, and the Reolink Wall dashboard card. The owner's checks of v0.55.0 and v0.56.0 passed (2026-11-10): the phase is done. See "Phase 9" |
 | 10 | Scrubbing that shows the picture while dragging | Very high | 2–4 wk | **Done** (2026-11-13, v0.63.15): the owner's playback checks passed on every device, Chrome and Safari on the Mac, the iPhone app and the wall tablet (v0.63.10 made MSE painting show a lone key frame, for Chrome on plain HTTP and the tablet). Started 2026-11-10. **Step 0 built** (v0.57.0): the gate's measurements, the probe's scrub cuts and key frames, and the playback check's K row (key frames decoded one at a time); the owner's runs passed it (2026-11-10). **Step 1 built** (v0.58.0): the picture at a moment, from the server: a scrub session (a signed websocket), answered from a store of key frames found, the disk cache or a 2-second cut the device sends, taking its channel's turn; the playback check's F row. **Step 2 built** (v0.59.0): dragging over what the video has not buffered shows the server's key frame at the pointer, over the video, until release plays from there. **Step 4 built** (v0.60.0, the owner's ask): the playback check's P row replaces the hand checklist. **Step 3 built** (v0.62.0): a drag pauses the video, the server answers each picture before its cut's drain, and a release plays from the picture shown; the P row drags slowly alone and beside a second viewer. The owner's runs of v0.62.0 passed it on Front Yard Right and Garage (alone, a picture every 0.05–0.06 s; beside a second viewer, no stall); v0.62.1 follows from them. See "Phase 10" |
-| 11 | Playback and settings extras: zoom, event clips, filters, copying settings | Standard | 1–2 wk | **Started** (2026-11-13). **Step 1 built** (v0.64.0, Reset fixed in v0.64.1): zoom into the picture, on a recording and in live full screen. See "Phase 11" |
+| 11 | Playback and settings extras: zoom, event clips, filters, copying settings | Standard | 1–2 wk | **Started** (2026-11-13). **Steps 1 and 2 built**: zoom into the picture (v0.64.0, Reset fixed in v0.64.1); save this event (v0.65.0). See "Phase 11" |
 | 12 | Optional R&D: the Doorbell's recordings and talk | Very high | 3–5 wk, gated | Planned. See "Phase 12" |
 | 13 | Optional: live picture integrity and outside live sources | High | 1–1.5 wk, gated | Planned. See "Phase 13" |
 | 14 | Copies of detection clips on a NAS or cloud | High | — | **TBD** (the owner, 2026-11-02): may be built here later; sketched, not scheduled. See "Phase 14" |
@@ -8466,7 +8466,7 @@ Goal: smaller things found in the review of Stamina and reostream (PLAN.md
 | Step | Status |
 | --- | --- |
 | 1. Zoom into the picture | Built (v0.64.0), see "As built" below |
-| 2. Save this event | Not started |
+| 2. Save this event | Built (v0.65.0), see "As built" below |
 | 3. Filters that start useful | Not started |
 | 4. Copy settings to other cameras | Not started |
 | 5. Research: settings changed from factory | Not started; a note only |
@@ -8586,6 +8586,73 @@ and in Safari on the Mac, but Reset did nothing on the Playback page.
   - otherwise, a download cut (143) of that range, muxed by `BaichuanMuxer`.
   - Either way, the original samples are kept untouched.
 - **Named** `<camera>-<date>-<time>-<type>.mp4`.
+
+**As built (v0.65.0):**
+
+- **The cut** (`fmp4.py`):
+  - `clip_fragments` picks the fragments: from the sync fragment at or before
+    the start (`FragmentIndex.find`) to the last one starting before the
+    end.
+  - `write_clip` writes the init segment, then those fragments normalized
+    as for MSE.
+  - Every track's decode times move back by the earliest track's start, so
+    the clip starts at 0 and the tracks keep their places against each
+    other, as they played.
+  - The samples are copied as stored.
+- **From the cached copy** (`VodCache.async_write_clip`): it waits until the
+  index reaches the end (`_await_index`). A download stopped at a deep
+  start's cut is resumed. It holds the recording (a reader) meanwhile.
+- **The file** (`clips.py`, `EventClips`):
+  - ffmpeg rewrites the cut as a plain MP4 (`remux.async_flatten`: stream
+    copy, `moov` first). Without ffmpeg, or if the rewrite fails, the
+    fragmented cut is served as it is (`plain: false`).
+  - One clip at a time, within 5 minutes (`CLIP_TIMEOUT_S`), at most 30
+    minutes long. It is clamped to its recording.
+  - Kept 15 minutes, then deleted. The directory is emptied at setup and
+    unload.
+  - Named in HA's time zone: `<camera>-<YYYYMMDD>-<HHMMSS>-<type>.mp4`, the
+    event's start.
+- **The API:**
+  - `reolink_viewer/playback/save_event` takes a recording (as `playback/url`
+    does), the event's `start` and `end` (UTC ms) and its `label`.
+  - The margins come from the options (`event_clip_before`,
+    `event_clip_after`: 0 to 120 s, 10 by default).
+  - It opens the copy that reaches the end (`at`), and answers with a signed
+    `/api/reolink_viewer/event_clip/{token}` (an attachment), the clip's
+    name, size, and the stretch it holds.
+  - `playback/stats` counts the clips kept.
+- **The panel:**
+  - "Save event" sits beside "Download clip", which is now called "Download
+    recording", as it is the whole file.
+  - It saves the event at the play position (`eventToSave`: the latest one
+    started, until 15 s after its end), in the stream playing.
+  - While it is made: "Saving event…". Then the clip is downloaded at once
+    (a link clicked for it), and the button becomes "Event saved (2.4 MB)",
+    a link to download it again.
+  - A failure is a toast saying why.
+  - The toolbar's icon-button width (40 px) no longer applies to the buttons
+    with words, which had squeezed "Picture in picture" onto three lines.
+    The group wraps on a phone (checked on the preview at 1280 px and on an
+    iPhone 13).
+- **Not built: the device's download cut** (143) where the copy has not
+  reached the event yet.
+  - The copy reaches 45 minutes into an hour in 7 to 13 s on the owner's
+    NVR (the sub stream), so a save waits for it instead.
+  - Phase 5b's cut is the way to make HD saves deep in long recordings
+    quicker, should they prove slow on the hardware.
+- **Checks:**
+  - `test_fmp4.py`: the fragments chosen, the cut from time 0 with the
+    samples untouched, and tracks kept in step.
+  - `test_clips.py`, end to end through the fake NVR:
+    - the stretch and its fragments, the download and its auth;
+    - the 15 minutes' expiry;
+    - the options' margins, and clamping to the recording;
+    - the errors;
+    - a real H.264 and AAC recording becoming a plain MP4 (ffprobe: both
+      streams, 5.0 s);
+    - ffmpeg failing, a stall, a full disk, shutdown.
+  - In the panel: the event chosen, the button's states, the request, the
+    download and its link, a failure.
 
 #### Step 11.3: filters that start useful
 

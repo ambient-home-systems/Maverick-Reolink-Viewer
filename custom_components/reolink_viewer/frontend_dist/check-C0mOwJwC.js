@@ -1,6 +1,6 @@
-import { $ as e, Bt as t, Tt as n, Vt as r, it as i, jt as a, v as o, wt as s, yt as c } from "./live-BD2sk3pJ.js";
-import { at as l, nt as u } from "./home-DJZam5_I.js";
-import { a as d, n as f, o as p, r as m, s as h, t as g } from "./findings-ChjCOr3r.js";
+import { $ as e, Ht as t, Tt as n, Vt as r, it as i, jt as a, v as o, wt as s, yt as c } from "./live-B3rIzIdQ.js";
+import { ot as l, rt as u } from "./home-OYB8tDsh.js";
+import { a as d, n as f, o as p, r as m, s as h, t as g } from "./findings-6PHDV5xU.js";
 //#region src/playback/check-util.ts
 var _ = (e) => /iPhone|iPad|iPod/.test(e);
 function v(e) {
@@ -758,16 +758,16 @@ var Y = (e) => new Date(e).toLocaleTimeString(), jt = class {
 	stop() {
 		this._stopped = !0;
 	}
-	async _row(e, n) {
+	async _row(e, t) {
 		this._rowName = e;
 		try {
-			await n();
-		} catch (n) {
-			if (n instanceof wt) throw n;
-			let r = t(n).message;
-			this._log(`${e}  FAILED: ${r}`), this._plain.push({
+			await t();
+		} catch (t) {
+			if (t instanceof wt) throw t;
+			let n = r(t).message;
+			this._log(`${e}  FAILED: ${n}`), this._plain.push({
 				grade: "problem",
-				text: `The check's ${e} row could not finish: ${r}.`
+				text: `The check's ${e} row could not finish: ${n}.`
 			});
 		}
 	}
@@ -779,7 +779,7 @@ var Y = (e) => new Date(e).toLocaleTimeString(), jt = class {
 			this._log(""), this._log("Summary:");
 			for (let e of this._summary) this._log(`- ${e}`);
 		} catch (e) {
-			this._log(e instanceof wt ? "Stopped." : `Check failed: ${t(e).message}`);
+			this._log(e instanceof wt ? "Stopped." : `Check failed: ${r(e).message}`);
 		} finally {
 			this._t.player?.pause(), this.running = !1, this._log(`Done at ${(/* @__PURE__ */ new Date()).toLocaleTimeString()}.`), await this._save(!0), Gt(this.id);
 		}
@@ -965,11 +965,11 @@ var Y = (e) => new Date(e).toLocaleTimeString(), jt = class {
 			return;
 		}
 	}
-	async _fillReport(e, t = 90) {
-		let n = this._t.playing, a = e?.token ?? r(n?.base ?? n?.url ?? "");
+	async _fillReport(e, n = 90) {
+		let r = this._t.playing, a = e?.token ?? t(r?.base ?? r?.url ?? "");
 		if (!a) return "server: nothing played";
-		let o = e ? e.plain : n?.file === "plain", s = null;
-		for (let e = 0; e < t; e += 1) {
+		let o = e ? e.plain : r?.file === "plain", s = null;
+		for (let e = 0; e < n; e += 1) {
 			try {
 				s = (await i(this._t.hass, a)).cache;
 			} catch {
@@ -1174,26 +1174,26 @@ var Y = (e) => new Date(e).toLocaleTimeString(), jt = class {
 		this._log(`K  ${e.text}`), this._summary.push(`Key frames: ${e.short}`);
 	}
 	async _serverPictures() {
-		let n = this._t, r = z(n.day?.segments ?? [], it);
-		if (!r.length) {
+		let t = this._t, n = z(t.day?.segments ?? [], it);
+		if (!n.length) {
 			this._log("F  skipped: no recording on this day");
 			return;
 		}
 		let i;
 		try {
-			let { url: t } = await a(n.hass, n.deviceId, n.date);
-			i = new je(new WebSocket(e(t, location.href))), await i.ready();
+			let { url: n } = await a(t.hass, t.deviceId, t.date);
+			i = new je(new WebSocket(e(n, location.href))), await i.ready();
 		} catch (e) {
-			this._log(`F  the scrub session did not open: ${t(e).message}`), this._summary.push("Pictures from the server: the session did not open");
+			this._log(`F  the scrub session did not open: ${r(e).message}`), this._summary.push("Pictures from the server: the session did not open");
 			return;
 		}
 		try {
-			let e = [], t = await this._askPass(i, r, e), a = await this._askPass(i, r, []), o = await this._decodePictures(e), s = e.map((e) => (e.at - e.time) / 1e3), c = s.length ? ` · each ${Math.min(...s).toFixed(1)} to ${Math.max(...s).toFixed(1)} s before its moment` : "";
-			this._log(`F  Pictures from the server (scrub, ${String(r.length)} moments over the day): first ${oe(t)} · again ${oe(a)}${c}${o}`);
-			let l = n.day?.segments ?? [];
-			(t.missedAt ?? []).forEach((e, n) => {
-				this._log(`   no picture at ${Y(e)}, ${ae(l, e)}: ${t.missed[n] ?? "?"}`);
-			}), this._summary.push(`Pictures from the server: first ${oe(t)}; again ${oe(a)}`);
+			let e = [], r = await this._askPass(i, n, e), a = await this._askPass(i, n, []), o = await this._decodePictures(e), s = e.map((e) => (e.at - e.time) / 1e3), c = s.length ? ` · each ${Math.min(...s).toFixed(1)} to ${Math.max(...s).toFixed(1)} s before its moment` : "";
+			this._log(`F  Pictures from the server (scrub, ${String(n.length)} moments over the day): first ${oe(r)} · again ${oe(a)}${c}${o}`);
+			let l = t.day?.segments ?? [];
+			(r.missedAt ?? []).forEach((e, t) => {
+				this._log(`   no picture at ${Y(e)}, ${ae(l, e)}: ${r.missed[t] ?? "?"}`);
+			}), this._summary.push(`Pictures from the server: first ${oe(r)}; again ${oe(a)}`);
 		} finally {
 			i.close();
 		}
@@ -1309,7 +1309,7 @@ var Y = (e) => new Date(e).toLocaleTimeString(), jt = class {
 			...v ? { paintFailure: v } : {}
 		};
 	}
-	async _dragBeside(e, n, r) {
+	async _dragBeside(e, t, n) {
 		let i = this._t.openViewer(), a = e;
 		try {
 			let o;
@@ -1320,7 +1320,7 @@ var Y = (e) => new Date(e).toLocaleTimeString(), jt = class {
 					startMs: void 0,
 					source: i.source,
 					recording: a,
-					why: t(e).message,
+					why: r(e).message,
 					...await this._viewerServer(i)
 				};
 			}
@@ -1330,7 +1330,7 @@ var Y = (e) => new Date(e).toLocaleTimeString(), jt = class {
 				recording: a,
 				...await this._viewerServer(i)
 			};
-			let s = ue(() => i.position), c = await this._dragPass(n, r, G.ms * this.timeScale), l = s.stop(), u = o > ht ? await this._viewerServer(i) : {};
+			let s = ue(() => i.position), c = await this._dragPass(t, n, G.ms * this.timeScale), l = s.stop(), u = o > ht ? await this._viewerServer(i) : {};
 			return {
 				startMs: o,
 				source: i.source,
@@ -1344,9 +1344,9 @@ var Y = (e) => new Date(e).toLocaleTimeString(), jt = class {
 		}
 	}
 	async _viewerServer(e) {
-		let t = r(e.url ?? "");
-		return t ? { server: await this._fillReport({
-			token: t,
+		let n = t(e.url ?? "");
+		return n ? { server: await this._fillReport({
+			token: n,
 			plain: !1
 		}, 5) } : {};
 	}
@@ -1507,7 +1507,7 @@ var Y = (e) => new Date(e).toLocaleTimeString(), jt = class {
 			});
 			return t.count === null ? { error: t.error ?? "not said" } : { count: t.count };
 		} catch (e) {
-			return { error: t(e).message };
+			return { error: r(e).message };
 		}
 	}
 	async _backAtRest(e, t) {
@@ -1574,12 +1574,12 @@ var Y = (e) => new Date(e).toLocaleTimeString(), jt = class {
 		return ` · VideoDecoder: ${String(n.length)} of ${String(t.length)} decode` + (a === void 0 ? "" : `, median ${a.toFixed(1)} ms each with its own decoder`);
 	}
 	async _keyLine(e) {
-		let n = this._t.player, r = n?.current, i = r?.mse;
-		if (!n || !r || !i) return {
+		let t = this._t.player, n = t?.current, i = n?.mse;
+		if (!t || !n || !i) return {
 			text: `${e} skipped: nothing playing through MSE (the file player has no fragments to read)`,
 			short: `${e} skipped`
 		};
-		let a = Math.round(Math.max(0, (n.time ?? r.start) - r.start));
+		let a = Math.round(Math.max(0, (t.time ?? n.start) - n.start));
 		try {
 			let t = await i.fetch(`${i.base}/frags?at=${String(a)}&ms=${String(nt)}&bytes=${String(rt)}`), n = t.headers.get("X-RV-Source") ?? "file", r = await i.fetch(`${i.base}/init?source=${n}`);
 			if (!t.ok || !r.ok) return {
@@ -1602,10 +1602,10 @@ var Y = (e) => new Date(e).toLocaleTimeString(), jt = class {
 				text: `${l.text} · from the ${n}`,
 				short: l.short
 			};
-		} catch (n) {
-			if (n instanceof wt) throw n;
+		} catch (t) {
+			if (t instanceof wt) throw t;
 			return {
-				text: `${e}: ${t(n).message}`,
+				text: `${e}: ${r(t).message}`,
 				short: `${e} failed`
 			};
 		}
@@ -1709,8 +1709,8 @@ var Y = (e) => new Date(e).toLocaleTimeString(), jt = class {
 		};
 	}
 	async _link() {
-		let e = this._t, n = e.playing, r = e.hass.fetchWithAuth?.bind(e.hass), i = n?.base, a = n?.url ?? n?.clip_url, o, s = "of the cached recording";
-		if (i && r ? (s = "of fragments", o = (e) => r(`${i}/frags?first=0&ms=${String(Qe)}&bytes=${String(Xe)}`, {
+		let e = this._t, t = e.playing, n = e.hass.fetchWithAuth?.bind(e.hass), i = t?.base, a = t?.url ?? t?.clip_url, o, s = "of the cached recording";
+		if (i && n ? (s = "of fragments", o = (e) => n(`${i}/frags?first=0&ms=${String(Qe)}&bytes=${String(Xe)}`, {
 			cache: "no-store",
 			signal: e
 		})) : a && (o = (e) => fetch(a, {
@@ -1739,7 +1739,7 @@ var Y = (e) => new Date(e).toLocaleTimeString(), jt = class {
 				text: `Recordings come from Home Assistant at ${a.toFixed(0)} Mbit/s: ` + (a >= 16 ? "plenty for HD." : a >= 4 ? "enough for SD; HD may pause to load." : "SD may pause to load.")
 			});
 		} catch (e) {
-			this._log(`L  Link test failed: ${t(e).message}`);
+			this._log(`L  Link test failed: ${r(e).message}`);
 		} finally {
 			clearTimeout(u);
 		}
@@ -1950,24 +1950,24 @@ function Vt(e, t) {
 	}), o = i.length > 10 ? ` | … ${i.length - 10} more` : "", s = r.length - i.length, c = [...new Set(i.map((e) => e.nextHopProtocol).filter(Boolean))].join("/");
 	return `requests${c ? ` (${c})` : ""}: ${i.length} sent${s ? `, ${s} cancelled before sending` : ""}: ${a.join(" | ")}${o}`;
 }
-async function Ht(e, n, r) {
+async function Ht(e, t, n) {
 	let i = navigator.mediaCapabilities;
 	if (!i?.decodingInfo) return "MediaCapabilities absent";
 	let a = [];
 	for (let o of ["file", "media-source"]) try {
-		let t = await i.decodingInfo({
+		let r = await i.decodingInfo({
 			type: o,
 			video: {
 				contentType: `video/mp4; codecs="${e}"`,
-				width: n,
-				height: r,
+				width: t,
+				height: n,
 				bitrate: 8e6,
 				framerate: 25
 			}
 		});
-		a.push(`${o}: ${t.supported ? "supported" : "not supported"}${t.supported ? `, ${t.smooth ? "smooth" : "not smooth"}, ${t.powerEfficient ? "power efficient" : "not power efficient"}` : ""}`);
+		a.push(`${o}: ${r.supported ? "supported" : "not supported"}${r.supported ? `, ${r.smooth ? "smooth" : "not smooth"}, ${r.powerEfficient ? "power efficient" : "not power efficient"}` : ""}`);
 	} catch (e) {
-		a.push(`${o}: ${t(e).message}`);
+		a.push(`${o}: ${r(e).message}`);
 	}
 	return a.join(" · ");
 }

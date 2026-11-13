@@ -1,6 +1,6 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
-import { Bt as i, Et as a, P as o, dt as s, et as c, g as l, n as u } from "./live-BD2sk3pJ.js";
-import { G as d, J as f, r as p } from "./home-DJZam5_I.js";
+import { Et as i, P as a, Vt as o, dt as s, et as c, g as l, n as u } from "./live-B3rIzIdQ.js";
+import { K as d, Y as f, r as p } from "./home-OYB8tDsh.js";
 //#region src/components/learning-check.ts
 var m = (e, t) => `${e.toLocaleString("en-US")} ${t}${e === 1 ? "" : "s"}`, h = (e) => e.replace(/_/g, " ");
 function g(e, t, n) {
@@ -99,7 +99,7 @@ var v = class extends r {
 		try {
 			this._state = await s(e);
 		} catch (e) {
-			this._state = { error: i(e).message };
+			this._state = { error: o(e).message };
 		}
 	}
 	render() {
@@ -114,13 +114,13 @@ var v = class extends r {
 		if (e) {
 			this._check = "running";
 			try {
-				let t = await a(e), n = e.config?.time_zone, r = this._state, i = g(t, n, new Map(r !== "loading" && !("error" in r) && r.enabled ? r.cameras.map((e) => [e.id, e.name]) : []));
+				let t = await i(e), n = e.config?.time_zone, r = this._state, a = g(t, n, new Map(r !== "loading" && !("error" in r) && r.enabled ? r.cameras.map((e) => [e.id, e.name]) : []));
 				this._check = {
-					lines: i,
-					report: _(i, Date.now(), n)
+					lines: a,
+					report: _(a, Date.now(), n)
 				};
 			} catch (e) {
-				this._check = { error: i(e).message };
+				this._check = { error: o(e).message };
 			}
 		}
 	}
@@ -256,7 +256,7 @@ var v = class extends r {
         it has seen since against that.
       </p>`;
 	}
-	static styles = [o, e`
+	static styles = [a, e`
       :host {
         display: block;
       }
@@ -467,7 +467,7 @@ var E = class extends r {
       </button>
     </li>`;
 	}
-	static styles = [o, e`
+	static styles = [a, e`
       :host {
         display: flex;
         flex-direction: column;

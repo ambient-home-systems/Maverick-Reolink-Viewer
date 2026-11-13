@@ -483,6 +483,15 @@ The camera's recordings, from its NVR or its own SD card.
   recording, the next one plays by itself.
 - **SD / HD**: switch quality; playback carries on from the same moment. HD may take
   a few seconds to start: the recorder sends the full-quality recording first.
+- **Speed**: from half speed to 8 times.
+- The buttons under the timeline (**Person 6**, **Vehicle 3**, …) show only those
+  events, with how many there were.
+- **Picture in picture** keeps the recording playing in a small window.
+- **Save event** saves the event playing as an MP4 (see
+  [Save an event](#save-an-event)). **Download recording** downloads the whole
+  recording it is in.
+
+A camera with no recordings to play says why, and what to do.
 
 #### Zoom into the picture
 
@@ -500,12 +509,27 @@ It zooms up to 8×, and never past the picture's edges into the black around it.
 zoomed, a pill at the top shows how far, with **Reset**. On a recording, the video's own
 controls hide while zoomed (they would be zoomed too): **Reset** brings them back.
 Dragging along the timeline while zoomed shows the same part of each picture.
-- **Speed**: from half speed to 8 times.
-- The buttons under the timeline (**Person 6**, **Vehicle 3**, …) show only those
-  events, with how many there were.
-- **Picture in picture** keeps the recording playing in a small window.
 
-A camera with no recordings to play says why, and what to do.
+#### Save an event
+
+While an event plays, **Save event** under the player saves it as an MP4: from 10
+seconds before it starts to 10 seconds after it ends, in the quality playing (SD or
+HD). It is downloaded as soon as it is made, named for the camera, the day, the time
+and what was seen: `front-door-20261113-081603-person.mp4`.
+
+- It starts at the picture just before that (a key frame, where a video can start),
+  so it may hold a second or two more. Nothing is re-encoded: it is the recording's
+  own video and sound.
+- It takes as long as the recording takes to copy that far from the recorder: at
+  once if it is already copied, often a few seconds, longer for HD deep in a long
+  recording. The button says **Saving event…** meanwhile.
+- Once saved, the button becomes **Event saved**, with the file's size: click it to
+  download it again within the next 15 minutes.
+- A clip stays within its recording: an event at the very start or end of one gets
+  what that recording holds.
+- How much it keeps before and after: **Settings → Devices & services → Reolink
+  Viewer → Configure → Save event: seconds before the event / after the event** (0
+  to 120 seconds).
 
 #### Starting deep in a recording
 
@@ -527,7 +551,8 @@ recordings over the Reolink protocol.**
   30 seconds). Everything else plays as before.
 - The recording is then copied in two pieces: up to that moment as before, the
   rest from the recorder's answer, so nothing is fetched twice. Downloading the
-  clip, or the file player, fetches the rest of the copy first.
+  recording, saving an event, or the file player, fetches the rest of the copy
+  first.
 - Speeds, pausing and jumping work as usual. Jumping back before that moment plays
   from the copy.
 - While it is in use, the recorder counts one more signed-in user, for about 30

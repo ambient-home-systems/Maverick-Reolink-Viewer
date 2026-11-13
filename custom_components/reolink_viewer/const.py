@@ -63,6 +63,10 @@ CONF_UNUSUAL_SENSITIVITY: Final = "unusual_sensitivity"
 CONF_UNUSUAL_SCOPE: Final = "unusual_scope"
 # Phase 8: house-wide signals (anyone home, the alarm...) learned with, by entity id.
 CONF_UNUSUAL_SIGNALS: Final = "unusual_signals"
+# Phase 11 step 2: "Save event" keeps this much before and after the event (s).
+CONF_EVENT_CLIP_BEFORE: Final = "event_clip_before"
+CONF_EVENT_CLIP_AFTER: Final = "event_clip_after"
+DEFAULT_EVENT_CLIP_MARGIN: Final = 10
 
 # Playback caches (under HA's cache directory) and their size caps.
 VOD_CACHE_DIR: Final = "vod"
@@ -73,5 +77,7 @@ THUMB_CACHE_DIR: Final = "thumbs"
 SCRUB_CACHE_DIR: Final = "scrub"
 # Each camera's last picture (live tiles show it at once).
 LIVE_IMAGES_DIR: Final = "live_images"
+# Phase 11 step 2: saved events' clips, each kept for a quarter of an hour.
+EVENT_CLIPS_DIR: Final = "event_clips"
 VOD_CACHE_MAX_BYTES: Final = 8 * 1024**3
 THUMB_CACHE_MAX_BYTES: Final = 256 * 1024**2
