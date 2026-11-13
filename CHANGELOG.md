@@ -3,6 +3,27 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.63.13
+
+From the owner's playback checks of 0.63.12: the iPhone app over Tailscale found no
+problem, and dragging on the wall tablet showed a picture every 0.05 s. With them,
+dragging has passed on every device: Chrome and Safari on the Mac, the iPhone app and
+the wall tablet.
+
+- **Today's timeline appears at once after a restart:** the first time the panel
+  opened after Home Assistant restarted, today's timeline took 5 to 9 s. Nothing was
+  kept for today, and the recorder searched each camera's whole day at once. Each
+  camera's last copy of today is now kept, and shown straight away, while the newer
+  part is fetched in the background. Only what came after that copy is searched.
+- **The panel's search goes first:** when the panel asks for a day that the background
+  warm-up is still waiting to fetch, that search moves to the front.
+- **The learning check and the nightly relearn:** alerts are judged with what was
+  learned up to the night before. The panel's Unusual tags are judged again each night
+  with what was learned since. An alert from before the last relearn that is no longer
+  tagged is now a note, not a fault ("judged again with what it had learned since").
+  Nothing needs marking by hand: Reolink Viewer learns only from what the cameras
+  detect.
+
 ## 0.63.12
 
 From the owner's playback checks of 0.63.11 on Garage. In Chrome on the Mac, everything

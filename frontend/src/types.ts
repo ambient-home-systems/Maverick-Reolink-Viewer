@@ -500,8 +500,13 @@ export type UnusualCheck =
         when: "start" | "end" | "late" | null;
         automations: string[];
       }[];
-      /** Events fired for no mark. */
-      unmarked: { camera: string; kind: string; start: number; delay: number }[];
+      /**
+       * Events fired for no mark; `relearned` when it fired before the model the
+       * marks are scored with was built (the nightly relearn may judge it otherwise).
+       */
+      unmarked: { camera: string; kind: string; start: number; delay: number; relearned?: boolean }[];
+      /** When the model the panel's marks are scored with was built (epoch ms, v0.63.13). */
+      built_at?: number | null;
       /** The automations listening, and how. */
       automations: { entity_id: string; name: string; how: string; on: boolean; last_triggered: string | null }[];
       /** Seconds from a detection's start within which its event should fire. */

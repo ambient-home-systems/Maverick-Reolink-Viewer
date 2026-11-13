@@ -7032,10 +7032,10 @@ download cut, then the thumbnail.
 
 | Step | Status |
 | --- | --- |
-| 0. Measure first (the gate) | Built (v0.57.0). **The gate passes** (2026-11-10): a cut's key frame in 166–182 ms back to back on all six cameras, and a key frame decoded in 1.7 ms on desktop Chrome; the iPhone app's and the wall tablet's K rows still to come (they choose step 2's way of painting, not whether step 1 is built) |
-| 1. Key frames from the server | Built (v0.58.0–v0.58.1); the owner's check passed on desktop Chrome (2026-11-10); the iPhone app's and the wall tablet's still to run |
-| 2. Painting while dragging | Built (v0.59.0; v0.60.0 answers a drag's asks, which 0.59.0 never did); the owner's check: the playback check's P row |
-| 3. Press and release | Not started |
+| 0. Measure first (the gate) | Built (v0.57.0). **The gate passes** (2026-11-10): a cut's key frame in 166–182 ms back to back on all six cameras, and a key frame decoded in 1.7 ms on desktop Chrome. The iPhone app's K row (2026-11-12): decoded in 2.5–4 ms. The wall tablet on plain HTTP has no `VideoDecoder`, so it paints through MSE |
+| 1. Key frames from the server | Built (v0.58.0–v0.58.1). **Passed on every device** (2026-11-10 on desktop Chrome; 2026-11-12 on the iPhone app over Tailscale and the wall tablet on the LAN) |
+| 2. Painting while dragging | Built (v0.59.0; v0.60.0 answers a drag's asks, which 0.59.0 never did; v0.63.10 makes MSE painting show a lone key frame). **Passed on every device** (2026-11-12, the P row): Chrome on the Mac through Nabu Casa (WebCodecs) and on the LAN (MSE), the iPhone app (WebCodecs: a picture every 0.1–0.2 s), the wall tablet (MSE: every 0.05 s) |
+| 3. Press and release | Built (v0.62.0, see "Step 10.3: press and release"); release is ✓ on every device |
 | 4. The checks | The playback check's P row built (v0.60.0, the owner's ask: "add automated validation for all these checks"); the CI drag check (`scrub_check.cjs` against a fake key-frame endpoint) not yet |
 | 5. Optional: storyboards | Not started; only if step 0's gate fails |
 
@@ -8136,6 +8136,68 @@ the Mac, on the LAN over plain HTTP):** no problem found.
     painted, a gap of two frames) is still one.
   - The second viewer's recording named, and the server's record of a start
     that did not come.
+
+
+**The owner's runs of v0.63.12 (2026-11-12):**
+
+- **The iPhone app over Tailscale, 7:16 PM:** no problem found.
+  - R: 0.5× "7.5 fps painted of 7.5" ✓.
+  - P: a new picture every 0.21 s, the first after 1.05 s (more of them cut
+    by the device); again 0.12 s; release 0.8 s.
+  - P's second viewer: the 6:54:19 PM recording, from the cut, in 0.82 s.
+    The 27.5 s start did not come back.
+  - ESPHome held the loop 273 ms twice in 10 s, in `states.py in
+    __getattr__`: a template reading `states.<domain>`, every few seconds.
+    The owner had it fixed on their side; the tablet's run after it saw at
+    most 13 ms.
+- **HD by hand, Chrome on the LAN:** a start on an earlier day "very fast,
+  almost instantly" (a cut). The exact case v0.63.8 fixed, a start just past
+  where an HD download stopped, is left to its test.
+- **The wall tablet (Fully Kiosk, Android 16, Chrome 156 WebView, plain HTTP),
+  8:46 PM,** run by the owner's Claude on the server through Fully's
+  JavaScript injection:
+  - P: painted with MSE (no `VideoDecoder` over HTTP). A new picture every
+    0.05 s, the first after 0.44 s; fast caught up; release 0.4 s. v0.63.10's
+    end of stream works on Android's decoder too.
+  - Events 0.19–0.82 s; 0.5× to 8× smooth; V ✓; HD not offered (no HEVC at
+    2560×1920).
+  - **A1 ✗, 8.0 s:** the first open of today after a restart. Fresh (no copy
+    in memory), queue 1.2 s, the NVR's recordings search 7.2 s. The panel's
+    ask joined its own warm-up, which searches today on every camera at once
+    at prefetch priority. The runs after earlier restarts took 5–9 s the
+    same way.
+  - F: one picture of 10 missed, "no key frame within 1 s" from the device
+    (`SCRUB_KEY_TIMEOUT_S`); P missed 1 of 164. Left as it is.
+
+**v0.63.13, from them:**
+
+- **Today's last copy is kept across restarts** (`timeline_today` store,
+  `_keep_today` / `_kept_today`). It is a small store of its own, saved 30 s
+  after a change, so a minute's refresh does not rewrite a camera's 120
+  days. After a restart, a caller that accepts a stale copy (the panel,
+  `max_age` a day) gets it at once. The search then goes on from where the
+  copy ended (incremental), not from midnight. A copy of another day is not
+  used.
+- **A search joined while it waits is raised** (`Scheduler.raise_priority`,
+  `TimelineService._fetching`). A caller that joins a day search still
+  queued at a lower priority (the panel behind its warm-up) moves it up to
+  its own priority.
+- **The learning check and the nightly relearn:**
+  - The panel's marks are scored with the model of now; an alert was scored
+    with the model when it fired. So an alert that fired before the latest
+    relearn (`built_at`) and is not marked now is a note, not a ✗: "fired
+    before the last nightly relearn, and not marked since".
+  - Likewise a mark whose detection came before the relearn and fired
+    nothing: "not fired, marked since by the nightly relearn".
+  - The owner's "3 events fired for no mark" were of this kind. They are not
+    for the owner to mark: there is no marking by hand.
+- **Checks:**
+  - Today shown stale after a restart, then searched from the copy's end;
+    another day's copy unused.
+  - The panel's ask overtaking a queued warm-up (the old code searched the
+    other camera first).
+  - `raise_priority` moves only a queued job, to a higher priority.
+  - The learning check's notes and its ✗ for an alert after the relearn.
 
 #### Step 10.4: the checks
 

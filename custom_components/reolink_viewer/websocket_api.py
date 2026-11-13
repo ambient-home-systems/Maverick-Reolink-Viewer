@@ -1246,6 +1246,9 @@ async def ws_unusual_check(
         )
     marks = await unusual.async_marks(since=since, until=now)
     matched, unmarked = unusual_check.compare(marks, fired.entries(since))
+    # The panel's marks are scored with the model of now; what fired before it
+    # was built was scored with the one before, and may differ (v0.63.13).
+    built_at = unusual.model.built_at
     # Who listens: the device trigger (Reolink Viewer's own device), a camera's
     # "Unusual activity" sensor, or an event trigger.
     device = dr.async_get(hass).async_get_device(identifiers={UNUSUAL_DEVICE})
@@ -1275,7 +1278,8 @@ async def ws_unusual_check(
         msg["id"],
         {
             "enabled": True,
-            "built": bool(unusual.model.built_at),
+            "built": bool(built_at),
+            "built_at": int(built_at * 1000) if built_at else None,
             "since": int(since * 1000),
             "until": int(now * 1000),
             "signals": signals,
@@ -1286,6 +1290,7 @@ async def ws_unusual_check(
                     "kind": event["kind"],
                     "start": int(event["start"] * 1000),
                     "delay": round(event["fired"] - event["start"], 1),
+                    "relearned": bool(built_at) and event["fired"] < built_at,
                 }
                 for event in unmarked
             ],

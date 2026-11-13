@@ -329,11 +329,7 @@ class HostScheduler:
         job = self._by_key.get(key) if key is not None else None
         if job is not None:
             job.waiters += 1
-            if job.state == _QUEUED and priority < job.priority:
-                # Re-queue at the higher priority; the old heap entry goes stale.
-                job.priority = priority
-                job.seq = next(self._seq)
-                heapq.heappush(self._heap, (priority, job.seq, job))
+            self._raise(job, priority)
         else:
             future: asyncio.Future[Any] = asyncio.get_running_loop().create_future()
             # Mark exceptions as retrieved even if every waiter went away.
@@ -358,6 +354,24 @@ class HostScheduler:
             if not job.future.done():
                 self._release_waiter(job)
             raise
+
+    def raise_priority(self, key: Hashable, priority: Priority) -> bool:
+        """Move the queued job with ``key`` up to ``priority``; True if it moved.
+
+        For a caller that joins a job by its own means (the timeline's search
+        a panel waits on, joined while it was queued to warm, v0.63.13).
+        """
+        job = self._by_key.get(key)
+        return job is not None and self._raise(job, priority)
+
+    def _raise(self, job: _Job, priority: Priority) -> bool:
+        if job.state != _QUEUED or priority >= job.priority:
+            return False
+        # Re-queue at the higher priority; the old heap entry goes stale.
+        job.priority = priority
+        job.seq = next(self._seq)
+        heapq.heappush(self._heap, (priority, job.seq, job))
+        return True
 
     def _release_waiter(self, job: _Job) -> None:
         job.waiters -= 1
@@ -534,6 +548,11 @@ class Scheduler:
         return await self.host(host_key).run(
             factory, priority=priority, key=key, timeout=timeout, exclusive=exclusive
         )
+
+    def raise_priority(self, host_key: str, key: Hashable, priority: Priority) -> bool:
+        """Move a host's queued job up to ``priority``; True if it moved."""
+        scheduler = self._hosts.get(host_key)
+        return scheduler is not None and scheduler.raise_priority(key, priority)
 
     def stats(self) -> dict[str, dict[str, int]]:
         """Return statistics per host."""

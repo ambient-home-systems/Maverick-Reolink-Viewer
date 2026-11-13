@@ -288,6 +288,88 @@ async def test_future_day_and_errors(host: FakeHost, service: TimelineService) -
         await service.async_days(SOURCE, 2026, 9)
 
 
+async def test_today_kept_across_a_restart(
+    hass: HomeAssistant, host: FakeHost, service: TimelineService, clock: Clock
+) -> None:
+    """After a restart, today's last copy is shown at once and searched on (v0.63.13).
+
+    The owner's wall tablet waited 8 s for today after a restart: no copy in
+    memory, and the NVR's search of the whole day took 7.2 s.
+    """
+    today = date(2026, 10, 17)
+    host.files["sub"] = [
+        vf(wall(2026, 10, 17, 9, 0), 2),
+        vf(wall(2026, 10, 17, 12, 55), 1),
+    ]
+    _, timing = await service.async_day(SOURCE, today)
+    assert timing["cache"] == "fresh"
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=31))
+    await hass.async_block_till_done()
+
+    # A restart an hour later: a new service, nothing in memory.
+    clock.advance(3600)
+    host.files["sub"].append(vf(wall(2026, 10, 17, 13, 30), 1))
+    restarted = TimelineService(hass, Scheduler(default_limit=2))
+    day, timing = await restarted.async_day(SOURCE, today, max_age=86_400)
+    assert (timing["cache"], timing["age_s"]) == ("stale", 3600)
+    assert len(day.segments) == 2
+    assert len(host.searches) == 1
+    # Then the search goes on from where the copy ended, not from midnight.
+    day, timing = await restarted.async_day(SOURCE, today)
+    assert timing["cache"] == "incremental"
+    assert host.searches[-1][:2] == (wall(2026, 10, 17, 12, 50), clock.now)
+    assert len(day.segments) == 3
+
+    # A copy of another day is not today's: the next day is searched in full.
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=62))
+    await hass.async_block_till_done()
+    clock.now = wall(2026, 10, 18, 13, 0)
+    next_day = TimelineService(hass, Scheduler(default_limit=2))
+    _, timing = await next_day.async_day(SOURCE, date(2026, 10, 18), max_age=86_400)
+    assert timing["cache"] == "fresh"
+
+
+async def test_a_panel_joining_a_queued_warm_up_goes_first(
+    hass: HomeAssistant, host: FakeHost, clock: Clock
+) -> None:
+    """A panel's ask joining a search still queued to warm raises it (v0.63.13)."""
+    order: list[int] = []
+    real = host.async_search_day
+
+    async def search(
+        channel: int, start: datetime, end: datetime, stream: str
+    ) -> DaySearch:
+        order.append(channel)
+        return await real(channel, start, end, stream)
+
+    host.async_search_day = search  # type: ignore[method-assign]
+    other = PlaybackSource("cam2", "Yard", "entry1", 5)
+    scheduler = Scheduler(default_limit=1)
+    with patch.object(bridge, "async_get_host", return_value=host):
+        service = TimelineService(hass, scheduler)
+        gate = asyncio.Event()
+        busy = asyncio.create_task(
+            scheduler.run("entry1", gate.wait, priority=Priority.PLAYBACK)
+        )
+        await asyncio.sleep(0)
+        # The warm-up: every camera's today at prefetch priority, the other camera queued first.
+        warm_other = asyncio.create_task(
+            service.async_day(other, date(2026, 10, 17), priority=Priority.PREFETCH)
+        )
+        warm = asyncio.create_task(
+            service.async_day(SOURCE, date(2026, 10, 17), priority=Priority.PREFETCH)
+        )
+        await asyncio.sleep(0.01)
+        panel = asyncio.create_task(service.async_day(SOURCE, date(2026, 10, 17)))
+        await asyncio.sleep(0.01)
+        gate.set()
+        _, (day, _t), (shown, _t2), _ = await asyncio.gather(
+            warm_other, warm, panel, busy
+        )
+    assert order == [16, 5]
+    assert shown is day
+
+
 async def test_concurrent_requests_share_one_search(
     host: FakeHost, service: TimelineService
 ) -> None:

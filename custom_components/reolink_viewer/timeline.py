@@ -24,7 +24,7 @@ whole past day takes 13 to 16 s (Phase 6 run 2), so the caching matters more.
 import asyncio
 from calendar import monthrange
 from collections import OrderedDict
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Hashable
 from dataclasses import asdict, dataclass, field
 from datetime import date, datetime, timedelta
 import logging
@@ -51,6 +51,10 @@ _LOGGER = logging.getLogger(__name__)
 
 STORAGE_VERSION = 1
 STORAGE_KEY = "reolink_viewer.timeline.{key}"
+# Each camera's last copy of today, kept across restarts (v0.63.13): small, and
+# saved apart from the camera's days so a minute's refresh does not write them all.
+TODAY_STORAGE_KEY = "reolink_viewer.timeline_today"
+TODAY_SAVE_DELAY = 30.0
 # Stored days of an older format are searched again (months are kept).
 # 2: the NVR's per-type alarm records for one moment are merged into one event.
 DAYS_FORMAT = 2
@@ -289,6 +293,10 @@ class TimelineService:
         self._months: dict[tuple[str, int, int], tuple[float, list[int], bool]] = {}
         self._warming_past = False
         self._warm_status: dict[str, WarmStatus] = {}
+        self._today_store: Store[dict[str, Any]] | None = None
+        self._today_kept: dict[str, Any] | None = None
+        # The day searches in the scheduler: (host, its key) by the day's key.
+        self._fetching: dict[tuple[Any, ...], tuple[str, Hashable]] = {}
 
     # ---- Storage ----
 
@@ -316,6 +324,39 @@ class TimelineService:
             for old in sorted(days)[:-MAX_STORED_DAYS]:
                 del days[old]
         self._stores[key].async_delay_save(lambda: data, SAVE_DELAY)
+
+    async def _today_copies(self) -> dict[str, Any]:
+        if self._today_kept is None:
+            store: Store[dict[str, Any]] = Store(
+                self._hass, STORAGE_VERSION, TODAY_STORAGE_KEY
+            )
+            self._today_store = store
+            loaded = await store.async_load()
+            days = (
+                loaded.get("days")
+                if isinstance(loaded, dict) and loaded.get("format") == DAYS_FORMAT
+                else None
+            )
+            self._today_kept = days if isinstance(days, dict) else {}
+        return self._today_kept
+
+    async def _kept_today(self, key: str, stream: str, iso: str) -> Day | None:
+        """Return the copy of today kept for a camera's stream, if it is of ``iso``."""
+        kept = (await self._today_copies()).get(f"{key}/{stream}")
+        if not isinstance(kept, dict) or kept.get("date") != iso:
+            return None
+        try:
+            return Day.from_dict(kept)
+        except KeyError, TypeError:
+            return None
+
+    async def _keep_today(self, key: str, stream: str, day: Day) -> None:
+        copies = await self._today_copies()
+        copies[f"{key}/{stream}"] = day.to_dict()
+        if (store := self._today_store) is not None:
+            store.async_delay_save(
+                lambda: {"format": DAYS_FORMAT, "days": copies}, TODAY_SAVE_DELAY
+            )
 
     def _remember(self, mkey: tuple[str, str, str], day: Day) -> None:
         self._memory[mkey] = day
@@ -390,6 +431,13 @@ class TimelineService:
                 return day_data, {"cache": "store", "total_ms": _ms(began)}
 
         is_today = day == now_local.date()
+        if is_today and cached is None:
+            # Today's last copy, kept across a restart (v0.63.13): shown at once
+            # to a caller that accepts a stale copy, and searched on from where
+            # it ended (the owner's tablet waited 8 s for today after a restart).
+            cached = await self._kept_today(source.key, stream, iso)
+            if cached is not None:
+                self._remember(mkey, cached)
         if is_today and cached is not None:
             age = _wall_time() - cached.fetched_at
             # A copy whose event search failed is never current: it is searched
@@ -411,7 +459,12 @@ class TimelineService:
                 priority=priority,
             )
 
-        result, timing = await self._dedupe(("day", *mkey), fetch)
+        dkey = ("day", *mkey)
+        if (queued := self._fetching.get(dkey)) is not None:
+            # Joining a search still queued at a lower priority (a panel's ask
+            # behind its warm-up of every camera, v0.63.13): it goes first now.
+            self._scheduler.raise_priority(*queued, priority)
+        result, timing = await self._dedupe(dkey, fetch)
         timing["total_ms"] = _ms(began)
         if not is_today and (warm := self._warm_status.get(source.key)) is not None:
             timing["warm"] = warm.describe(iso)
@@ -491,16 +544,21 @@ class TimelineService:
                 _LOGGER.debug("Event search of %s failed: %s", source.name, err)
                 return bridge.DaySearch([], [], type(err).__name__)
 
+        key = ("day", source.channel, stream, window_start, window_end)
+        joined = ("day", source.key, stream, empty.date)
+        self._fetching[joined] = (source.entry_id, key)
         try:
             search = await self._scheduler.run(
                 source.entry_id,
                 job,
                 priority=priority,
-                key=("day", source.channel, stream, window_start, window_end),
+                key=key,
                 timeout=SEARCH_TIMEOUT,
             )
         except Exception as err:
             raise TimelineError(f"day search failed: {type(err).__name__}") from err
+        finally:
+            self._fetching.pop(joined, None)
         search_ms = _ms(searched)
         segments, events, hint = convert_search(search, tz)
         failed = search.events_error is not None
@@ -524,6 +582,8 @@ class TimelineService:
             data = await self._data(source.key)
             data[stream][day.date] = day.to_dict()
             self._save(source.key)
+        elif day.date == now_local.date().isoformat():
+            await self._keep_today(source.key, stream, day)
         timing = {
             "cache": "incremental" if incremental else "fresh",
             "search_ms": search_ms,

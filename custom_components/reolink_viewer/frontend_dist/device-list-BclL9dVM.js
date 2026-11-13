@@ -1,6 +1,6 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
 import { Ct as i, Lt as a, Z as o, ct as s, j as c, n as l, p as u } from "./live-DbkkZT-0.js";
-import { G as d, J as f, r as p } from "./home-JF-D5pSQ.js";
+import { G as d, J as f, r as p } from "./home-xPpoRa6e.js";
 //#region src/components/learning-check.ts
 var m = (e, t) => `${e.toLocaleString("en-US")} ${t}${e === 1 ? "" : "s"}`, h = (e) => e.replace(/_/g, " ");
 function g(e, t, n) {
@@ -23,29 +23,37 @@ function g(e, t, n) {
 	let o = `since ${r(e.since)}`, s = e.marks;
 	if (!s.length) a.push({ text: `No mark ${o}: nothing to compare yet. Each mark from now on is compared with the event fired for it; open this again in a few days.` });
 	else {
-		let t = s.filter((e) => e.fired === 1), n = s.filter((e) => e.fired === 0), c = s.filter((e) => e.fired > 1), l = (e) => `${r(e.start)}, ${h(e.kind)} on ${(e.cameras ?? []).join(", ") || i(e.camera)}`;
+		let t = s.filter((e) => e.fired === 1), n = e.built_at ?? void 0, c = s.filter((e) => e.fired === 0 && (n === void 0 || e.start >= n)), l = s.filter((e) => e.fired === 0 && n !== void 0 && e.start < n), u = s.filter((e) => e.fired > 1), d = (e) => `${r(e.start)}, ${h(e.kind)} on ${(e.cameras ?? []).join(", ") || i(e.camera)}`;
 		a.push({
-			ok: t.length === s.length,
+			ok: t.length + l.length === s.length,
 			text: `${m(s.length, "mark")} ${o}: ${String(t.length)} of ${String(s.length)} fired its event once`,
-			details: [...n.map((e) => `not fired: ${l(e)}`), ...c.map((e) => `fired ${String(e.fired)} times: ${l(e)}`)]
+			details: [
+				...c.map((e) => `not fired: ${d(e)}`),
+				...u.map((e) => `fired ${String(e.fired)} times: ${d(e)}`),
+				...l.map((e) => `not fired, marked since by the nightly relearn: ${d(e)}`)
+			]
 		});
-		let u = s.filter((e) => e.fired > 0);
-		if (u.length) {
-			let t = u.filter((e) => e.when === "start"), n = u.filter((e) => e.when === "end"), r = u.filter((e) => e.when === "late");
+		let f = s.filter((e) => e.fired > 0);
+		if (f.length) {
+			let t = f.filter((e) => e.when === "start"), n = f.filter((e) => e.when === "end"), r = f.filter((e) => e.when === "late");
 			a.push({
 				ok: r.length === 0,
-				text: `${String(t.length)} of ${String(u.length)} fired within ${String(e.prompt_s)} s of the detection's start` + (n.length ? `, ${String(n.length)} at its end (it stood out by its length)` : ""),
-				details: r.map((e) => `late, after ${String(e.delay ?? "?")} s: ${l(e)}`)
+				text: `${String(t.length)} of ${String(f.length)} fired within ${String(e.prompt_s)} s of the detection's start` + (n.length ? `, ${String(n.length)} at its end (it stood out by its length)` : ""),
+				details: r.map((e) => `late, after ${String(e.delay ?? "?")} s: ${d(e)}`)
 			});
 		}
 	}
-	if (e.unmarked.length ? a.push({
+	let c = e.unmarked.filter((e) => !e.relearned), l = e.unmarked.filter((e) => e.relearned), d = (e) => `${r(e.start)}, ${h(e.kind)} on ${i(e.camera)}`;
+	if (c.length ? a.push({
 		ok: !1,
-		text: `${m(e.unmarked.length, "event")} fired for no mark`,
-		details: e.unmarked.map((e) => `${r(e.start)}, ${h(e.kind)} on ${i(e.camera)}`)
+		text: `${m(c.length, "event")} fired for no mark`,
+		details: c.map(d)
 	}) : s.length && a.push({
 		ok: !0,
 		text: "No event fired that is not marked"
+	}), l.length && a.push({
+		text: `${m(l.length, "event")} fired before the last nightly relearn, and not marked since: the relearn judged them again with what it had learned since (expected now and then)`,
+		details: l.map(d)
 	}), !e.automations.length) a.push({
 		ok: !1,
 		text: "No automation listens for unusual activity, so nothing is notified: make the user guide's example (Settings → Automations & scenes, triggered by Reolink Viewer's Unusual activity)."
