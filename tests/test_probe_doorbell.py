@@ -326,6 +326,8 @@ async def test_without_reolink_aio_023(
     (channel,) = host["doorbell"]["channels"]
     assert channel["cut"] == {"ok": False, "skipped": CUT_NEEDS_LIBRARY}
     assert channel["gate"]["playback"] == "untested"
+    # No picture came: neither under nor over the goal.
+    assert channel["gate"]["first_frame_under_goal"] is None
     assert channel["gate"]["talk"] == "go"
     assert channel["ok"] is True
 
