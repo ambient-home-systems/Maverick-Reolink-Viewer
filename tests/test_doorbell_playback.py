@@ -17,9 +17,13 @@ from reolink_aio.typings import VOD_trigger
 from custom_components.reolink_viewer import bridge, devices
 from custom_components.reolink_viewer.baichuan_source import BaichuanSource
 from custom_components.reolink_viewer.bridge import VodEvent, recordings_of_events
-from custom_components.reolink_viewer.cutstream import local_wall, muxed_cut
+from custom_components.reolink_viewer.cutstream import (
+    CutStreamError,
+    local_wall,
+    muxed_cut,
+)
 from custom_components.reolink_viewer.fmp4 import FragmentIndex
-from custom_components.reolink_viewer.scheduler import Scheduler
+from custom_components.reolink_viewer.scheduler import Priority, Scheduler
 from custom_components.reolink_viewer.vodcache import Recording, VodCache
 from homeassistant.core import HomeAssistant
 
@@ -371,3 +375,147 @@ def test_cut_request_names_the_main_stream() -> None:
     start = datetime(2026, 11, 19, 12, 30)
     body = bridge._download_cut_xml(0, "UID", "main", start, start)
     assert ET.fromstring(body).findtext(".//streamType") == "mainStream"
+
+
+async def _stream(
+    parts: list[bytes], *, hang: bool = False, fail: Exception | None = None
+) -> AsyncGenerator[bytes]:
+    """A cut's payload: ``parts``, then silence (``hang``) or ``fail``."""
+    for part in parts:
+        await asyncio.sleep(0)
+        yield part
+    if fail is not None:
+        raise fail
+    if hang:
+        await asyncio.Event().wait()
+
+
+async def _drain(muxed: AsyncGenerator[bytes]) -> bytes:
+    return b"".join([part async for part in muxed])
+
+
+async def test_a_cut_that_sends_nothing_says_so() -> None:
+    """Nothing within the first wait: the cut fails, saying so."""
+    timing: dict[str, Any] = {}
+    muxed = muxed_cut(
+        _stream([], hang=True),
+        origin_unix=ORIGIN.timestamp(),
+        timing=timing,
+        first_chunk_s=0.05,
+    )
+    with pytest.raises(CutStreamError, match="the doorbell sent nothing within"):
+        await _drain(muxed)
+    assert timing["cut"]["bytes"] == 0
+
+
+async def test_a_cut_that_stops_part_way_says_how_far() -> None:
+    """A silence before the recording's end fails it, with how much came."""
+    media = cut_media()
+    timing: dict[str, Any] = {}
+    muxed = muxed_cut(
+        _stream(chunked(media[: len(media) // 2], 700), hang=True),
+        origin_unix=ORIGIN.timestamp(),
+        timing=timing,
+        length_s=10,
+        quiet_s=0.05,
+    )
+    with pytest.raises(
+        CutStreamError, match=r"the doorbell stopped after \d+ of 10 s of the recording"
+    ):
+        await _drain(muxed)
+    assert 3 <= timing["cut"]["media_s"] <= 6
+    # Before any picture: said so too.
+    muxed = muxed_cut(
+        _stream([media[:20]], hang=True),
+        origin_unix=ORIGIN.timestamp(),
+        timing={},
+        quiet_s=0.05,
+    )
+    with pytest.raises(
+        CutStreamError, match="stopped after 20 bytes, before a picture"
+    ):
+        await _drain(muxed)
+
+
+async def test_a_quiet_device_at_the_recordings_end_is_its_end() -> None:
+    """Everything came and the device went quiet without an end: done."""
+    timing: dict[str, Any] = {}
+    data = await _drain(
+        muxed_cut(
+            _stream(chunked(cut_media(), 700), hang=True),
+            origin_unix=ORIGIN.timestamp(),
+            timing=timing,
+            length_s=12,
+            quiet_s=0.05,
+        )
+    )
+    assert timing["cut"]["ended"] == "quiet"
+    assert _index(data).duration_ms == pytest.approx(10_000, abs=250)
+
+
+async def test_a_failing_cut_is_named() -> None:
+    """Any other failure of the cut says what it was."""
+    muxed = muxed_cut(
+        _stream([b"x"], fail=RuntimeError("refused")),
+        origin_unix=ORIGIN.timestamp(),
+        timing={},
+    )
+    with pytest.raises(
+        CutStreamError, match="the doorbell's cut failed: RuntimeError: refused"
+    ):
+        await _drain(muxed)
+
+
+async def test_a_far_clock_is_placed_at_once() -> None:
+    """A key frame time far from the start is not held: placed at the start, at once."""
+    media = cut_media(ORIGIN + timedelta(hours=5))
+    parts = chunked(media, 700)
+    sent: list[int] = []
+
+    async def counted() -> AsyncGenerator[bytes]:
+        for index, part in enumerate(parts):
+            sent.append(index)
+            yield part
+
+    timing: dict[str, Any] = {}
+    muxed = muxed_cut(counted(), origin_unix=ORIGIN.timestamp(), timing=timing)
+    first = await anext(muxed)
+    # Out well before the end of the cut (a held start waits for 30 key frames).
+    assert len(sent) < len(parts)
+    rest = await _drain(muxed)
+    assert timing["cut"]["anchor"] == "asked time"
+    assert _index(first + rest).duration_ms == pytest.approx(10_000, abs=250)
+
+
+async def test_nothing_else_asks_the_host_during_its_cut(
+    hass: HomeAssistant, tmp_path: Path
+) -> None:
+    """The cut runs alone: a picture or search asked meanwhile waits for its end."""
+    host = QueueHost()
+    source = MagicMock(entry_id="door", channel=0, key="door|0")
+    first_ms = int(ORIGIN.timestamp() * 1000)
+    recording = Recording(source, "sub", "one", first_ms, first_ms + 10_000)
+    scheduler = Scheduler(default_limit=2, default_stream_limit=2)
+
+    async def picture() -> None:
+        host.order.append("picture")
+
+    async with ClientSession() as session:
+        with patch.object(bridge, "async_get_host", return_value=host):
+            cache = VodCache(hass, scheduler, tmp_path / "vod", 10**9, lambda: session)
+            await cache.async_setup()
+            try:
+                entry = await cache.async_open(recording)
+                await host.opened.wait()
+                asked = asyncio.ensure_future(
+                    scheduler.run("door", picture, priority=Priority.THUMBNAILS)
+                )
+                await asyncio.sleep(0.01)
+                assert host.order == ["open 00"]
+                host.gate.set()
+                await cache.async_wait(entry, complete=True)
+                await asked
+            finally:
+                await cache.async_shutdown()
+    await scheduler.async_shutdown()
+    assert host.order == ["open 00", "close 00", "picture"]

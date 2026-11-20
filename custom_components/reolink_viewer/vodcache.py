@@ -86,7 +86,7 @@ from homeassistant.helpers.storage import Store
 from . import bridge
 from .baichuan_source import BaichuanSource, Cut, CutError
 from .bridge import VodFile, VodMethod
-from .cutstream import local_wall, muxed_cut
+from .cutstream import CutStreamError, local_wall, muxed_cut
 from .devices import PlaybackSource
 from .fmp4 import (
     Fragment,
@@ -108,7 +108,7 @@ from .mp4index import (
     plan_reserve,
 )
 from .remux import RemuxError, async_flatten, is_plain, moov_size
-from .scheduler import Priority, Scheduler, StreamTicket
+from .scheduler import Priority, Scheduler, SchedulerClosedError, StreamTicket
 from .timeconv import from_ms
 
 _LOGGER = logging.getLogger(__name__)
@@ -1613,18 +1613,12 @@ class VodCache:
                 if queued:
                     # Behind another recording's cut of this camera.
                     entry.timing["cut_wait_ms"] = _ms(waited)
-                tz = host.timezone()
-                payload = host.async_stream_cut(
-                    rec.source.channel,
-                    local_wall(rec.start_ms / 1000, tz),
-                    local_wall(rec.end_ms / 1000, tz),
-                    rec.stream,
-                )
-                muxed = muxed_cut(
-                    payload, origin_unix=rec.start_ms / 1000, timing=entry.timing
-                )
-                async with contextlib.aclosing(muxed):
-                    yield muxed
+                alone = time.monotonic()
+                async with self._host_alone(rec.source.entry_id):
+                    # Its other requests running when the cut asked finish first.
+                    entry.timing["host_wait_ms"] = _ms(alone)
+                    async with self._cut_bytes(entry, host) as muxed:
+                        yield muxed
             return
         vod_file = VodFile(
             start=from_ms(rec.start_ms),
@@ -1651,6 +1645,63 @@ class VodCache:
             entry.timing.setdefault("headers_ms", _ms(began))
             entry.response = resp
             yield resp.content.iter_chunked(CHUNK)
+
+    @contextlib.asynccontextmanager
+    async def _cut_bytes(
+        self, entry: Entry, host: bridge.ReolinkHostHandle
+    ) -> AsyncIterator[AsyncIterator[bytes]]:
+        """Open a recording as one cut over HA's session, muxed (Phase 12b)."""
+        rec = entry.recording
+        tz = host.timezone()
+        payload = host.async_stream_cut(
+            rec.source.channel,
+            local_wall(rec.start_ms / 1000, tz),
+            local_wall(rec.end_ms / 1000, tz),
+            rec.stream,
+        )
+        muxed = muxed_cut(
+            payload,
+            origin_unix=rec.start_ms / 1000,
+            timing=entry.timing,
+            length_s=(rec.end_ms - rec.start_ms) / 1000,
+        )
+        async with contextlib.aclosing(muxed):
+            yield muxed
+
+    @contextlib.asynccontextmanager
+    async def _host_alone(self, entry_id: str) -> AsyncIterator[None]:
+        """Hold a host to one cut: an exclusive scheduler job while it runs.
+
+        The battery Doorbell's first played recording timed out (v0.70.0)
+        while its event pictures (298) and searches went over the same
+        session; the probe's cut, alone, came whole. So nothing else of this
+        integration asks the host while its cut runs: those wait their turn.
+        """
+        started = asyncio.Event()
+        done = asyncio.Event()
+
+        async def hold() -> None:
+            started.set()
+            await done.wait()
+
+        job = asyncio.ensure_future(
+            self._scheduler.run(
+                entry_id, hold, priority=Priority.PLAYBACK, exclusive=True
+            )
+        )
+        waiter = asyncio.ensure_future(started.wait())
+        try:
+            await asyncio.wait({job, waiter}, return_when=asyncio.FIRST_COMPLETED)
+            if not started.is_set():
+                job.result()  # the scheduler refused it (closed): raise that
+            yield
+        finally:
+            done.set()
+            waiter.cancel()
+            if not started.is_set():
+                job.cancel()
+            with contextlib.suppress(asyncio.CancelledError, SchedulerClosedError):
+                await job
 
     def _shift(self, rec: Recording, shifter: OffsetShifter, data: bytes) -> bytes:
         try:
@@ -2064,7 +2115,7 @@ def _unlink(path: Path) -> None:
 def _describe(err: BaseException) -> str:
     if isinstance(err, TimeoutError):
         return "timeout"
-    if isinstance(err, (VodCacheError, bridge.BridgeError)):
+    if isinstance(err, (VodCacheError, bridge.BridgeError, CutStreamError)):
         return str(err)
     if isinstance(err, ClientError):
         return f"connection error ({type(err).__name__})"

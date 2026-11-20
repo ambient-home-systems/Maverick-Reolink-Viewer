@@ -8859,7 +8859,7 @@ UDP (the desktop client could not add it by IP). Phase 5a captured talk on it:
 | Step | Status |
 | --- | --- |
 | a. UDP transport and the gate | **Done** (2026-11-20, v0.69.0): Home Assistant's own UDP session reused. The owner's runs: talk go (2026-11-14); playback go on HA 2026.11.2 (2026-11-20): first picture in 0.44 s, at twice real time, H.265 main stream |
-| b. SD playback | Built (v0.70.0): each recording fetched as one cut over HA's session, muxed into the cache's original; awaits the owner's check |
+| b. SD playback | Built (v0.70.0–v0.70.1): each recording fetched as one cut over HA's session, muxed into the cache's original. The owner's first try timed out (v0.70.0); v0.70.1 runs the cut alone on the Doorbell and says how far a failed cut came; awaits the owner's check |
 | c. Talk | Not started; after a go for talk |
 | d. Fallback for playback: clips by FTP | Not started; only if a says no to playback |
 
@@ -9061,6 +9061,46 @@ does not have.
   - the first picture comes in under 2 s;
   - the picture and sound are right, the event marks on the recording are
     where the events are, and Save event gives a file that plays.
+
+**The owner's first try (2026-11-20, v0.70.0): nothing played.**
+
+- **What it showed:**
+  - the Playback tab played video and its timeline (25 recordings, 39 events);
+  - the recording asked failed with "HTTP 502: timeout" (the cache: "failed: timeout");
+  - no window came.
+
+  reolink-aio's own timeout is a `TimeoutError`, so the cut asked of the Doorbell
+  either got no answer or went quiet for 30 s.
+- **What differed from 12a's probe, whose cut came whole:**
+  - the probe's cut ran with only a clock query beside it;
+  - opening Playback also asks the Doorbell for a picture per listed event
+    (298, 39 here) and for the day's search (272), over the same session,
+    while the cut streams.
+
+  A battery doorbell that serves one reading of its SD card at a time would
+  drop the cut for a picture.
+- **v0.70.1:**
+  - **The cut runs alone on the Doorbell:** an exclusive scheduler job
+    (`VodCache._host_alone`) for as long as it runs. The pictures and
+    searches asked meanwhile wait for it; those already running finish
+    first (`host_wait_ms`).
+  - **The cut keeps time itself** (`cutstream`):
+    - nothing within 20 s says "the doorbell sent nothing";
+    - a silence of 10 s before the recording's end says "the doorbell
+      stopped after N of M s of the recording";
+    - a silence once the recording's length has come is its end
+      (`ended: quiet`), for a device that does not mark it;
+    - any other failure is named ("the doorbell's cut failed: …").
+
+    The Playback tab says "The doorbell did not send this recording", and
+    Details holds the rest.
+  - **No held start:** the muxer holds a start whose key frame time is far
+    from the start asked, as perhaps another cut's, for up to 30 key frames.
+    That can never happen here (reolink-aio routes a cut's payload by its
+    message), so `hold_far=False` places such a start at once, at the
+    recording's start.
+- **If it still fails,** the error now says whether the Doorbell sent
+  nothing, stopped part way, or refused.
 
 #### Step 12c: talk
 

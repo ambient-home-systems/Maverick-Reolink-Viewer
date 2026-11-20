@@ -241,6 +241,7 @@ class BaichuanMuxer:
         asked_unix: float | None = None,
         *,
         rate: int | None = None,
+        hold_far: bool = True,
     ) -> None:
         """Mux a stream of one recording.
 
@@ -248,6 +249,10 @@ class BaichuanMuxer:
         0. ``asked_unix``: the moment asked for; the first key frame is placed
         there if its own POSIX time is far from it (a device clock off).
         ``rate``: the camera's counter rate from an earlier cut, if known.
+        ``hold_far``: hold a start far from the moment asked as perhaps another
+        cut's (the module doc); False where no other cut's blocks can arrive
+        (a cut over Home Assistant's session, whose payload reolink-aio routes
+        by message), so such a start is placed at once, at the asked time.
         """
         self._origin = origin_unix
         self._asked = asked_unix
@@ -283,7 +288,7 @@ class BaichuanMuxer:
         self._held: list[Block] = []
         self._held_keys = 0
         self._held_micro: int | None = None
-        self._far_ok = False
+        self._far_ok = not hold_far
 
     @property
     def asked_unix(self) -> float | None:
@@ -309,6 +314,11 @@ class BaichuanMuxer:
             self._joining = True
             self._guard = FOREIGN_GUARD
             self.stats.spans += 1
+
+    @property
+    def last_time(self) -> float | None:
+        """Return the media time (s) of the last video frame placed, if any."""
+        return self._last_time if self._started else None
 
     @property
     def first_time(self) -> float | None:

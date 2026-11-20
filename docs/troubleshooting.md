@@ -405,6 +405,13 @@ again to see what is still there.
 
 The recorder has the recording, but nothing in it. Pick another event.
 
+> **The doorbell did not send this recording.**
+
+Reolink Viewer fetches a battery doorbell's recordings from its SD card over Home
+Assistant's own connection to it, and the doorbell sent nothing, or stopped part way.
+Check that it is online and on wired power, then play the recording again. If it keeps
+happening, open **Details** under the player: it says how far the recording came.
+
 > **This browser cannot play H.265, the video format of this recording.**
 
 A battery doorbell records only in H.265 (HEVC), in its full size, even its SD copy.
