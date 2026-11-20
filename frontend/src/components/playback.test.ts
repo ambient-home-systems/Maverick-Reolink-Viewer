@@ -781,6 +781,9 @@ describe("rv-playback", () => {
       }),
     ).toBe("filling (3.1 MB so far) · from the doorbell: first fragment 512 ms, 31 of 44 s, 2 tries, H.265");
     expect(
+      describeCache({ complete: true, bytes: 2_500_000, error: null, cut_wait_ms: 8_400, sd_cut: { first_fragment_ms: 2176, media_s: 9, length_s: 11 } }),
+    ).toBe("cached (2.5 MB) · from the doorbell: first fragment 2176 ms, 9 of 11 s, waited 8 s for another recording");
+    expect(
       describeCache({ complete: false, bytes: 0, error: "the doorbell sent nothing within 20 s", sd_cut: { length_s: 21 } }),
     ).toBe("failed: the doorbell sent nothing within 20 s · from the doorbell: nothing yet");
   });

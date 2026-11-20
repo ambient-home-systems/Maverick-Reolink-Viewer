@@ -550,10 +550,10 @@ async def test_a_far_clock_is_placed_at_once() -> None:
     assert _index(first + rest).duration_ms == pytest.approx(10_000, abs=250)
 
 
-async def test_nothing_else_asks_the_host_during_its_cut(
+async def test_a_picture_asked_during_a_cut_is_not_held_up(
     hass: HomeAssistant, tmp_path: Path
 ) -> None:
-    """The cut runs alone: a picture or search asked meanwhile waits for its end."""
+    """The cut does not hold the host (v0.70.1 did: the first picture waited 52 s)."""
     host = QueueHost()
     source = MagicMock(entry_id="door", channel=0, key="door|0")
     first_ms = int(ORIGIN.timestamp() * 1000)
@@ -570,15 +570,11 @@ async def test_nothing_else_asks_the_host_during_its_cut(
             try:
                 entry = await cache.async_open(recording)
                 await host.opened.wait()
-                asked = asyncio.ensure_future(
-                    scheduler.run("door", picture, priority=Priority.THUMBNAILS)
-                )
-                await asyncio.sleep(0.01)
-                assert host.order == ["open 00"]
+                await scheduler.run("door", picture, priority=Priority.THUMBNAILS)
+                assert host.order == ["open 00", "picture"]
                 host.gate.set()
                 await cache.async_wait(entry, complete=True)
-                await asked
             finally:
                 await cache.async_shutdown()
     await scheduler.async_shutdown()
-    assert host.order == ["open 00", "close 00", "picture"]
+    assert host.order == ["open 00", "picture", "close 00"]

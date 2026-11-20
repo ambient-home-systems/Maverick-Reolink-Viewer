@@ -2319,6 +2319,10 @@ function describeSdCut(cache: CacheStatus): string | undefined {
     parts.push(`${String(Math.round(cut.media_s))}${of} s`);
   }
   if (typeof cut.spans === "number" && cut.spans > 1) parts.push(`${String(cut.spans)} tries`);
+  // Behind another recording of the camera (one at a time comes from it).
+  if (typeof cache.cut_wait_ms === "number" && cache.cut_wait_ms >= 1000) {
+    parts.push(`waited ${String(Math.round(cache.cut_wait_ms / 1000))} s for another recording`);
+  }
   if (cut.codec) parts.push(cut.codec === "h265" ? "H.265" : "H.264");
   return `from the doorbell: ${parts.join(", ")}`;
 }

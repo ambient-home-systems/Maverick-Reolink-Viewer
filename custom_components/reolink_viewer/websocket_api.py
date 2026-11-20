@@ -909,6 +909,14 @@ async def ws_playback_prefetch(
     entry, source = resolved
     try:
         recording, segment_id = await _recording(entry, source, msg)
+        if _plays_by_cut(hass, source):
+            # One recording at a time comes from such a camera (the Doorbell,
+            # Phase 12b): one fetched ahead would hold up the one asked next.
+            connection.send_result(
+                msg["id"],
+                {"segment_id": segment_id, "cache": None, "skipped": "played by cut"},
+            )
+            return
         cache_entry = await entry.runtime_data.vod_cache.async_open(
             recording, Priority.PREFETCH, any_copy=True
         )
@@ -921,6 +929,13 @@ async def ws_playback_prefetch(
     connection.send_result(
         msg["id"], {"segment_id": segment_id, "cache": cache_entry.public()}
     )
+
+
+def _plays_by_cut(hass: HomeAssistant, source: devices.PlaybackSource) -> bool:
+    try:
+        return bridge.async_get_host(hass, source.entry_id).plays_by_cut(source.channel)
+    except bridge.BridgeError:
+        return False
 
 
 @websocket_api.websocket_command(

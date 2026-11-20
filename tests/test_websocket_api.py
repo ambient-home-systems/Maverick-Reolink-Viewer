@@ -11,7 +11,7 @@ import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry, MockUser
 from pytest_homeassistant_custom_component.typing import WebSocketGenerator
 
-from custom_components.reolink_viewer import bridge, probe
+from custom_components.reolink_viewer import bridge, probe, websocket_api
 from custom_components.reolink_viewer.media import ByteResult, FrameResult
 from homeassistant.components.ffmpeg import FFmpegManager
 from homeassistant.core import HomeAssistant
@@ -273,6 +273,54 @@ async def test_probe_doorbell_options(
         await _collect_probe(client, {"doorbell_only": True})
     options = run.call_args.args[0]._options.doorbell
     assert (options.enabled, options.only) == (False, False)
+
+
+async def test_no_recording_is_fetched_ahead_from_a_camera_played_by_cut(
+    hass: HomeAssistant,
+    hass_ws_client: WebSocketGenerator,
+    loaded_viewer: MockConfigEntry,
+) -> None:
+    """One recording at a time comes from the Doorbell: none is fetched ahead."""
+    source = MagicMock(entry_id="door", channel=0)
+    recording = MagicMock()
+    client = await hass_ws_client(hass)
+    with (
+        patch.object(
+            websocket_api,
+            "_playback_source",
+            return_value=(loaded_viewer, source),
+        ),
+        patch.object(
+            websocket_api,
+            "_recording",
+            AsyncMock(return_value=(recording, "s1")),
+        ),
+        patch.object(
+            bridge,
+            "async_get_host",
+            return_value=MagicMock(plays_by_cut=MagicMock(return_value=True)),
+        ),
+        patch.object(
+            loaded_viewer.runtime_data.vod_cache, "async_open", AsyncMock()
+        ) as opened,
+    ):
+        await client.send_json(
+            {
+                "id": 1,
+                "type": "reolink_viewer/playback/prefetch",
+                "device_id": "dev",
+                "date": "2026-11-20",
+                "segment_id": "s1",
+            }
+        )
+        reply = await client.receive_json()
+    assert reply["success"] is True
+    assert reply["result"] == {
+        "segment_id": "s1",
+        "cache": None,
+        "skipped": "played by cut",
+    }
+    opened.assert_not_awaited()
 
 
 async def test_probe_requires_admin(

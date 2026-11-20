@@ -3,6 +3,19 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.70.4
+
+The doorbell's recordings now play (0.70.3 played them on the iPhone), faster and one
+after another.
+
+- **A doorbell recording no longer waits for the doorbell's other requests.** The first
+  one took 52 seconds to start while its days were searched again; it starts as soon as
+  the doorbell sends it.
+- **Nothing is fetched ahead from the doorbell.** The doorbell sends one recording at a
+  time, and the next one fetched ahead kept the event you picked next from playing.
+- **Details says when a recording waited for another** ("waited 8 s for another
+  recording").
+
 ## 0.70.3
 
 - **The doorbell's past days get its recordings.** Days Reolink Viewer had saved from

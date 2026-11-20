@@ -108,7 +108,7 @@ from .mp4index import (
     plan_reserve,
 )
 from .remux import RemuxError, async_flatten, is_plain, moov_size
-from .scheduler import Priority, Scheduler, SchedulerClosedError, StreamTicket
+from .scheduler import Priority, Scheduler, StreamTicket
 from .timeconv import from_ms
 
 _LOGGER = logging.getLogger(__name__)
@@ -1613,12 +1613,8 @@ class VodCache:
                 if queued:
                     # Behind another recording's cut of this camera.
                     entry.timing["cut_wait_ms"] = _ms(waited)
-                alone = time.monotonic()
-                async with self._host_alone(rec.source.entry_id):
-                    # Its other requests running when the cut asked finish first.
-                    entry.timing["host_wait_ms"] = _ms(alone)
-                    async with self._cut_bytes(entry, host) as muxed:
-                        yield muxed
+                async with self._cut_bytes(entry, host) as muxed:
+                    yield muxed
             return
         vod_file = VodFile(
             start=from_ms(rec.start_ms),
@@ -1669,41 +1665,6 @@ class VodCache:
         )
         async with contextlib.aclosing(muxed):
             yield muxed
-
-    @contextlib.asynccontextmanager
-    async def _host_alone(self, entry_id: str) -> AsyncIterator[None]:
-        """Hold a host to one cut: an exclusive scheduler job while it runs.
-
-        The battery Doorbell's first played recording timed out (v0.70.0)
-        while its event pictures (298) and searches went over the same
-        session; the probe's cut, alone, came whole. So nothing else of this
-        integration asks the host while its cut runs: those wait their turn.
-        """
-        started = asyncio.Event()
-        done = asyncio.Event()
-
-        async def hold() -> None:
-            started.set()
-            await done.wait()
-
-        job = asyncio.ensure_future(
-            self._scheduler.run(
-                entry_id, hold, priority=Priority.PLAYBACK, exclusive=True
-            )
-        )
-        waiter = asyncio.ensure_future(started.wait())
-        try:
-            await asyncio.wait({job, waiter}, return_when=asyncio.FIRST_COMPLETED)
-            if not started.is_set():
-                job.result()  # the scheduler refused it (closed): raise that
-            yield
-        finally:
-            done.set()
-            waiter.cancel()
-            if not started.is_set():
-                job.cancel()
-            with contextlib.suppress(asyncio.CancelledError, SchedulerClosedError):
-                await job
 
     def _shift(self, rec: Recording, shifter: OffsetShifter, data: bytes) -> bytes:
         try:
