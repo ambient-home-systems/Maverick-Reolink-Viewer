@@ -1,9 +1,9 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
 import { $ as i, A as a, Ct as o, D as s, E as c, Ft as l, Ht as u, Mt as d, Nt as f, O as p, P as m, Tt as ee, U as te, Vt as h, _ as ne, a as g, bt as _, c as re, d as v, et as y, g as ie, i as b, it as x, j as ae, jt as oe, l as se, m as S, n as ce, o as le, p as ue, r as de, s as fe, u as pe, wt as me, xt as C, yt as he } from "./live-B3rIzIdQ.js";
-import { $ as w, A as ge, B as _e, C as T, D as ve, H as ye, I as E, L as be, M as D, N as O, O as xe, P as k, R as Se, S as A, U as Ce, V as j, W as M, _ as we, at as N, d as P, g as Te, j as Ee, k as F, l as De, u as Oe, v as I, w as ke, x as Ae, y as L, z as je } from "./home-BphQR9nu.js";
-import { dayLabel as Me, shortDay as Ne } from "./events-view--kgN6nFy.js";
+import { $ as w, A as ge, B as _e, C as T, D as ve, H as ye, I as E, L as be, M as D, N as O, O as xe, P as k, R as Se, S as A, U as Ce, V as j, W as M, _ as we, at as N, d as P, g as Te, j as Ee, k as F, l as De, u as Oe, v as I, w as ke, x as Ae, y as L, z as je } from "./home-ByI-dpco.js";
+import { dayLabel as Me, shortDay as Ne } from "./events-view-Gv2csPUr.js";
 import { i as Pe } from "./findings-6PHDV5xU.js";
-import { a as Fe, c as Ie, f as Le, i as R, l as Re, n as z, o as ze, r as Be, s as B, t as Ve, u as He } from "./check-CO3xnXSX.js";
+import { a as Fe, c as Ie, f as Le, i as R, l as Re, n as z, o as ze, r as Be, s as B, t as Ve, u as He } from "./check-rkirGYrO.js";
 var Ue = class extends r {
 	static properties = {
 		events: { attribute: !1 },
@@ -3208,7 +3208,7 @@ function Wt(e) {
 		let e = typeof t.length_s == "number" ? ` of ${String(Math.round(t.length_s))}` : "";
 		n.push(`${String(Math.round(t.media_s))}${e} s`);
 	}
-	return typeof t.spans == "number" && t.spans > 1 && n.push(`${String(t.spans)} tries`), t.codec && n.push(t.codec === "h265" ? "H.265" : "H.264"), `from the doorbell: ${n.join(", ")}`;
+	return typeof t.spans == "number" && t.spans > 1 && n.push(`${String(t.spans)} tries`), typeof e.cut_wait_ms == "number" && e.cut_wait_ms >= 1e3 && n.push(`waited ${String(Math.round(e.cut_wait_ms / 1e3))} s for another recording`), t.codec && n.push(t.codec === "h265" ? "H.265" : "H.264"), `from the doorbell: ${n.join(", ")}`;
 }
 function Gt() {
 	try {

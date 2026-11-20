@@ -8859,7 +8859,7 @@ UDP (the desktop client could not add it by IP). Phase 5a captured talk on it:
 | Step | Status |
 | --- | --- |
 | a. UDP transport and the gate | **Done** (2026-11-20, v0.69.0): Home Assistant's own UDP session reused. The owner's runs: talk go (2026-11-14); playback go on HA 2026.11.2 (2026-11-20): first picture in 0.44 s, at twice real time, H.265 main stream |
-| b. SD playback | Built (v0.70.0–v0.70.2): each recording fetched as cuts over HA's session, muxed into the cache's original. The owner's first try timed out (v0.70.0); the second (v0.70.1) showed the Doorbell stopping after 31 s of a 227 s recording; v0.70.2 makes a recording per run of events and resumes a cut where it stops; awaits the owner's check |
+| b. SD playback | Built (v0.70.0–v0.70.4): each recording fetched as cuts over HA's session, muxed into the cache's original, one per run of events, resumed where a cut stops. The owner's third try (v0.70.3) played on the iPhone (H.265 through ManagedMediaSource) but took 52.7 s and a second event did not play; v0.70.4 drops the cut's hold on the Doorbell and its recordings fetched ahead; awaits the owner's check |
 | c. Talk | Not started; after a go for talk |
 | d. Fallback for playback: clips by FTP | Not started; only if a says no to playback |
 
@@ -9140,6 +9140,36 @@ does not have.
   without recordings (before v0.70.0) or with one per file (v0.70.0–v0.70.1),
   and today's copy is only searched on from where it ended. Format 3 makes
   every camera's saved days search again once.
+
+**The owner's third try (2026-11-20, v0.70.3, the iPhone app): it played,
+slowly; a second event did not.**
+
+- **What it showed:**
+  - the iPhone played the Doorbell's H.265 through ManagedMediaSource
+    (`hvc1.1.6.L150,mp4a.40.2`);
+  - the cut came whole and fast: its first fragment after 2.2 s, 9 of 11 s;
+  - but the first frame took 52.7 s, and a picture while dragging found
+    "the camera or Home Assistant busy";
+  - a second event did not play.
+- **Why:**
+  - v0.70.1's hold made the cut wait for the Doorbell's running requests to
+    end. After v0.70.3's reset, those were the searches of its days again
+    (seconds to tens of seconds each) and its event pictures.
+  - After the first frame, the panel fetched the next recording ahead. Its
+    cut held the camera's one turn, and the event asked next waited behind
+    it.
+  - The hold's evidence was weak. v0.70.0's timeout fits the same
+    mid-recording stall v0.70.1 reported (reolink-aio gives up after 30 s
+    of it), which v0.70.2's resumed spans now handle.
+- **v0.70.4:**
+  - **No hold:** the cut no longer runs as an exclusive scheduler job
+    (`_host_alone` removed). Pictures and searches go on beside it; a stall
+    they may cause is resumed like any other.
+  - **Nothing fetched ahead from a camera played by cut:**
+    `playback/prefetch` answers `skipped: played by cut` without opening
+    the recording, so an event asked next has the camera's turn at once.
+  - **Details shows a wait for another recording:** "waited N s for another
+    recording".
 
 #### Step 12c: talk
 
