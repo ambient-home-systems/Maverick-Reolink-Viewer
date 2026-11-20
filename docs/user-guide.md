@@ -246,6 +246,8 @@ A battery doorbell that keeps its recordings on its own SD card lists its events
 too, while it runs on wired power, and its recordings play in its **Playback** tab like
 any other camera's. Reolink Viewer fetches each one from the doorbell's SD card over
 Home Assistant's own connection to it; this needs Home Assistant 2026.11.2 or later.
+The doorbell sends one recording at a time: the one you pick goes first, and the panel
+says when it waits for another to finish.
 The doorbell records in H.265 only, in its full size: Safari plays it, and so does Chrome
 on a computer or tablet that decodes H.265. A browser that cannot says so. On an older
 Home Assistant, its Playback tab shows pictures from each event (one every 5 seconds)

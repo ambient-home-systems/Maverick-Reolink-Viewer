@@ -64,7 +64,7 @@ File I/O runs in the executor; device I/O goes through the scheduler.
 """
 
 import asyncio
-from collections.abc import AsyncGenerator, AsyncIterator, Callable
+from collections.abc import AsyncGenerator, AsyncIterator, Callable, Iterator
 import contextlib
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -86,7 +86,13 @@ from homeassistant.helpers.storage import Store
 from . import bridge
 from .baichuan_source import BaichuanSource, Cut, CutError
 from .bridge import VodFile, VodMethod
-from .cutstream import CutStreamError, local_wall, muxed_cut
+from .cutstream import (
+    FIRST_CHUNK_S,
+    RESUME_FIRST_S,
+    CutStreamError,
+    local_wall,
+    muxed_cut,
+)
 from .devices import PlaybackSource
 from .fmp4 import (
     Fragment,
@@ -177,6 +183,11 @@ LAYOUT = 5
 # A copy of a recording that has since grown still serves a start at least
 # this long before the copy's end.
 COVER_MARGIN_MS = 60_000
+# A fill a viewer's click on another recording of its camera stopped (a
+# camera played by cut sends one at a time, Phase 12b).
+STOPPED_FOR_ANOTHER = (
+    "stopped: another recording of this camera was asked for (it sends one at a time)"
+)
 # A scrub's key frame from the cache is at most this far before the moment (a
 # group of pictures is 1-4 s on the owner's cameras); else a cut answers.
 KEY_FRAME_REACH_MS = 10_000
@@ -293,6 +304,10 @@ class Entry:
     halting: bool = False
     # The download's response while it runs (closed to give the slot up).
     response: ClientResponse | None = None
+    # Events being saved from it: no click on another recording stops its fill.
+    keep: int = 0
+    # Why its fill was stopped, when another recording took the turn.
+    stop_reason: str | None = None
 
     @property
     def part_path(self) -> Path:
@@ -384,6 +399,9 @@ class VodCache:
         # One cut at a time per host played by cut (reolink-aio streams one
         # 143 per device and gives up on a second after 30 s): later ones queue.
         self._cut_locks: dict[str, asyncio.Lock] = {}
+        # When a host's cut was last left before the device ended it: reolink-aio
+        # takes the next only once the device answers the stop (144).
+        self._cut_left: dict[str, float] = {}
         self._media_store: Store[dict[str, Any]] = Store(hass, 1, MEDIA_STORE_KEY)
         self._closed = False
 
@@ -443,6 +461,7 @@ class VodCache:
         *,
         at: int | None = None,
         any_copy: bool = False,
+        takes_turn: bool = False,
     ) -> Entry:
         """Return the recording's entry, starting or speeding up its fill.
 
@@ -451,6 +470,9 @@ class VodCache:
         a start at ``at`` (UTC ms) if it reaches far enough past it; with
         ``any_copy`` (prefetch) any copy will do, so warming does not fetch a
         growing recording again every minute.
+
+        ``takes_turn``: a viewer asked for it, and its camera sends one
+        recording at a time (played by cut): see ``_take_turn``.
         """
         if self._closed:
             raise VodCacheError("cache closed")
@@ -483,7 +505,45 @@ class VodCache:
             entry.priority = priority
             if entry.ticket is not None:
                 entry.ticket.raise_priority(priority)
+        if takes_turn:
+            self._take_turn(entry)
         return entry
+
+    def _take_turn(self, entry: Entry) -> None:
+        """Stop the camera's other fills: a viewer's recording goes first.
+
+        A camera played by cut (the Doorbell, Phase 12b) sends one recording
+        at a time. v0.70.4: the panel's preload of the next recording, and
+        the recording left on screen, held its turn and its stream slots, so
+        the next event clicked never began. The newest click wins: the
+        camera's other recordings still filling stop (their cuts end), but not
+        one an event is being saved from.
+        """
+        if not entry.filling:
+            return
+        source = entry.recording.source
+        for other in list(self._entries.values()):
+            them = other.recording.source
+            if (
+                other is entry
+                or other.task is None
+                or not other.filling
+                or other.keep
+                or them.entry_id != source.entry_id
+                or them.channel != source.channel
+            ):
+                continue
+            other.stop_reason = STOPPED_FOR_ANOTHER
+            other.task.cancel()
+
+    @contextlib.contextmanager
+    def keeping(self, entry: Entry) -> Iterator[None]:
+        """Keep a recording's fill going while an event is saved from it."""
+        entry.keep += 1
+        try:
+            yield
+        finally:
+            entry.keep -= 1
 
     def _copy_for(
         self, recording: Recording, at: int | None, any_copy: bool
@@ -668,7 +728,7 @@ class VodCache:
                 # The cut took the slot: queue behind it, then go on.
                 entry.timing["yields"] = entry.timing.get("yields", 0) + 1
         except asyncio.CancelledError:
-            entry.error = "cancelled"
+            entry.error = entry.stop_reason or "cancelled"
             await self._discard_part(entry)
             raise
         except Exception as err:  # noqa: BLE001 - recorded, readers see it
@@ -1609,9 +1669,12 @@ class VodCache:
             entry.timing["source"] = "cut"
             lock = self._cut_locks.setdefault(rec.source.entry_id, asyncio.Lock())
             queued, waited = lock.locked(), time.monotonic()
+            if queued:
+                # Behind another recording's cut of this camera (the panel says so).
+                entry.timing["cut_waiting"] = True
             async with lock:
                 if queued:
-                    # Behind another recording's cut of this camera.
+                    entry.timing.pop("cut_waiting", None)
                     entry.timing["cut_wait_ms"] = _ms(waited)
                 async with self._cut_bytes(entry, host) as muxed:
                     yield muxed
@@ -1657,14 +1720,27 @@ class VodCache:
                 rec.source.channel, local_wall(start_unix, tz), end, rec.stream
             )
 
+        host_id = rec.source.entry_id
+        left = self._cut_left.get(host_id)
+        # Just after a cut that was left (a click took the turn, or the device
+        # went quiet at its end), reolink-aio may still wait for the device's
+        # answer to its stop: up to 30 s before this one is even asked.
+        after_left = left is not None and time.monotonic() - left < RESUME_FIRST_S
         muxed = muxed_cut(
             open_cut,
             origin_unix=rec.start_ms / 1000,
             timing=entry.timing,
             length_s=(rec.end_ms - rec.start_ms) / 1000,
+            first_chunk_s=RESUME_FIRST_S if after_left else FIRST_CHUNK_S,
         )
-        async with contextlib.aclosing(muxed):
-            yield muxed
+        try:
+            async with contextlib.aclosing(muxed):
+                yield muxed
+        finally:
+            if (entry.timing.get("sd_cut") or {}).get("ended") == "device":
+                self._cut_left.pop(host_id, None)
+            else:
+                self._cut_left[host_id] = time.monotonic()
 
     def _shift(self, rec: Recording, shifter: OffsetShifter, data: bytes) -> bytes:
         try:

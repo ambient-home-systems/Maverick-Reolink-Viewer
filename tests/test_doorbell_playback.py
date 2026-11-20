@@ -5,6 +5,7 @@ from collections.abc import AsyncGenerator
 from datetime import UTC, datetime, timedelta
 import io
 from pathlib import Path
+import time
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 from xml.etree import ElementTree as ET
@@ -14,10 +15,12 @@ import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from reolink_aio.typings import VOD_trigger
 
-from custom_components.reolink_viewer import bridge, devices
+from custom_components.reolink_viewer import bridge, devices, vodcache
 from custom_components.reolink_viewer.baichuan_source import BaichuanSource
 from custom_components.reolink_viewer.bridge import VodEvent, recordings_of_events
 from custom_components.reolink_viewer.cutstream import (
+    FIRST_CHUNK_S,
+    RESUME_FIRST_S,
     CutStreamError,
     local_wall,
     muxed_cut,
@@ -238,6 +241,123 @@ async def test_a_cameras_cuts_take_turns(hass: HomeAssistant, tmp_path: Path) ->
         f"open {other}",
         f"close {other}",
     ]
+
+
+async def test_a_click_takes_the_doorbells_turn(
+    hass: HomeAssistant, tmp_path: Path
+) -> None:
+    """v0.70.5: the recording left on screen and the preload stop for a click."""
+    host = QueueHost()
+    source = MagicMock(entry_id="door", channel=0, key="door|0")
+    first_ms = int(ORIGIN.timestamp() * 1000)
+    one = Recording(source, "sub", "one", first_ms, first_ms + 10_000)
+    ahead = Recording(source, "sub", "two", first_ms + 20_000, first_ms + 30_000)
+    clicked = Recording(source, "sub", "three", first_ms + 40_000, first_ms + 50_000)
+    waits: list[float] = []
+    real = muxed_cut
+
+    def spy(*args: Any, **kwargs: Any) -> AsyncGenerator[bytes]:
+        waits.append(kwargs["first_chunk_s"])
+        return real(*args, **kwargs)
+
+    scheduler = Scheduler(default_limit=2, default_stream_limit=2)
+    async with ClientSession() as session:
+        with (
+            patch.object(bridge, "async_get_host", return_value=host),
+            patch.object(vodcache, "muxed_cut", spy),
+        ):
+            cache = VodCache(hass, scheduler, tmp_path / "vod", 10**9, lambda: session)
+            await cache.async_setup()
+            try:
+                watched = await cache.async_open(one, takes_turn=True)
+                await host.opened.wait()
+                # The panel loads the next one ahead: it waits for the turn.
+                preload = await cache.async_open(ahead, Priority.PREFETCH)
+                await asyncio.sleep(0.01)
+                assert preload.timing["cut_waiting"] is True
+                # Both stream slots are taken; a click stops both fills.
+                third = await cache.async_open(clicked, takes_turn=True)
+                host.gate.set()
+                await cache.async_wait(third, complete=True)
+                for stopped in (watched, preload):
+                    assert stopped.error == vodcache.STOPPED_FOR_ANOTHER
+                    assert not stopped.part_path.exists()
+            finally:
+                await cache.async_shutdown()
+    await scheduler.async_shutdown()
+    assert host.order == ["open 00", "close 00", "open 40", "close 40"]
+    # The first cut was left before its end: the click's waits for its stop.
+    assert waits == [FIRST_CHUNK_S, RESUME_FIRST_S]
+
+
+async def test_an_event_being_saved_keeps_its_turn(
+    hass: HomeAssistant, tmp_path: Path
+) -> None:
+    """A click does not stop the fill an event is being saved from: it waits."""
+    host = QueueHost()
+    source = MagicMock(entry_id="door", channel=0, key="door|0")
+    first_ms = int(ORIGIN.timestamp() * 1000)
+    one = Recording(source, "sub", "one", first_ms, first_ms + 10_000)
+    two = Recording(source, "sub", "two", first_ms + 20_000, first_ms + 30_000)
+    scheduler = Scheduler(default_limit=2, default_stream_limit=2)
+    async with ClientSession() as session:
+        with patch.object(bridge, "async_get_host", return_value=host):
+            cache = VodCache(hass, scheduler, tmp_path / "vod", 10**9, lambda: session)
+            await cache.async_setup()
+            try:
+                saved = await cache.async_open(one, takes_turn=True)
+                with cache.keeping(saved):
+                    await host.opened.wait()
+                    clicked = await cache.async_open(two, takes_turn=True)
+                    await asyncio.sleep(0.01)
+                    assert clicked.timing["cut_waiting"] is True
+                    host.gate.set()
+                    await cache.async_wait(saved, complete=True)
+                assert saved.keep == 0
+                await cache.async_wait(clicked, complete=True)
+                assert "cut_waiting" not in clicked.timing
+                assert clicked.timing["cut_wait_ms"] > 0
+                # Both cuts ran to the device's end: nothing was left.
+                assert "door" not in cache._cut_left
+            finally:
+                await cache.async_shutdown()
+    await scheduler.async_shutdown()
+    assert host.order == ["open 00", "close 00", "open 20", "close 20"]
+
+
+async def test_a_cut_after_one_was_left_waits_longer_for_its_first_bytes(
+    hass: HomeAssistant, tmp_path: Path
+) -> None:
+    """reolink-aio asks the next cut only once the device answers the stop (144)."""
+    host = CutHost(cut_media())
+    source = MagicMock(entry_id="door", channel=0, key="door|0")
+    start_ms = int(ORIGIN.timestamp() * 1000)
+    recording = Recording(source, "sub", "one", start_ms, start_ms + 10_000)
+    waits: list[float] = []
+    real = muxed_cut
+
+    def spy(*args: Any, **kwargs: Any) -> AsyncGenerator[bytes]:
+        waits.append(kwargs["first_chunk_s"])
+        return real(*args, **kwargs)
+
+    scheduler = Scheduler(default_limit=2, default_stream_limit=1)
+    async with ClientSession() as session:
+        with (
+            patch.object(bridge, "async_get_host", return_value=host),
+            patch.object(vodcache, "muxed_cut", spy),
+        ):
+            cache = VodCache(hass, scheduler, tmp_path / "vod", 10**9, lambda: session)
+            await cache.async_setup()
+            try:
+                cache._cut_left["door"] = time.monotonic()
+                entry = await cache.async_open(recording)
+                await cache.async_wait(entry, complete=True)
+                # It ran to the device's end: the next has the usual wait.
+                assert "door" not in cache._cut_left
+            finally:
+                await cache.async_shutdown()
+    await scheduler.async_shutdown()
+    assert waits == [RESUME_FIRST_S]
 
 
 def test_the_tcp_deep_start_never_asks_a_udp_only_host(hass: HomeAssistant) -> None:

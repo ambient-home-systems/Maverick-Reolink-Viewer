@@ -8859,7 +8859,7 @@ UDP (the desktop client could not add it by IP). Phase 5a captured talk on it:
 | Step | Status |
 | --- | --- |
 | a. UDP transport and the gate | **Done** (2026-11-20, v0.69.0): Home Assistant's own UDP session reused. The owner's runs: talk go (2026-11-14); playback go on HA 2026.11.2 (2026-11-20): first picture in 0.44 s, at twice real time, H.265 main stream |
-| b. SD playback | Built (v0.70.0–v0.70.4): each recording fetched as cuts over HA's session, muxed into the cache's original, one per run of events, resumed where a cut stops. The owner's third try (v0.70.3) played on the iPhone (H.265 through ManagedMediaSource) but took 52.7 s and a second event did not play; v0.70.4 drops the cut's hold on the Doorbell and its recordings fetched ahead; awaits the owner's check |
+| b. SD playback | Built (v0.70.0–v0.70.4): each recording fetched as cuts over HA's session, muxed into the cache's original, one per run of events, resumed where a cut stops. The owner's third try (v0.70.3) played on the iPhone (H.265 through ManagedMediaSource) but took 52.7 s and a second event did not play; v0.70.4 drops the cut's hold on the Doorbell and its recordings fetched ahead. The fourth try (v0.70.4) started quickly but a second event failed: the panel's preload of the next recording held the Doorbell's turn; v0.70.5 gives the turn to the newest click and makes preloads wait; awaits the owner's check |
 | c. Talk | Not started; after a go for talk |
 | d. Fallback for playback: clips by FTP | Not started; only if a says no to playback |
 
@@ -9170,6 +9170,55 @@ slowly; a second event did not.**
     the recording, so an event asked next has the camera's turn at once.
   - **Details shows a wait for another recording:** "waited N s for another
     recording".
+
+**The owner's fourth try (2026-11-20, v0.70.4): the first event started
+quickly; a second one failed.**
+
+- **What it showed:**
+  - the second event's Details: Cache "filling (0.0 MB so far)", with no
+    "from the doorbell" part, and 0 windows. Its fill never reached the cut;
+  - a yellow "The recorder did not answer when asked for this day's
+    recordings", with the day (220 recordings, 287 events) still on screen.
+- **Why:**
+  - v0.70.4 stopped the server's `playback/prefetch`, but the panel's own
+    preload still opened the next recording (`playback/mse` with the next
+    recording, as a playback) once the first frame showed. The Doorbell's
+    recordings are now one per event, so the next is always well within
+    the 3-minute preload lead.
+  - That preload held the camera's second stream slot (2 per host), then
+    its one turn. The event clicked next waited for a slot, then behind the
+    preload's cut, and behind any stop reolink-aio was still waiting on.
+  - The yellow box came from the panel's background refresh of today (every
+    minute): the Doorbell's event search failed while it sent a recording,
+    and any failed load showed "could not load recordings" over the day
+    still on screen.
+- **v0.70.5:**
+  - **A click takes the turn:** `playback/mse`, `playback/url` and
+    `playback/save_event` open a recording of a camera played by cut with
+    `takes_turn`. The cache cancels the camera's other fills (the recording
+    left on screen, a preload, a stale player's), whatever they wait on
+    (slot, turn or cut), and they fail "stopped: another recording of this
+    camera was asked for". The newest click wins.
+  - **A preload waits behind:** the panel sends `preload: true` for the
+    next recording. For a camera played by cut it opens at prefetch priority
+    without taking the turn; it is fetched once the one asked for has come,
+    and the player raises it to playback when it moves on to it. An NVR's
+    preload is unchanged.
+  - **An event being saved keeps its fill:** `VodCache.keeping(entry)`
+    around the clip; a click waits behind it.
+  - **The first bytes after a cut that was left:** reolink-aio takes the
+    next 143 only once the device answers the stop (144), up to 30 s. A cut
+    asked within 35 s of one left before its end (a click, or a quiet end)
+    waits 35 s for its first bytes, not 20.
+  - **The panel says what it waits for:** the note under the player reads
+    "Waiting for the doorbell to finish sending another recording…",
+    "Asking the doorbell for this recording…" or "Fetching the recording
+    from the doorbell: N of L s"; Details' Cache line gains "waiting while
+    it sends another recording".
+  - **A failed background refresh keeps the day:** the yellow box shows
+    only when a day asked for cannot be loaded. A failed refresh of the day
+    on screen is in Details' Day line ("last refresh failed (…)"), and the
+    next refresh tries again.
 
 #### Step 12c: talk
 

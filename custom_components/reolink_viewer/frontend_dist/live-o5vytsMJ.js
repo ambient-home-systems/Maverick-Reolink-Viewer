@@ -91,21 +91,23 @@ var f = (e, t, n, r) => e.callWS({
 }), ae = (e) => e.callWS({
 	type: "reolink_viewer/events/seen",
 	all: !0
-}), oe = (e) => e.callWS({ type: "reolink_viewer/timeline/warm" }), se = (e, t, n, r) => e.callWS({
+}), oe = (e) => e.callWS({ type: "reolink_viewer/timeline/warm" }), se = (e, t, n, r, i = !1) => e.callWS({
 	type: "reolink_viewer/playback/url",
 	device_id: t.deviceId,
 	date: t.date,
 	segment_id: t.segmentId,
 	stream: t.stream,
 	progressive: n,
-	...r === void 0 ? {} : { at: Math.round(r) }
-}), ce = (e, t, n) => e.callWS({
+	...r === void 0 ? {} : { at: Math.round(r) },
+	...i ? { preload: i } : {}
+}), ce = (e, t, n, r = !1) => e.callWS({
 	type: "reolink_viewer/playback/mse",
 	device_id: t.deviceId,
 	date: t.date,
 	segment_id: t.segmentId,
 	stream: t.stream,
-	...n === void 0 ? {} : { at: Math.round(n) }
+	...n === void 0 ? {} : { at: Math.round(n) },
+	...r ? { preload: r } : {}
 }), le = (e, t, n, r, i) => e.callWS({
 	type: "reolink_viewer/playback/save_event",
 	device_id: t.deviceId,

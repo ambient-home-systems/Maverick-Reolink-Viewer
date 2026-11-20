@@ -13,6 +13,8 @@ from pytest_homeassistant_custom_component.typing import WebSocketGenerator
 
 from custom_components.reolink_viewer import bridge, probe, websocket_api
 from custom_components.reolink_viewer.media import ByteResult, FrameResult
+from custom_components.reolink_viewer.scheduler import Priority
+from custom_components.reolink_viewer.vodcache import VodCacheError
 from homeassistant.components.ffmpeg import FFmpegManager
 from homeassistant.core import HomeAssistant
 from scripts import build_release
@@ -321,6 +323,97 @@ async def test_no_recording_is_fetched_ahead_from_a_camera_played_by_cut(
         "skipped": "played by cut",
     }
     opened.assert_not_awaited()
+
+
+async def test_a_click_takes_the_doorbells_turn_and_a_preload_waits(
+    hass: HomeAssistant,
+    hass_ws_client: WebSocketGenerator,
+    loaded_viewer: MockConfigEntry,
+) -> None:
+    """v0.70.5: a recording asked for takes the turn; one loaded ahead waits behind."""
+    source = MagicMock(entry_id="door", channel=0)
+    recording = MagicMock()
+    client = await hass_ws_client(hass)
+    with (
+        patch.object(
+            websocket_api,
+            "_playback_source",
+            return_value=(loaded_viewer, source),
+        ),
+        patch.object(
+            websocket_api,
+            "_recording",
+            AsyncMock(return_value=(recording, "s1")),
+        ),
+        patch.object(
+            bridge,
+            "async_get_host",
+            return_value=MagicMock(plays_by_cut=MagicMock(return_value=True)),
+        ),
+        patch.object(
+            loaded_viewer.runtime_data.vod_cache,
+            "async_open",
+            AsyncMock(side_effect=VodCacheError("stop here")),
+        ) as opened,
+    ):
+        ref = {"device_id": "dev", "date": "2026-11-20", "segment_id": "s1"}
+        for message in (
+            {"type": "reolink_viewer/playback/mse", **ref},
+            {"type": "reolink_viewer/playback/url", **ref, "preload": True},
+        ):
+            await client.send_json_auto_id(message)
+            reply = await client.receive_json()
+            assert reply["success"] is False
+    clicked, preloaded = opened.await_args_list
+    assert clicked.args[1] is Priority.PLAYBACK
+    assert clicked.kwargs["takes_turn"] is True
+    assert preloaded.args[1] is Priority.PREFETCH
+    assert preloaded.kwargs["takes_turn"] is False
+
+
+async def test_a_preload_of_an_nvr_recording_is_unchanged(
+    hass: HomeAssistant,
+    hass_ws_client: WebSocketGenerator,
+    loaded_viewer: MockConfigEntry,
+) -> None:
+    """Only a camera played by cut sends one at a time: an NVR's preload is a playback."""
+    source = MagicMock(entry_id="nvr", channel=0)
+    client = await hass_ws_client(hass)
+    with (
+        patch.object(
+            websocket_api,
+            "_playback_source",
+            return_value=(loaded_viewer, source),
+        ),
+        patch.object(
+            websocket_api,
+            "_recording",
+            AsyncMock(return_value=(MagicMock(), "s1")),
+        ),
+        patch.object(
+            bridge,
+            "async_get_host",
+            return_value=MagicMock(plays_by_cut=MagicMock(return_value=False)),
+        ),
+        patch.object(
+            loaded_viewer.runtime_data.vod_cache,
+            "async_open",
+            AsyncMock(side_effect=VodCacheError("stop here")),
+        ) as opened,
+    ):
+        await client.send_json_auto_id(
+            {
+                "type": "reolink_viewer/playback/mse",
+                "device_id": "dev",
+                "date": "2026-11-20",
+                "segment_id": "s1",
+                "preload": True,
+            }
+        )
+        await client.receive_json()
+    (call,) = opened.await_args_list
+    assert call.args[1] is Priority.PLAYBACK
+    assert call.kwargs["takes_turn"] is False
 
 
 async def test_probe_requires_admin(

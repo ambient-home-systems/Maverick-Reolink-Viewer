@@ -3,6 +3,24 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.70.5
+
+A second doorbell event now plays (0.70.4 started the first one quickly).
+
+- **The event you pick takes the doorbell's turn.** The doorbell sends one recording at
+  a time. Once an event started, the panel loaded the next recording ahead, and the
+  event you picked next waited behind it. Now a pick stops whatever else the doorbell is
+  sending (except an event being saved).
+- **Recordings loaded ahead wait their turn.** The next recording still loads, after the
+  one you are watching has come.
+- **The panel says what it is waiting for**: "Waiting for the doorbell to finish sending
+  another recording…", or how far the recording has come ("Fetching the recording from
+  the doorbell: 5 of 21 s").
+- **A failed refresh no longer says the recordings could not be loaded.** Today's
+  recordings are refreshed every minute; when the doorbell, busy sending a recording,
+  did not answer, a warning covered the day still on screen. Now Details says so, and
+  the next refresh tries again.
+
 ## 0.70.4
 
 The doorbell's recordings now play (0.70.3 played them on the iPhone), faster and one
