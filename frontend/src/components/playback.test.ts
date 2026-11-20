@@ -771,6 +771,18 @@ describe("rv-playback", () => {
     expect(
       describeCache({ complete: false, bytes: 0, error: null, cut: {}, cut_error: "no stream slot within 5 s (7 of 7 in use)" }),
     ).toBe("filling (0.0 MB so far) · Reolink protocol cut not used: no stream slot within 5 s (7 of 7 in use)");
+    // Phase 12b: a doorbell's recording fetched from its SD card, in spans.
+    expect(
+      describeCache({
+        complete: false,
+        bytes: 3_100_000,
+        error: null,
+        sd_cut: { first_fragment_ms: 512.3, media_s: 31.2, length_s: 44, spans: 2, codec: "h265" },
+      }),
+    ).toBe("filling (3.1 MB so far) · from the doorbell: first fragment 512 ms, 31 of 44 s, 2 tries, H.265");
+    expect(
+      describeCache({ complete: false, bytes: 0, error: "the doorbell sent nothing within 20 s", sd_cut: { length_s: 21 } }),
+    ).toBe("failed: the doorbell sent nothing within 20 s · from the doorbell: nothing yet");
   });
 
   it("offers the playback check and its saved reports under Details", async () => {

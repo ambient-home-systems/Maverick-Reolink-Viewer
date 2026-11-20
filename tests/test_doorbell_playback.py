@@ -73,7 +73,7 @@ async def test_a_cut_is_muxed_into_the_mp4_a_download_would_be() -> None:
     parts = [
         part
         async for part in muxed_cut(
-            cut(), origin_unix=ORIGIN.timestamp(), timing=timing
+            lambda _start: cut(), origin_unix=ORIGIN.timestamp(), timing=timing
         )
     ]
     data = b"".join(parts)
@@ -81,11 +81,12 @@ async def test_a_cut_is_muxed_into_the_mp4_a_download_would_be() -> None:
     index = _index(data)
     assert len(index.fragments) == 10
     assert index.duration_ms == pytest.approx(10_000, abs=250)
-    numbers = timing["cut"]
-    assert (numbers["key_frames"], numbers["frames"], numbers["audio_blocks"]) == (
-        10,
-        40,
-        50,
+    numbers = timing["sd_cut"]
+    assert (numbers["key_frames"], numbers["frames"]) == (10, 40)
+    assert (numbers["spans"], numbers["ended"], numbers["media_s"]) == (
+        1,
+        "device",
+        9.8,
     )
     assert numbers["codec"] == "h264"
     # The key frames' own POSIX times are the recording's: placed by them.
@@ -98,13 +99,15 @@ async def test_leaving_a_cut_early_ends_it() -> None:
     """Closing the muxed stream closes the cut (reolink-aio then sends 144)."""
     cut = FakeCut(chunked(cut_media(), 700))
     timing: dict[str, Any] = {}
-    muxed = muxed_cut(cut(), origin_unix=ORIGIN.timestamp(), timing=timing)
+    muxed = muxed_cut(
+        lambda _start: cut(), origin_unix=ORIGIN.timestamp(), timing=timing
+    )
     first = await anext(muxed)
     assert first[4:8] == b"ftyp"
     await muxed.aclose()
     assert cut.closed is True
     assert cut.sent < len(cut.chunks)
-    assert timing["cut"]["key_frames"] >= 1
+    assert timing["sd_cut"]["key_frames"] >= 1
 
 
 class CutHost:
@@ -150,7 +153,7 @@ async def test_the_cache_fetches_a_recording_by_cut(
                 await cache.async_wait(entry, complete=True)
                 assert entry.complete
                 assert entry.timing["source"] == "cut"
-                assert entry.timing["cut"]["anchor"] == "key frame time"
+                assert entry.timing["sd_cut"]["anchor"] == "key frame time"
                 # Room for the index after moov, as for an NVR's fragmented file.
                 assert entry.timing["indexed"] == "yes"
                 stored = entry.path.read_bytes()
@@ -288,6 +291,31 @@ def test_recordings_of_events() -> None:
     assert recordings_of_events([], "sub") == ([], [])
 
 
+def test_a_files_events_far_apart_are_recordings_of_their_own() -> None:
+    """A long file is cut into its runs of events (the owner's: 227 s)."""
+    at = datetime(2026, 11, 19, 7, 30, 45)
+    events = [
+        _event(at, 21, "20261119073015", "VEHICLE"),
+        # Overlapping: the same run.
+        _event(at + timedelta(seconds=1), 21, "20261119073015", "MOTION"),
+        # 2 minutes later in the same file: a recording of its own.
+        _event(at + timedelta(minutes=2), 44, "20261119073015", "VEHICLE"),
+    ]
+    files, linked = recordings_of_events(events, "sub")
+    first, second = files
+    # The stamp 30 s before the first event is no pre-recording: the event.
+    assert (first.start, first.end) == (at, at + timedelta(seconds=22))
+    assert (second.start, second.end) == (
+        at + timedelta(minutes=2),
+        at + timedelta(minutes=2, seconds=44),
+    )
+    assert [e.file_id for e in linked] == [
+        first.start_id,
+        first.start_id,
+        second.start_id,
+    ]
+
+
 def _doorbell(host: MagicMock, *, wired: bool = True, streams: bool = True) -> None:
     host.is_nvr = False
     host.is_hub = False
@@ -398,43 +426,76 @@ async def test_a_cut_that_sends_nothing_says_so() -> None:
     """Nothing within the first wait: the cut fails, saying so."""
     timing: dict[str, Any] = {}
     muxed = muxed_cut(
-        _stream([], hang=True),
+        lambda _start: _stream([], hang=True),
         origin_unix=ORIGIN.timestamp(),
         timing=timing,
         first_chunk_s=0.05,
     )
     with pytest.raises(CutStreamError, match="the doorbell sent nothing within"):
         await _drain(muxed)
-    assert timing["cut"]["bytes"] == 0
+    assert timing["sd_cut"]["bytes"] == 0
 
 
 async def test_a_cut_that_stops_part_way_says_how_far() -> None:
     """A silence before the recording's end fails it, with how much came."""
     media = cut_media()
     timing: dict[str, Any] = {}
+    # Each span asked brings the same first half again, then silence.
     muxed = muxed_cut(
-        _stream(chunked(media[: len(media) // 2], 700), hang=True),
+        lambda _start: _stream(chunked(media[: len(media) // 2], 700), hang=True),
         origin_unix=ORIGIN.timestamp(),
         timing=timing,
         length_s=10,
         quiet_s=0.05,
     )
     with pytest.raises(
-        CutStreamError, match=r"the doorbell stopped after \d+ of 10 s of the recording"
+        CutStreamError,
+        match=r"the doorbell stopped after \d+ of 10 s of the recording \(3 tries\)",
     ):
         await _drain(muxed)
-    assert 3 <= timing["cut"]["media_s"] <= 6
+    assert 3 <= timing["sd_cut"]["media_s"] <= 6
+    assert timing["sd_cut"]["spans"] == 3
     # Before any picture: said so too.
     muxed = muxed_cut(
-        _stream([media[:20]], hang=True),
+        lambda _start: _stream([media[:20]], hang=True),
         origin_unix=ORIGIN.timestamp(),
         timing={},
         quiet_s=0.05,
     )
-    with pytest.raises(
-        CutStreamError, match="stopped after 20 bytes, before a picture"
-    ):
+    with pytest.raises(CutStreamError, match=r"stopped before a picture \(2 tries\)"):
         await _drain(muxed)
+
+
+async def test_a_quiet_cut_resumes_where_it_stopped() -> None:
+    """A silence part way asks again from a little before; the spans join."""
+    media = cut_media()
+    asked: list[float] = []
+
+    def open_cut(start: float) -> AsyncGenerator[bytes]:
+        asked.append(start)
+        if len(asked) == 1:
+            return _stream(chunked(media[: len(media) // 2], 700), hang=True)
+        # The device again, from a key frame before the moment asked.
+        return _stream(chunked(media, 700))
+
+    timing: dict[str, Any] = {}
+    data = await _drain(
+        muxed_cut(
+            open_cut,
+            origin_unix=ORIGIN.timestamp(),
+            timing=timing,
+            length_s=10,
+            quiet_s=0.05,
+        )
+    )
+    numbers = timing["sd_cut"]
+    assert (numbers["spans"], numbers["ended"]) == (2, "device")
+    assert (numbers["key_frames"], numbers["frames"]) == (10, 40)
+    assert numbers["overlap_skipped"] > 0
+    assert asked[0] == ORIGIN.timestamp()
+    assert ORIGIN.timestamp() <= asked[1] < ORIGIN.timestamp() + 5
+    assert [s["ended"] for s in numbers["span_list"]] == ["quiet", "device"]
+    assert _index(data).duration_ms == pytest.approx(10_000, abs=250)
 
 
 async def test_a_quiet_device_at_the_recordings_end_is_its_end() -> None:
@@ -442,21 +503,21 @@ async def test_a_quiet_device_at_the_recordings_end_is_its_end() -> None:
     timing: dict[str, Any] = {}
     data = await _drain(
         muxed_cut(
-            _stream(chunked(cut_media(), 700), hang=True),
+            lambda _start: _stream(chunked(cut_media(), 700), hang=True),
             origin_unix=ORIGIN.timestamp(),
             timing=timing,
             length_s=12,
             quiet_s=0.05,
         )
     )
-    assert timing["cut"]["ended"] == "quiet"
+    assert timing["sd_cut"]["ended"] == "quiet"
     assert _index(data).duration_ms == pytest.approx(10_000, abs=250)
 
 
 async def test_a_failing_cut_is_named() -> None:
     """Any other failure of the cut says what it was."""
     muxed = muxed_cut(
-        _stream([b"x"], fail=RuntimeError("refused")),
+        lambda _start: _stream([b"x"], fail=RuntimeError("refused")),
         origin_unix=ORIGIN.timestamp(),
         timing={},
     )
@@ -478,12 +539,14 @@ async def test_a_far_clock_is_placed_at_once() -> None:
             yield part
 
     timing: dict[str, Any] = {}
-    muxed = muxed_cut(counted(), origin_unix=ORIGIN.timestamp(), timing=timing)
+    muxed = muxed_cut(
+        lambda _start: counted(), origin_unix=ORIGIN.timestamp(), timing=timing
+    )
     first = await anext(muxed)
     # Out well before the end of the cut (a held start waits for 30 key frames).
     assert len(sent) < len(parts)
     rest = await _drain(muxed)
-    assert timing["cut"]["anchor"] == "asked time"
+    assert timing["sd_cut"]["anchor"] == "asked time"
     assert _index(first + rest).duration_ms == pytest.approx(10_000, abs=250)
 
 

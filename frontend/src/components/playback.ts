@@ -743,7 +743,9 @@ export class RvPlayback extends LitElement {
     // Phase 5b: a start the device's cut served shows it in the debug panel.
     try {
       const status = await fetchCacheStatus(hass, token);
-      if (seq === this._playSeq && status.cache?.cut) this._metrics = { ...this._metrics, cache: status.cache };
+      if (seq === this._playSeq && (status.cache?.cut || status.cache?.sd_cut)) {
+        this._metrics = { ...this._metrics, cache: status.cache };
+      }
     } catch {
       // The panel keeps what it showed.
     }
@@ -2275,10 +2277,13 @@ export function deliveryOf(progressive: boolean, browserProgressive: boolean, ca
 /** The debug panel's one-line cache state. */
 export function describeCache(cache: CacheStatus): string {
   const mb = `${(cache.bytes / 1_000_000).toFixed(1)} MB`;
-  if (cache.error) return `failed: ${cache.error}`;
+  const fromDoorbell = describeSdCut(cache);
+  const doorbell = fromDoorbell ? ` · ${fromDoorbell}` : "";
+  if (cache.error) return `failed: ${cache.error}${doorbell}`;
   // Phase 5c: the download stopped where the cut begins (the cut has the rest).
   const stopped = typeof cache.stopped_ms === "number" ? `copied to ${(cache.stopped_ms / 60_000).toFixed(1)} min (${mb})` : undefined;
   const state = cache.complete ? `cached (${mb})` : (stopped ?? `filling (${mb} so far)`);
+  if (fromDoorbell) return `${state}${doorbell}`;
   // Phase 5b: a deep start served by the device's cut, or why none did.
   if (typeof cache.cut_error === "string") return `${state} · Reolink protocol cut not used: ${cache.cut_error}`;
   const cut = cache.cut as { first_fragment_ms?: number; login?: string; error?: string | null } | undefined;
@@ -2287,6 +2292,35 @@ export function describeCache(cache: CacheStatus): string {
     typeof cut.first_fragment_ms === "number" ? `first fragment ${Math.round(cut.first_fragment_ms)} ms` : "no fragment";
   const login = cut.login === "new" ? ", new login" : cut.login ? ", shared login" : "";
   return `${state} · Reolink protocol cut: ${cut.error ? `failed (${cut.error})` : `${first}${login}`}`;
+}
+
+/** A battery doorbell's recording fetched as cuts over HA's session (Phase 12b). */
+function describeSdCut(cache: CacheStatus): string | undefined {
+  const cut = cache.sd_cut as
+    | {
+        first_chunk_ms?: number | null;
+        first_fragment_ms?: number;
+        media_s?: number | null;
+        length_s?: number | null;
+        spans?: number;
+        codec?: string | null;
+      }
+    | undefined;
+  if (!cut) return undefined;
+  const parts = [
+    typeof cut.first_fragment_ms === "number"
+      ? `first fragment ${String(Math.round(cut.first_fragment_ms))} ms`
+      : typeof cut.first_chunk_ms === "number"
+        ? `first bytes ${String(Math.round(cut.first_chunk_ms))} ms`
+        : "nothing yet",
+  ];
+  if (typeof cut.media_s === "number") {
+    const of = typeof cut.length_s === "number" ? ` of ${String(Math.round(cut.length_s))}` : "";
+    parts.push(`${String(Math.round(cut.media_s))}${of} s`);
+  }
+  if (typeof cut.spans === "number" && cut.spans > 1) parts.push(`${String(cut.spans)} tries`);
+  if (cut.codec) parts.push(cut.codec === "h265" ? "H.265" : "H.264");
+  return `from the doorbell: ${parts.join(", ")}`;
 }
 
 function rememberedSetup(): string {

@@ -8859,7 +8859,7 @@ UDP (the desktop client could not add it by IP). Phase 5a captured talk on it:
 | Step | Status |
 | --- | --- |
 | a. UDP transport and the gate | **Done** (2026-11-20, v0.69.0): Home Assistant's own UDP session reused. The owner's runs: talk go (2026-11-14); playback go on HA 2026.11.2 (2026-11-20): first picture in 0.44 s, at twice real time, H.265 main stream |
-| b. SD playback | Built (v0.70.0–v0.70.1): each recording fetched as one cut over HA's session, muxed into the cache's original. The owner's first try timed out (v0.70.0); v0.70.1 runs the cut alone on the Doorbell and says how far a failed cut came; awaits the owner's check |
+| b. SD playback | Built (v0.70.0–v0.70.2): each recording fetched as cuts over HA's session, muxed into the cache's original. The owner's first try timed out (v0.70.0); the second (v0.70.1) showed the Doorbell stopping after 31 s of a 227 s recording; v0.70.2 makes a recording per run of events and resumes a cut where it stops; awaits the owner's check |
 | c. Talk | Not started; after a go for talk |
 | d. Fallback for playback: clips by FTP | Not started; only if a says no to playback |
 
@@ -9101,6 +9101,39 @@ does not have.
     recording's start.
 - **If it still fails,** the error now says whether the Doorbell sent
   nothing, stopped part way, or refused.
+
+**The owner's second try (2026-11-20, v0.70.1): "the doorbell stopped after
+31 of 227 s of the recording".**
+
+- **What it showed:**
+  - the Doorbell answered and sent 31 s of media (its init too: `hvc1`),
+    then went quiet for 10 s;
+  - the recording asked was 227 s long. v0.70.0 made one recording per
+    file the Doorbell names, and that file held minutes of events;
+  - the event pressed lay past the 31 s, so no window came.
+
+  Why the Doorbell paused (pacing, a lost UDP packet, a stall) cannot be
+  told from here.
+- **v0.70.2:**
+  - **A recording per run of events:** `recordings_of_events` makes one
+    recording per run of a file's events that overlap or come within 10 s
+    of each other. It runs from the run's first event (or the file's stamp,
+    when that is up to 10 s before it: the pre-recording) to its last
+    event's end. An event pressed is fetched from its own start: 20–45 s,
+    not minutes.
+  - **A quiet cut resumes:** `muxed_cut` takes `open_cut(start_unix)`.
+    - After a 6 s silence before the recording's end, it pauses the muxer
+      and asks a new span from 4 s before where the media stopped.
+    - The muxer joins the span by the frame counter (Phase 5's spans),
+      skipping what it has.
+    - It fails only when a span brings no chunk within 20 s (35 s for a
+      later span, which may wait for reolink-aio to end the one before),
+      twice no new media, or 20 spans.
+    - Its numbers carry the spans (`span_list`, the last five).
+  - **Its numbers under their own name,** `timing["sd_cut"]`, not `cut`:
+    the panel read `cut` as Phase 5's deep start ("Asking the recorder for
+    this moment"). Details' Cache line now ends "from the doorbell: first
+    fragment N ms, M of L s, K tries, H.265", updated while it fills.
 
 #### Step 12c: talk
 
