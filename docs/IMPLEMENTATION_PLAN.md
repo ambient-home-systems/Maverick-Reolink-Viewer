@@ -28,7 +28,7 @@ put on it:
 | 9 | The Wall: the Live page as a security monitor, with layouts, arranging, HD large tiles and the detection strip | Standard / High | 2–3 wk | **Done** (2026-11-10, v0.56.0): the owner validated v0.55.0's and v0.56.0's checklists. Started 2026-11-05. **Step 1 built** (v0.52.0): the Wall, its layouts (Auto by shape, 1, 2×2, 3×3, 4×4, 1+5, 1+7), saved per user on the server, `#wall/<id>`, each device remembering board or Wall; the owner's check: it works, nothing to scroll. **Step 2 built** (v0.53.0): swapping (drag, or Arrange and two taps), the large slot or alone by a double tap or Enter, the keyboard, pages and tours. **Step 3 built** (v0.54.0–v0.54.1): HD in the large tiles while a stream slot is spare, the NVR's budget 9 streams with 2 HD tiles (the capacity test). **Step 4 built** (v0.55.0): the detection strip, a tile lit at once by its sensor, and per layout the feeds' floodlight and siren buttons. **Step 5 built** (v0.56.0): the pointer hidden when still, the screen kept awake, the tiles asleep under Fully's screen off, and the Reolink Wall dashboard card. The owner's checks of v0.55.0 and v0.56.0 passed (2026-11-10): the phase is done. See "Phase 9" |
 | 10 | Scrubbing that shows the picture while dragging | Very high | 2–4 wk | **Done** (2026-11-13, v0.63.15): the owner's playback checks passed on every device, Chrome and Safari on the Mac, the iPhone app and the wall tablet (v0.63.10 made MSE painting show a lone key frame, for Chrome on plain HTTP and the tablet). Started 2026-11-10. **Step 0 built** (v0.57.0): the gate's measurements, the probe's scrub cuts and key frames, and the playback check's K row (key frames decoded one at a time); the owner's runs passed it (2026-11-10). **Step 1 built** (v0.58.0): the picture at a moment, from the server: a scrub session (a signed websocket), answered from a store of key frames found, the disk cache or a 2-second cut the device sends, taking its channel's turn; the playback check's F row. **Step 2 built** (v0.59.0): dragging over what the video has not buffered shows the server's key frame at the pointer, over the video, until release plays from there. **Step 4 built** (v0.60.0, the owner's ask): the playback check's P row replaces the hand checklist. **Step 3 built** (v0.62.0): a drag pauses the video, the server answers each picture before its cut's drain, and a release plays from the picture shown; the P row drags slowly alone and beside a second viewer. The owner's runs of v0.62.0 passed it on Front Yard Right and Garage (alone, a picture every 0.05–0.06 s; beside a second viewer, no stall); v0.62.1 follows from them. See "Phase 10" |
 | 11 | Playback and settings extras: zoom, event clips, filters, copying settings | Standard | 1–2 wk | **Started** (2026-11-13). **Steps 1 to 4 built**: zoom into the picture (v0.64.0, Reset fixed in v0.64.1); save this event (v0.65.0, confirmed on the owner's NVR); filters that start useful (v0.66.0); copy settings to other cameras (v0.67.0). Step 5's research: the probe asks (v0.68.0), awaiting the owner's run. See "Phase 11" |
-| 12 | Optional R&D: the Doorbell's recordings and talk | Very high | 3–5 wk, gated | **Started** (2026-11-13). **Step a built** (v0.69.0): the gate reuses Home Assistant's own UDP session to the Doorbell (reolink-aio 0.23.0 streams a 143 cut over it), so no UDP client of our own; the probe's Doorbell test reads its talk format and times a 10 s cut. The owner's first run (2026-11-14, HA 2026.11.1): talk go (ADPCM 16 kHz mono, full duplex); playback waits for HA 2026.11.2, which ships reolink-aio 0.23.0. See "Phase 12" |
+| 12 | Optional R&D: the Doorbell's recordings and talk | Very high | 3–5 wk, gated | **Started** (2026-11-13). **Step a built** (v0.69.0): the gate reuses Home Assistant's own UDP session to the Doorbell (reolink-aio 0.23.0 streams a 143 cut over it), so no UDP client of our own; the probe's Doorbell test reads its talk format and times a 10 s cut. The owner's runs: talk go (2026-11-14; ADPCM 16 kHz mono, full duplex); playback go on HA 2026.11.2 (2026-11-20; first picture in 0.44 s, twice real time, the main stream in H.265). See "Phase 12" |
 | 13 | Optional: live picture integrity and outside live sources | High | 1–1.5 wk, gated | Planned. See "Phase 13" |
 | 14 | Copies of detection clips on a NAS or cloud | High | — | **TBD** (the owner, 2026-11-02): may be built here later; sketched, not scheduled. See "Phase 14" |
 
@@ -8858,7 +8858,7 @@ UDP (the desktop client could not add it by IP). Phase 5a captured talk on it:
 
 | Step | Status |
 | --- | --- |
-| a. UDP transport and the gate | Built (v0.69.0): Home Assistant's own UDP session reused. The owner's first run (2026-11-14): talk go; playback awaits HA 2026.11.2 (reolink-aio 0.23.0) |
+| a. UDP transport and the gate | **Done** (2026-11-20, v0.69.0): Home Assistant's own UDP session reused. The owner's runs: talk go (2026-11-14); playback go on HA 2026.11.2 (2026-11-20): first picture in 0.44 s, at twice real time, H.265 main stream |
 | b. SD playback | Not started; after a go for playback |
 | c. Talk | Not started; after a go for talk |
 | d. Fallback for playback: clips by FTP | Not started; only if a says no to playback |
@@ -8961,6 +8961,29 @@ transport turned out to be unneeded for the gate.
     from a fresh search of the day.
 - **Fixed after the run:** `first_frame_under_goal` read false where no cut
   ran. It now reads null (unreleased; rides the next release).
+
+**The owner's second run (2026-11-20; v0.69.0, HA 2026.11.2, reolink-aio
+0.23.0): playback go, talk go.**
+
+- **The cut:** 10 s from the start of a 52 s event, over HA's own UDP session.
+  - First chunk after 315 ms, first key frame after 439 ms (12b's goal: under
+    2 s).
+  - 2.85 MB in 333 chunks, 4.5 Mbit/s on the wire, ended by the Doorbell.
+  - Speed 2.02: 10.2 s of media came in about 5 s, so a recording plays at 1x
+    while it downloads.
+  - 6 key frames (one every 2 s), 148 frames, 161 AAC blocks at 16 kHz; no
+    resync and no byte skipped.
+- **The Doorbell sends its main stream, asked for its sub stream:** the cut
+  was 2048×2048 H.265 at 15 fps, its main stream (the sub stream is 720×720
+  H.264). So it records the main stream only, or ignores `streamType`.
+  12b plays H.265 (`hvc1`), which Safari and Chrome on hardware with an
+  H.265 decoder take.
+- **HA's session stayed usable:** the clock query answered in 94 ms during
+  the cut and in 138 ms after it. As before, the session sat logged out
+  before the check (`session_active` false) and came back when asked.
+- **Searches:** the day search took 81 ms (8 days); today's event search
+  took 4.6 s for 329 events.
+- **Talk:** the same `TalkAbility` as the first run, in 60 ms.
 
 #### Step 12b: SD playback
 
