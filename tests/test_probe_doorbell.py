@@ -1,7 +1,7 @@
 """Tests for the Doorbell check (Phase 12 step a): cuts and talk over HA's session."""
 
 import asyncio
-from collections.abc import AsyncGenerator, AsyncIterator
+from collections.abc import AsyncGenerator
 from datetime import datetime, timedelta
 import importlib
 import json
@@ -98,7 +98,7 @@ class FakeCut:
         self.closed = False
         self.sent = 0
 
-    def __call__(self, **kwargs: Any) -> AsyncIterator[bytes]:
+    def __call__(self, **kwargs: Any) -> AsyncGenerator[bytes]:
         self.calls.append(kwargs)
         return self._stream()
 
@@ -326,6 +326,8 @@ async def test_without_reolink_aio_023(
     (channel,) = host["doorbell"]["channels"]
     assert channel["cut"] == {"ok": False, "skipped": CUT_NEEDS_LIBRARY}
     assert channel["gate"]["playback"] == "untested"
+    # No picture came: neither under nor over the goal.
+    assert channel["gate"]["first_frame_under_goal"] is None
     assert channel["gate"]["talk"] == "go"
     assert channel["ok"] is True
 

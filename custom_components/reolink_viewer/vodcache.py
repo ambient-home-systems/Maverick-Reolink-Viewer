@@ -86,6 +86,7 @@ from homeassistant.helpers.storage import Store
 from . import bridge
 from .baichuan_source import BaichuanSource, Cut, CutError
 from .bridge import VodFile, VodMethod
+from .cutstream import local_wall, muxed_cut
 from .devices import PlaybackSource
 from .fmp4 import (
     Fragment,
@@ -380,6 +381,9 @@ class VodCache:
         self._media: dict[str, dict[str, Any]] = {}
         # Recordings whose offsets could not be shifted: cached without index.
         self._no_index: set[str] = set()
+        # One cut at a time per host played by cut (reolink-aio streams one
+        # 143 per device and gives up on a second after 30 s): later ones queue.
+        self._cut_locks: dict[str, asyncio.Lock] = {}
         self._media_store: Store[dict[str, Any]] = Store(hass, 1, MEDIA_STORE_KEY)
         self._closed = False
 
@@ -1084,7 +1088,9 @@ class VodCache:
             or not source.enabled
             or entry.complete
             or entry.error is not None
+            or not source.usable(entry.recording.source.entry_id)
         ):
+            # Never of a UDP-only device: its original is a cut already (12b).
             return None
         # One decision at a time per recording: concurrent starts share a cut.
         async with entry.cut_lock:
@@ -1479,21 +1485,7 @@ class VodCache:
         """
         rec = entry.recording
         host = bridge.async_get_host(self._hass, rec.source.entry_id)
-        vod_file = VodFile(
-            start=from_ms(rec.start_ms),
-            end=from_ms(rec.end_ms),
-            name=rec.name,
-            stream=rec.stream,
-            size=rec.size,
-            triggers=(),
-        )
         began = time.monotonic()
-        _mime, url = await self._scheduler.run(
-            rec.source.entry_id,
-            lambda: host.async_vod_url(rec.source.channel, vod_file, VOD_METHOD),
-            priority=Priority.PLAYBACK,
-            timeout=URL_TIMEOUT,
-        )
         scanner = BoxScanner(max_boxes=3)
         duration_s = (rec.end_ms - rec.start_ms) / 1000
         head = bytearray()
@@ -1521,19 +1513,9 @@ class VodCache:
 
         outcome = "complete"
         try:
-            async with self._session().get(
-                url.value,
-                timeout=ClientTimeout(
-                    total=None, sock_connect=CONNECT_TIMEOUT, sock_read=READ_TIMEOUT
-                ),
-            ) as resp:
-                if resp.status != 200:
-                    raise VodCacheError(f"HTTP {resp.status}")
-                entry.timing.setdefault("headers_ms", _ms(began))
-                entry.response = resp
+            async with self._original_bytes(entry, host, began) as chunks:
                 buffer = bytearray()
                 first = True
-                chunks = resp.content.iter_chunked(CHUNK)
                 while True:
                     try:
                         received = await anext(chunks)
@@ -1611,6 +1593,64 @@ class VodCache:
         entry.timing["mbit_s"] = round(entry.written * 8 / seconds / 1e6, 1)
         await self._remember_media(rec, scanner, entry.timing.get("indexed"))
         return outcome
+
+    @contextlib.asynccontextmanager
+    async def _original_bytes(
+        self, entry: Entry, host: bridge.ReolinkHostHandle, began: float
+    ) -> AsyncIterator[AsyncIterator[bytes]]:
+        """Open a recording's original: the device's HTTP download, or a cut.
+
+        A camera with no HTTP download whose recordings play by a cut over
+        Home Assistant's session (the Doorbell, Phase 12b) sends the whole
+        recording as one cut, muxed here into the MP4 its download would be.
+        """
+        rec = entry.recording
+        if host.plays_by_cut(rec.source.channel):
+            entry.timing["source"] = "cut"
+            lock = self._cut_locks.setdefault(rec.source.entry_id, asyncio.Lock())
+            queued, waited = lock.locked(), time.monotonic()
+            async with lock:
+                if queued:
+                    # Behind another recording's cut of this camera.
+                    entry.timing["cut_wait_ms"] = _ms(waited)
+                tz = host.timezone()
+                payload = host.async_stream_cut(
+                    rec.source.channel,
+                    local_wall(rec.start_ms / 1000, tz),
+                    local_wall(rec.end_ms / 1000, tz),
+                    rec.stream,
+                )
+                muxed = muxed_cut(
+                    payload, origin_unix=rec.start_ms / 1000, timing=entry.timing
+                )
+                async with contextlib.aclosing(muxed):
+                    yield muxed
+            return
+        vod_file = VodFile(
+            start=from_ms(rec.start_ms),
+            end=from_ms(rec.end_ms),
+            name=rec.name,
+            stream=rec.stream,
+            size=rec.size,
+            triggers=(),
+        )
+        _mime, url = await self._scheduler.run(
+            rec.source.entry_id,
+            lambda: host.async_vod_url(rec.source.channel, vod_file, VOD_METHOD),
+            priority=Priority.PLAYBACK,
+            timeout=URL_TIMEOUT,
+        )
+        async with self._session().get(
+            url.value,
+            timeout=ClientTimeout(
+                total=None, sock_connect=CONNECT_TIMEOUT, sock_read=READ_TIMEOUT
+            ),
+        ) as resp:
+            if resp.status != 200:
+                raise VodCacheError(f"HTTP {resp.status}")
+            entry.timing.setdefault("headers_ms", _ms(began))
+            entry.response = resp
+            yield resp.content.iter_chunked(CHUNK)
 
     def _shift(self, rec: Recording, shifter: OffsetShifter, data: bytes) -> bytes:
         try:

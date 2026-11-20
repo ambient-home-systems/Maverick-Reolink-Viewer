@@ -187,6 +187,9 @@ def _init_probe_mock(host_mock: MagicMock) -> None:
         ]
     )
     host_mock.baichuan.snapshot_past = AsyncMock(return_value=b"\xff\xd8jpegdata")
+    # As the reolink-aio of the dev environment (before 0.23.0): no cut is
+    # streamed over Home Assistant's session; tests of Phase 12 set one.
+    del host_mock.baichuan.send_payload_stream
 
 
 @pytest.fixture

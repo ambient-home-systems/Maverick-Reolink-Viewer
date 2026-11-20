@@ -106,6 +106,11 @@ class FakeHost:
     def __init__(self, server: TestServer) -> None:
         self.server = server
         self.calls: list[tuple[int, VodFile, VodMethod]] = []
+        # An NVR: its recordings come by HTTP, not by a cut (Phase 12b).
+        self.baichuan_only = False
+
+    def plays_by_cut(self, channel: int) -> bool:
+        return False
 
     async def async_vod_url(
         self, channel: int, file: VodFile, method: VodMethod

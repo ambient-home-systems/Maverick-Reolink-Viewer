@@ -243,10 +243,13 @@ board.
 - Tap a row to play its recording.
 
 A battery doorbell that keeps its recordings on its own SD card lists its events
-too, while it runs on wired power. Its recordings cannot be played in the panel yet:
-tapping one of its rows opens its **Playback** tab on that event, with pictures from it
-(one every 5 seconds) and the day's other events beside them. Play the recordings
-themselves in the Reolink app.
+too, while it runs on wired power, and its recordings play in its **Playback** tab like
+any other camera's. Reolink Viewer fetches each one from the doorbell's SD card over
+Home Assistant's own connection to it; this needs Home Assistant 2026.11.2 or later.
+The doorbell records in H.265 only, in its full size: Safari plays it, and so does Chrome
+on a computer or tablet that decodes H.265. A browser that cannot says so. On an older
+Home Assistant, its Playback tab shows pictures from each event (one every 5 seconds)
+instead; play the recordings themselves in the Reolink app.
 
 ## Devices
 

@@ -170,8 +170,9 @@ def verdict(result: dict[str, Any]) -> dict[str, Any]:
     return {
         "playback": playback,
         "playback_why": why,
+        # None when no picture came (the owner's run on 0.22.0 read "false").
         "first_frame_under_goal": (
-            isinstance(first, int | float) and first < FIRST_FRAME_GOAL_MS
+            first < FIRST_FRAME_GOAL_MS if isinstance(first, int | float) else None
         ),
         "talk": talk,
         "talk_why": talk_why,

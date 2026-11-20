@@ -895,8 +895,15 @@ export class RvPlayback extends LitElement {
       if (this._cursor !== undefined) void this.playAt(this._cursor);
       return;
     }
-    this._playFailure = message;
-    toast(this, explainPlayback(message).text, "error");
+    // The MSE player refused the recording as H.265 and the file player could
+    // not decode it either: name the format (the Doorbell records only it).
+    const refused = this._metrics.lastFallback ?? "";
+    const said =
+      /hvc1|hev1/i.test(refused) && /media error [34]|not supported|decod/i.test(message)
+        ? `${message} (H.265: ${refused})`
+        : message;
+    this._playFailure = said;
+    toast(this, explainPlayback(said).text, "error");
   }
 
   private _onTime(time: number): void {

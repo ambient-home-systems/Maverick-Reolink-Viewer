@@ -3,6 +3,20 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.70.0
+
+The second step of Phase 12: the doorbell's recordings play in the panel.
+
+- **A battery doorbell's recordings play in its Playback tab**, like any other
+  camera's, while it runs on wired power.
+  - Each recording is fetched from the doorbell's SD card over Home Assistant's own
+    connection to it (no second login), then plays, seeks and saves (Save event) as an
+    NVR's do.
+  - The doorbell records in H.265 only. Safari plays it, and so does Chrome on a
+    computer or tablet that decodes H.265; a browser that cannot now says so.
+  - Needs Home Assistant 2026.11.2 or later. On an older one, or with the doorbell on its
+    battery, the Playback tab shows pictures from each event, as before.
+
 ## 0.69.0
 
 The first step of Phase 12, the doorbell's recordings and talk: can they come over Home

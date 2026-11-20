@@ -405,6 +405,13 @@ again to see what is still there.
 
 The recorder has the recording, but nothing in it. Pick another event.
 
+> **This browser cannot play H.265, the video format of this recording.**
+
+A battery doorbell records only in H.265 (HEVC), in its full size, even its SD copy.
+Safari plays it, on a Mac, iPhone or iPad, and so does Chrome on a computer or tablet
+whose graphics decode H.265. Other browsers, and Chrome on hardware without that, cannot;
+play it in one that can, or in the Reolink app.
+
 > **This browser cannot play this recording.**
 
 HD recordings from some cameras are H.265 (HEVC), which some browsers cannot play. Try
