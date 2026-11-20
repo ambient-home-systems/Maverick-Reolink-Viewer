@@ -388,14 +388,35 @@ def _merge(
 
 
 def _mark_playback_source(camera: _Camera) -> None:
-    for conn in camera.connections:
-        if (
-            conn.handle is not None
-            and conn.channel is not None
-            and conn.handle.records_locally(conn.channel)
-        ):
-            conn.playback_source = True
-            return
+    """Mark the connection the camera's recordings play from.
+
+    One that records them where this integration fetches them over HTTP (an
+    NVR, a camera's SD card with replay) comes first; else one whose SD card
+    plays by a cut over Home Assistant's session (the Doorbell, Phase 12b).
+    """
+    for plays in (_records_locally, _plays_by_cut):
+        for conn in camera.connections:
+            if plays(conn):
+                conn.playback_source = True
+                return
+
+
+def _records_locally(conn: _Connection) -> bool:
+    return (
+        conn.handle is not None
+        and conn.channel is not None
+        and conn.handle.records_locally(conn.channel)
+    )
+
+
+def _plays_by_cut(conn: _Connection) -> bool:
+    if conn.handle is None or conn.channel is None:
+        return False
+    try:
+        return conn.handle.plays_by_cut(conn.channel)
+    except Exception:  # a host that cannot say plays nothing by cut
+        _LOGGER.debug("Cannot read whether a camera plays by cut", exc_info=True)
+        return False
 
 
 def _reolink_entities(

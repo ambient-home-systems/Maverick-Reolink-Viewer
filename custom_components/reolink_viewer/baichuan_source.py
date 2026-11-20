@@ -356,8 +356,13 @@ class BaichuanSource:
         return not self._closed and self._enabled()
 
     def usable(self, entry_id: str) -> bool:
-        """Return whether a cut may be asked of a host (the option on, not refused)."""
-        if not self.enabled:
+        """Return whether a cut may be asked of a host (the option on, not refused).
+
+        Never of a device that speaks Baichuan over UDP only (the battery
+        Doorbell): this client speaks TCP. Its recordings come by a cut over
+        Home Assistant's session instead (Phase 12b, ``cutstream``).
+        """
+        if not self.enabled or _udp_only(self._hass, entry_id):
             return False
         host = self._hosts.get(entry_id)
         return (
@@ -1097,6 +1102,13 @@ class BaichuanSource:
             ],
             "scrub_cuts": dict(self._scrubs),
         }
+
+
+def _udp_only(hass: HomeAssistant, entry_id: str) -> bool:
+    try:
+        return bridge.async_get_host(hass, entry_id).baichuan_only
+    except bridge.BridgeError:
+        return False
 
 
 def _key_frame_sample(

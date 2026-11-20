@@ -31,6 +31,8 @@ describe("explainPlayback", () => {
     ["no main-stream recording for this time", "There is no HD copy of this recording."],
     ["unknown segment s1", "This recording is no longer there: the recorder may have recorded over it."],
     ["empty recording", "This recording is empty."],
+    ['MSE cannot play video/mp4; codecs="hvc1.1.6.L150.90"', "This browser cannot play H.265, the video format of this recording."],
+    ["media error 4 (H.265)", "This browser cannot play H.265, the video format of this recording."],
     ["media error 4", "This browser cannot play this recording."],
     ["MEDIA_ERR_SRC_NOT_SUPPORTED", "This browser cannot play this recording."],
     ["no supported streams", "This browser cannot play this recording."],

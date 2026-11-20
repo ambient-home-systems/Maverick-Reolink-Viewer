@@ -968,6 +968,19 @@ describe("rv-playback with MSE", () => {
     expect(player?.mse).toBe(false);
     await el.updateComplete;
     expect(el.renderRoot.textContent).toContain("1× (last: MSE cannot play hvc1)");
+
+    // The file player cannot decode it either: the format is named (Phase 12b).
+    el.renderRoot.querySelector("rv-player")?.dispatchEvent(
+      new CustomEvent("rv-player-error", {
+        detail: { message: "media error 4", segmentId: "s1", played: false },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    await flush();
+    await el.updateComplete;
+    expect(el._playFailure).toBe("media error 4 (H.265: MSE cannot play hvc1)");
+    expect(el.renderRoot.textContent).toContain("This browser cannot play H.265, the video format of this recording.");
   });
 
   it("can be told to use the file player only", async () => {

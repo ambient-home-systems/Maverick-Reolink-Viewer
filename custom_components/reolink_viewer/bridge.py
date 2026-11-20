@@ -16,7 +16,7 @@ Methods on :class:`ReolinkHostHandle` that perform device I/O are prefixed with
 import asyncio
 from collections.abc import AsyncGenerator, Awaitable, Callable, Iterable
 import contextlib
-from dataclasses import asdict, dataclass, field, fields, is_dataclass
+from dataclasses import asdict, dataclass, field, fields, is_dataclass, replace
 from datetime import date, datetime, timedelta, tzinfo
 from enum import StrEnum
 import functools
@@ -38,7 +38,7 @@ from homeassistant.util import dt as dt_util
 from .baichuan_media import BlockReader
 from .const import REOLINK_DOMAIN
 from .remux import async_jpeg_from_frame
-from .timeconv import device_timezone
+from .timeconv import device_timezone, name_stamp
 
 if TYPE_CHECKING:
     from reolink_aio.api import Host
@@ -904,6 +904,32 @@ class ReolinkHostHandle:
             return False
         return self.stores_recordings(channel)
 
+    @property
+    def baichuan_only(self) -> bool:
+        """Return True for a device that speaks Baichuan only (the battery Doorbell).
+
+        Its Baichuan is UDP, which this integration's own client (TCP) cannot
+        reach: only Home Assistant's session to it carries requests.
+        """
+        return _safe(lambda: self._api.baichuan_only) is True
+
+    def plays_by_cut(self, channel: int) -> bool:
+        """Return True for a channel played by a cut over HA's session (Phase 12b).
+
+        A camera that keeps recordings this integration cannot fetch over HTTP
+        (the battery Doorbell's SD card: Baichuan only, no replay) plays them
+        by a download cut (143) over Home Assistant's own session, when
+        reolink-aio can stream one (0.23.0 and later). A battery camera only on
+        wired power: a cut keeps it awake.
+        """
+        if self.records_locally(channel) or not self.stores_recordings(channel):
+            return False
+        if not callable(getattr(self._api.baichuan, "send_payload_stream", None)):
+            return False
+        api = self._api
+        on_battery = bool(_safe(api.supported, channel, "battery"))
+        return not on_battery or _wired_power(api, channel)
+
     def stores_recordings(self, channel: int) -> bool:
         """Return True if this host keeps recordings of the channel, playable or not.
 
@@ -1304,6 +1330,8 @@ class ReolinkHostHandle:
         ``start``/``end`` are device wall-clock times. An event search failure
         leaves the recordings usable (``events_error``).
         """
+        if self.plays_by_cut(channel):
+            return await self._search_day_by_cut(channel, start, end, stream)
         timing: dict[str, float] = {}
 
         async def timed[T](name: str, call: Callable[[], Awaitable[T]]) -> T:
@@ -1336,6 +1364,22 @@ class ReolinkHostHandle:
             return DaySearch(files, [], _search_error(events_result), timing)
         _by_id, by_trigger = events_result
         return DaySearch(files, _events(by_trigger), timing=timing)
+
+    async def _search_day_by_cut(
+        self, channel: int, start: datetime, end: datetime, stream: str
+    ) -> DaySearch:
+        """Search a window of a camera played by cut: its recordings are its events'.
+
+        Such a camera (the battery Doorbell) has no HTTP recording search, and
+        its Baichuan event search names each event's recording but not the
+        recording's end: ``recordings_of_events`` makes them. A failure raises,
+        as a failed recording search does.
+        """
+        began = time.monotonic()
+        _by_id, by_trigger = await self._search_events(channel, start, end, stream)
+        files, events = recordings_of_events(_events(by_trigger), stream)
+        timing = {"events_ms": round((time.monotonic() - began) * 1000, 1)}
+        return DaySearch(files, events, timing=timing)
 
     async def async_search_day_events(
         self, channel: int, start: datetime, end: datetime, stream: str
@@ -1653,6 +1697,52 @@ def _events(by_trigger: Any) -> list[VodEvent]:
             end = max(end, known.end)
         merged[file_id, start] = VodEvent(start, end, types, file_id)
     return sorted(merged.values(), key=lambda e: (e.start, e.end))
+
+
+# A recording starts at its file's stamp when the stamp comes at most this long
+# before its first event (pre-recording); else at its first event.
+FILE_LEAD_MAX = timedelta(minutes=5)
+
+
+def recordings_of_events(
+    events: list[VodEvent], stream: str
+) -> tuple[list[VodFile], list[VodEvent]]:
+    """Make the recordings of a camera whose search lists only events (Phase 12b).
+
+    Each event names its recording (``file_id``, the file's 14-digit stamp).
+    A recording starts at that stamp (its pre-recording included) when the
+    stamp reads as a moment shortly before its first event, else at the
+    first event; it ends at its last event's end. Its events are given its
+    start as their ``file_id``, as an NVR's events carry their recording's.
+    """
+    by_file: dict[str, list[VodEvent]] = {}
+    for event in events:
+        by_file.setdefault(event.file_id, []).append(event)
+    files: list[VodFile] = []
+    linked: list[VodEvent] = []
+    for file_id, items in by_file.items():
+        first = min(e.start for e in items)
+        last = max(e.end for e in items)
+        start = first
+        if (stamp := name_stamp(file_id)) is not None and (
+            timedelta(0) <= first - stamp <= FILE_LEAD_MAX
+        ):
+            start = stamp
+        end = max(last, start + timedelta(seconds=1))
+        types = tuple(dict.fromkeys(t for e in items for t in e.types))
+        file = VodFile(
+            start=start,
+            end=end,
+            name=_reolink_time_id(start),
+            stream=stream,
+            size=None,
+            triggers=types,
+        )
+        files.append(file)
+        linked += [replace(e, file_id=file.start_id) for e in items]
+    files.sort(key=lambda f: f.start)
+    linked.sort(key=lambda e: (e.start, e.end))
+    return files, linked
 
 
 def _collect_limits(section: Any, path: str, out: dict[str, int | float]) -> None:

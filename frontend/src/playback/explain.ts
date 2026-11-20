@@ -46,6 +46,13 @@ export function explainPlayback(error: string): Explained {
   if (/empty recording/i.test(error)) {
     return { text: "This recording is empty.", advice: "Pick another event." };
   }
+  if (/hvc1|hev1|hevc|h\.?265/i.test(error)) {
+    // The Doorbell records only H.265, its SD copy too (Phase 12b).
+    return {
+      text: "This browser cannot play H.265, the video format of this recording.",
+      advice: "Safari plays it, and so does Chrome on a computer or tablet that decodes H.265.",
+    };
+  }
   if (/media error 4|SRC_NOT_SUPPORTED|not supported|no supported|codec|no moov|not playable|decod|demux|pipeline/i.test(error)) {
     return {
       text: "This browser cannot play this recording.",
