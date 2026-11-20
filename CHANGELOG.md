@@ -3,6 +3,12 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.70.3
+
+- **The doorbell's past days get its recordings.** Days Reolink Viewer had saved from
+  before 0.70.2 kept the doorbell without recordings, or with one long recording per file
+  (and today's saved copy too): every camera's saved days are searched again once.
+
 ## 0.70.2
 
 The second fix for the doorbell's recordings: they stopped part way ("the doorbell
