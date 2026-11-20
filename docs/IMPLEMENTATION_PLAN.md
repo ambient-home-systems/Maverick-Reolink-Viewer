@@ -9135,6 +9135,12 @@ does not have.
     this moment"). Details' Cache line now ends "from the doorbell: first
     fragment N ms, M of L s, K tries, H.265", updated while it fills.
 
+- **v0.70.3: saved days searched again.** The timeline keeps past days and
+  today's copy across restarts (`DAYS_FORMAT`). The Doorbell's were saved
+  without recordings (before v0.70.0) or with one per file (v0.70.0–v0.70.1),
+  and today's copy is only searched on from where it ended. Format 3 makes
+  every camera's saved days search again once.
+
 #### Step 12c: talk
 
 - **A Talk button** in live view, to hold or to toggle.

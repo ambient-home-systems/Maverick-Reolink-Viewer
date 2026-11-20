@@ -61,7 +61,10 @@ TODAY_SAVE_DELAY = 30.0
 KEEP_TODAY_INTERVAL = timedelta(minutes=15)
 # Stored days of an older format are searched again (months are kept).
 # 2: the NVR's per-type alarm records for one moment are merged into one event.
-DAYS_FORMAT = 2
+# 3: a battery Doorbell's days have its recordings (v0.70.0: it plays by cut),
+#    one per run of events (v0.70.2); days kept from before had none, or one
+#    per file of minutes.
+DAYS_FORMAT = 3
 # Past days fetched in the background when the panel opens.
 WARM_PAST_DAYS = 7
 SAVE_DELAY = 10.0
