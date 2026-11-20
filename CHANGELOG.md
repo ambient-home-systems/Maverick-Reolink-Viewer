@@ -3,6 +3,19 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.70.2
+
+The second fix for the doorbell's recordings: they stopped part way ("the doorbell
+stopped after 31 of 227 s").
+
+- **Each event is its own recording**, from its start to its end (events that overlap or
+  come within 10 seconds together). The doorbell's files can hold minutes of events, and
+  the whole file came first: an event two minutes in waited a minute.
+- **A recording the doorbell stops sending part way is asked for again** from where it
+  stopped, and plays on. It fails only when the doorbell sends nothing more.
+- **Details shows how far the doorbell's recording came**: "from the doorbell: first
+  fragment 512 ms, 31 of 44 s, 2 tries, H.265".
+
 ## 0.70.1
 
 A fix for 0.70.0: the doorbell's recordings did not play ("The recording could not be

@@ -64,7 +64,7 @@ File I/O runs in the executor; device I/O goes through the scheduler.
 """
 
 import asyncio
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncGenerator, AsyncIterator, Callable
 import contextlib
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -1653,14 +1653,16 @@ class VodCache:
         """Open a recording as one cut over HA's session, muxed (Phase 12b)."""
         rec = entry.recording
         tz = host.timezone()
-        payload = host.async_stream_cut(
-            rec.source.channel,
-            local_wall(rec.start_ms / 1000, tz),
-            local_wall(rec.end_ms / 1000, tz),
-            rec.stream,
-        )
+        end = local_wall(rec.end_ms / 1000, tz)
+
+        def open_cut(start_unix: float) -> AsyncGenerator[bytes]:
+            # From that moment to the recording's end, in the device's time.
+            return host.async_stream_cut(
+                rec.source.channel, local_wall(start_unix, tz), end, rec.stream
+            )
+
         muxed = muxed_cut(
-            payload,
+            open_cut,
             origin_unix=rec.start_ms / 1000,
             timing=entry.timing,
             length_s=(rec.end_ms - rec.start_ms) / 1000,

@@ -1700,8 +1700,10 @@ def _events(by_trigger: Any) -> list[VodEvent]:
 
 
 # A recording starts at its file's stamp when the stamp comes at most this long
-# before its first event (pre-recording); else at its first event.
-FILE_LEAD_MAX = timedelta(minutes=5)
+# before its first event (the camera's pre-recording); else at that event.
+PRE_RECORD_MAX = timedelta(seconds=10)
+# Events of one file this close together (or overlapping) make one recording.
+EVENT_GAP_MAX = timedelta(seconds=10)
 
 
 def recordings_of_events(
@@ -1709,11 +1711,14 @@ def recordings_of_events(
 ) -> tuple[list[VodFile], list[VodEvent]]:
     """Make the recordings of a camera whose search lists only events (Phase 12b).
 
-    Each event names its recording (``file_id``, the file's 14-digit stamp).
-    A recording starts at that stamp (its pre-recording included) when the
-    stamp reads as a moment shortly before its first event, else at the
-    first event; it ends at its last event's end. Its events are given its
-    start as their ``file_id``, as an NVR's events carry their recording's.
+    Each event names its recording's file (``file_id``, the file's 14-digit
+    stamp), but not where the file ends; and a file can hold minutes of
+    events (the owner's Doorbell: 227 s), which a cut fetches from its start.
+    So a recording is a run of a file's events that overlap or come within
+    ``EVENT_GAP_MAX`` of each other: from the run's first event (or the
+    file's stamp, when that comes up to ``PRE_RECORD_MAX`` before it) to its
+    last event's end. Its events are given its start as their ``file_id``,
+    as an NVR's events carry their recording's.
     """
     by_file: dict[str, list[VodEvent]] = {}
     for event in events:
@@ -1721,28 +1726,41 @@ def recordings_of_events(
     files: list[VodFile] = []
     linked: list[VodEvent] = []
     for file_id, items in by_file.items():
-        first = min(e.start for e in items)
-        last = max(e.end for e in items)
-        start = first
-        if (stamp := name_stamp(file_id)) is not None and (
-            timedelta(0) <= first - stamp <= FILE_LEAD_MAX
-        ):
-            start = stamp
-        end = max(last, start + timedelta(seconds=1))
-        types = tuple(dict.fromkeys(t for e in items for t in e.types))
-        file = VodFile(
-            start=start,
-            end=end,
-            name=_reolink_time_id(start),
-            stream=stream,
-            size=None,
-            triggers=types,
-        )
-        files.append(file)
-        linked += [replace(e, file_id=file.start_id) for e in items]
+        stamp = name_stamp(file_id)
+        for run in _runs(sorted(items, key=lambda e: (e.start, e.end))):
+            first = run[0].start
+            last = max(e.end for e in run)
+            start = first
+            if stamp is not None and timedelta(0) <= first - stamp <= PRE_RECORD_MAX:
+                start = stamp
+            types = tuple(dict.fromkeys(t for e in run for t in e.types))
+            file = VodFile(
+                start=start,
+                end=max(last, start + timedelta(seconds=1)),
+                name=_reolink_time_id(start),
+                stream=stream,
+                size=None,
+                triggers=types,
+            )
+            files.append(file)
+            linked += [replace(e, file_id=file.start_id) for e in run]
     files.sort(key=lambda f: f.start)
     linked.sort(key=lambda e: (e.start, e.end))
     return files, linked
+
+
+def _runs(events: list[VodEvent]) -> list[list[VodEvent]]:
+    """Split time-ordered events into runs that overlap or come close."""
+    runs: list[list[VodEvent]] = []
+    end: datetime | None = None
+    for event in events:
+        if end is None or event.start - end > EVENT_GAP_MAX:
+            runs.append([event])
+            end = event.end
+        else:
+            runs[-1].append(event)
+            end = max(end, event.end)
+    return runs
 
 
 def _collect_limits(section: Any, path: str, out: dict[str, int | float]) -> None:
