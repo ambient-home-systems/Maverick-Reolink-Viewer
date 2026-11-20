@@ -740,10 +740,18 @@ async def _open_for_playback(
     if (resolved := _playback_source(hass, connection, msg)) is None:
         return None
     entry, source = resolved
+    # A camera played by cut sends one recording at a time (Phase 12b): the
+    # one a viewer asks for takes its turn; what the panel loads ahead
+    # (``preload``) waits behind it and stops when another is asked for.
+    by_cut = _plays_by_cut(hass, source)
+    preload = by_cut and msg.get("preload", False)
     try:
         recording, segment_id = await _recording(entry, source, msg)
         cache_entry = await entry.runtime_data.vod_cache.async_open(
-            recording, Priority.PLAYBACK, at=msg.get("at")
+            recording,
+            Priority.PREFETCH if preload else Priority.PLAYBACK,
+            at=msg.get("at"),
+            takes_turn=by_cut and not preload,
         )
     except TimelineError as err:
         connection.send_error(msg["id"], ERR_SEARCH_FAILED, str(err))
@@ -796,6 +804,8 @@ def _playback_result(
         # Where playback will start (UTC ms): a shorter copy of a recording
         # still being written serves it if it reaches that far.
         probatio.Optional("at"): int,
+        # Loaded ahead of need (the next recording), not asked for.
+        probatio.Optional("preload", default=False): bool,
     }
 )
 @websocket_api.async_response
@@ -834,6 +844,7 @@ async def ws_playback_url(
         probatio.Required("type"): f"{DOMAIN}/playback/mse",
         **_SEGMENT_SCHEMA,
         probatio.Optional("at"): int,
+        probatio.Optional("preload", default=False): bool,
     }
 )
 @websocket_api.async_response
@@ -984,10 +995,12 @@ async def ws_playback_save_event(
         recording, _segment_id = await _recording(entry, source, msg)
         # A copy of a recording still being written must reach the end.
         cache_entry = await data.vod_cache.async_open(
-            recording, Priority.PLAYBACK, at=end
+            recording, Priority.PLAYBACK, at=end, takes_turn=_plays_by_cut(hass, source)
         )
         name = clip_name(source.name, msg["start"], msg["label"], hass.config.time_zone)
-        clip = await data.clips.async_make(cache_entry, start, end, name)
+        # No click on another recording stops the fill an event is saved from.
+        with data.vod_cache.keeping(cache_entry):
+            clip = await data.clips.async_make(cache_entry, start, end, name)
     except TimelineError as err:
         connection.send_error(msg["id"], ERR_SEARCH_FAILED, str(err))
         return

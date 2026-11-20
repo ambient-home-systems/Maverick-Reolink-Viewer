@@ -194,6 +194,7 @@ export class RvPlayback extends LitElement {
     _date: { state: true },
     _day: { state: true },
     _error: { state: true },
+    _refreshError: { state: true },
     _playFailure: { state: true },
     _loading: { state: true },
     _view: { state: true },
@@ -238,6 +239,8 @@ export class RvPlayback extends LitElement {
   declare _date: string;
   declare _day: TimelineDay | undefined;
   declare _error: string | undefined;
+  /** Why the last background refresh of the day on screen failed (it stays shown). */
+  declare _refreshError: string | undefined;
   /** Why the last play attempt failed, until the next one starts. */
   declare _playFailure: string | undefined;
   declare _loading: boolean;
@@ -443,6 +446,7 @@ export class RvPlayback extends LitElement {
       const first = !this._day || this._day.date !== day.date;
       this._day = day;
       this._error = undefined;
+      this._refreshError = undefined;
       this._firstFilters(day);
       if (first || !options.keepView) {
         // The latest event shown (motion-only ones may be hidden).
@@ -465,7 +469,16 @@ export class RvPlayback extends LitElement {
       stale = !options.quiet && day.timing.cache === "stale";
       this._retryEventsSoon(day);
     } catch (err) {
-      if (seq === this._daySeq) this._error = toError(err).message;
+      if (seq !== this._daySeq) {
+        // A newer load answers.
+      } else if (options.quiet && this._day?.date === date) {
+        // v0.70.5: a background refresh that failed (the Doorbell's event
+        // search, busy sending a recording) leaves the day on screen as it
+        // was; Details says so, and the next refresh tries again.
+        this._refreshError = toError(err).message;
+      } else {
+        this._error = toError(err).message;
+      }
     } finally {
       if (seq === this._daySeq) this._loading = false;
     }
@@ -730,11 +743,15 @@ export class RvPlayback extends LitElement {
         if (!waiting() || !status.cache || status.cache.complete || status.cache.error) break;
         const hd = playback.stream === "main" ? "HD " : "";
         const cut = status.cache.cut as { error?: string | null } | undefined;
+        // Phase 12b: the Doorbell sends one recording at a time.
+        const doorbell = doorbellNote(status.cache);
+        if (doorbell) this._metrics = { ...this._metrics, cache: status.cache };
         // Phase 5b: the recorder is asked for this moment (the download goes on behind).
         this._note =
-          cut && !cut.error && status.cache.cut_error === undefined
+          doorbell ??
+          (cut && !cut.error && status.cache.cut_error === undefined
             ? `Asking the recorder for this moment${hd ? " in HD" : ""}…`
-            : `Fetching the ${hd}recording from the recorder: ${megabytes(status.cache.bytes)} of about ${megabytes(status.expected_bytes)}`;
+            : `Fetching the ${hd}recording from the recorder: ${megabytes(status.cache.bytes)} of about ${megabytes(status.expected_bytes)}`);
       } catch {
         break;
       }
@@ -743,7 +760,7 @@ export class RvPlayback extends LitElement {
     // Phase 5b: a start the device's cut served shows it in the debug panel.
     try {
       const status = await fetchCacheStatus(hass, token);
-      if (seq === this._playSeq && (status.cache?.cut || status.cache?.sd_cut)) {
+      if (seq === this._playSeq && (status.cache?.cut || status.cache?.sd_cut || status.cache?.cut_waiting)) {
         this._metrics = { ...this._metrics, cache: status.cache };
       }
     } catch {
@@ -811,8 +828,8 @@ export class RvPlayback extends LitElement {
     try {
       const ref = this._ref(next);
       const playback = this._useMse(this._stream)
-        ? await fetchPlaybackMse(hass, ref, next.start)
-        : await fetchPlaybackUrl(hass, ref, this._progressive, next.start);
+        ? await fetchPlaybackMse(hass, ref, next.start, true)
+        : await fetchPlaybackUrl(hass, ref, this._progressive, next.start, true);
       if (seq !== this._playSeq) {
         this._release(playback);
         return;
@@ -1748,7 +1765,7 @@ export class RvPlayback extends LitElement {
         <dt>Day</dt>
         <dd>
           ${this._day
-            ? `${this._day.segments.length} recordings, ${this._day.events.length} events${this._day.complete ? ", final" : ""}${this._day.events_error ? `, event search failed (${this._day.events_error})` : ""}`
+            ? `${this._day.segments.length} recordings, ${this._day.events.length} events${this._day.complete ? ", final" : ""}${this._day.events_error ? `, event search failed (${this._day.events_error})` : ""}${this._refreshError ? `, last refresh failed (${this._refreshError})` : ""}`
             : "–"}
         </dd>
         </dl>
@@ -2294,6 +2311,19 @@ export function describeCache(cache: CacheStatus): string {
   return `${state} · Reolink protocol cut: ${cut.error ? `failed (${cut.error})` : `${first}${login}`}`;
 }
 
+/**
+ * What the note under the player says while a recording played by cut has
+ * not started (Phase 12b): the camera sends one recording at a time.
+ */
+export function doorbellNote(cache: CacheStatus): string | undefined {
+  if (cache.cut_waiting === true) return "Waiting for the doorbell to finish sending another recording…";
+  const cut = cache.sd_cut as { media_s?: number | null; length_s?: number | null } | undefined;
+  if (!cut) return undefined;
+  if (typeof cut.media_s !== "number") return "Asking the doorbell for this recording…";
+  const of = typeof cut.length_s === "number" ? ` of ${String(Math.round(cut.length_s))}` : "";
+  return `Fetching the recording from the doorbell: ${String(Math.round(cut.media_s))}${of} s`;
+}
+
 /** A battery doorbell's recording fetched as cuts over HA's session (Phase 12b). */
 function describeSdCut(cache: CacheStatus): string | undefined {
   const cut = cache.sd_cut as
@@ -2306,7 +2336,7 @@ function describeSdCut(cache: CacheStatus): string | undefined {
         codec?: string | null;
       }
     | undefined;
-  if (!cut) return undefined;
+  if (!cut) return cache.cut_waiting === true ? "from the doorbell: waiting while it sends another recording" : undefined;
   const parts = [
     typeof cut.first_fragment_ms === "number"
       ? `first fragment ${String(Math.round(cut.first_fragment_ms))} ms`

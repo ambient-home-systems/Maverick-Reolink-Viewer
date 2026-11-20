@@ -412,6 +412,10 @@ Assistant's own connection to it, and the doorbell sent nothing, or stopped part
 Check that it is online and on wired power, then play the recording again. If it keeps
 happening, open **Details** under the player: it says how far the recording came.
 
+The doorbell sends one recording at a time. The one you pick goes first, and stops any
+other it was sending; meanwhile the player says "Waiting for the doorbell to finish
+sending another recording…". Only an event being saved finishes first.
+
 > **This browser cannot play H.265, the video format of this recording.**
 
 A battery doorbell records only in H.265 (HEVC), in its full size, even its SD copy.

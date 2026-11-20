@@ -257,12 +257,15 @@ export interface SegmentRef {
 /**
  * `at` (UTC ms): where playback will start. A recording still being written
  * grows; the server uses a copy made earlier only if it reaches that far.
+ * `preload`: loaded ahead of need (the next recording), not asked for: a
+ * camera that sends one recording at a time sends it after the one asked for.
  */
 export const fetchPlaybackUrl = (
   hass: HomeAssistant,
   ref: SegmentRef,
   progressive: boolean,
   at?: number,
+  preload = false,
 ): Promise<PlaybackUrl> =>
   hass.callWS<PlaybackUrl>({
     type: "reolink_viewer/playback/url",
@@ -272,10 +275,16 @@ export const fetchPlaybackUrl = (
     stream: ref.stream,
     progressive,
     ...(at === undefined ? {} : { at: Math.round(at) }),
+    ...(preload ? { preload } : {}),
   });
 
-/** The MSE player's fragment path for a recording (see fetchPlaybackUrl for `at`). */
-export const fetchPlaybackMse = (hass: HomeAssistant, ref: SegmentRef, at?: number): Promise<PlaybackUrl> =>
+/** The MSE player's fragment path for a recording (see fetchPlaybackUrl for `at` and `preload`). */
+export const fetchPlaybackMse = (
+  hass: HomeAssistant,
+  ref: SegmentRef,
+  at?: number,
+  preload = false,
+): Promise<PlaybackUrl> =>
   hass.callWS<PlaybackUrl>({
     type: "reolink_viewer/playback/mse",
     device_id: ref.deviceId,
@@ -283,6 +292,7 @@ export const fetchPlaybackMse = (hass: HomeAssistant, ref: SegmentRef, at?: numb
     segment_id: ref.segmentId,
     stream: ref.stream,
     ...(at === undefined ? {} : { at: Math.round(at) }),
+    ...(preload ? { preload } : {}),
   });
 
 /**

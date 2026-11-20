@@ -19,6 +19,7 @@ import {
   deliveryOf,
   describeCache,
   describeScrub,
+  doorbellNote,
   videoCodec,
   type RvPlayback,
 } from "./playback";
@@ -215,8 +216,10 @@ describe("rv-playback", () => {
     });
     // Where it starts goes along (a copy of a growing recording may not reach it).
     expect(urls[0]?.at).toBe(event.start);
-    // The next recording is preloaded, from its start.
-    expect(urls[1]).toMatchObject({ segment_id: "s2", at: T0 + 62 * MIN });
+    // The next recording is preloaded, from its start, said to be ahead of
+    // need (a doorbell sends it after what is asked for, v0.70.5).
+    expect(urls[0]?.preload).toBeUndefined();
+    expect(urls[1]).toMatchObject({ segment_id: "s2", at: T0 + 62 * MIN, preload: true });
     const player = el.renderRoot.querySelector("rv-player");
     expect(player?.current?.segmentId).toBe("s1");
     expect(player?.preloaded?.segmentId).toBe("s2");
@@ -786,6 +789,43 @@ describe("rv-playback", () => {
     expect(
       describeCache({ complete: false, bytes: 0, error: "the doorbell sent nothing within 20 s", sd_cut: { length_s: 21 } }),
     ).toBe("failed: the doorbell sent nothing within 20 s · from the doorbell: nothing yet");
+    // v0.70.5: behind another recording of the doorbell (one at a time).
+    expect(describeCache({ complete: false, bytes: 0, error: null, source: "cut", cut_waiting: true })).toBe(
+      "filling (0.0 MB so far) · from the doorbell: waiting while it sends another recording",
+    );
+  });
+
+  it("keeps the day on screen when a background refresh of it fails", async () => {
+    const hass = playbackHass();
+    const el = await mount(hass);
+    const shown = el._day;
+    if (!shown) throw new Error("no day");
+    const callWS = hass.callWS.bind(hass);
+    hass.callWS = <T,>(message: Record<string, unknown>): Promise<T> =>
+      message.type === "reolink_viewer/timeline/day"
+        ? Promise.reject(new Error("day search failed: TimeoutError"))
+        : callWS<T>(message);
+    // v0.70.5: the Doorbell's event search, busy sending a recording.
+    await el._loadDay(shown.date, { keepView: true, quiet: true });
+    expect(el._day).toBe(shown);
+    expect(el._error).toBeUndefined();
+    expect(el._refreshError).toBe("day search failed: TimeoutError");
+    // Asked for (not a refresh): the warning shows.
+    await el._loadDay(shown.date);
+    expect(el._error).toBe("day search failed: TimeoutError");
+  });
+
+  it("says under the player how far a doorbell's recording has come", () => {
+    expect(doorbellNote({ complete: false, bytes: 0, error: null })).toBeUndefined();
+    expect(doorbellNote({ complete: false, bytes: 0, error: null, cut_waiting: true })).toBe(
+      "Waiting for the doorbell to finish sending another recording…",
+    );
+    expect(doorbellNote({ complete: false, bytes: 0, error: null, sd_cut: { length_s: 21 } })).toBe(
+      "Asking the doorbell for this recording…",
+    );
+    expect(doorbellNote({ complete: false, bytes: 9, error: null, sd_cut: { media_s: 4.6, length_s: 21 } })).toBe(
+      "Fetching the recording from the doorbell: 5 of 21 s",
+    );
   });
 
   it("offers the playback check and its saved reports under Details", async () => {
@@ -949,8 +989,8 @@ describe("rv-playback with MSE", () => {
     expect(player?.current?.mse?.base).toContain("/api/reolink_viewer/mse/tok-s1");
     expect(el._metrics.delivery).toBe("MSE (MediaSource)");
     expect(el._describeMode()).toBe("MSE (MediaSource)");
-    // The next recording is preloaded through MSE too.
-    expect(mse.some((m) => m.segment_id === "s2")).toBe(true);
+    // The next recording is preloaded through MSE too, as a preload.
+    expect(mse.some((m) => m.segment_id === "s2" && m.preload === true)).toBe(true);
     const before = sentOf(hass, "reolink_viewer/playback/mse").length;
     await el.playAt(T0 + 61 * MIN);
     await flush();

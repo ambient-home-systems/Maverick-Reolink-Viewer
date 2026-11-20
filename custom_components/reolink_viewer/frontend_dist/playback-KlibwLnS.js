@@ -1,9 +1,9 @@
 import { a as e, n as t, r as n, t as r } from "./lit-DdRjbP0M.js";
-import { $ as i, A as a, Ct as o, D as s, E as c, Ft as l, Ht as u, Mt as d, Nt as f, O as p, P as m, Tt as ee, U as te, Vt as h, _ as ne, a as g, bt as _, c as re, d as v, et as y, g as ie, i as b, it as x, j as ae, jt as oe, l as se, m as S, n as ce, o as le, p as ue, r as de, s as fe, u as pe, wt as me, xt as C, yt as he } from "./live-B3rIzIdQ.js";
-import { $ as w, A as ge, B as _e, C as T, D as ve, H as ye, I as E, L as be, M as D, N as O, O as xe, P as k, R as Se, S as A, U as Ce, V as j, W as M, _ as we, at as N, d as P, g as Te, j as Ee, k as F, l as De, u as Oe, v as I, w as ke, x as Ae, y as L, z as je } from "./home-ByI-dpco.js";
-import { dayLabel as Me, shortDay as Ne } from "./events-view-Gv2csPUr.js";
-import { i as Pe } from "./findings-6PHDV5xU.js";
-import { a as Fe, c as Ie, f as Le, i as R, l as Re, n as z, o as ze, r as Be, s as B, t as Ve, u as He } from "./check-rkirGYrO.js";
+import { $ as i, A as a, Ct as o, D as s, E as c, Ft as l, Ht as u, Mt as d, Nt as f, O as p, P as m, Tt as ee, U as te, Vt as h, _ as ne, a as g, bt as _, c as re, d as v, et as y, g as ie, i as b, it as x, j as ae, jt as oe, l as se, m as S, n as ce, o as le, p as ue, r as de, s as fe, u as pe, wt as me, xt as C, yt as he } from "./live-o5vytsMJ.js";
+import { $ as w, A as ge, B as _e, C as T, D as ve, H as ye, I as E, L as be, M as D, N as O, O as xe, P as k, R as Se, S as A, U as Ce, V as j, W as M, _ as we, at as N, d as P, g as Te, j as Ee, k as F, l as De, u as Oe, v as I, w as ke, x as Ae, y as L, z as je } from "./home-J5IMWa2D.js";
+import { dayLabel as Me, shortDay as Ne } from "./events-view-BE5zAwuW.js";
+import { i as Pe } from "./findings-BHAiivmI.js";
+import { a as Fe, c as Ie, f as Le, i as R, l as Re, n as z, o as ze, r as Be, s as B, t as Ve, u as He } from "./check-DdU_nb0w.js";
 var Ue = class extends r {
 	static properties = {
 		events: { attribute: !1 },
@@ -1653,6 +1653,7 @@ var yt = 6e4, bt = 3e3, xt = 1e4, St = 3, Ct = 86400, wt = 10, Tt = 8e3, Z = 3 *
 		_date: { state: !0 },
 		_day: { state: !0 },
 		_error: { state: !0 },
+		_refreshError: { state: !0 },
 		_playFailure: { state: !0 },
 		_loading: { state: !0 },
 		_view: { state: !0 },
@@ -1722,7 +1723,7 @@ var yt = 6e4, bt = 3e3, xt = 1e4, St = 3, Ct = 86400, wt = 10, Tt = 8e3, Z = 3 *
 		}, this._monthDays = /* @__PURE__ */ new Set(), this._monthLoading = !1, this._stream = "sub", this._hd = {
 			main: !1,
 			reason: "checking…"
-		}, this._thumbs = /* @__PURE__ */ new Map(), this._metrics = {}, this._checkText = "", this._checkRunning = !1, this._checkSetup = Gt(), this._checkSession = !1, this._checkHdPart = R(this._checkSetup), this._rate = 1, this._mode = qt(), this._timelineStyle = Kt();
+		}, this._thumbs = /* @__PURE__ */ new Map(), this._metrics = {}, this._checkText = "", this._checkRunning = !1, this._checkSetup = Kt(), this._checkSession = !1, this._checkHdPart = R(this._checkSetup), this._rate = 1, this._mode = Jt(), this._timelineStyle = qt();
 	}
 	get _zone() {
 		return this.hass?.config?.time_zone;
@@ -1785,7 +1786,7 @@ var yt = 6e4, bt = 3e3, xt = 1e4, St = 3, Ct = 86400, wt = 10, Tt = 8e3, Z = 3 *
 			let o = await me(n, this.deviceId, e, t.quiet ? 0 : Ct);
 			if (r !== this._daySeq) return;
 			let s = !this._day || this._day.date !== o.date;
-			if (this._day = o, this._error = void 0, this._firstFilters(o), s || !t.keepView) {
+			if (this._day = o, this._error = void 0, this._refreshError = void 0, this._firstFilters(o), s || !t.keepView) {
 				let e = this._events.at(-1)?.start ?? o.segments.at(-1)?.start;
 				this._cursor = e, this._view = this._timelineStyle === "centred" ? {
 					start: (e ?? o.start) - Nt / 2,
@@ -1800,8 +1801,8 @@ var yt = 6e4, bt = 3e3, xt = 1e4, St = 3, Ct = 86400, wt = 10, Tt = 8e3, Z = 3 *
 				timelineMs: performance.now() - i,
 				timelineServer: o.timing
 			}), this._warmLongRecording(o), this._warmHdDay(o), a = !t.quiet && o.timing.cache === "stale", this._retryEventsSoon(o);
-		} catch (e) {
-			r === this._daySeq && (this._error = h(e).message);
+		} catch (n) {
+			r !== this._daySeq || (t.quiet && this._day?.date === e ? this._refreshError = h(n).message : this._error = h(n).message);
 		} finally {
 			r === this._daySeq && (this._loading = !1);
 		}
@@ -1988,15 +1989,18 @@ var yt = 6e4, bt = 3e3, xt = 1e4, St = 3, Ct = 86400, wt = 10, Tt = 8e3, Z = 3 *
 		for (; i() && (await Lt(Ot), i());) try {
 			let t = await x(n, r);
 			if (!i() || !t.cache || t.cache.complete || t.cache.error) break;
-			let a = e.stream === "main" ? "HD " : "", o = t.cache.cut;
-			this._note = o && !o.error && t.cache.cut_error === void 0 ? `Asking the recorder for this moment${a ? " in HD" : ""}…` : `Fetching the ${a}recording from the recorder: ${Rt(t.cache.bytes)} of about ${Rt(t.expected_bytes)}`;
+			let a = e.stream === "main" ? "HD " : "", o = t.cache.cut, s = Wt(t.cache);
+			s && (this._metrics = {
+				...this._metrics,
+				cache: t.cache
+			}), this._note = s ?? (o && !o.error && t.cache.cut_error === void 0 ? `Asking the recorder for this moment${a ? " in HD" : ""}…` : `Fetching the ${a}recording from the recorder: ${Rt(t.cache.bytes)} of about ${Rt(t.expected_bytes)}`);
 		} catch {
 			break;
 		}
 		t === this._playSeq && (this._note = void 0);
 		try {
 			let e = await x(n, r);
-			t === this._playSeq && (e.cache?.cut || e.cache?.sd_cut) && (this._metrics = {
+			t === this._playSeq && (e.cache?.cut || e.cache?.sd_cut || e.cache?.cut_waiting) && (this._metrics = {
 				...this._metrics,
 				cache: e.cache
 			});
@@ -2031,7 +2035,7 @@ var yt = 6e4, bt = 3e3, xt = 1e4, St = 3, Ct = 86400, wt = 10, Tt = 8e3, Z = 3 *
 		let n = this.hass, r = this._nextSegment(e);
 		if (!n || !r) await this._player?.preload(void 0);
 		else if (!this._player?.preloaded?.recording.startsWith(`${this._stream}:${r.id}:`)) try {
-			let e = this._ref(r), i = this._useMse(this._stream) ? await _(n, e, r.start) : await C(n, e, this._progressive, r.start);
+			let e = this._ref(r), i = this._useMse(this._stream) ? await _(n, e, r.start, !0) : await C(n, e, this._progressive, r.start, !0);
 			if (t !== this._playSeq) {
 				this._release(i);
 				return;
@@ -2175,7 +2179,7 @@ var yt = 6e4, bt = 3e3, xt = 1e4, St = 3, Ct = 86400, wt = 10, Tt = 8e3, Z = 3 *
 		e === "moving" && this._day && (this._view = A(this._view, this._cursor ?? this._view.start, this._day));
 	}
 	_setMode(e) {
-		this._mode = e, this._mseFailed.clear(), Jt(e);
+		this._mode = e, this._mseFailed.clear(), Yt(e);
 		let t = this._player?.time ?? this._cursor;
 		this._playing && t !== void 0 && this.playAt(t);
 	}
@@ -2397,7 +2401,7 @@ var yt = 6e4, bt = 3e3, xt = 1e4, St = 3, Ct = 86400, wt = 10, Tt = 8e3, Z = 3 *
             aria-labelledby="check-setup"
             ?disabled=${e}
             @change=${(e) => {
-			this._checkSetup = e.target.value, this._checkHdPart = R(this._checkSetup), Yt(this._checkSetup);
+			this._checkSetup = e.target.value, this._checkHdPart = R(this._checkSetup), Xt(this._checkSetup);
 		}}
           >
             ${z.map((e) => n`<option .value=${e} ?selected=${e === this._checkSetup}>${e}</option>`)}
@@ -2508,7 +2512,7 @@ var yt = 6e4, bt = 3e3, xt = 1e4, St = 3, Ct = 86400, wt = 10, Tt = 8e3, Z = 3 *
       </div>
       <div class="group" role="group" aria-label="Zoom">
         <button aria-label="Zoom out" ?disabled=${E(e, -1) === void 0} @click=${() => this._timeline?.zoom(-1)}>${y("minus")}</button>
-        <span class="zoom">${Xt(this._view.span)}</span>
+        <span class="zoom">${Zt(this._view.span)}</span>
         <button
           aria-label="Zoom in"
           ?disabled=${E(e, 1) === void 0}
@@ -2576,7 +2580,7 @@ var yt = 6e4, bt = 3e3, xt = 1e4, St = 3, Ct = 86400, wt = 10, Tt = 8e3, Z = 3 *
         href=${i.clip.url}
         download=${i.clip.name}
         title=${i.clip.name}
-        >${y("download")}Event saved (${Zt(i.clip.size)})</a
+        >${y("download")}Event saved (${Qt(i.clip.size)})</a
       >`;
 		let a = i !== void 0, o = this._saving !== void 0 && !this._saving.clip;
 		return n`<button
@@ -2604,7 +2608,7 @@ var yt = 6e4, bt = 3e3, xt = 1e4, St = 3, Ct = 86400, wt = 10, Tt = 8e3, Z = 3 *
 			this._saving = {
 				key: r,
 				clip: n
-			}, Qt(this.renderRoot, n.url, n.name), w(this, `Saved ${n.name}`);
+			}, $t(this.renderRoot, n.url, n.name), w(this, `Saved ${n.name}`);
 		} catch (e) {
 			this._saving = void 0, w(this, `Could not save the event: ${h(e).message}`, "error");
 		}
@@ -2716,7 +2720,7 @@ var yt = 6e4, bt = 3e3, xt = 1e4, St = 3, Ct = 86400, wt = 10, Tt = 8e3, Z = 3 *
         <dd>${e.fallbacks ? `${e.fallbacks}× (last: ${e.lastFallback ?? "?"})` : "never"}</dd>
         <dt>Day</dt>
         <dd>
-          ${this._day ? `${this._day.segments.length} recordings, ${this._day.events.length} events${this._day.complete ? ", final" : ""}${this._day.events_error ? `, event search failed (${this._day.events_error})` : ""}` : "–"}
+          ${this._day ? `${this._day.segments.length} recordings, ${this._day.events.length} events${this._day.complete ? ", final" : ""}${this._day.events_error ? `, event search failed (${this._day.events_error})` : ""}${this._refreshError ? `, last refresh failed (${this._refreshError})` : ""}` : "–"}
         </dd>
         </dl>
       </details>
@@ -3190,7 +3194,7 @@ function Ht(e, t, n) {
 	return n ? "cached file (Range)" : e ? "progressive" : t ? "whole file first (to seek)" : "whole file first (WebKit)";
 }
 function Ut(e) {
-	let t = `${(e.bytes / 1e6).toFixed(1)} MB`, n = Wt(e), r = n ? ` · ${n}` : "";
+	let t = `${(e.bytes / 1e6).toFixed(1)} MB`, n = Gt(e), r = n ? ` · ${n}` : "";
 	if (e.error) return `failed: ${e.error}${r}`;
 	let i = typeof e.stopped_ms == "number" ? `copied to ${(e.stopped_ms / 6e4).toFixed(1)} min (${t})` : void 0, a = e.complete ? `cached (${t})` : i ?? `filling (${t} so far)`;
 	if (n) return `${a}${r}`;
@@ -3201,8 +3205,16 @@ function Ut(e) {
 	return `${a} · Reolink protocol cut: ${o.error ? `failed (${o.error})` : `${s}${c}`}`;
 }
 function Wt(e) {
+	if (e.cut_waiting === !0) return "Waiting for the doorbell to finish sending another recording…";
 	let t = e.sd_cut;
 	if (!t) return;
+	if (typeof t.media_s != "number") return "Asking the doorbell for this recording…";
+	let n = typeof t.length_s == "number" ? ` of ${String(Math.round(t.length_s))}` : "";
+	return `Fetching the recording from the doorbell: ${String(Math.round(t.media_s))}${n} s`;
+}
+function Gt(e) {
+	let t = e.sd_cut;
+	if (!t) return e.cut_waiting === !0 ? "from the doorbell: waiting while it sends another recording" : void 0;
 	let n = [typeof t.first_fragment_ms == "number" ? `first fragment ${String(Math.round(t.first_fragment_ms))} ms` : typeof t.first_chunk_ms == "number" ? `first bytes ${String(Math.round(t.first_chunk_ms))} ms` : "nothing yet"];
 	if (typeof t.media_s == "number") {
 		let e = typeof t.length_s == "number" ? ` of ${String(Math.round(t.length_s))}` : "";
@@ -3210,50 +3222,50 @@ function Wt(e) {
 	}
 	return typeof t.spans == "number" && t.spans > 1 && n.push(`${String(t.spans)} tries`), typeof e.cut_wait_ms == "number" && e.cut_wait_ms >= 1e3 && n.push(`waited ${String(Math.round(e.cut_wait_ms / 1e3))} s for another recording`), t.codec && n.push(t.codec === "h265" ? "H.265" : "H.264"), `from the doorbell: ${n.join(", ")}`;
 }
-function Gt() {
+function Kt() {
 	try {
 		let e = window.localStorage.getItem(At);
 		if (e && z.includes(e)) return e;
 	} catch {}
 	return Le(navigator.userAgent);
 }
-function Kt() {
+function qt() {
 	try {
 		return window.localStorage.getItem(Mt) === "moving" ? "moving" : "centred";
 	} catch {
 		return "centred";
 	}
 }
-function qt() {
+function Jt() {
 	try {
 		return window.localStorage.getItem(jt) === "file" ? "file" : "auto";
 	} catch {
 		return "auto";
 	}
 }
-function Jt(e) {
+function Yt(e) {
 	try {
 		window.localStorage.setItem(jt, e);
 	} catch {}
 }
-function Yt(e) {
+function Xt(e) {
 	try {
 		window.localStorage.setItem(At, e);
 	} catch {}
 }
-function Xt(e) {
+function Zt(e) {
 	return e >= 36e5 ? `${Math.round(e / 36e5)} h` : `${Math.round(e / I)} min`;
 }
 customElements.get("rv-playback") || customElements.define("rv-playback", It);
 function $(e, t) {
 	return `${e.segment_id}|${e.stream}|${t.start}`;
 }
-function Zt(e) {
+function Qt(e) {
 	return e < 1e6 ? `${Math.max(1, Math.round(e / 1e3))} KB` : `${(e / 1e6).toFixed(1)} MB`;
 }
-function Qt(e, t, n) {
+function $t(e, t, n) {
 	let r = document.createElement("a");
 	r.href = t, r.download = n, r.hidden = !0, e.appendChild(r), r.click(), r.remove();
 }
 //#endregion
-export { Dt as CHECK_SESSION_MIN, St as EVENTS_RETRIES, xt as EVENTS_RETRY_MS, Z as PRELOAD_LEAD_MS, bt as PROGRESSIVE_SEEK_LIMIT_MS, Ot as PROGRESS_EVERY_MS, Et as RECOVER_EVERY_MS, It as RvPlayback, Ft as SCRUB_HOLD_MS, Ct as STALE_TODAY_S, Tt as THUMB_PAUSE_MAX_MS, yt as TODAY_REFRESH_MS, Zt as clipSize, Ht as deliveryOf, Ut as describeCache, Bt as describePlayer, Vt as describeScrub, $ as saveKey, zt as videoCodec };
+export { Dt as CHECK_SESSION_MIN, St as EVENTS_RETRIES, xt as EVENTS_RETRY_MS, Z as PRELOAD_LEAD_MS, bt as PROGRESSIVE_SEEK_LIMIT_MS, Ot as PROGRESS_EVERY_MS, Et as RECOVER_EVERY_MS, It as RvPlayback, Ft as SCRUB_HOLD_MS, Ct as STALE_TODAY_S, Tt as THUMB_PAUSE_MAX_MS, yt as TODAY_REFRESH_MS, Qt as clipSize, Ht as deliveryOf, Ut as describeCache, Bt as describePlayer, Vt as describeScrub, Wt as doorbellNote, $ as saveKey, zt as videoCodec };
