@@ -46,6 +46,13 @@ export function explainPlayback(error: string): Explained {
   if (/empty recording/i.test(error)) {
     return { text: "This recording is empty.", advice: "Pick another event." };
   }
+  if (/the doorbell( sent nothing| stopped|'s cut failed)/i.test(error)) {
+    // A recording fetched from a battery doorbell's SD card (Phase 12b).
+    return {
+      text: "The doorbell did not send this recording.",
+      advice: "Check that it is online and on wired power, then play it again.",
+    };
+  }
   if (/hvc1|hev1|hevc|h\.?265/i.test(error)) {
     // The Doorbell records only H.265, its SD copy too (Phase 12b).
     return {

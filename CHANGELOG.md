@@ -3,6 +3,20 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.70.1
+
+A fix for 0.70.0: the doorbell's recordings did not play ("The recording could not be
+fetched", a timeout).
+
+- **While a doorbell recording is fetched, nothing else asks the doorbell anything.** The
+  pictures of its other events and the day's search wait until the recording has come:
+  opening Playback asked for them all at once, over the same connection.
+- **A recording the doorbell does not send now says so**, and how far it came, instead of
+  waiting for a timeout: "The doorbell did not send this recording", with the rest under
+  Details.
+- **Its first picture is shown as soon as it comes**, even when the doorbell's own clock
+  is off.
+
 ## 0.70.0
 
 The second step of Phase 12: the doorbell's recordings play in the panel.
