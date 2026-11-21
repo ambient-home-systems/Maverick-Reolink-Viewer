@@ -28,7 +28,7 @@ put on it:
 | 9 | The Wall: the Live page as a security monitor, with layouts, arranging, HD large tiles and the detection strip | Standard / High | 2–3 wk | **Done** (2026-11-10, v0.56.0): the owner validated v0.55.0's and v0.56.0's checklists. Started 2026-11-05. **Step 1 built** (v0.52.0): the Wall, its layouts (Auto by shape, 1, 2×2, 3×3, 4×4, 1+5, 1+7), saved per user on the server, `#wall/<id>`, each device remembering board or Wall; the owner's check: it works, nothing to scroll. **Step 2 built** (v0.53.0): swapping (drag, or Arrange and two taps), the large slot or alone by a double tap or Enter, the keyboard, pages and tours. **Step 3 built** (v0.54.0–v0.54.1): HD in the large tiles while a stream slot is spare, the NVR's budget 9 streams with 2 HD tiles (the capacity test). **Step 4 built** (v0.55.0): the detection strip, a tile lit at once by its sensor, and per layout the feeds' floodlight and siren buttons. **Step 5 built** (v0.56.0): the pointer hidden when still, the screen kept awake, the tiles asleep under Fully's screen off, and the Reolink Wall dashboard card. The owner's checks of v0.55.0 and v0.56.0 passed (2026-11-10): the phase is done. See "Phase 9" |
 | 10 | Scrubbing that shows the picture while dragging | Very high | 2–4 wk | **Done** (2026-11-13, v0.63.15): the owner's playback checks passed on every device, Chrome and Safari on the Mac, the iPhone app and the wall tablet (v0.63.10 made MSE painting show a lone key frame, for Chrome on plain HTTP and the tablet). Started 2026-11-10. **Step 0 built** (v0.57.0): the gate's measurements, the probe's scrub cuts and key frames, and the playback check's K row (key frames decoded one at a time); the owner's runs passed it (2026-11-10). **Step 1 built** (v0.58.0): the picture at a moment, from the server: a scrub session (a signed websocket), answered from a store of key frames found, the disk cache or a 2-second cut the device sends, taking its channel's turn; the playback check's F row. **Step 2 built** (v0.59.0): dragging over what the video has not buffered shows the server's key frame at the pointer, over the video, until release plays from there. **Step 4 built** (v0.60.0, the owner's ask): the playback check's P row replaces the hand checklist. **Step 3 built** (v0.62.0): a drag pauses the video, the server answers each picture before its cut's drain, and a release plays from the picture shown; the P row drags slowly alone and beside a second viewer. The owner's runs of v0.62.0 passed it on Front Yard Right and Garage (alone, a picture every 0.05–0.06 s; beside a second viewer, no stall); v0.62.1 follows from them. See "Phase 10" |
 | 11 | Playback and settings extras: zoom, event clips, filters, copying settings | Standard | 1–2 wk | **Started** (2026-11-13). **Steps 1 to 4 built**: zoom into the picture (v0.64.0, Reset fixed in v0.64.1); save this event (v0.65.0, confirmed on the owner's NVR); filters that start useful (v0.66.0); copy settings to other cameras (v0.67.0). Step 5's research: the probe asks (v0.68.0), awaiting the owner's run. See "Phase 11" |
-| 12 | Optional R&D: the Doorbell's recordings and talk | Very high | 3–5 wk, gated | **Started** (2026-11-13). **Step b done** (2026-11-21, v0.70.5): the Doorbell's recordings play in Playback, each fetched as cuts over HA's session and muxed into the cache's original; in the owner's fifth try a second event picked started in 2.1 s. Next: step c (talk), which needs the owner at the door. **Step a done** (v0.69.0): the gate reuses Home Assistant's own UDP session to the Doorbell (reolink-aio 0.23.0 streams a 143 cut over it), so no UDP client of our own; the probe's Doorbell test reads its talk format and times a 10 s cut. The owner's runs: talk go (2026-11-14; ADPCM 16 kHz mono, full duplex); playback go on HA 2026.11.2 (2026-11-20; first picture in 0.44 s, twice real time, the main stream in H.265). See "Phase 12" |
+| 12 | Optional R&D: the Doorbell's recordings and talk | Very high | 3–5 wk, gated | **Started** (2026-11-13). **Step c built** (v0.71.0): Talk in the Doorbell's live view, over HA's own session; awaiting the owner's test at the door. **Step b done** (2026-11-21, v0.70.5): the Doorbell's recordings play in Playback, each fetched as cuts over HA's session and muxed into the cache's original; in the owner's fifth try a second event picked started in 2.1 s. **Step a done** (v0.69.0): the gate reuses Home Assistant's own UDP session to the Doorbell (reolink-aio 0.23.0 streams a 143 cut over it), so no UDP client of our own; the probe's Doorbell test reads its talk format and times a 10 s cut. The owner's runs: talk go (2026-11-14; ADPCM 16 kHz mono, full duplex); playback go on HA 2026.11.2 (2026-11-20; first picture in 0.44 s, twice real time, the main stream in H.265). See "Phase 12" |
 | 13 | Optional: live picture integrity and outside live sources | High | 1–1.5 wk, gated | Planned. See "Phase 13" |
 | 14 | Copies of detection clips on a NAS or cloud | High | — | **TBD** (the owner, 2026-11-02): may be built here later; sketched, not scheduled. See "Phase 14" |
 
@@ -8860,7 +8860,7 @@ UDP (the desktop client could not add it by IP). Phase 5a captured talk on it:
 | --- | --- |
 | a. UDP transport and the gate | **Done** (2026-11-20, v0.69.0): Home Assistant's own UDP session reused. The owner's runs: talk go (2026-11-14); playback go on HA 2026.11.2 (2026-11-20): first picture in 0.44 s, at twice real time, H.265 main stream |
 | b. SD playback | **Done** (2026-11-21, v0.70.5): each recording fetched as cuts over HA's session, muxed into the cache's original, one per run of events, resumed where a cut stops; the event picked takes the Doorbell's one turn. The owner's fifth try (iPhone app): a second event picked played, its first frame in 2.1 s (first fragment from the Doorbell in 1.6 s), H.265 through ManagedMediaSource. Tries one to four (v0.70.0–v0.70.4) and their fixes are below |
-| c. Talk | Not started; after a go for talk |
+| c. Talk | Built (v0.71.0): a Talk button in the Doorbell's live view, the microphone as PCM over HA's websocket, IMA ADPCM blocks sent as 202 over HA's own session at real time; awaits the owner's test at the door |
 | d. Fallback for playback: clips by FTP | Not started; only if a says no to playback |
 
 #### Step 12a: UDP transport and the gate
@@ -9243,6 +9243,77 @@ quickly; a second one failed.**
   - 202 messages at real time, with 201 and 11 around them.
 - **Live view keeps playing during talk.**
 - **Who may talk:** admins by default; an option opens it to every user.
+
+**As built (v0.71.0).**
+
+- **How the Doorbell takes talk** (nodelink-js, MIT, read for the protocol;
+  no neolink code):
+  - **Open:** 201 `<TalkConfig>` echoing the device's own ability (its
+    first duplex and stream mode, its ADPCM format as given: FDX,
+    `followVideoStream`, 16 kHz, 16 bit, 1024, mono). A 422 (a talk left
+    open) is cleared with 11 and asked once more.
+  - **Audio:** each 202 carries one standard IMA ADPCM block: its first
+    sample (int16), the step index, a zero, then 512 bytes of codes, low
+    nibble first. That is 1,025 samples, 64 ms at 16 kHz. It is framed as
+    the device frames audio: `01wb`, the payload's size twice, `0x0100`,
+    512, the block.
+  - **The 202 message:** the extension `<binaryData>1</binaryData>` with
+    `<channelId>`, encrypted as the session is; the audio after it, not
+    encrypted; the channel's handle (channel + 1); a new message number
+    each.
+  - **Close:** 11 on the channel; a 400 answer still ends it.
+- **Why no wait:** the Doorbell answers each block about 99 ms later
+  (neolink PR #420's note), and a block is 64 ms. reolink-aio's `send`
+  waits for each answer, and one message number at a time, so it would fall
+  behind. reolink-aio has no public send that does not wait: the bridge
+  builds the message and writes it with the session's own
+  `send_without_wait`. It reads reolink-aio's AES key and message numbers
+  (`_talk_internals` checks they exist; a camera is offered talk only when
+  they do). Rule 1: only `bridge.py` touches them. The answers reach
+  reolink-aio's push callback, which drops them.
+- **Rule 2:** the open (10, 201) and the close (11) run as Live-priority
+  jobs through the scheduler. The blocks ride the session they open (8 KB/s,
+  no new device session, no stream slot).
+- **Server (`talk.py`):**
+  - `AdpcmEncoder`: the step index carries over from block to block;
+    33 dB signal to noise on a tone, 0.6 ms a block.
+  - `TalkSession`: the panel's PCM in, blocks out at real time and 0.13 s
+    ahead. Audio more than 1 s behind is dropped, oldest first.
+  - **Ends:** on a stop, the websocket closing, 10 s with no audio, 5
+    minutes, or a block that cannot be written. What was sent plays out
+    before the close.
+  - **Numbers:** open time, blocks, seconds, gaps, dropped, how it ended,
+    the close.
+  - `Talks`: one talk per camera.
+- **Websocket:**
+  - `talk/start` is a subscription. Its `started` event gives the binary
+    handler (Home Assistant's `async_register_binary_handler`) and the
+    sample rate; its `ended` event gives the numbers. Unsubscribing, or the
+    websocket closing, ends the talk.
+  - `talk/stop` ends this websocket's talk and answers with the numbers
+    once it is closed.
+  - Administrators only, unless **Everyone may talk through cameras** (the
+    option `talk_everyone`) is on. `live/cameras` sets `talk` per camera
+    for this user.
+- **Panel:**
+  - `rv-talk` sits in a talking camera's own view and full screen. Hold it
+    to talk (let go to stop), or tap it to start and again to stop; the
+    keyboard toggles.
+  - It asks for the microphone first (echo cancellation, noise suppression,
+    gain control).
+  - An AudioWorklet (or a ScriptProcessor) captures 64 ms pieces in an
+    AudioContext at the camera's rate. `PcmConverter` resamples if the
+    browser kept its own rate (low-passed). The pieces go as binary
+    websocket messages: the handler's byte, then 16-bit PCM.
+  - It says why talk cannot start: not a secure page, the microphone
+    blocked, someone already talking, the camera's refusal.
+- **What the owner's test should show:**
+  - **Heard at the door:** the speech is clear, not noise. Noise would mean
+    a wrong nibble order or block header.
+  - **Delay:** about half a second or less.
+  - **The end:** the talk stops when let go.
+  - **Numbers:** a talk's numbers (blocks, gaps) are in the `ended` event
+    for a second try if needed.
 
 #### Step 12d: fallback for playback, clips by FTP
 

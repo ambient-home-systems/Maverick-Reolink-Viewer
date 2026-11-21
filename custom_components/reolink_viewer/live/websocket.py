@@ -39,6 +39,7 @@ import probatio
 from custom_components.reolink_viewer import devices
 from custom_components.reolink_viewer.const import DOMAIN
 from custom_components.reolink_viewer.models import ReolinkViewerConfigEntry
+from custom_components.reolink_viewer.talk import may_talk
 from custom_components.reolink_viewer.unusual.events import SUBJECTS
 from custom_components.reolink_viewer.views import LiveGrant, LiveImageGrant, sign
 from homeassistant.components import websocket_api
@@ -166,6 +167,8 @@ def ws_live_cameras(
         hass, warm=lambda source, kind: LiveStream(source, kind).name in warm
     )
     entities = er.async_get(hass)
+    # Phase 12c: the Talk button, for a camera that takes talk and a user who may.
+    talker = may_talk(resolved[0].options, connection.user)
     # Phase 9 step 4: each camera's detection sensors, by entity id, with the
     # event type each stands for, so a Wall tile lights up while one is on.
     detection: dict[str, dict[str, str]] = {}
@@ -178,6 +181,7 @@ def ws_live_cameras(
             "switch", DOMAIN, keep_warm_unique_id(camera["id"])
         )
         camera["detection"] = detection.get(camera["id"], {})
+        camera["talk"] = bool(camera.get("talk")) and talker
     connection.send_result(msg["id"], {"cameras": cameras})
 
 

@@ -3,6 +3,20 @@
 What each release of Reolink Viewer brings. A release's notes on GitHub are its
 entry here.
 
+## 0.71.0
+
+**Talk through the doorbell.** A battery doorbell on wired power has **Talk** in its
+live view: hold it to talk and let go to stop, or tap to start and tap again to stop.
+
+- Your phone's or computer's microphone, through the doorbell's speaker, over Home
+  Assistant's own connection to the doorbell. Live view keeps playing.
+- It needs a secure page (https, Nabu Casa, or the Home Assistant app), and says so on
+  a plain http page.
+- Administrators may talk; a new option, **Everyone may talk through cameras**, lets
+  every user.
+- It ends after 10 seconds without sound, or after 5 minutes; one person talks through
+  a camera at a time.
+
 ## 0.70.5
 
 A second doorbell event now plays (0.70.4 started the first one quickly).

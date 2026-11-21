@@ -127,6 +127,10 @@ class NoPlaybackError(Exception):
     """The camera records nowhere HA can reach (no NVR, Hub or SD card)."""
 
 
+class NoTalkError(Exception):
+    """The camera takes no talk here (Phase 12c: the battery Doorbell does)."""
+
+
 @dataclass(frozen=True, slots=True)
 class PlaybackSource:
     """Where a camera's recordings are: a host and channel (the NVR for merged).
@@ -636,6 +640,58 @@ def async_event_source(hass: HomeAssistant, device_id: str) -> PlaybackSource:
     raise DeviceNotFoundError(device_id)
 
 
+@dataclass(frozen=True, slots=True)
+class TalkSource:
+    """Where a camera is talked to (Phase 12c): a host and channel."""
+
+    camera_id: str
+    name: str
+    entry_id: str
+    channel: int
+
+    @property
+    def key(self) -> str:
+        """Return a stable key that reveals no identifier."""
+        return bridge.opaque_key(self.entry_id, self.channel)
+
+
+def _talk_connection(camera: _Camera) -> _Connection | None:
+    """Return the connection a camera is talked to over, if it takes talk."""
+    for conn in camera.connections:
+        if conn.handle is None or conn.channel is None:
+            continue
+        try:
+            if conn.handle.can_talk(conn.channel):
+                return conn
+        except Exception:  # a host that cannot say takes no talk
+            _LOGGER.debug("Cannot read whether a camera takes talk", exc_info=True)
+    return None
+
+
+@callback
+def async_talk_source(hass: HomeAssistant, device_id: str) -> TalkSource:
+    """Return where a camera is talked to; ``device_id`` as in async_device.
+
+    Raises DeviceNotFoundError for an unknown camera, NoTalkError for one
+    that takes no talk here.
+    """
+    model = _async_build(hass, degraded=False)
+    for camera in model.cameras:
+        if any(device_id in c.device_ids for c in camera.connections) or (
+            device_id == camera.group_id
+        ):
+            conn = _talk_connection(camera)
+            if conn is None or conn.channel is None:
+                raise NoTalkError(device_id)
+            return TalkSource(
+                camera_id=camera.id,
+                name=_device_name(camera.primary.device) or camera.primary.entry_title,
+                entry_id=conn.entry_id,
+                channel=conn.channel,
+            )
+    raise DeviceNotFoundError(device_id)
+
+
 def _live_source(camera: _Camera, conn: _Connection) -> LiveSource | None:
     if conn.channel is None or conn.handle is None:
         return None
@@ -837,6 +893,8 @@ def async_live_cameras(
                     "connections": connections,
                     "controls": _live_controls(ent_reg, camera.connections),
                     "visitor_entity": _visitor_entity(ent_reg, camera.connections),
+                    # Phase 12c: it takes talk (whether this user may: live/websocket).
+                    "talk": _talk_connection(camera) is not None,
                 }
             )
     return cameras

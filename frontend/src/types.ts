@@ -707,6 +707,8 @@ export interface LiveCamera {
   visitor_entity?: string | null;
   /** Its detection sensors (Phase 9 step 4), by entity id, with the event type each stands for. */
   detection?: Record<string, string>;
+  /** It takes talk and this user may talk (Phase 12c): its live view has a Talk button. */
+  talk?: boolean;
 }
 
 /** A PTZ move: a press of its button starts it, PTZ stop ends it. */

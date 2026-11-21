@@ -203,6 +203,23 @@ video, for the cameras that have them:
 They work through Home Assistant's own Reolink controls, so automations and the rest
 of Home Assistant see each change.
 
+### Talk
+
+A battery doorbell on wired power has **Talk** at the bottom of its **Live** tab and of
+its full screen: you speak through the doorbell's speaker from your phone or computer.
+
+- **Hold Talk** to talk, and let go to stop; or **tap** it to start, and tap again to
+  stop. It shows how long you have been talking.
+- The first time, the browser (or the Home Assistant app) asks to use the microphone.
+- Live view keeps playing while you talk. What you said is played out at the door
+  before the talk ends.
+- Talk needs a secure page: Home Assistant over https (Nabu Casa, or your own
+  certificate), or its app. On a plain http page the button says so.
+- It ends by itself after 10 seconds without sound from the microphone, or after 5
+  minutes. One person talks through a camera at a time.
+- Administrators may talk. **Everyone may talk through cameras**, in Reolink
+  Viewer's options, lets every Home Assistant user.
+
 ### Keep warm
 
 **Keep warm**, on a camera's **Live** tab, keeps its connection open all the time, so

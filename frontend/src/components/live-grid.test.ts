@@ -104,6 +104,8 @@ const CAMERAS: LiveCamera[] = [
         streams: { sub: { encoding, entity_id: null } },
       },
     ],
+    // It takes talk, and this user may (Phase 12c).
+    talk: true,
   },
   {
     // The E1 Zoom: records nowhere, so it is watched for its picture.
@@ -733,6 +735,20 @@ describe("full screen", () => {
     fullButton(doorbell).click();
     await settle(doorbell);
     expect(controls(doorbell)).toBeNull();
+  });
+
+  it("offers talk in full screen for a camera that takes it, not on its grid tile", async () => {
+    const { garage, doorbell } = await garageAndBell();
+    const talk = (tile: Element) => tile.shadowRoot?.querySelector("rv-talk");
+    expect(talk(doorbell)).toBeNull();
+    fullButton(garage).click();
+    await settle(garage);
+    // The garage takes no talk.
+    expect(talk(garage)).toBeNull();
+    fullButton(doorbell).click();
+    await settle(doorbell);
+    expect(talk(doorbell)?.deviceId).toBe("cam2");
+    expect(talk(doorbell)?.cameraName).toBe("Doorbell");
   });
 
   it("keeps watching in picture-in-picture: in HD, hidden, behind another camera, off screen", async () => {
