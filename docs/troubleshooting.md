@@ -287,6 +287,35 @@ wired power is watched like any other camera. The
 [soak report](user-guide.md#the-soak-report) checks that battery cameras slept while
 nobody was watching.
 
+### Talking through the doorbell
+
+Its **Talk** button says why a talk did not start or ended:
+
+> **Talk needs a secure page: open Home Assistant over https (Nabu Casa, or a certificate) or in its app.**
+
+Browsers let pages use the microphone only over https. Open Home Assistant through
+Nabu Casa, your own https address, or the Home Assistant app.
+
+> **The microphone is blocked for this page: allow it in the browser's (or the app's) settings.**
+
+The microphone was refused, now or earlier. Allow it for Home Assistant in the
+browser's site settings, or for the Home Assistant app in your phone's settings.
+
+> **Someone is already talking through this camera.**
+
+One person talks through a camera at a time; try again when they stop.
+
+> **Talk ended: no sound from the microphone for a while.**
+
+Nothing came from the microphone for 10 seconds (the page was hidden, or the
+microphone muted), so the talk ended. Talk lasts 5 minutes at most.
+
+> **Talk did not start: …**
+
+The doorbell refused to start the talk, or did not answer. Check that it is online
+and on wired power, then try again. If it keeps happening, say what follows "Talk did
+not start" when you [ask for help](#asking-for-help).
+
 ### A camera card on a dashboard
 
 The [Reolink camera card](user-guide.md#a-camera-on-a-dashboard) shows a camera's

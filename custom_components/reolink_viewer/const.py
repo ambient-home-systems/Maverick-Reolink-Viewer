@@ -67,6 +67,9 @@ CONF_UNUSUAL_SIGNALS: Final = "unusual_signals"
 CONF_EVENT_CLIP_BEFORE: Final = "event_clip_before"
 CONF_EVENT_CLIP_AFTER: Final = "event_clip_after"
 DEFAULT_EVENT_CLIP_MARGIN: Final = 10
+# Phase 12c: who may talk through a camera: admins, or with this on, everyone.
+CONF_TALK_EVERYONE: Final = "talk_everyone"
+DEFAULT_TALK_EVERYONE: Final = False
 
 # Playback caches (under HA's cache directory) and their size caps.
 VOD_CACHE_DIR: Final = "vod"

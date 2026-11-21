@@ -23,6 +23,7 @@ import type {
   SoakCounts,
 } from "../types";
 import "./live-controls";
+import "./talk-button";
 import "./live-debug";
 
 /** Scrolled out of view this long, a tile stops its stream (a quick scroll back keeps it). */
@@ -731,6 +732,9 @@ export class RvLiveTile extends LitElement {
             .controls=${this.controls}
             .cameraName=${name}
           ></rv-live-controls>`
+        : nothing}
+      ${this.camera?.talk && (this._full || own)
+        ? html`<rv-talk .hass=${this.hass} .deviceId=${this.camera.id} .cameraName=${name}></rv-talk>`
         : nothing}
       ${(this._full || own) && (playing || this.hdShown || this._pip) && pipSupported()
         ? html`<button

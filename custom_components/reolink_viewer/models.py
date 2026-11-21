@@ -14,6 +14,7 @@ from .live.service import LiveService
 from .loopwatch import LoopWatch
 from .scheduler import Scheduler
 from .scrub import ScrubService
+from .talk import Talks
 from .thumbnails import ThumbnailService
 from .timeline import TimelineService
 from .unusual.check import FiredLog
@@ -57,6 +58,8 @@ class ReolinkViewerData:
     loop: LoopWatch | None = None
     # Phase 11 step 2: events' saved clips, each kept a quarter of an hour.
     clips: EventClips | None = None
+    # Phase 12c: the running talks through cameras, one per camera.
+    talk: Talks = field(default_factory=Talks)
 
 
 type ReolinkViewerConfigEntry = ConfigEntry[ReolinkViewerData]

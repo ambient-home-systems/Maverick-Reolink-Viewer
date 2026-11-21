@@ -38,6 +38,16 @@ from .probe_events import EventsOptions
 from .probe_factory import FactoryOptions
 from .probe_playback import PlaybackOptions
 from .scheduler import Priority
+from .talk import (
+    CLOSE_TIMEOUT_S,
+    IDLE_S,
+    MAX_TALK_S,
+    OPEN_TIMEOUT_S,
+    TalkAudio,
+    TalkError,
+    TalkSession,
+    may_talk,
+)
 from .thumbnails import BUCKETS_S
 from .timeconv import epoch_ms
 from .timeline import TimelineError
@@ -75,6 +85,10 @@ ERR_SEARCH_FAILED = "search_failed"
 ERR_CACHE_FAILED = "cache_failed"
 ERR_CLIP_FAILED = "clip_failed"
 ERR_NOT_LEARNING = "not_learning"
+ERR_NO_TALK = "no_talk"
+ERR_TALK = "talk_failed"
+# The most audio one binary message may carry (a second at 16 kHz is 32 KB).
+MAX_TALK_MESSAGE = 64 * 1024
 MAX_THUMB_TIMES = 200
 MAX_RELEASE = 20
 STREAM = probatio.In(["sub", "main"])
@@ -117,6 +131,8 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_wall_layouts)
     websocket_api.async_register_command(hass, ws_wall_layout_save)
     websocket_api.async_register_command(hass, ws_wall_layout_delete)
+    websocket_api.async_register_command(hass, ws_talk_start)
+    websocket_api.async_register_command(hass, ws_talk_stop)
 
 
 def _friendly(hass: HomeAssistant, entity_id: str) -> str:
@@ -1651,3 +1667,151 @@ def ws_wall_layout_delete(
         return
     entry.runtime_data.wall.delete(_user_id(connection), msg["layout_id"])
     connection.send_result(msg["id"], {})
+
+
+@websocket_api.websocket_command(
+    {
+        probatio.Required("type"): f"{DOMAIN}/talk/start",
+        probatio.Required("device_id"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_talk_start(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Talk through a camera (Phase 12c), as a subscription.
+
+    Once the camera has started the talk, an event ``started`` gives the
+    binary handler the panel sends its microphone to (16-bit little-endian
+    mono PCM at ``sample_rate``, as binary websocket messages that start with
+    ``handler_id``), and when the talk is over an event ``ended`` gives its
+    numbers. Unsubscribing, or the websocket closing, ends it. One talk per
+    camera; administrators only unless the option opens it to everyone.
+    """
+    if (entry := _loaded_entry(hass)) is None:
+        connection.send_error(msg["id"], ERR_NOT_LOADED, "Reolink Viewer is not loaded")
+        return
+    if not may_talk(entry.options, connection.user):
+        connection.send_error(
+            msg["id"],
+            websocket_api.ERR_UNAUTHORIZED,
+            "Only administrators may talk through a camera (an option lets everyone)",
+        )
+        return
+    try:
+        source = devices.async_talk_source(hass, msg["device_id"])
+        host = bridge.async_get_host(hass, source.entry_id)
+    except devices.DeviceNotFoundError:
+        connection.send_error(msg["id"], websocket_api.ERR_NOT_FOUND, "Unknown camera")
+        return
+    except devices.NoTalkError, bridge.BridgeError:
+        connection.send_error(msg["id"], ERR_NO_TALK, "This camera takes no talk here")
+        return
+    data = entry.runtime_data
+    channel = source.channel
+
+    async def open_() -> TalkAudio:
+        fmt = await data.scheduler.run(
+            source.entry_id,
+            lambda: host.async_talk_open(channel),
+            priority=Priority.LIVE,
+            timeout=OPEN_TIMEOUT_S,
+        )
+        return TalkAudio(fmt.sample_rate, fmt.length_per_encoder)
+
+    async def write(frame: bytes) -> None:
+        await host.async_talk_write(channel, frame)
+
+    async def close() -> None:
+        await data.scheduler.run(
+            source.entry_id,
+            lambda: host.async_talk_close(channel),
+            priority=Priority.LIVE,
+            timeout=CLOSE_TIMEOUT_S,
+        )
+
+    session = TalkSession(source.name, open_=open_, write=write, close=close)
+    try:
+        audio = await data.talk.async_start(source.key, connection, session)
+    except TalkError as err:
+        connection.send_error(msg["id"], ERR_TALK, str(err))
+        return
+    except Exception as err:  # noqa: BLE001 - the camera's refusal, said
+        reason = str(err) if isinstance(err, bridge.BridgeError) else type(err).__name__
+        connection.send_error(
+            msg["id"], ERR_TALK, f"The camera did not start the talk: {reason}"[:300]
+        )
+        return
+
+    @callback
+    def received(
+        _hass: HomeAssistant, _connection: websocket_api.ActiveConnection, pcm: bytes
+    ) -> None:
+        if len(pcm) <= MAX_TALK_MESSAGE:
+            session.feed(pcm)
+
+    handler_id, unregister = connection.async_register_binary_handler(received)
+
+    def ended(done: TalkSession) -> None:
+        unregister()
+        connection.send_message(
+            websocket_api.event_message(msg["id"], {"type": "ended", **done.stats})
+        )
+
+    @callback
+    def unsubscribe() -> None:
+        hass.async_create_background_task(
+            session.async_stop("stopped"), "reolink_viewer talk stop"
+        )
+
+    connection.subscriptions[msg["id"]] = unsubscribe
+    connection.send_result(msg["id"])
+    connection.send_message(
+        websocket_api.event_message(
+            msg["id"],
+            {
+                "type": "started",
+                "handler_id": handler_id,
+                "sample_rate": audio.sample_rate,
+                "idle_s": IDLE_S,
+                "max_s": MAX_TALK_S,
+                "open_ms": session.stats["open_ms"],
+            },
+        )
+    )
+    session.on_end(ended)
+
+
+@websocket_api.websocket_command(
+    {
+        probatio.Required("type"): f"{DOMAIN}/talk/stop",
+        probatio.Required("device_id"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_talk_stop(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """End this websocket's talk through a camera; answer once it is closed.
+
+    What was said plays out first. The answer has the talk's numbers (blocks
+    sent, gaps, how it ended); none when no talk of this websocket runs.
+    """
+    if (entry := _loaded_entry(hass)) is None:
+        connection.send_error(msg["id"], ERR_NOT_LOADED, "Reolink Viewer is not loaded")
+        return
+    try:
+        source = devices.async_talk_source(hass, msg["device_id"])
+    except devices.DeviceNotFoundError, devices.NoTalkError:
+        connection.send_result(msg["id"], {"stats": None})
+        return
+    talks = entry.runtime_data.talk
+    session = talks.get(source.key)
+    if session is None or talks.owner(source.key) is not connection:
+        connection.send_result(msg["id"], {"stats": None})
+        return
+    connection.send_result(msg["id"], {"stats": await session.async_stop("stopped")})

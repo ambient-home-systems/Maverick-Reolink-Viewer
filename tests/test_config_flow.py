@@ -8,6 +8,7 @@ from custom_components.reolink_viewer.const import (
     CONF_EVENT_CLIP_AFTER,
     CONF_EVENT_CLIP_BEFORE,
     CONF_LEARN_NORMAL,
+    CONF_TALK_EVERYONE,
     CONF_UNUSUAL_SCOPE,
     CONF_UNUSUAL_SENSITIVITY,
     CONF_UNUSUAL_SIGNALS,
@@ -61,6 +62,8 @@ async def test_options_flow(hass: HomeAssistant) -> None:
         # "Save event" (Phase 11 step 2): 10 s either side.
         CONF_EVENT_CLIP_BEFORE: 10,
         CONF_EVENT_CLIP_AFTER: 10,
+        # Talk (Phase 12c): administrators only.
+        CONF_TALK_EVERYONE: False,
     }
     chosen = {
         CONF_BAICHUAN_DEEP_START: False,
@@ -70,6 +73,7 @@ async def test_options_flow(hass: HomeAssistant) -> None:
         CONF_UNUSUAL_SIGNALS: ["alarm_control_panel.house", "person.josh"],
         CONF_EVENT_CLIP_BEFORE: 5,
         CONF_EVENT_CLIP_AFTER: 30,
+        CONF_TALK_EVERYONE: True,
     }
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], chosen
