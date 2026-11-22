@@ -419,6 +419,7 @@ async def async_unload_entry(
         await entry.runtime_data.baichuan.async_shutdown()
     if entry.runtime_data.clips is not None:
         await entry.runtime_data.clips.async_shutdown()
+    await entry.runtime_data.talk.async_shutdown()
     await entry.runtime_data.vod_cache.async_shutdown()
     await entry.runtime_data.scheduler.async_shutdown()
     return True

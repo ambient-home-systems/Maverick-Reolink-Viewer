@@ -28,6 +28,7 @@ import re
 import time
 from typing import TYPE_CHECKING, Any, cast
 from xml.etree import ElementTree as ET
+from xml.sax.saxutils import escape as xml_escape
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
@@ -387,6 +388,102 @@ def talk_ability(root: ET.Element) -> dict[str, Any]:
         "formats": [f for f in formats if f],
         "fields": sorted({el.tag for el in root.iter()}),
     }
+
+
+# Phase 12c: talk. A 202 carries talk audio behind this extension: the
+# extension encrypted as the session is, the audio not (nodelink-js, MIT).
+_TALK_EXTENSION_XML = (
+    '<?xml version="1.0" encoding="UTF-8" ?>\n<Extension version="1.1">\n'
+    "<binaryData>1</binaryData>\n<channelId>{channel}</channelId>\n</Extension>\n"
+)
+# The Baichuan header's magic, and the modern 24-byte header's status and class.
+_BC_MAGIC = bytes.fromhex("f0debc0a")
+_BC_STATUS_CLASS = bytes.fromhex("00001464")
+# What a talk's audio must be (the panel's encoder): ADPCM, mono, 16 bit.
+_TALK_RATES = frozenset({8000, 16000})
+TALK_NEEDS_LIBRARY = "this reolink-aio cannot send talk audio"
+
+
+@dataclass(frozen=True, slots=True)
+class TalkFormat:
+    """How a device takes talk audio, from its ``TalkAbility`` (Phase 12c)."""
+
+    sample_rate: int
+    # ``lengthPerEncoder``: an ADPCM block holds half as many bytes of codes.
+    length_per_encoder: int
+    config_xml: str
+
+
+def talk_format(channel: int, ability: dict[str, Any]) -> TalkFormat:
+    """Return the ``TalkConfig`` (201) for a device's ability, and its audio.
+
+    The ability's first duplex and stream mode, and its ADPCM format, echoed
+    as the device gave them (it refuses a config that differs, per reostream).
+    Raises BridgeError for a device that takes no 16-bit mono ADPCM.
+    """
+    adpcm = next(
+        (
+            f
+            for f in ability.get("formats", [])
+            if str(f.get("audioType", "")).lower() == "adpcm"
+        ),
+        None,
+    )
+    if adpcm is None:
+        raise BridgeError("the device takes talk in no format this integration sends")
+    try:
+        rate = int(adpcm.get("sampleRate", ""))
+        length = int(adpcm.get("lengthPerEncoder", ""))
+    except ValueError as err:
+        raise BridgeError(f"the device's talk format is unreadable: {err}") from err
+    precision = str(adpcm.get("samplePrecision", "16"))
+    track = str(adpcm.get("soundTrack", "mono"))
+    if rate not in _TALK_RATES or precision != "16" or track != "mono":
+        raise BridgeError(
+            f"the device takes talk as {rate} Hz, {precision} bit, {track}: "
+            "this integration sends 8 or 16 kHz, 16 bit, mono"
+        )
+    if length < 64 or length > 4096 or length % 2:
+        raise BridgeError(f"the device's talk block ({length}) is not one sent here")
+    duplex = (ability.get("duplex") or ["FDX"])[0]
+    mode = (ability.get("stream_modes") or ["followVideoStream"])[0]
+
+    def text(value: object) -> str:
+        return xml_escape(str(value))
+
+    xml = (
+        '<?xml version="1.0" encoding="UTF-8" ?>\n<body>\n'
+        '<TalkConfig version="1.1">\n'
+        f"<channelId>{channel}</channelId>\n"
+        f"<duplex>{text(duplex)}</duplex>\n"
+        f"<audioStreamMode>{text(mode)}</audioStreamMode>\n"
+        "<audioConfig>\n"
+        f"<audioType>{text(adpcm['audioType'])}</audioType>\n"
+        f"<sampleRate>{rate}</sampleRate>\n"
+        f"<samplePrecision>{text(precision)}</samplePrecision>\n"
+        f"<lengthPerEncoder>{length}</lengthPerEncoder>\n"
+        f"<soundTrack>{text(track)}</soundTrack>\n"
+        "</audioConfig>\n</TalkConfig>\n</body>"
+    )
+    return TalkFormat(rate, length, xml)
+
+
+def _talk_internals(baichuan: Any) -> str | None:
+    """Return what reolink-aio lacks to send talk audio without waiting, or None.
+
+    Talk blocks go out at real time, unacknowledged: the Doorbell answers each
+    about 99 ms later, so a send that waits for its answer falls behind (64 ms
+    of audio a block). reolink-aio has no public send that does not wait: its
+    session's own (``send_without_wait``) is used, with its AES key and
+    message numbers, read here only.
+    """
+    for name in ("send", "login", "_connect_if_needed", "_aes_encrypt"):
+        if not callable(getattr(baichuan, name, None)):
+            return f"reolink-aio's Baichuan has no {name}"
+    for name in ("_mess_id", "_logged_in", "_connection"):
+        if not hasattr(baichuan, name):
+            return f"reolink-aio's Baichuan has no {name}"
+    return None
 
 
 def _cover_preview_xml(channel: int, stream: str, start: datetime) -> str:
@@ -1158,6 +1255,90 @@ class ReolinkHostHandle:
         async with contextlib.aclosing(payload) as chunks:
             async for chunk in chunks:
                 yield bytes(chunk)
+
+    def can_talk(self, channel: int) -> bool:
+        """Return True for a channel talked to over HA's session (Phase 12c).
+
+        A camera with two-way audio that speaks Baichuan only (the battery
+        Doorbell: its talk was captured and checked in 12a), on wired power
+        (talk keeps it awake), when reolink-aio can send talk audio.
+        """
+        api = self._api
+        if not self.baichuan_only or not _safe(api.supported, channel, "two_way_audio"):
+            return False
+        if _safe(api.supported, channel, "battery") and not _wired_power(api, channel):
+            return False
+        return _talk_internals(_safe(lambda: api.baichuan)) is None
+
+    async def async_talk_open(self, channel: int) -> TalkFormat:
+        """Start talking to a channel: its ability (10), then ``TalkConfig`` (201).
+
+        A 422 (a talk left open, by this or another client) is cleared with 11
+        and asked once more. Returns the audio the device takes. Raises
+        BridgeError when the device refuses.
+        """
+        baichuan = self._api.baichuan
+        if (lacking := _talk_internals(baichuan)) is not None:
+            raise NotApplicableError(f"{TALK_NEEDS_LIBRARY}: {lacking}")
+        fmt = talk_format(channel, await self.async_talk_ability(channel))
+        for attempt in (1, 2):
+            try:
+                await baichuan.send(
+                    cmd_id=201, channel=channel, body=fmt.config_xml, retry=1
+                )
+            except Exception as err:
+                code = getattr(err, "rspCode", None)
+                if code == 422 and attempt == 1:
+                    # Busy: a talk left open. Reset it (whatever it answers),
+                    # then ask again.
+                    with contextlib.suppress(Exception):
+                        await self.async_talk_close(channel)
+                    continue
+                if code is not None:
+                    raise BridgeError(f"the device refused to talk ({code})") from err
+                raise
+            return fmt
+        raise BridgeError("the device refused to talk (422)")  # pragma: no cover
+
+    async def async_talk_write(self, channel: int, frame: bytes) -> None:
+        """Send one talk block (202) without waiting for its answer.
+
+        ``frame`` is an ADPCM block in its media framing (``01wb``). The
+        device answers each block on its own, later; reolink-aio drops those
+        answers (nothing waits for them). Raises reolink-aio's errors when
+        the session cannot be written to.
+        """
+        # Read as Any: reolink-aio's private parts (checked in _talk_internals).
+        baichuan: Any = self._api.baichuan
+        if not baichuan._logged_in:  # noqa: SLF001 - see _talk_internals
+            await baichuan.login()
+        if baichuan._connection is None:  # noqa: SLF001
+            await baichuan._connect_if_needed()  # noqa: SLF001
+        connection = baichuan._connection  # noqa: SLF001
+        if connection is None:
+            raise BridgeError("the device's session is not connected")
+        extension = _TALK_EXTENSION_XML.format(channel=channel).encode()
+        mess_id = (baichuan._mess_id + 1) % 0x1000000  # noqa: SLF001
+        baichuan._mess_id = mess_id  # noqa: SLF001
+        header = (
+            _BC_MAGIC
+            + (202).to_bytes(4, "little")
+            + (len(extension) + len(frame)).to_bytes(4, "little")
+            + (channel + 1).to_bytes(1, "little")
+            + mess_id.to_bytes(3, "little")
+            + _BC_STATUS_CLASS
+            + len(extension).to_bytes(4, "little")
+        )
+        encrypted = baichuan._aes_encrypt(extension)  # noqa: SLF001
+        await connection.send_without_wait(header + encrypted + frame, 202)
+
+    async def async_talk_close(self, channel: int) -> None:
+        """Stop talking to a channel (11).
+
+        The Doorbell answered 200, or 400 to a talk already over (Phase 5a);
+        an error raises, for the caller to report.
+        """
+        await self._api.baichuan.send(cmd_id=11, channel=channel, retry=1)
 
     def live_protocols(self) -> frozenset[LiveProtocol]:
         """Return the protocols live streams can be read with (cached data only).
